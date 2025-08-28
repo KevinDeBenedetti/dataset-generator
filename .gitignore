@@ -40,3 +40,4 @@ scraper.log
 
 # URL configuration (potentially sensitive)
 urls.json
+urls/
