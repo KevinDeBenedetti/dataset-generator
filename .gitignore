@@ -1,0 +1,42 @@
+# =============================================================================
+# PYTHON GENERATED FILES
+# =============================================================================
+# Python cache and compiled files
+__pycache__/
+*.py[oc]
+
+# Build and distribution artifacts
+build/
+dist/
+wheels/
+*.egg-info
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENTS
+# =============================================================================
+# Python virtual environment
+.venv
+
+# =============================================================================
+# DATA AND CACHE
+# =============================================================================
+# Application cache
+cache
+
+# Datasets (potentially large)
+datasets
+
+# Scraped data
+scrapes
+
+# =============================================================================
+# LOGS AND CONFIGURATION
+# =============================================================================
+# Log files
+scraper.log
+
+# Environment variables (contains secrets)
+.env
+
+# URL configuration (potentially sensitive)
+urls.json

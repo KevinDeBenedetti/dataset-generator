@@ -1,0 +1,56 @@
+{
+  "official_sources": {
+    "main_site": {
+      "url": "https://example-official.gov",
+      "description": "Main official website of the organization"
+    },
+    "documentation": {
+      "url": "https://docs.example.gov",
+      "description": "Official documentation and guides"
+    },
+    "api": {
+      "url": "https://api.example.gov",
+      "description": "Public Application Programming Interface (API)"
+    }
+  },
+  "external_sources": {
+    "wikipedia": {
+      "url": "https://en.wikipedia.org/wiki/Example_Page",
+      "description": "Reference Wikipedia article"
+    },
+    "press": {
+      "url": "https://example-news.com/articles",
+      "description": "Press articles and news"
+    },
+    "analysis": {
+      "url": "https://think-tank.example.org/reports",
+      "description": "Expert analysis and reports"
+    }
+  },
+  "data": {
+    "datasets": {
+      "url": "https://data.example.gov/datasets",
+      "description": "Public datasets"
+    },
+    "statistics": {
+      "url": "https://stats.example.com",
+      "description": "Statistics and indicators"
+    },
+    "archives": {
+      "url": "https://archives.example.com",
+      "description": "Historical archives and documents"
+    }
+  },
+  "_configuration": {
+    "description": "Data source configuration for scraping",
+    "usage": "Copy this file to 'urls.json' and configure your actual URLs",
+    "required_format": {
+      "url": "Complete URL to the resource",
+      "description": "Clear description of the source content"
+    },
+    "commands": [
+      "cp urls.json.example urls.json",
+      "nano urls.json  # Edit with your actual URLs"
+    ]
+  }
+}
