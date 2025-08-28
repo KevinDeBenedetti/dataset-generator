@@ -6,7 +6,7 @@ from app.scraper import WebScraper
 from app.llm_client import LLMClient
 from app.data_manager import DataManager
 from app.models import ScrapingMetrics
-from utils import setup_logging, qa_to_dict_list, print_summary
+from app.utils import setup_logging, qa_to_dict_list, print_summary
 
 class ScrapingPipeline:
     def __init__(self, use_cache: bool = True):

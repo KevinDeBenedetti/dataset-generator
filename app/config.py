@@ -31,7 +31,7 @@ class ScraperConfig:
     scrapes_dir: str = "scrapes"
     datasets_dir: str = "datasets"
     cache_dir: str = "cache"
-    target_language = os.getenv("TARGET_LANGUAGE", "en")
+    target_language: str = field(default_factory=lambda: os.getenv("TARGET_LANGUAGE", "en"))
 
     # URLs to process (populated from .env)
     urls: List[str] = field(default_factory=list)

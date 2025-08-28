@@ -28,19 +28,22 @@ class PromptManager:
     """
     
     @classmethod
-    def get_qa_prompt(cls, context: str, target_language: str = "en") -> str:
+    def get_qa_prompt(cls, context: str, target_language: str = None) -> str:
+        target_language = target_language or config.target_language or "en"
+        logging.info(f"Language detected: {target_language}...")
+        logging.info(f"Context : {context}")
         return f"""
         Generate high-quality question-answer pairs based on this text.
         
         Strict rules:
-        - 5 to 10 varied questions (what, who, when, where, why, how)
+        - Varied questions (what, who, when, where, why, how)
         - Complete and precise answers (minimum 2 sentences)
         - Context must be the exact excerpt that enables the answer
         - Avoid trivial or overly generic questions
         - Questions and answers must be in {target_language} language
         
         Source text:
-        {context[:3000]}...
+        {context}...
         """
 
 class LLMClient:
@@ -77,7 +80,7 @@ class LLMClient:
                 model=config.model_qa,
                 response_model=list[QA],
                 messages=[
-                    {"role": "user", "content": self.prompt_manager.get_qa_prompt(text)}
+                    {"role": "user", "content": self.prompt_manager.get_qa_prompt(text, config.target_language)}
                 ],
                 max_tokens=config.max_tokens_qa,
             )
