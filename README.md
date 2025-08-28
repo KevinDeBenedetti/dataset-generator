@@ -1,4 +1,4 @@
-# French Dataset Generator
+# Dataset Generator
 
 Web scraping and automatic dataset generation tool for question-answer datasets.
 
