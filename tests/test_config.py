@@ -7,7 +7,7 @@ from pathlib import Path
 # Import après les patches pour éviter l'initialisation automatique
 def test_config_initialization(test_env_vars):
     """Test basic config initialization"""
-    from app.config import Config
+    from app.core.config import Config
     
     config = Config()
     
@@ -17,7 +17,7 @@ def test_config_initialization(test_env_vars):
 
 def test_urls_config_loading(test_env_vars, sample_urls_config):
     """Test URLs configuration loading"""
-    from app.config import Config
+    from app.core.config import Config
     
     config = Config()
     
@@ -34,7 +34,7 @@ def test_urls_config_loading(test_env_vars, sample_urls_config):
 
 def test_dataset_names_generation(test_env_vars, sample_urls_config):
     """Test dataset names generation from hierarchical config"""
-    from app.config import Config
+    from app.core.config import Config
     
     config = Config()
     
@@ -57,7 +57,7 @@ def test_dataset_names_generation(test_env_vars, sample_urls_config):
 def test_missing_api_key():
     """Test error when API key is missing"""
     with patch.dict(os.environ, {}, clear=True):
-        from app.config import Config
+        from app.core.config import Config
         
         with pytest.raises(EnvironmentError, match="OPENAI_API_KEY missing"):
             Config()
@@ -68,7 +68,7 @@ def test_missing_urls_file():
         "OPENAI_API_KEY": "test-key",
         "URLS": "nonexistent.json"
     }):
-        from app.config import Config
+        from app.core.config import Config
         
         with pytest.raises(EnvironmentError, match="URLs file not found"):
             Config()
@@ -82,7 +82,7 @@ def test_invalid_json_urls_file(temp_dir):
         "OPENAI_API_KEY": "test-key",
         "URLS": str(invalid_json_file)
     }):
-        from app.config import Config
+        from app.core.config import Config
         
         with pytest.raises(EnvironmentError, match="Unable to read URLs file"):
             Config()
@@ -93,7 +93,7 @@ def test_legacy_urls_string():
         "OPENAI_API_KEY": "test-key",
         "URLS": "https://example1.com,https://example2.com"
     }):
-        from app.config import Config
+        from app.core.config import Config
         
         config = Config()
         
@@ -110,7 +110,7 @@ def test_legacy_urls_string():
 ])
 def test_parse_urls_function(urls_string, expected):
     """Test the _parse_urls function with various formats"""
-    from app.config import _parse_urls
+    from app.core.config import _parse_urls
     
     result = _parse_urls(urls_string)
     assert result == expected
