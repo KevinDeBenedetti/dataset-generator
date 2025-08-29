@@ -25,8 +25,6 @@ app.add_middleware(
 app.include_router(scrape.router)
 app.include_router(dataset.router)
 
-# Stockage en mémoire des tâches (à remplacer par une BD en production)
-tasks_store = {}
 
 # Routes API
 @app.get("/")
