@@ -16,3 +16,8 @@ start: ## Start generating datasets
 	@echo "Start generating datasets..."
 	uv sync
 	uv run main.py
+
+api: ## Start the FastAPI server
+	@echo "Starting API server..."
+	uv sync
+	uv run -m uvicorn main:app --reload --host 0.0.0.0 --port 8000

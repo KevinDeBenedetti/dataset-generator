@@ -1,107 +1,42 @@
-import logging
-import pprint
-from typing import List, Dict
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import config
-from app.scraper import WebScraper
-from app.llm_client import LLMClient
-from app.data_manager import DataManager
-from app.models import ScrapingMetrics
-from app.utils import setup_logging, qa_to_dict_list, print_summary
+from app.routers import scrape, dataset
+from app.utils import setup_logging
 
-class ScrapingPipeline:
-    def __init__(self, use_cache: bool = True):
-        self.scraper = WebScraper(use_cache=use_cache)
-        self.llm_client = LLMClient()
-        self.data_manager = DataManager()
-        self.metrics = ScrapingMetrics()
-    
-    def process_url(self, url: str, dataset_name: str = None) -> List:
-        """Process a full URL: scrape -> clean -> QA -> save"""
-        try:
-            # 1. Scraping
-            content = self.scraper.scrape_url(url)
-            self.metrics.urls_processed += 1
-            
-            # 2. Save raw markdown
-            md_path = self.data_manager.save_markdown(content)
-            logging.info(f"Saved markdown: {md_path}")
-            
-            # 3. LLM cleaning
-            cleaned_text = self.llm_client.clean_text(content.text)
-            
-            # 4. Save cleaned text
-            txt_path = self.data_manager.save_cleaned_text(content, cleaned_text)
-            logging.info(f"Saved cleaned text: {txt_path}")
-            
-            # 5. QA generation
-            qa_list = self.llm_client.generate_qa(cleaned_text)
-            qa_dicts = qa_to_dict_list(qa_list)
-            self.metrics.qa_pairs_generated += len(qa_dicts)
-            
-            # 6. Save datasets
-            if qa_dicts:
-                # Créer la structure de catégories pour save_dataset
-                dataset_structure = {
-                    dataset_name or "general": {
-                        f"qa_{i}": qa_dict for i, qa_dict in enumerate(qa_dicts)
-                    }
-                }
-                dataset_paths = self.data_manager.save_dataset(dataset_structure)
-                logging.info(f"Saved datasets: {[str(p) for p in dataset_paths]}")
-                return dataset_paths
-            
-            return []
-            
-        except Exception as e:
-            error_msg = f"Error processing {url}: {str(e)}"
-            self.metrics.add_error(error_msg)
-            logging.error(error_msg)
-            return []
-    
-    def process_urls(self, urls_config: Dict) -> List:
-        """Process a list of URLs"""
-        all_paths = []
-        
-        def process_nested_urls(data: Dict, path_parts: List[str] = []):
-            for key, value in data.items():
-                current_path = path_parts + [key]
-                 
-                if isinstance(value, dict):
-                    if "url" in value:
-                        # Valid URL entry
-                        url = value["url"]
-                        dataset_name = "-".join(current_path)
+# Configuration de base
+setup_logging()
 
-                        logging.info(f"Processing {url} for dataset '{dataset_name}'")
-                        paths = self.process_url(url, dataset_name)
-                        all_paths.extend(paths)
+# Création de l'application FastAPI
+app = FastAPI(
+    title="Datasets Generator API",
+    description="API pour générer des datasets à partir de scraping web",
+    version="1.0.0"
+)
 
-                        if paths:
-                            print(f"✅ {dataset_name}: {url}")
-                        else:
-                            print(f"❌ {dataset_name}: Processing failed for {url}")
-                    else:
-                        # New hierarchical level - recurse into nested dictionary
-                        process_nested_urls(value, current_path)
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # À adapter selon vos besoins de sécurité
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(scrape.router)
+app.include_router(dataset.router)
 
-        process_nested_urls(urls_config)
-        return all_paths
-        
-def main():
-    # Configure logging
-    setup_logging()
+# Stockage en mémoire des tâches (à remplacer par une BD en production)
+tasks_store = {}
 
-    urls_config = config.urls_config
-
-    # Pipeline
-    pipeline = ScrapingPipeline(use_cache=True)
-    
-    # Processing
-    paths = pipeline.process_urls(urls_config)
-    
-    # Summary
-    print_summary(pipeline.metrics, paths)
-
-if __name__ == "__main__":
-    main()
+# Routes API
+@app.get("/")
+def read_root():
+    return {
+        "name": "Datasets Generator API",
+        "version": "1.0.0",
+        "endpoints": [
+            "/scrape/urls", 
+            "/scrape/simple",
+            "/tasks/{task_id}"
+        ]
+    }
