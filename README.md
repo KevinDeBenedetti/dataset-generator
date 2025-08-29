@@ -124,3 +124,62 @@ The project can easily be extended to:
 - Make sure to respect the terms of use of the websites you scrape
 - Using LLM APIs may incur costs depending on your provider
 
+## 🚀 API Usage
+
+Le projet expose une API REST qui permet de lancer des tâches de scraping et de génération de datasets:
+
+```bash
+# Lancer le serveur API
+make api
+```
+
+### Endpoints
+
+- `GET /` - Informations sur l'API
+- `POST /scrape/urls` - Lancer une tâche avec configuration hiérarchique
+- `POST /scrape/simple` - Lancer une tâche avec liste simple d'URLs
+- `GET /tasks/{task_id}` - Vérifier le statut d'une tâche
+
+### Exemples d'utilisation
+
+#### Configuration hiérarchique (comme urls.json)
+
+```bash
+curl -X POST http://localhost:8000/scrape/urls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "urls_config": {
+      "ministeres": {
+        "interieur": {
+          "url": "https://fr.wikipedia.org/wiki/Minist%C3%A8re_de_l%27Int%C3%A9rieur_(France)",
+          "description": "Page Wikipedia du ministère de l'Intérieur"
+        }
+      }
+    },
+    "use_cache": true,
+    "target_language": "fr"
+  }'
+```
+
+#### Liste simple d'URLs
+
+```bash
+curl -X POST http://localhost:8000/scrape/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "urls": [
+      "https://fr.wikipedia.org/wiki/Minist%C3%A8re_de_l%27Int%C3%A9rieur_(France)"
+    ],
+    "category": "gouvernement",
+    "use_cache": true
+  }'
+```
+
+#### Vérification du statut
+
+```bash
+curl -X GET http://localhost:8000/tasks/f47ac10b-58cc-4372-a567-0e02b2c3d479
+```
+
+La documentation complète de l'API est disponible à l'adresse `http://localhost:8000/docs` après le lancement du serveur.
+
