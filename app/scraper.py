@@ -8,9 +8,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import Tuple
 
-from app.config import config
-from app.cache import URLCache
-from app.models import ScrapedContent
+from app.core.config import config
+from app.core.cache import URLCache
+from app.models.qa import ScrapedContent
 from datetime import datetime, timezone
 
 class WebScraper:
