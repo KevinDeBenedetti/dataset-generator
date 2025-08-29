@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 import re
 
-from app.config import config
-from app.models import ScrapedContent
+from app.core.config import config
+from app.models.qa import ScrapedContent
 
 class DataManager:
     def __init__(self):

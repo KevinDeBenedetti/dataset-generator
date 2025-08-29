@@ -3,8 +3,8 @@ import instructor
 import logging
 from typing import List
 
-from app.config import config
-from app.models import QA
+from app.core.config import config
+from app.models.qa import QA
 
 class PromptManager:
     CLEANING_PROMPT = """
