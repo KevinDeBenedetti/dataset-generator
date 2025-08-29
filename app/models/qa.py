@@ -35,19 +35,36 @@ class ScrapingMetrics:
     qa_pairs_generated: int = 0
     errors: List[str] = dc_field(default_factory=list)
     start_time: float = dc_field(default_factory=time.time)
+    duration: float = 0.0
+    rate: float = 0.0
+    _start_time: Optional[float] = None
+    _end_time: Optional[float] = None
     
     def add_error(self, error: str):
         from datetime import datetime
         self.errors.append(f"{datetime.now().isoformat()}: {error}")
     
     def get_summary(self) -> str:
-        duration = time.time() - self.start_time
-        rate = self.qa_pairs_generated / duration if duration > 0 else 0
+        self.calculate_rate()
         return f"""
 Scraping Summary:
 - URLs processed: {self.urls_processed}
 - QA pairs generated: {self.qa_pairs_generated}
 - Errors: {len(self.errors)}
-- Duration: {duration:.2f}s
-- Rate: {rate:.2f} QA/s
+- Duration: {self.duration:.2f}s
+- Rate: {self.rate:.2f} QA/s
         """
+    
+    def start_timer(self):
+        self._start_time = time.time()
+
+    def stop_timer(self):
+        self._end_time = time.time()
+        if self._start_time is not None:
+            self.duration = self._end_time - self._start_time
+
+    def calculate_rate(self):
+        if self.duration > 0:
+            self.rate = self.urls_processed / self.duration
+        else:
+            self.rate = 0.0

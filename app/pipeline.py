@@ -4,7 +4,6 @@ from typing import List, Dict
 from app.scraper import WebScraper
 from app.llm_client import LLMClient
 from app.data_manager import DataManager
-from app.models.api import ScrapingResult
 from app.models.qa import ScrapingMetrics
 from app.utils import qa_to_dict_list
 
@@ -14,6 +13,8 @@ class ScrapingPipeline:
         self.llm_client = LLMClient()
         self.data_manager = DataManager()
         self.metrics = ScrapingMetrics()
+        # Démarrer le timer pour la durée
+        self.metrics.start_timer()
     
     def process_url(self, url: str, dataset_name: str = None) -> List:
         """Process a full URL: scrape -> clean -> QA -> save"""
@@ -85,15 +86,9 @@ class ScrapingPipeline:
                         process_nested_urls(value, current_path)
 
         process_nested_urls(urls_config)
+        # Arrêter le timer à la fin du traitement
+        self.metrics.stop_timer()
+        # Calculer le taux (rate)
+        self.metrics.calculate_rate()
         return all_paths
     
-    # Méthode utilitaire pour créer un résultat de scraping
-    def create_result(self, task_id: str, paths: List) -> ScrapingResult:
-        return ScrapingResult(
-            task_id=task_id,
-            status="success" if not self.metrics.errors else "partial_success",
-            urls_processed=self.metrics.urls_processed,
-            qa_pairs_generated=self.metrics.qa_pairs_generated,
-            files_generated=[str(p) for p in paths],
-            errors=self.metrics.errors[-10:] if self.metrics.errors else []
-        )

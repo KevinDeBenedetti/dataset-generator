@@ -2,7 +2,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Body
 from typing import Dict, Any, Optional
 
-from app.models.api import TaskStatus
+from app.models.dataset import DatasetResult
+
 from app.core.config import config
 from app.utils import print_summary
 from app.pipeline import ScrapingPipeline
@@ -11,15 +12,15 @@ router = APIRouter(
     tags=["dataset"],
 )
 
-@router.post("/dataset", response_model=TaskStatus)
+@router.post("/dataset", response_model=DatasetResult)
 async def create_dataset(
     urls_config: Optional[Dict[str, Any]] = Body(
         None,
-        description="Configuration des URLs à scraper",
+        description="Configuration for URLs to scrape",
         openapi_examples={
             "Example": {
-                "summary": "Configuration complète d'exemple",
-                "description": "Configuration type basée sur urls.json.example",
+                "summary": "Full example configuration",
+                "description": "Typical configuration based on urls.json.example",
                 "value": {
                     "official_sources": {
                         "main_site": {
@@ -42,15 +43,25 @@ async def create_dataset(
         # Processing
         paths = pipeline.process_urls(urls_config or {})
         
-        # Summary
+        # Create details with metrics and summary
+        # result_details_obj = pipeline.create_result("dataset-creation", paths)
+
         print_summary(pipeline.metrics, paths)
-        
-        return TaskStatus(
+
+        # Convert paths to strings to satisfy Pydantic validation
+        files = [str(p) for p in paths] if paths else []
+
+        return DatasetResult(
             task_id="dataset-creation",
             status="completed",
-            progress=1.0,
-            details=pipeline.create_result("dataset-creation", paths)
+            urls_processed=pipeline.metrics.urls_processed,
+            qa_pairs_generated=pipeline.metrics.qa_pairs_generated,
+            files_generated=files,
+            errors=pipeline.metrics.errors,
+            duration=pipeline.metrics.duration,
+            rate=pipeline.metrics.rate
         )
+        
     except Exception as e:
         logging.error(f"Error creating dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
