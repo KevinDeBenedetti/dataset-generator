@@ -9,6 +9,7 @@ dependencies = [
     "fake-useragent>=2.2.0",
     "instructor>=1.10.0",
     "openai>=1.102.0",
+    "pytest>=8.4.1",
     "requests>=2.32.5",
     "scrapy>=2.13.3",
 ]

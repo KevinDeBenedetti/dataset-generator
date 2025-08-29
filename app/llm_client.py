@@ -30,8 +30,6 @@ class PromptManager:
     @classmethod
     def get_qa_prompt(cls, context: str, target_language: str = None) -> str:
         target_language = target_language or config.target_language or "en"
-        logging.info(f"Language detected: {target_language}...")
-        logging.info(f"Context : {context}")
         return f"""
         Generate high-quality question-answer pairs based on this text.
         

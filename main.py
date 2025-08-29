@@ -1,5 +1,6 @@
 import logging
-from typing import List
+import pprint
+from typing import List, Dict
 
 from app.config import config
 from app.scraper import WebScraper
@@ -15,7 +16,7 @@ class ScrapingPipeline:
         self.data_manager = DataManager()
         self.metrics = ScrapingMetrics()
     
-    def process_url(self, url: str) -> List:
+    def process_url(self, url: str, dataset_name: str = None) -> List:
         """Process a full URL: scrape -> clean -> QA -> save"""
         try:
             # 1. Scraping
@@ -40,7 +41,13 @@ class ScrapingPipeline:
             
             # 6. Save datasets
             if qa_dicts:
-                dataset_paths = self.data_manager.save_dataset(qa_dicts)
+                # Créer la structure de catégories pour save_dataset
+                dataset_structure = {
+                    dataset_name or "general": {
+                        f"qa_{i}": qa_dict for i, qa_dict in enumerate(qa_dicts)
+                    }
+                }
+                dataset_paths = self.data_manager.save_dataset(dataset_structure)
                 logging.info(f"Saved datasets: {[str(p) for p in dataset_paths]}")
                 return dataset_paths
             
@@ -52,33 +59,46 @@ class ScrapingPipeline:
             logging.error(error_msg)
             return []
     
-    def process_urls(self, urls: List[str]) -> List:
+    def process_urls(self, urls_config: Dict) -> List:
         """Process a list of URLs"""
         all_paths = []
         
-        for url in urls:
-            logging.info(f"Processing {url}")
-            paths = self.process_url(url)
-            all_paths.extend(paths)
-            
-            if paths:
-                print(f"✅ {url}: {self.metrics.qa_pairs_generated} QA pairs total")
-            else:
-                print(f"❌ {url}: Processing failed")
-        
-        return all_paths
+        def process_nested_urls(data: Dict, path_parts: List[str] = []):
+            for key, value in data.items():
+                current_path = path_parts + [key]
+                 
+                if isinstance(value, dict):
+                    if "url" in value:
+                        # Valid URL entry
+                        url = value["url"]
+                        dataset_name = "-".join(current_path)
 
+                        logging.info(f"Processing {url} for dataset '{dataset_name}'")
+                        paths = self.process_url(url, dataset_name)
+                        all_paths.extend(paths)
+
+                        if paths:
+                            print(f"✅ {dataset_name}: {url}")
+                        else:
+                            print(f"❌ {dataset_name}: Processing failed for {url}")
+                    else:
+                        # New hierarchical level - recurse into nested dictionary
+                        process_nested_urls(value, current_path)
+
+        process_nested_urls(urls_config)
+        return all_paths
+        
 def main():
     # Configure logging
     setup_logging()
-    
-    urls = config.urls
+
+    urls_config = config.urls_config
 
     # Pipeline
     pipeline = ScrapingPipeline(use_cache=True)
     
     # Processing
-    paths = pipeline.process_urls(urls)
+    paths = pipeline.process_urls(urls_config)
     
     # Summary
     print_summary(pipeline.metrics, paths)

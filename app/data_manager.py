@@ -1,7 +1,7 @@
 import json
-import csv
+import hashlib
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 import re
@@ -25,6 +25,24 @@ class DataManager:
     def _get_timestamp(self) -> str:
         return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     
+    def _generate_item_id(self, item: Dict) -> str:
+        """Generate a unique ID based on the hash of the item's content."""
+        content_str = json.dumps(item, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
+    
+    def prepare_for_langfuse(self, items: List[Dict], dataset_name: str) -> List[Dict]:
+        """Prepare items of the dataset for Langfuse and add IDs and metada."""
+        prepared_items = []
+        for item in items:
+            # Copy item to don't modify the original
+            prepared_item = item.copy()
+            # Add a unique ID if don't exist
+            if "id" not in prepared_item:
+                prepared_item["id"] = self._generate_item_id(item)
+            prepared_items.append(prepared_item)
+        
+        return prepared_items
+
     def save_markdown(self, content: ScrapedContent) -> Path:
         ts = self._get_timestamp()
         filename = f"{self._slugify_url(content.url)}-{ts}.md"
@@ -58,44 +76,63 @@ class DataManager:
         path.write_text(header + cleaned_text, encoding="utf-8")
         return path
     
-    def save_dataset(self, items: List[Dict], formats: List[str] = None, prefix: str = None) -> List[Path]:
-        formats = formats or config.output_formats
+    def save_dataset(self, 
+                     data, 
+                     formats: List[str] = None, 
+                     prefix: str = None,
+                     dataset_name: Optional[str] = None,
+                     sub_category: Optional[str] = None) -> List[Path]:
+        """
+        Save a dataset in JSON format with standardized naming.
+
+        Args:
+            data: Dictionary with categories or List of items
+            formats: Ignored, only JSON is used
+            prefix: Ignored, using standardized naming
+            dataset_name: Name of the dataset (category)
+            sub_category: Sub-category for the dataset
+
+        Returns:
+            List of paths to the created files
+        """
         ts = self._get_timestamp()
-        prefix = f"{prefix}-" if prefix else ""
         paths = []
         
-        qa_dir = self.datasets_dir / "qa"
-        qa_dir.mkdir(parents=True, exist_ok=True)
+        # Convert list to dict structure if needed
+        if isinstance(data, list):
+            category_name = dataset_name or "general"
+            items_dict = {
+                category_name: {
+                    f"qa_{i}": item for i, item in enumerate(data)
+                }
+            }
+        else:
+            items_dict = data
         
-        if "json" in formats:
-            path = qa_dir / f"{prefix}dataset-{ts}.json"
-            path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
-            paths.append(path)
+        # Create base directory
+        base_dir = self.datasets_dir / "qa"
+        base_dir.mkdir(parents=True, exist_ok=True)
         
-        if "jsonl" in formats:
-            path = qa_dir / f"{prefix}dataset-{ts}.jsonl"
-            with path.open("w", encoding="utf-8") as f:
-                for item in items:
-                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
-            paths.append(path)
-        
-        if "csv" in formats:
-            path = qa_dir / f"{prefix}dataset-{ts}.csv"
-            if items:
-                all_keys = set()
-                for item in items:
-                    all_keys.update(item.keys())
-                
-                preferred = ["question", "answer", "context"]
-                rest = sorted(k for k in all_keys if k not in preferred)
-                fieldnames = [k for k in preferred if k in all_keys] + rest
-                
-                with path.open("w", encoding="utf-8", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for item in items:
-                        row = {k: item.get(k, "") for k in fieldnames}
-                        writer.writerow(row)
-            paths.append(path)
-        
+        # Process each category
+        for category_name, category_items in items_dict.items():
+            # Use provided sub_category or default to 'data'
+            current_sub_category = sub_category or "data"
+            
+            # Prepare items for Langfuse format
+            prepared_items = []
+            for item_key, item_data in category_items.items():
+                prepared_item = item_data.copy()
+                if "id" not in prepared_item:
+                    prepared_item["id"] = self._generate_item_id(item_data)
+                prepared_items.append(prepared_item)
+            
+            # Save only in JSON format with standardized naming
+            filename = f"{category_name}-{current_sub_category}-{ts}.json"
+            file_path = base_dir / filename
+            file_path.write_text(
+                json.dumps(prepared_items, ensure_ascii=False, indent=2), 
+                encoding="utf-8"
+            )
+            paths.append(file_path)
+
         return paths
