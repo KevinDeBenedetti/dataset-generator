@@ -13,10 +13,13 @@ from app.models.qa import ScrapedContent
 from datetime import datetime, timezone
 
 class WebScraper:
+    """Web scraper with caching and error handling capabilities"""
+    
     def __init__(self, use_cache: bool = True):
         self.cache = URLCache(config.cache_dir) if use_cache else None
     
     def _setup_session(self) -> requests.Session:
+        """Setup requests session with retry strategy"""
         session = requests.Session()
         retries = Retry(
             total=config.max_retries,
@@ -29,6 +32,7 @@ class WebScraper:
         return session
     
     def _get_user_agent(self) -> str:
+        """Get a random user agent string"""
         try:
             ua = UserAgent()
             return ua.random
@@ -37,6 +41,7 @@ class WebScraper:
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     
     def _extract_text(self, html: str) -> str:
+        """Extract clean text from HTML content"""
         # Clean HTML
         cleaned_html = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', '', html)
         cleaned_html = re.sub(r'<!--.*?-->', '', cleaned_html, flags=re.S)
@@ -47,6 +52,7 @@ class WebScraper:
         return re.sub(r'\s+', ' ', text).strip()
     
     def scrape_url(self, url: str) -> ScrapedContent:
+        """Scrape content from a URL with caching support"""
         # Check cache
         if self.cache:
             cached = self.cache.get(url)

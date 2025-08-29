@@ -1,8 +1,9 @@
 import logging
 from typing import List, Dict
-from app.models.qa import QA
+from pathlib import Path
+from app.models.qa import QA, ScrapingMetrics
 
-def setup_logging(level: int = logging.INFO):
+def setup_logging(level: int = logging.INFO) -> None:
     logging.basicConfig(
         level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(filename)s:%(lineno)d',
@@ -16,7 +17,8 @@ def qa_to_dict_list(qa_list: List[QA]) -> List[Dict]:
     """Convert a list of QA objects to dictionaries"""
     return [qa.model_dump() for qa in qa_list]
 
-def print_summary(metrics, paths: List):
+def print_summary(metrics: ScrapingMetrics, paths: List[Path]) -> None:
+    """Print a summary of scraping results"""
     print("\n" + "="*50)
     print("SCRAPING COMPLETED")
     print("="*50)

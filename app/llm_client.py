@@ -1,12 +1,14 @@
 import openai
 import instructor
 import logging
-from typing import List
+from typing import List, Optional
 
 from app.core.config import config
 from app.models.qa import QA
 
 class PromptManager:
+    """Manages prompts for LLM interactions"""
+    
     CLEANING_PROMPT = """
     You are an expert text cleaner. Goal: extract only the main informative content.
     
@@ -28,7 +30,8 @@ class PromptManager:
     """
     
     @classmethod
-    def get_qa_prompt(cls, context: str, target_language: str = None) -> str:
+    def get_qa_prompt(cls, context: str, target_language: Optional[str] = None) -> str:
+        """Generate QA prompt with specified target language"""
         target_language = target_language or config.target_language or "en"
         return f"""
         Generate high-quality question-answer pairs based on this text.
@@ -45,6 +48,8 @@ class PromptManager:
         """
 
 class LLMClient:
+    """Client for interacting with Language Models for text cleaning and QA generation"""
+    
     def __init__(self):
         self.client = openai.OpenAI(
             api_key=config.openai_api_key,
@@ -57,6 +62,7 @@ class LLMClient:
         self.prompt_manager = PromptManager()
     
     def clean_text(self, text: str) -> str:
+        """Clean text using LLM to remove noise and extract main content"""
         try:
             response = self.client.chat.completions.create(
                 model=config.model_cleaning,
@@ -73,6 +79,7 @@ class LLMClient:
             return text
     
     def generate_qa(self, text: str) -> List[QA]:
+        """Generate question-answer pairs from cleaned text"""
         try:
             result = self.instructor_client.chat.completions.create(
                 model=config.model_qa,

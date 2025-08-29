@@ -1,5 +1,6 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
+from pathlib import Path
 
 from app.scraper import WebScraper
 from app.llm_client import LLMClient
@@ -9,13 +10,15 @@ from app.models.qa import ScrapingMetrics
 from app.utils import qa_to_dict_list
 
 class ScrapingPipeline:
+    """Orchestrates the complete dataset generation pipeline"""
+    
     def __init__(self, use_cache: bool = True):
         self.scraper = WebScraper(use_cache=use_cache)
         self.llm_client = LLMClient()
         self.data_manager = DataManager()
         self.metrics = ScrapingMetrics()
     
-    def process_url(self, url: str, dataset_name: str = None) -> List:
+    def process_url(self, url: str, dataset_name: Optional[str] = None) -> List[Path]:
         """Process a full URL: scrape -> clean -> QA -> save"""
         try:
             # 1. Scraping
@@ -58,8 +61,8 @@ class ScrapingPipeline:
             logging.error(error_msg)
             return []
     
-    def process_urls(self, urls_config: Dict) -> List:
-        """Process a list of URLs"""
+    def process_urls(self, urls_config: Dict) -> List[Path]:
+        """Process multiple URLs from hierarchical configuration"""
         all_paths = []
         
         def process_nested_urls(data: Dict, path_parts: List[str] = []):
@@ -88,7 +91,8 @@ class ScrapingPipeline:
         return all_paths
     
     # Utility method to create a scraping result
-    def create_result(self, task_id: str, paths: List) -> ScrapingResult:
+    def create_result(self, task_id: str, paths: List[Path]) -> ScrapingResult:
+        """Create a ScrapingResult object from pipeline execution"""
         return ScrapingResult(
             task_id=task_id,
             status="success" if not self.metrics.errors else "partial_success",

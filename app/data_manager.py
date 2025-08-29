@@ -10,6 +10,8 @@ from app.core.config import config
 from app.models.qa import ScrapedContent
 
 class DataManager:
+    """Manages data storage and file operations for scraped content and datasets"""
+    
     def __init__(self):
         self.scrapes_dir = Path(config.scrapes_dir)
         self.datasets_dir = Path(config.datasets_dir)
@@ -17,12 +19,14 @@ class DataManager:
         self.datasets_dir.mkdir(parents=True, exist_ok=True)
     
     def _slugify_url(self, url: str) -> str:
+        """Convert URL to filesystem-safe slug"""
         parsed = urlparse(url)
         slug = f"{parsed.netloc}{parsed.path}"
         slug = re.sub(r'[^A-Za-z0-9]+', '-', slug).strip('-').lower()
         return slug or "page"
     
     def _get_timestamp(self) -> str:
+        """Get current timestamp in ISO format"""
         return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     
     def _generate_item_id(self, item: Dict) -> str:
@@ -44,6 +48,7 @@ class DataManager:
         return prepared_items
 
     def save_markdown(self, content: ScrapedContent) -> Path:
+        """Save scraped content as markdown file"""
         ts = self._get_timestamp()
         filename = f"{self._slugify_url(content.url)}-{ts}.md"
         path = self.scrapes_dir / filename
@@ -61,6 +66,7 @@ class DataManager:
         return path
     
     def save_cleaned_text(self, content: ScrapedContent, cleaned_text: str) -> Path:
+        """Save cleaned text with metadata header"""
         ts = self._get_timestamp()
         filename = f"{self._slugify_url(content.url)}-{ts}.txt"
         path = self.datasets_dir / "texts" / filename
