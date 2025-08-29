@@ -13,7 +13,7 @@ def setup_logging(level: int = logging.INFO):
     )
 
 def qa_to_dict_list(qa_list: List[QA]) -> List[Dict]:
-    """Convertit une liste de QA en dictionnaires"""
+    """Convert a list of QA objects to dictionaries"""
     return [qa.model_dump() for qa in qa_list]
 
 def print_summary(metrics, paths: List):
@@ -29,5 +29,5 @@ def print_summary(metrics, paths: List):
     
     if metrics.errors:
         print(f"\nErrors ({len(metrics.errors)}):")
-        for error in metrics.errors[-5:]:  # Dernières 5 erreurs
+        for error in metrics.errors[-5:]:  # Last 5 errors
             print(f"  - {error}")

@@ -40,7 +40,7 @@ class ScrapingPipeline:
             
             # 6. Save datasets
             if qa_dicts:
-                # Créer la structure de catégories pour save_dataset
+                # Create category structure for save_dataset
                 dataset_structure = {
                     dataset_name or "general": {
                         f"qa_{i}": qa_dict for i, qa_dict in enumerate(qa_dicts)
@@ -87,7 +87,7 @@ class ScrapingPipeline:
         process_nested_urls(urls_config)
         return all_paths
     
-    # Méthode utilitaire pour créer un résultat de scraping
+    # Utility method to create a scraping result
     def create_result(self, task_id: str, paths: List) -> ScrapingResult:
         return ScrapingResult(
             task_id=task_id,

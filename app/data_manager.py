@@ -31,12 +31,12 @@ class DataManager:
         return hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
     
     def prepare_for_langfuse(self, items: List[Dict], dataset_name: str) -> List[Dict]:
-        """Prepare items of the dataset for Langfuse and add IDs and metada."""
+        """Prepare items of the dataset for Langfuse and add IDs and metadata."""
         prepared_items = []
         for item in items:
-            # Copy item to don't modify the original
+            # Copy item to not modify the original
             prepared_item = item.copy()
-            # Add a unique ID if don't exist
+            # Add a unique ID if it doesn't exist
             if "id" not in prepared_item:
                 prepared_item["id"] = self._generate_item_id(item)
             prepared_items.append(prepared_item)

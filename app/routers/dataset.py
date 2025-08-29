@@ -15,11 +15,11 @@ router = APIRouter(
 async def create_dataset(
     urls_config: Optional[Dict[str, Any]] = Body(
         None,
-        description="Configuration des URLs à scraper",
+        description="Configuration of URLs to scrape",
         openapi_examples={
             "Example": {
-                "summary": "Configuration complète d'exemple",
-                "description": "Configuration type basée sur urls.json.example",
+                "summary": "Complete example configuration",
+                "description": "Configuration type based on urls.json.example",
                 "value": {
                     "official_sources": {
                         "main_site": {

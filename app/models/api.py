@@ -1,50 +1,50 @@
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 
 
 class UrlEntry(BaseModel):
-    """Un élément URL individuel avec sa description"""
-    url: HttpUrl = Field(..., description="URL à scraper")
-    description: Optional[str] = Field(None, description="Description de la source")
+    """An individual URL entry with its description"""
+    url: HttpUrl = Field(..., description="URL to scrape")
+    description: Optional[str] = Field(None, description="Source description")
 
 
 class ScrapingTask(BaseModel):
-    """Tâche de scraping avec structure hiérarchique comme dans urls.json"""
+    """Scraping task with hierarchical structure like in urls.json"""
     urls_config: Dict[str, Any] = Field(
         ...,
-        description="Configuration d'URLs avec structure hiérarchique"
+        description="URL configuration with hierarchical structure"
     )
     use_cache: bool = Field(
         True, 
-        description="Utiliser le cache pour les URLs déjà scrapées"
+        description="Use cache for already scraped URLs"
     )
     target_language: Optional[str] = Field(
         None, 
-        description="Langue cible pour les QA (par défaut: fr)"
+        description="Target language for QA (default: en)"
     )
 
 
 class SimpleUrlList(BaseModel):
-    """Format simplifié pour une liste d'URLs à scraper"""
-    urls: List[str] = Field(..., description="Liste simple d'URLs à scraper")
-    category: str = Field("general", description="Catégorie pour toutes les URLs")
-    use_cache: bool = Field(True, description="Utiliser le cache")
+    """Simplified format for a list of URLs to scrape"""
+    urls: List[str] = Field(..., description="Simple list of URLs to scrape")
+    category: str = Field("general", description="Category for all URLs")
+    use_cache: bool = Field(True, description="Use cache")
 
 
 class ScrapingResult(BaseModel):
-    """Résultat d'une tâche de scraping"""
-    task_id: str = Field(..., description="ID unique de la tâche")
-    status: str = Field(..., description="Statut: success, error, processing")
-    urls_processed: int = Field(0, description="Nombre d'URLs traitées")
-    qa_pairs_generated: int = Field(0, description="Nombre de paires QA générées")
-    files_generated: List[str] = Field([], description="Chemins des fichiers générés")
-    errors: List[str] = Field([], description="Erreurs éventuelles")
+    """Result of a scraping task"""
+    task_id: str = Field(..., description="Unique task ID")
+    status: str = Field(..., description="Status: success, error, processing")
+    urls_processed: int = Field(0, description="Number of URLs processed")
+    qa_pairs_generated: int = Field(0, description="Number of QA pairs generated")
+    files_generated: List[str] = Field([], description="Paths of generated files")
+    errors: List[str] = Field([], description="Possible errors")
     
     
 class TaskStatus(BaseModel):
-    """Statut d'une tâche"""
+    """Status of a task"""
     task_id: str
     status: str
-    progress: float = Field(0.0, description="Progression de 0 à 1")
+    progress: float = Field(0.0, description="Progress from 0 to 1")
     details: Optional[ScrapingResult] = None
     message: Optional[str] = None

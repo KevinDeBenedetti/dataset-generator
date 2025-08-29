@@ -6,7 +6,6 @@ from scrapy import Selector
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from typing import Tuple
 
 from app.core.config import config
 from app.core.cache import URLCache
@@ -38,17 +37,17 @@ class WebScraper:
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     
     def _extract_text(self, html: str) -> str:
-        # Nettoyage HTML
+        # Clean HTML
         cleaned_html = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', '', html)
         cleaned_html = re.sub(r'<!--.*?-->', '', cleaned_html, flags=re.S)
         
-        # Extraction texte
+        # Extract text
         selector = Selector(text=cleaned_html)
         text = ' '.join(selector.xpath('//body//text()').getall())
         return re.sub(r'\s+', ' ', text).strip()
     
     def scrape_url(self, url: str) -> ScrapedContent:
-        # Vérifier cache
+        # Check cache
         if self.cache:
             cached = self.cache.get(url)
             if cached:
@@ -61,7 +60,7 @@ class WebScraper:
                     timestamp=datetime.now(timezone.utc).isoformat()
                 )
         
-        # Scraper
+        # Scrape
         session = self._setup_session()
         user_agent = self._get_user_agent()
         headers = {"User-Agent": user_agent}
