@@ -10,7 +10,7 @@ from typing import Tuple
 
 from app.core.config import config
 from app.core.cache import URLCache
-from app.models.qa import ScrapedContent
+from app.models.scraping import ScrapedContent
 from datetime import datetime, timezone
 
 class WebScraper:

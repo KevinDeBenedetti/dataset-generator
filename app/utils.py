@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict
-from app.models.qa import QA
+from app.models.dataset import QA
 
 def setup_logging(level: int = logging.INFO):
     logging.basicConfig(

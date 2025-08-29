@@ -42,9 +42,6 @@ async def create_dataset(
         
         # Processing
         paths = pipeline.process_urls(urls_config or {})
-        
-        # Create details with metrics and summary
-        # result_details_obj = pipeline.create_result("dataset-creation", paths)
 
         print_summary(pipeline.metrics, paths)
 

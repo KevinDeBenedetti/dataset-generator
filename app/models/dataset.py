@@ -1,3 +1,4 @@
+from pydantic import BaseModel, Field, field_validator
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Dict, List, Optional, Any, Union
 
@@ -11,3 +12,22 @@ class DatasetResult(BaseModel):
     errors: List[str] = Field([], description="Potential errors")
     duration: float = Field(0.0, description="Duration of the task in seconds")
     rate: float = Field(0.0, description="QA generation rate (QA/s)")
+
+class QA(BaseModel):
+    question: str = Field(..., min_length=10, max_length=500, description="Question related to the context")
+    answer: str = Field(..., min_length=20, description="Complete answer based on the context")
+    context: str = Field(..., min_length=50, description="Source text that enabled the answer")
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls, v):
+        v = v.strip()
+        if not v.endswith('?'):
+            v = v + '?'
+        return v
+    
+    @field_validator('answer', 'context')
+    @classmethod
+    def validate_text_fields(cls, v):
+        return v.strip()

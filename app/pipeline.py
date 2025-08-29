@@ -4,7 +4,7 @@ from typing import List, Dict
 from app.scraper import WebScraper
 from app.llm_client import LLMClient
 from app.data_manager import DataManager
-from app.models.qa import ScrapingMetrics
+from app.models.scraping import ScrapingMetrics
 from app.utils import qa_to_dict_list
 
 class ScrapingPipeline:
