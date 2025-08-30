@@ -128,12 +128,14 @@ The main workflow is managed by the `ScrapingPipeline` class which coordinates t
 
 ## 📚 Libraries Used
 
-- **requests**: Execution of HTTP requests for scraping
-- **scrapy**: Extraction of structured data from HTML
-- **fake-useragent**: Rotation of user-agents to avoid scraping detection
-- **openai**: Communication with OpenAI API for text processing
-- **instructor**: Enhancement of interaction with LLMs to generate structured outputs
-- **dotenv**: Management of environment variables and configurations
+- **requests** >= 2.32.5 — HTTP requests for scraping
+- **scrapy** >= 2.13.3 — Structured data extraction from HTML
+- **fake-useragent** >= 2.2.0 — User-agent rotation to avoid scraping detection
+- **openai** >= 1.102.0 — OpenAI API client for text processing
+- **instructor** >= 1.10.0 — Tools to build structured LLM prompts / structured outputs
+- **python-dotenv** >= 0.9.9 — Load environment variables from a .env file
+- **fastapi** >= 0.116.1 — API framework used by the service
+- **pytest** >= 8.4.1 — Testing framework
 
 ## 🛠️ Features
 
