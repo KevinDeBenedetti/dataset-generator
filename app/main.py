@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from importlib import import_module
+from fastapi.responses import RedirectResponse
 
 from app.routers import dataset
 from app.utils.langfuse import is_langfuse_available
@@ -27,7 +28,6 @@ app.add_middleware(
 
 app.include_router(dataset.router)
 
-# Inclure les routes Langfuse seulement si la configuration + connexion sont OK
 if is_langfuse_available():
     try:
         langfuse_mod = import_module("app.routers.langfuse")
@@ -48,12 +48,4 @@ else:
 
 @app.get("/")
 def read_root():
-    return {
-        "name": "Datasets Generator API",
-        "version": "1.0.0",
-        "endpoints": [
-            "/scrape/urls", 
-            "/scrape/simple",
-            "/tasks/{task_id}"
-        ]
-    }
+    return RedirectResponse(url="/docs", status_code=302)
