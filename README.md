@@ -8,6 +8,18 @@ Create quality datasets for training AI models by automatically scraping reliabl
 
 ## ⚡ Quick Start
 
+```env
+# OpenAI API Key
+# Get your key from https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# OpenAI API base URL
+# Use the official URL or your custom proxy/gateway
+# Official URL: https://api.openai.com/v1
+# Proxy example: https://your-proxy.example.com/v1
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
 ```bash
 # Configuration
 cp .env.example .env
@@ -83,27 +95,6 @@ To optimize performance and reduce network calls:
 - Scraping results are cached
 - API requests to LLMs can be cached
 
-## 📂 Project Structure
-
-```
-datasets/
-├── app/                      # Main code
-│   ├── cache.py              # Caching system
-│   ├── config.py             # Configuration
-│   ├── data_manager.py       # Data management and storage
-│   ├── llm_client.py         # Interaction with LLMs
-│   ├── models.py             # Data model definitions
-│   ├── scraper.py            # Scraping module
-│   └── utils.py              # Utilities
-├── datasets/                 # Generated datasets
-│   ├── qa/                   # Generated QA pairs
-│   └── texts/                # Cleaned texts
-├── scrapes/                  # Raw scraped data
-├── main.py                   # Entry point
-├── Makefile                  # Make commands
-└── pyproject.toml            # Project configuration
-```
-
 ## 🔄 Workflow
 
 1. **Scraping**: Retrieving raw web data
@@ -124,62 +115,87 @@ The project can easily be extended to:
 - Make sure to respect the terms of use of the websites you scrape
 - Using LLM APIs may incur costs depending on your provider
 
-## 🚀 API Usage
+## Using the POST /dataset API
 
-Le projet expose une API REST qui permet de lancer des tâches de scraping et de génération de datasets:
+This API triggers dataset generation from one or more URLs. The pipeline will: scrape the page, clean the text via an LLM, generate question-answer pairs, and save files (raw markdown, cleaned text, datasets).
 
-```bash
-# Lancer le serveur API
-make api
-```
+- Endpoint: POST /dataset
+- Content-Type: application/json
+- Query parameters:
+  - target_language: target language (e.g. fr, en)
+  - model_cleaning: name of the model used for cleaning (e.g. gpt-4, gpt-3.5-turbo)
+  - model_qa: name of the model used for QA generation (e.g. gpt-4, gpt-3.5-turbo)
 
-### Endpoints
-
-- `GET /` - Informations sur l'API
-- `POST /scrape/urls` - Lancer une tâche avec configuration hiérarchique
-- `POST /scrape/simple` - Lancer une tâche avec liste simple d'URLs
-- `GET /tasks/{task_id}` - Vérifier le statut d'une tâche
-
-### Exemples d'utilisation
-
-#### Configuration hiérarchique (comme urls.json)
+Example curl command:
 
 ```bash
-curl -X POST http://localhost:8000/scrape/urls \
+curl -X POST "http://localhost:8000/dataset?target_language=fr&model_cleaning=gpt-4&model_qa=gpt-4" \
   -H "Content-Type: application/json" \
-  -d '{
-    "urls_config": {
-      "ministeres": {
-        "interieur": {
-          "url": "https://fr.wikipedia.org/wiki/Minist%C3%A8re_de_l%27Int%C3%A9rieur_(France)",
-          "description": "Page Wikipedia du ministère de l'Intérieur"
-        }
+  --data-raw '{
+    "official_sources": {
+      "main_site": {
+        "url": "https://example-official.gov",
+        "description": "Site officiel de l\'organisation"
+      },
+      "annex": {
+        "url": "https://example-official.gov/annexe",
+        "description": "Useful annex page"
       }
-    },
-    "use_cache": true,
-    "target_language": "fr"
+    }
   }'
 ```
 
-#### Liste simple d'URLs
+Expected JSON body structure: any valid structure matching the UrlsConfig model. A minimal example:
 
-```bash
-curl -X POST http://localhost:8000/scrape/simple \
-  -H "Content-Type: application/json" \
-  -d '{
-    "urls": [
-      "https://fr.wikipedia.org/wiki/Minist%C3%A8re_de_l%27Int%C3%A9rieur_(France)"
-    ],
-    "category": "gouvernement",
-    "use_cache": true
-  }'
+```json
+{
+  "official_sources": {
+    "main_site": {
+      "url": "https://example-official.gov",
+      "description": "Main official website"
+    }
+  }
+}
 ```
 
-#### Vérification du statut
+API behavior:
+- For each valid URL, the service:
+  1. scrapes the page and saves the raw markdown,
+  2. cleans the text using the `model_cleaning` model and saves the cleaned text,
+  3. generates question-answer pairs using `model_qa` and saves the dataset(s).
+- Progress and errors are printed to the server console (✅ / ❌) and logged.
 
-```bash
-curl -X GET http://localhost:8000/tasks/f47ac10b-58cc-4372-a567-0e02b2c3d479
+Returned response (DatasetResult) — simplified example:
+
+```json
+{
+  "task_id": "dataset-creation",
+  "status": "completed",
+  "urls_processed": 2,
+  "qa_pairs_generated": 14,
+  "files_generated": [
+    "data/markdown/main_site.md",
+    "data/cleaned/main_site.txt",
+    "data/datasets/main_site.jsonl"
+  ],
+  "errors": [],
+  "duration": 12.34,
+  "rate": 0.16
+}
 ```
 
-La documentation complète de l'API est disponible à l'adresse `http://localhost:8000/docs` après le lancement du serveur.
+- files_generated: list of paths to created files (paths returned by DataManager).
+- errors: list of errors encountered during processing.
+- duration, rate: processing metrics.
 
+Where are files stored?
+- Exact paths and folder structure are defined by the DataManager class (see `app/data_manager.py`). Typically the pipeline saves:
+  - raw markdown,
+  - cleaned text,
+  - datasets (JSON / JSONL / CSV) in output folders configured by DataManager.
+
+Practical tips:
+- Make sure the API is running (e.g. uvicorn on localhost:8000).
+- Ensure your LLM API keys are loaded in the environment (.env).
+- Check `app/data_manager.py` to change output paths if needed.
+- On errors, inspect the server logs to see messages recorded by ScrapingMetrics.
