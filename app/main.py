@@ -4,8 +4,11 @@ setup_logging()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+from importlib import import_module
 
-from app.routers import dataset, langfuse
+from app.routers import dataset
+from app.utils.langfuse import is_langfuse_available
 
 
 app = FastAPI(
@@ -23,7 +26,17 @@ app.add_middleware(
 )
 
 app.include_router(dataset.router)
-app.include_router(langfuse.router)
+
+# Inclure les routes Langfuse seulement si la configuration + connexion sont OK
+if is_langfuse_available():
+    try:
+        langfuse_mod = import_module("app.routers.langfuse")
+        app.include_router(langfuse_mod.router)
+        logging.info("Langfuse routes enabled")
+    except Exception as e:
+        logging.exception(f"Failed to enable Langfuse routes: {e}")
+else:
+    logging.info("Langfuse routes disabled: missing configuration or client unreachable")
 
 # =================================================================
 # TODO : Add more routes

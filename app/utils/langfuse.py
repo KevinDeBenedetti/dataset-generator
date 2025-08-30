@@ -1,7 +1,9 @@
 import logging
 import json
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
+
 from langfuse import get_client, Langfuse
 
 def prepare_langfuse_dataset(data: List[Dict], dataset_name: str) -> Dict[str, Any]:
@@ -134,3 +136,29 @@ def get_langfuse_client() -> Langfuse:
     except Exception as e:
         logging.error(f"Error initializing Langfuse client: {e}")
         raise
+
+def is_langfuse_configured() -> bool:
+    """
+    Vérifie la présence des variables d'environnement nécessaires pour Langfuse.
+    """
+    required = ["LANGFUSE_SECRET_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_HOST"]
+    missing = [k for k in required if not os.getenv(k)]
+    if missing:
+        logging.info(f"Langfuse not configured, missing env vars: {missing}")
+        return False
+    return True
+
+def is_langfuse_available() -> bool:
+    """
+    Tente d'initialiser le client Langfuse pour vérifier la connectivité.
+    Retourne True si le client s'initialise correctement, False sinon.
+    """
+    if not is_langfuse_configured():
+        return False
+    try:
+        _ = get_client()
+        logging.info("Langfuse client reachable")
+        return True
+    except Exception as e:
+        logging.warning(f"Langfuse client initialization failed: {e}")
+        return False
