@@ -12,7 +12,12 @@ help: ## Show helper
 clean: ## Clean cache, datasets, and scrapes
 	rm -rf cache/ datasets/ scrapes/ scraper.log
 
+dev: ## Start the FastAPI server
+	@echo "Starting API server..."
+	uv sync
+	uv run fastapi dev
+
 start: ## Start the FastAPI server
 	@echo "Starting API server..."
 	uv sync
-	uv run -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+	uv run -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

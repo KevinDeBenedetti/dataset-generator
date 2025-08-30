@@ -9,6 +9,7 @@ dependencies = [
     "fake-useragent>=2.2.0",
     "fastapi[standard]>=0.116.1",
     "instructor>=1.10.0",
+    "langfuse>=3.3.2",
     "openai>=1.102.0",
     "pytest>=8.4.1",
     "requests>=2.32.5",

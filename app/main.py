@@ -1,10 +1,12 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from app.routers import dataset
 from app.utils import setup_logging
 
 setup_logging()
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers import dataset, langfuse
+
 
 app = FastAPI(
     title="Datasets Generator API",
@@ -21,7 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(dataset.router)
-
+app.include_router(langfuse.router)
 
 # =================================================================
 # TODO : Add more routes
