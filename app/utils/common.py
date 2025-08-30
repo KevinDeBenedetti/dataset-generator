@@ -1,18 +1,7 @@
-import logging
 from typing import List, Dict, Any
 from urllib.parse import urlparse
 
 from app.models.dataset import QA
-
-def setup_logging(level: int = logging.INFO):
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(filename)s:%(lineno)d',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('scraper.log')
-        ]
-    )
 
 def qa_to_dict_list(qa_list: List[QA]) -> List[Dict]:
     """Convert a list of QA to dictionaries"""

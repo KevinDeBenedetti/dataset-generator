@@ -2,11 +2,11 @@ import logging
 from fastapi import APIRouter, HTTPException, Body, Query
 from typing import List
 
-from app.utils import print_summary, qa_to_dict_list, flatten_urls, is_valid_url
-from app.scraper import WebScraper
-from app.llm_client import LLMClient
-from app.data_manager import DataManager
-from app.models.scraping import ScrapingMetrics, UrlsConfig
+from app.utils.common import print_summary, qa_to_dict_list, flatten_urls, is_valid_url
+from app.utils.scraper import WebScraper
+from app.utils.llm_client import LLMClient
+from app.utils.data_manager import DataManager
+from app.models.scraper import ScrapingMetrics, UrlsConfig
 from app.models.dataset import TargetLanguage, ModelName, DatasetResult
 
 router = APIRouter(

@@ -9,7 +9,7 @@ from urllib3.util.retry import Retry
 
 from app.core.config import config
 from app.core.cache import URLCache
-from app.models.scraping import ScrapedContent
+from app.models.scraper import ScrapedContent
 from datetime import datetime, timezone
 
 class WebScraper:
