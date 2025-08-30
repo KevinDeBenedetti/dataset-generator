@@ -1,7 +1,16 @@
 from pydantic import BaseModel, Field, field_validator
-from pydantic import BaseModel, Field, HttpUrl
-from typing import Dict, List, Optional, Any, Union
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from enum import Enum
 
+class TargetLanguage(str, Enum):
+    fr = "fr"
+    en = "en"
+    es = "es"
+    
+class ModelName(str, Enum):
+    mistral_small = "mistral-small-3.1-24b-instruct-2503"
+    
 class DatasetResult(BaseModel):
     """Task Result of a scraping task"""
     task_id: str = Field(..., description="Unique ID of the task")
@@ -14,6 +23,7 @@ class DatasetResult(BaseModel):
     rate: float = Field(0.0, description="QA generation rate (QA/s)")
 
 class QA(BaseModel):
+    """Item representing a question-answer pair"""
     question: str = Field(..., min_length=10, max_length=500, description="Question related to the context")
     answer: str = Field(..., min_length=20, description="Complete answer based on the context")
     context: str = Field(..., min_length=50, description="Source text that enabled the answer")

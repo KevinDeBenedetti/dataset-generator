@@ -56,10 +56,12 @@ class LLMClient:
         )
         self.prompt_manager = PromptManager()
     
-    def clean_text(self, text: str) -> str:
+    def clean_text(self, text: str, model: str = None) -> str:
+        """Clean text using provided model or fallback to config.model_cleaning."""
+        model = model or config.model_cleaning
         try:
             response = self.client.chat.completions.create(
-                model=config.model_cleaning,
+                model=model,
                 messages=[
                     {"role": "system", "content": self.prompt_manager.CLEANING_PROMPT},
                     {"role": "user", "content": text[:10000]}
@@ -72,13 +74,16 @@ class LLMClient:
             logging.error(f"Text cleaning failed: {e}")
             return text
     
-    def generate_qa(self, text: str) -> List[QA]:
+    def generate_qa(self, text: str, target_language: str = None, model: str = None) -> List[QA]:
+        """Generate QA using optional target_language and model; fall back to config."""
+        target_language = target_language or config.target_language
+        model = model or config.model_qa
         try:
             result = self.instructor_client.chat.completions.create(
-                model=config.model_qa,
+                model=model,
                 response_model=list[QA],
                 messages=[
-                    {"role": "user", "content": self.prompt_manager.get_qa_prompt(text, config.target_language)}
+                    {"role": "user", "content": self.prompt_manager.get_qa_prompt(text, target_language)}
                 ],
                 max_tokens=config.max_tokens_qa,
             )

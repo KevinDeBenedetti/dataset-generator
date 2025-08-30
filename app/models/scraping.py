@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
@@ -7,9 +7,20 @@ import time
 
 class UrlEntry(BaseModel):
     """An individual URL entry with its description"""
-    url: HttpUrl = Field(..., description="URL to scrape")
+    url: str = Field(..., description="URL to scrape")
     description: Optional[str] = Field(None, description="Source description")
 
+class UrlsConfig(BaseModel):
+    """Configuration of URLs with flexible hierarchical structure"""
+    # Uses a generic Dict to accept any structure
+    model_config = {"extra": "allow"}
+    
+    def __init__(self, **data):
+        # Allows initialization with any structure
+        super().__init__(**data)
+        # Stores the data in an accessible attribute
+        for key, value in data.items():
+            setattr(self, key, value)
 
 class ScrapingTask(BaseModel):
     """Scraping task with hierarchical structure as in urls.json"""
@@ -25,7 +36,6 @@ class ScrapingTask(BaseModel):
         None,
         description="Target language for QA (default: fr)"
     )
-
 
 class SimpleUrlList(BaseModel):
     """Simplified format for a list of URLs to scrape"""

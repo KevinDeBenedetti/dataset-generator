@@ -4,17 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import dataset
 from app.utils import setup_logging
 
-# Base configuration
 setup_logging()
 
-# Create FastAPI application
 app = FastAPI(
     title="Datasets Generator API",
     description="API to generate datasets from web scraping",
-    version="1.0.0"
+    version="0.0.1"
 )
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +23,14 @@ app.add_middleware(
 app.include_router(dataset.router)
 
 
-# API routes
+# =================================================================
+# TODO : Add more routes
+# =================================================================
+# - Scraping detail for a specific URL : /scrape/advanced
+# - Langfuse export data from a file : /langfuse/export/{file_name}
+# =================================================================
+
+
 @app.get("/")
 def read_root():
     return {
