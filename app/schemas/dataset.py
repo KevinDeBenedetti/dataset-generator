@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, field_validator
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, HttpUrl
 from typing import List, Optional
 from enum import Enum
+from datetime import datetime
 
+# Verify next code
 class TargetLanguage(str, Enum):
     fr = "fr"
     en = "en"
@@ -10,7 +11,7 @@ class TargetLanguage(str, Enum):
     
 class ModelName(str, Enum):
     mistral_small = "mistral-small-3.1-24b-instruct-2503"
-    
+
 class DatasetResult(BaseModel):
     """Task Result of a scraping task"""
     task_id: str = Field(..., description="Unique ID of the task")
@@ -41,3 +42,23 @@ class QA(BaseModel):
     @classmethod
     def validate_text_fields(cls, v):
         return v.strip()
+    
+# class QASource(BaseModel):
+#     id: str
+#     input: Dict[str, Any]
+#     expected_output: Dict[str, Any]
+#     source_trace_id: str
+#     metadata: Dict[str, Any]
+
+#     @classmethod
+#     def from_qa_generation(
+#         cls,
+#         question: str,
+#         answer: str,
+#         context: str,
+#         confidence: float,
+#         source_url: str,
+#         index: int = 0,
+#         **extra_metadata
+#     ) -> "QASource":
+#         source_trace_id = 

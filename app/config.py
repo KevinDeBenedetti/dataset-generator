@@ -32,7 +32,6 @@ class Config:
     output_formats: List[str] = field(default_factory=lambda: ["json", "jsonl", "csv"])
     scrapes_dir: str = "scrapes"
     datasets_dir: str = "datasets"
-    cache_dir: str = "cache"
 
     # Validation
     def __post_init__(self):

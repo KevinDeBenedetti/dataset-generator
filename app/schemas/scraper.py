@@ -28,10 +28,6 @@ class ScrapingTask(BaseModel):
         ...,
         description="Configuration of URLs with hierarchical structure"
     )
-    use_cache: bool = Field(
-        True,
-        description="Use cache for already scraped URLs"
-    )
     target_language: Optional[str] = Field(
         None,
         description="Target language for QA (default: fr)"
@@ -41,7 +37,6 @@ class SimpleUrlList(BaseModel):
     """Simplified format for a list of URLs to scrape"""
     urls: List[str] = Field(..., description="Simple list of URLs to scrape")
     category: str = Field("general", description="Category for all URLs")
-    use_cache: bool = Field(True, description="Use cache")
 
 @dataclass
 class ScrapedContent:

@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import re
 
 from app.config import config
-from app.models.scraper import ScrapedContent
+from app.schemas.scraper import ScrapedContent
 
 class DataManager:
     def __init__(self):

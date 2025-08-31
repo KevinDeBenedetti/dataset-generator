@@ -8,14 +8,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from app.config import config
-# from app.core.cache import URLCache
-from app.models.scraper import ScrapedContent
+from app.models import PageSnapShot
 from datetime import datetime, timezone
 
 class WebScraper:
-    # def __init__(self, use_cache: bool = True):
-        # self.cache = URLCache(config.cache_dir) if use_cache else None
-    
     def _setup_session(self) -> requests.Session:
         session = requests.Session()
         retries = Retry(
@@ -46,21 +42,7 @@ class WebScraper:
         text = ' '.join(selector.xpath('//body//text()').getall())
         return re.sub(r'\s+', ' ', text).strip()
     
-    def scrape_url(self, url: str) -> ScrapedContent:
-        # Verify cache
-        if self.cache:
-            cached = self.cache.get(url)
-            if cached:
-                logging.info(f"Using cached data for {url}")
-                text, user_agent = cached
-                return ScrapedContent(
-                    url=url,
-                    text=text,
-                    user_agent=user_agent,
-                    timestamp=datetime.now(timezone.utc).isoformat()
-                )
-        
-        # Scraper
+    def scrape_url(self, url: str) -> PageSnapShot:        
         session = self._setup_session()
         user_agent = self._get_user_agent()
         headers = {"User-Agent": user_agent}
@@ -75,16 +57,15 @@ class WebScraper:
             raise
         
         text = self._extract_text(response.text)
-        
-        # Cache
-        if self.cache:
-            self.cache.set(url, (text, user_agent))
-        
+      
         time.sleep(config.scrape_delay)
         
-        return ScrapedContent(
+        url_hash = PageSnapShot.compute_hash_from_url(url)
+
+        return PageSnapShot(
             url=url,
-            text=text,
             user_agent=user_agent,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            content=text,
+            retrieved_at=datetime.now(timezone.utc),
+            url_hash=url_hash
         )

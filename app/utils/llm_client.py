@@ -4,7 +4,7 @@ import logging
 from typing import List
 
 from app.config import config
-from app.models.dataset import QA
+from app.schemas.dataset import QA
 
 class PromptManager:
     CLEANING_PROMPT = """

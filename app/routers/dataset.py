@@ -1,19 +1,58 @@
 import logging
-from fastapi import APIRouter, HTTPException, Body, Query
+import datetime
+from typing import Annotated
+
+from fastapi import Depends
+
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from typing import List
+from sqlmodel import Session
 
 from app.utils.common import print_summary, qa_to_dict_list, flatten_urls, is_valid_url
 from app.utils.scraper import WebScraper
 from app.utils.llm_client import LLMClient
 from app.utils.data_manager import DataManager
-from app.models.scraper import ScrapingMetrics, UrlsConfig
-from app.models.dataset import TargetLanguage, ModelName, DatasetResult
+from app.schemas.scraper import ScrapingMetrics, UrlsConfig
+from app.schemas.dataset import TargetLanguage, ModelName, DatasetResult
 
 router = APIRouter(
     tags=["dataset"],
 )
+from app.services.database import get_db
 
-@router.post("/dataset", response_model=DatasetResult)
+@router.post("/dataset/url")
+async def create_dataset_for_url(
+    url: str,
+    db: Session = Depends(get_db),
+    # dataset_name: str
+    model_cleaning: ModelName = Query(),
+    target_language: TargetLanguage = Query(),
+    model_qa: ModelName = Query(),
+):
+    try:
+        page_snapshot = WebScraper().scrape_url(url)
+
+        db.add(page_snapshot)
+        db.commit()
+        db.refresh(page_snapshot)
+
+        cleaned_text = LLMClient().clean_text(page_snapshot.content, model_cleaning)
+
+        # TODO :
+        # Add cleaned text to database
+
+        qa_list = LLMClient().generate_qa(cleaned_text, target_language, model_qa)
+        # TODO :
+        # Add Q / A to database
+
+        return qa_list
+    
+    except Exception as e:
+        logging.error(f"Error creating dataset: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/dataset")
+# @router.post("/dataset", response_model=DatasetResult)
 async def create_dataset(
     urls_config: UrlsConfig = Body(
         ..., 
@@ -34,12 +73,12 @@ async def create_dataset(
         }),
     target_language: TargetLanguage = Query(),
     model_cleaning: ModelName = Query(),
-    model_qa: ModelName = Query()
+    model_qa: ModelName = Query(),
 ):
     try:
         logging.info("Received dataset creation request")
 
-        scraper = WebScraper(use_cache=True)
+        scraper = WebScraper()
         llm_client = LLMClient()
         data_manager = DataManager()
         metrics = ScrapingMetrics()
@@ -50,18 +89,20 @@ async def create_dataset(
         def process_single_url(url: str, dataset_name: str) -> List[str]:
             """Processing a single URL: scraping, cleaning, QA generation, saving."""
             try:
-                content = scraper.scrape_url(url)
+                page_snapshot = scraper.scrape_url(url)
                 metrics.urls_processed += 1
 
+                logging.info(f"Processed URL: {url}")
+
                 # save raw markdown
-                md_path = data_manager.save_markdown(content)
+                md_path = data_manager.save_markdown(page_snapshot)
                 logging.info(f"Saved markdown: {md_path}")
 
                 # cleaning via LLM
-                cleaned_text = llm_client.clean_text(content.text, model_cleaning)
+                cleaned_text = llm_client.clean_text(page_snapshot.content, model_cleaning)
 
                 # save cleaned text
-                txt_path = data_manager.save_cleaned_text(content, cleaned_text)
+                txt_path = data_manager.save_cleaned_text(page_snapshot, cleaned_text)
                 logging.info(f"Saved cleaned text: {txt_path}")
 
                 # QA generation
@@ -90,6 +131,7 @@ async def create_dataset(
 
 
         urls_items = flatten_urls(urls_config.model_dump())
+        logging.info(f"Flattened URLs: {urls_items}")
 
         for dataset_name, url in urls_items:
             if not is_valid_url(url):

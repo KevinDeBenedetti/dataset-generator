@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 from urllib.parse import urlparse
 
-from app.models.dataset import QA
+from app.schemas.dataset import QA
 
 def qa_to_dict_list(qa_list: List[QA]) -> List[Dict]:
     """Convert a list of QA to dictionaries"""
