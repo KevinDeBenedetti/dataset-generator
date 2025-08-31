@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 import re
 
-from app.core.config import config
+from app.config import config
 from app.models.scraper import ScrapedContent
 
 class DataManager:
@@ -84,16 +84,6 @@ class DataManager:
                      sub_category: Optional[str] = None) -> List[Path]:
         """
         Save a dataset in JSON format with standardized naming.
-
-        Args:
-            data: Dictionary with categories or List of items
-            formats: Ignored, only JSON is used
-            prefix: Ignored, using standardized naming
-            dataset_name: Name of the dataset (category)
-            sub_category: Sub-category for the dataset
-
-        Returns:
-            List of paths to the created files
         """
         ts = self._get_timestamp()
         paths = []

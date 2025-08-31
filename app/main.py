@@ -1,4 +1,4 @@
-from app.utils.logger import setup_logging
+from app.logger import setup_logging
 
 setup_logging()
 
@@ -38,11 +38,11 @@ if is_langfuse_available():
 else:
     logging.info("Langfuse routes disabled: missing configuration or client unreachable")
 
+
 # =================================================================
 # TODO : Add more routes
 # =================================================================
 # - Scraping detail for a specific URL : /scrape/advanced
-# - Langfuse export data from a file : /langfuse/export/{file_name}
 # =================================================================
 
 

@@ -139,7 +139,7 @@ def get_langfuse_client() -> Langfuse:
 
 def is_langfuse_configured() -> bool:
     """
-    Vérifie la présence des variables d'environnement nécessaires pour Langfuse.
+    Checks for the presence of the environment variables required for Langfuse.
     """
     required = ["LANGFUSE_SECRET_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_HOST"]
     missing = [k for k in required if not os.getenv(k)]
@@ -150,8 +150,8 @@ def is_langfuse_configured() -> bool:
 
 def is_langfuse_available() -> bool:
     """
-    Tente d'initialiser le client Langfuse pour vérifier la connectivité.
-    Retourne True si le client s'initialise correctement, False sinon.
+    Attempts to initialize the Langfuse client to verify connectivity.
+    Returns True if the client initializes correctly, False otherwise.
     """
     if not is_langfuse_configured():
         return False

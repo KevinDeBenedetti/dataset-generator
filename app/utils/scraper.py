@@ -7,14 +7,14 @@ from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from app.core.config import config
-from app.core.cache import URLCache
+from app.config import config
+# from app.core.cache import URLCache
 from app.models.scraper import ScrapedContent
 from datetime import datetime, timezone
 
 class WebScraper:
-    def __init__(self, use_cache: bool = True):
-        self.cache = URLCache(config.cache_dir) if use_cache else None
+    # def __init__(self, use_cache: bool = True):
+        # self.cache = URLCache(config.cache_dir) if use_cache else None
     
     def _setup_session(self) -> requests.Session:
         session = requests.Session()

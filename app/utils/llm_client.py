@@ -3,7 +3,7 @@ import instructor
 import logging
 from typing import List
 
-from app.core.config import config
+from app.config import config
 from app.models.dataset import QA
 
 class PromptManager:

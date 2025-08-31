@@ -1,11 +1,17 @@
 import logging
-import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Body, Query
-from typing import List
+from typing import List, Optional
 from langfuse import get_client
 
-from app.utils.langfuse import prepare_langfuse_dataset, load_json_dataset, scan_dataset_files, get_langfuse_client, scan_dataset_files, normalize_dataset_name
+from app.utils.langfuse import (
+    prepare_langfuse_dataset,
+    load_json_dataset,
+    scan_dataset_files,
+    get_langfuse_client,
+    normalize_dataset_name,
+    create_langfuse_dataset_with_items,
+)
 
 router = APIRouter(
     tags=["langfuse"],
@@ -46,30 +52,54 @@ async def list_datasets():
 
 @router.post("/langfuse/dataset/export")
 async def export_dataset(
-    filename: str = Query(..., description="Nom du fichier JSON dans datasets/qa", enum=AVAILABLE_DATASETS)
+    filename: str = Query(..., description="Name of the JSON file in datasets/qa", enum=AVAILABLE_DATASETS),
+    dataset_name: Optional[str] = Query(None, description="Custom name for the dataset in Langfuse")
 ):
     requested = Path(filename).name
     file_path = qa_dir / requested
 
-    if not file_path.exists() or not file_path.is_file():
+    try:
+        # Load file data
+        payload = load_json_dataset(file_path)
+
+        # Resolve dataset name: use provided param or derive from filename.
+        dataset_name_used = dataset_name if dataset_name else normalize_dataset_name(requested)
+
+        # Determine the actual list of items from the payload.
+        if isinstance(payload, list):
+            data_list = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            data_list = payload["items"]
+        elif isinstance(payload, dict) and "question" in payload and "answer" in payload:
+            # single-object QA -> wrap into a list
+            data_list = [payload]
+        else:
+            raise ValueError("JSON dataset must be a list of items, a dict with an 'items' list, or a single QA object")
+
+        dataset_config, dataset_items = prepare_langfuse_dataset(data_list, dataset_name_used)
+
+        result = create_langfuse_dataset_with_items(dataset_config, dataset_items)
+
+        logging.info(f"Dataset {dataset_name_used} successfully exported to Langfuse")
+
+        return {
+            "message": "Dataset exported successfully",
+            "filename": requested,
+            **result
+        }
+    
+    except FileNotFoundError:
         logging.error(f"File not found: {file_path}")
-        raise HTTPException(status_code=404, detail="File not found in datasets/qa")
-
-    try:
-        with file_path.open("r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        logging.exception("Erreur lors de la lecture du fichier JSON")
-        raise HTTPException(status_code=500, detail="Impossible de lire le fichier JSON demandé")
-
-    langfuse = get_client()
-    logging.info("Langfuse client initialized for dataset export")
-    try:
-        logging.info(f"Pret à envoyer {file_path} vers Langfuse (taille: {len(json.dumps(payload))} octets)")
-        return {"message": "Dataset exporté avec succès (simulation)", "filename": requested}
-    except Exception:
-        logging.exception("Erreur lors de l'exportation du dataset Langfuse")
-        raise HTTPException(status_code=500, detail="Erreur interne lors de l'exportation du dataset Langfuse")
+        raise HTTPException(status_code=404, detail="Requested file not found in datasets/qa")
+    except ValueError as e:
+        logging.error(f"Data error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.exception("Error during export to Langfuse")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during export to Langfuse: {str(e)}"
+        )
     
 
 @router.get("/langfuse/dataset/preview")
@@ -82,9 +112,20 @@ async def preview_dataset_transformation(
 
     try:
         payload = load_json_dataset(file_path)
-        dataset_name = normalize_dataset_name(filename)
-        dataset_config, dataset_items = prepare_langfuse_dataset(payload, dataset_name)
-        
+        # use the actual filename (requested) to derive a default dataset name for preview
+        dataset_name = normalize_dataset_name(requested)
+        # Determine list of items like in export to avoid same class-of-type errors
+        if isinstance(payload, list):
+            data_list = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            data_list = payload["items"]
+        elif isinstance(payload, dict) and "question" in payload and "answer" in payload:
+            data_list = [payload]
+        else:
+            raise ValueError("JSON dataset must be a list of items, a dict with an 'items' list, or a single QA object")
+
+        dataset_config, dataset_items = prepare_langfuse_dataset(data_list, dataset_name)
+         
         preview_items = dataset_items[:3]
         
         return {
