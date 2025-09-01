@@ -19,7 +19,7 @@ for model in config.available_models:
     model_attr = model.replace('-', '_')
     setattr(ModelName, model_attr, model)
 
-# S'assurer que ModelName a au moins un attribut pour être une Enum valide
+# Ensure that ModelName has at least one attribute to be a valid Enum
 if not ModelName.__members__:
     setattr(ModelName, "default_model", "default-model")
 
