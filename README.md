@@ -8,18 +8,6 @@ Create quality datasets for training AI models by automatically scraping reliabl
 
 ## ⚡ Quick Start
 
-```env
-# OpenAI API Key
-# Get your key from https://platform.openai.com/api-keys
-OPENAI_API_KEY=sk-your-openai-api-key-here
-
-# OpenAI API base URL
-# Use the official URL or your custom proxy/gateway
-# Official URL: https://api.openai.com/v1
-# Proxy example: https://your-proxy.example.com/v1
-OPENAI_BASE_URL=https://api.openai.com/v1
-```
-
 ```bash
 # Configuration
 cp .env.example .env
