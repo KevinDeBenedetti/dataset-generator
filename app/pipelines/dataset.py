@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 from sqlalchemy.orm import Session
 
 from app.services.scraper import ScraperService
@@ -21,12 +21,17 @@ class DatasetPipeline:
     async def process_url(self, 
                          url: str,
                          dataset_name: str,
-                         model_cleaning: ModelName,
-                         target_language: TargetLanguage,
-                         model_qa: ModelName,
+                         model_cleaning: Union[str, ModelName],
+                         target_language: Union[str, TargetLanguage],
+                         model_qa: Union[str, ModelName],
                          similarity_threshold: float = 0.9) -> Dict[str, Any]:
         """Executes the complete pipeline for a URL"""
         try:
+            # Extract string values from enum objects
+            model_cleaning_str = model_cleaning.value if hasattr(model_cleaning, 'value') else str(model_cleaning)
+            target_language_str = target_language.value if hasattr(target_language, 'value') else str(target_language)
+            model_qa_str = model_qa.value if hasattr(model_qa, 'value') else str(model_qa)
+            
             # 1. Get or create the dataset
             dataset = self.dataset_service.get_or_create_dataset(
                 name=dataset_name, 
@@ -37,18 +42,18 @@ class DatasetPipeline:
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
             
             # 3. Clean the text with LLM
-            cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning)
+            cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning_str)
             
             # 4. Save the cleaned text
             cleaned_text_record = self.scraper_service.save_cleaned_text(
                 page_snapshot_id=page_snapshot.id,
                 content=cleaned_text,
-                language=target_language,
-                model=model_cleaning
+                language=target_language_str,
+                model=model_cleaning_str
             )
             
             # 5. Generate QA pairs
-            qa_list = self.llm_service.generate_qa(cleaned_text, target_language, model_qa)
+            qa_list = self.llm_service.generate_qa(cleaned_text, target_language_str, model_qa_str)
             
             # 6. Process and save QA pairs
             qa_stats = self.qa_service.process_qa_pairs(
@@ -57,7 +62,7 @@ class DatasetPipeline:
                 url=url,
                 page_snapshot_id=page_snapshot.id,
                 dataset_name=dataset_name,
-                model=model_qa,
+                model=model_qa_str,
                 similarity_threshold=similarity_threshold
             )
             
