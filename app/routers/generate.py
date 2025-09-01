@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.utils.common import print_summary, qa_to_dict_list, flatten_urls, is_valid_url
 from app.schemas.dataset import TargetLanguage, ModelName
 from app.services.database import get_db
-from app.pipelines.dataset_pipeline import DatasetPipeline
+from app.pipelines.dataset import DatasetPipeline
 
 router = APIRouter(
     prefix="/generate",

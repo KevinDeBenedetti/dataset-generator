@@ -2,10 +2,10 @@ import logging
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 
-from app.services.scraper_service import ScraperService
-from app.services.llm_service import LLMService
-from app.services.dataset_service import DatasetService
-from app.services.qa_service import QAService
+from app.services.scraper import ScraperService
+from app.services.llm import LLMService
+from app.services.dataset import DatasetService
+from app.services.qa import QAService
 from app.schemas.dataset import TargetLanguage, ModelName
 
 class DatasetPipeline:
