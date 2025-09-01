@@ -14,7 +14,7 @@ class TargetLanguage(str, Enum):
 class ModelName(str, Enum):
     pass
 
-# Puis étendons-la dynamiquement
+# Then extend it dynamically
 for model in config.available_models:
     model_attr = model.replace('-', '_')
     setattr(ModelName, model_attr, model)
