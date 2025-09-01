@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, field_validator, HttpUrl
-from typing import List, Optional
+from typing import List, Optional, Literal, Union, Annotated
 from enum import Enum
 from datetime import datetime
+from app.utils.config import config
 
 # Verify next code
 class TargetLanguage(str, Enum):
@@ -9,8 +10,18 @@ class TargetLanguage(str, Enum):
     en = "en"
     es = "es"
     
+# Au lieu de créer dynamiquement une Enum, créons une classe str Enum
 class ModelName(str, Enum):
-    mistral_small = "mistral-small-3.1-24b-instruct-2503"
+    pass
+
+# Puis étendons-la dynamiquement
+for model in config.available_models:
+    model_attr = model.replace('-', '_')
+    setattr(ModelName, model_attr, model)
+
+# S'assurer que ModelName a au moins un attribut pour être une Enum valide
+if not ModelName.__members__:
+    setattr(ModelName, "default_model", "default-model")
 
 class DatasetResult(BaseModel):
     """Task Result of a scraping task"""

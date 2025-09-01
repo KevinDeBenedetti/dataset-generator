@@ -6,19 +6,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from typing import List
 from importlib import import_module
 from fastapi.responses import RedirectResponse
 
-# Import all models to ensure they are registered with SQLAlchemy
-from app.models import dataset, scraper
-
-from app.routers import dataset
-from app.services.langfuse import is_langfuse_available
-from app.services.database import create_db_and_tables
+from app.models import dataset
+from app.routers import dataset, generate
+from app.services import langfuse, database
+from app.utils.config import config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_db_and_tables()
+    database.create_db_and_tables()
     yield
 
 app = FastAPI(
@@ -36,11 +35,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(dataset.router)
-from app.routers import generate
 app.include_router(generate.router)
+app.include_router(dataset.router)
 
-if is_langfuse_available():
+if langfuse.is_langfuse_available():
     try:
         langfuse_mod = import_module("app.routers.langfuse")
         app.include_router(langfuse_mod.router)
@@ -55,9 +53,6 @@ else:
 def read_root():
     return RedirectResponse(url="/docs", status_code=302)
 
-
-# =================================================================
-# TODO : Add more routes
-# =================================================================
-# - Scraping detail for a specific URL : /scrape/advanced
-# =================================================================
+@app.get("/available-models", response_model=List[str], summary="Simple list of available LLM models")
+async def get_available_models():
+    return config.available_models

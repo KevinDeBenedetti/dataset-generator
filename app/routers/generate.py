@@ -1,34 +1,71 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
+from typing import List, Optional, Dict, Any
 
-from app.schemas.dataset import TargetLanguage, ModelName
+from app.schemas.dataset import TargetLanguage
 from app.services.database import get_db
 from app.pipelines.dataset import DatasetPipeline
+from app.utils.config import config
 
 router = APIRouter(
     prefix="/generate",
     tags=["generate"],
 )
 
+
 @router.post("/dataset/url")
 async def create_dataset_for_url(
     url: str,
     dataset_name: str = Query(..., description="Dataset name (use GET /datasets to see available options)"),
     db: Session = Depends(get_db),
-    model_cleaning: ModelName = Query(),
-    target_language: TargetLanguage = Query(),
-    model_qa: ModelName = Query(),
-    similarity_threshold: float = Query(0.9, description="Similarity threshold to detect duplicates (0.0-1.0)")
+    model_cleaning: Optional[str] = Query(
+        default=config.model_cleaning,
+        description=f"Model to use for cleaning text (default: {config.model_cleaning})"
+    ),
+    target_language: Optional[str] = Query(
+        default=config.target_language,
+        description=f"Target language for QA generation (default: {config.target_language})"
+    ),
+    model_qa: Optional[str] = Query(
+        default=config.model_qa,
+        description=f"Model to use for QA generation (default: {config.model_qa})"
+    ),
+    similarity_threshold: float = Query(
+        default=0.9,
+        description="Similarity threshold to detect duplicates (0.0-1.0)"
+    )
 ):
     try:
+        # Check if the models are available
+        if model_cleaning not in config.available_models:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Model '{model_cleaning}' not in available models: {config.available_models}"
+            )
+        
+        if target_language not in [l.value for l in TargetLanguage]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid target language: {target_language}. Available options: {[l.value for l in TargetLanguage]}"
+            )
+                
+        if model_qa not in config.available_models:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Model '{model_qa}' not in available models: {config.available_models}"
+            )
+            
+        # Convert to the appropriate type for the pipeline
+        target_language_enum = TargetLanguage(target_language)
+            
         pipeline = DatasetPipeline(db)
         result = await pipeline.process_url(
             url=url,
             dataset_name=dataset_name,
             model_cleaning=model_cleaning,
-            target_language=target_language,
+            target_language=target_language_enum,
             model_qa=model_qa,
             similarity_threshold=similarity_threshold
         )
