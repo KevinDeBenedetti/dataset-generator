@@ -10,7 +10,7 @@ help: ## Show helper
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 clean: ## Clean cache, datasets, and scrapes
-	rm -rf cache/ datasets/ scrapes/ scraper.log datasets.db
+	rm -rf scraper.log
 
 dev: ## Start the FastAPI server
 	@echo "Starting API server..."
