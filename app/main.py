@@ -1,4 +1,4 @@
-from app.logger import setup_logging
+from app.utils.logger import setup_logging
 
 setup_logging()
 
@@ -13,7 +13,7 @@ from fastapi.responses import RedirectResponse
 from app.models import dataset, scraper
 
 from app.routers import dataset
-from app.utils.langfuse import is_langfuse_available
+from app.services.langfuse import is_langfuse_available
 from app.services.database import create_db_and_tables
 
 @asynccontextmanager

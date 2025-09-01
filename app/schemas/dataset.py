@@ -42,23 +42,3 @@ class QA(BaseModel):
     @classmethod
     def validate_text_fields(cls, v):
         return v.strip()
-    
-# class QASource(BaseModel):
-#     id: str
-#     input: Dict[str, Any]
-#     expected_output: Dict[str, Any]
-#     source_trace_id: str
-#     metadata: Dict[str, Any]
-
-#     @classmethod
-#     def from_qa_generation(
-#         cls,
-#         question: str,
-#         answer: str,
-#         context: str,
-#         confidence: float,
-#         source_url: str,
-#         index: int = 0,
-#         **extra_metadata
-#     ) -> "QASource":
-#         source_trace_id = 
