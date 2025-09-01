@@ -9,6 +9,9 @@ import logging
 from importlib import import_module
 from fastapi.responses import RedirectResponse
 
+# Importer tous les modèles pour s'assurer qu'ils sont enregistrés avec SQLAlchemy
+from app.models import dataset, scraper
+
 from app.routers import dataset
 from app.utils.langfuse import is_langfuse_available
 from app.services.database import create_db_and_tables
@@ -34,6 +37,8 @@ app.add_middleware(
 )
 
 app.include_router(dataset.router)
+from app.routers import generate
+app.include_router(generate.router)
 
 if is_langfuse_available():
     try:

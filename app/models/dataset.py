@@ -3,7 +3,6 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 from difflib import SequenceMatcher
 

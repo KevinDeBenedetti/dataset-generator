@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from app.services.database import Base
 
-class PageSnapShot(Base):
+class PageSnapshot(Base):
     __tablename__ = "page_snapshots"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -13,7 +13,7 @@ class PageSnapShot(Base):
     retrieved_at = Column(DateTime, nullable=False)
     content = Column(Text, nullable=False)
     url_hash = Column(String, nullable=False, index=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
+    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)  # Rendre nullable pour éviter problèmes circulaires
 
     @staticmethod
     def compute_hash_from_url(url: str) -> str:
