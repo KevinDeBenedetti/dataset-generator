@@ -8,17 +8,17 @@ class DatasetService:
         self.db = db
     
     def get_or_create_dataset(self, name: str, description: Optional[str] = None) -> Dataset:
-        """Récupère un dataset existant ou en crée un nouveau"""
+        """Retrieves an existing dataset or creates a new one"""
         existing_dataset = self.db.query(Dataset).filter(Dataset.name == name).first()
         
         if existing_dataset:
             logging.info(f"Using existing dataset: {name}")
             return existing_dataset
         
-        # Créer le dataset automatiquement
+        # Create the dataset automatically
         dataset = Dataset(
             name=name, 
-            description=description or f"Dataset créé automatiquement pour {name}"
+            description=description or f"Dataset automatically created for {name}"
         )
         self.db.add(dataset)
         self.db.commit()

@@ -1,23 +1,20 @@
 import logging
 from difflib import SequenceMatcher
-
-from fastapi import Depends
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset, QASource
+from app.services.database import get_db
 
 router = APIRouter(
     prefix="/dataset",
     tags=["dataset"],
 )
 
-from app.services.database import get_db
-
 def get_dataset_names(db: Session) -> List[str]:
-    """Récupère la liste des noms de datasets pour la validation"""
+    """Retrieves the list of dataset names for validation"""
     try:
         datasets = db.query(Dataset).all()
         return [dataset.name for dataset in datasets]
@@ -26,13 +23,13 @@ def get_dataset_names(db: Session) -> List[str]:
 
 @router.post("")
 async def create_dataset(
-    name: str = Query(..., description="Nom du nouveau dataset"),
-    description: str = Query(None, description="Description optionnelle du dataset"),
+    name: str = Query(..., description="Name of the new dataset"),
+    description: str = Query(None, description="Optional dataset description"),
     db: Session = Depends(get_db)
 ):
-    """Crée un nouveau dataset"""
+    """Creates a new dataset"""
     try:
-        # Vérifier que le nom n'existe pas déjà
+        # Check that the name doesn't already exist
         existing = db.query(Dataset).filter(Dataset.name == name).first()
         if existing:
             raise HTTPException(status_code=400, detail=f"Dataset with name '{name}' already exists")
@@ -52,7 +49,7 @@ async def create_dataset(
 
 @router.get("/datasets")
 async def get_datasets(db: Session = Depends(get_db)):
-    """Récupère la liste de tous les datasets disponibles"""
+    """Retrieves the list of all available datasets"""
     try:
         datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
         return [{"id": dataset.id, "name": dataset.name, "description": dataset.description} for dataset in datasets]
@@ -63,10 +60,10 @@ async def get_datasets(db: Session = Depends(get_db)):
 @router.get("/{dataset_name}/analyze-similarities")
 async def analyze_similarities(
     dataset_name: str,
-    threshold: float = Query(0.8, description="Seuil de similarité"),
+    threshold: float = Query(0.8, description="Similarity threshold"),
     db: Session = Depends(get_db)
 ):
-    """Analyse les questions similaires dans un dataset"""
+    """Analyzes similar questions in a dataset"""
     records = db.query(QASource).filter(QASource.dataset_name == dataset_name).all()
     
     similarities = []
@@ -105,14 +102,14 @@ async def analyze_similarities(
 @router.post("/{dataset_name}/clean-similarities")
 async def clean_similarities(
     dataset_name: str,
-    threshold: float = Query(0.8, description="Seuil de similarité pour détecter les doublons (0.0-1.0)"),
+    threshold: float = Query(0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"),
     db: Session = Depends(get_db)
 ):
-    """Nettoie les questions similaires dans un dataset en supprimant les doublons"""
+    """Cleans similar questions in a dataset by removing duplicates"""
     records = db.query(QASource).filter(QASource.dataset_name == dataset_name).all()
     
     if not records:
-        raise HTTPException(status_code=404, detail=f"Aucun enregistrement trouvé pour le dataset '{dataset_name}'")
+        raise HTTPException(status_code=404, detail=f"No records found for dataset '{dataset_name}'")
     
     similarities = []
     processed_pairs = set()
@@ -130,7 +127,7 @@ async def clean_similarities(
             similarity = SequenceMatcher(None, question1, question2).ratio()
             
             if similarity >= threshold:
-                # Décider lequel supprimer
+                # Decide which one to remove
                 confidence1 = record1.expected_output.get('confidence', 0) if record1.expected_output else 0
                 confidence2 = record2.expected_output.get('confidence', 0) if record2.expected_output else 0
                 
@@ -141,7 +138,7 @@ async def clean_similarities(
                     record_to_keep = record2
                     record_to_remove = record1
                 else:
-                    # Si confiances égales, garder le plus ancien
+                    # If confidences are equal, keep the oldest
                     if record1.created_at < record2.created_at:
                         record_to_keep = record1
                         record_to_remove = record2
@@ -149,7 +146,7 @@ async def clean_similarities(
                         record_to_keep = record2
                         record_to_remove = record1
                 
-                # Vérifier si ce record n'a pas déjà été marqué pour suppression
+                # Check if this record hasn't already been marked for removal
                 if record_to_remove.id not in [r["id"] for r in removed_records]:
                     similarities.append({
                         "keep_id": record_to_keep.id[:8],
@@ -166,12 +163,12 @@ async def clean_similarities(
                         "kept_id": record_to_keep.id[:8]
                     })
                     
-                    # Supprimer l'enregistrement
+                    # Remove the record
                     db.query(QASource).filter(QASource.id == record_to_remove.id).delete()
             
             processed_pairs.add(pair_key)
     
-    # Valider les changements
+    # Validate the changes
     db.commit()
     
     return {

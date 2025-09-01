@@ -9,7 +9,7 @@ from app.services.qa import QAService
 from app.schemas.dataset import TargetLanguage, ModelName
 
 class DatasetPipeline:
-    """Pipeline pour traiter une URL et générer un dataset de QA"""
+    """Pipeline to process a URL and generate a QA dataset"""
     
     def __init__(self, db: Session):
         self.db = db
@@ -25,21 +25,21 @@ class DatasetPipeline:
                          target_language: TargetLanguage,
                          model_qa: ModelName,
                          similarity_threshold: float = 0.9) -> Dict[str, Any]:
-        """Exécute le pipeline complet pour une URL"""
+        """Executes the complete pipeline for a URL"""
         try:
-            # 1. Récupérer ou créer le dataset
+            # 1. Get or create the dataset
             dataset = self.dataset_service.get_or_create_dataset(
                 name=dataset_name, 
-                description=f"Dataset créé automatiquement pour {url}"
+                description=f"Dataset automatically created for {url}"
             )
             
-            # 2. Scraper l'URL
+            # 2. Scrape the URL
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
             
-            # 3. Nettoyer le texte avec LLM
+            # 3. Clean the text with LLM
             cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning)
             
-            # 4. Sauvegarder le texte nettoyé
+            # 4. Save the cleaned text
             cleaned_text_record = self.scraper_service.save_cleaned_text(
                 page_snapshot_id=page_snapshot.id,
                 content=cleaned_text,
@@ -47,10 +47,10 @@ class DatasetPipeline:
                 model=model_cleaning
             )
             
-            # 5. Générer les paires QA
+            # 5. Generate QA pairs
             qa_list = self.llm_service.generate_qa(cleaned_text, target_language, model_qa)
             
-            # 6. Traiter et sauvegarder les paires QA
+            # 6. Process and save QA pairs
             qa_stats = self.qa_service.process_qa_pairs(
                 qa_list=qa_list,
                 cleaned_text=cleaned_text,
@@ -61,7 +61,7 @@ class DatasetPipeline:
                 similarity_threshold=similarity_threshold
             )
             
-            # 7. Retourner les résultats
+            # 7. Return results
             return {
                 "qa_pairs": qa_list,
                 **qa_stats,

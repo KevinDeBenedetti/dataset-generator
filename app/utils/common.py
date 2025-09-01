@@ -41,11 +41,11 @@ def flatten_urls(urls_dict: Dict[str, Any]) -> List[tuple[str, str]]:
             
             if isinstance(value, dict):
                 if "url" in value:
-                    # C'est une UrlEntry
+                    # It's a UrlEntry
                     dataset_name = "-".join(current_path)
                     result.append((dataset_name, value["url"]))
                 else:
-                    # Continue la récursion
+                    # Continue recursion
                     recursive_flatten(value, current_path)
     
     recursive_flatten(urls_dict)
