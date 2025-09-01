@@ -63,6 +63,7 @@ class DatasetPipeline:
                 page_snapshot_id=page_snapshot.id,
                 dataset_name=dataset_name,
                 model=model_qa_str,
+                dataset_id=dataset.id,
                 similarity_threshold=similarity_threshold
             )
             

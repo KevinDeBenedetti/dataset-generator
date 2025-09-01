@@ -19,9 +19,9 @@ class Dataset(Base):
 class QASource(Base):
     __tablename__ = "qa_sources"
 
-    id = Column(String, primary_key=True)  # Remove the default
+    id = Column(String, primary_key=True)
     dataset_name = Column(String, index=True)
-    dataset_run_id = Column(String, index=True)
+    dataset_id = Column(String, ForeignKey("datasets.id"), index=True)
     source_trace_id = Column(String)
     page_snapshot_id = Column(String, ForeignKey("page_snapshots.id"))
     input = Column(JSON, nullable=False, default=dict)
@@ -133,6 +133,7 @@ class QASource(Base):
         source_url: str = "",
         source_trace_id: Optional[str] = None,
         page_snapshot_id: Optional[str] = None,
+        dataset_id: Optional[str] = None,  # Ajout du paramètre dataset_id
         index: int = 0,
     ) -> "QASource":
         if not question or not answer:
@@ -155,6 +156,7 @@ class QASource(Base):
             },
             source_trace_id=source_trace_id,
             page_snapshot_id=page_snapshot_id,
+            dataset_id=dataset_id,  # Utilisation du dataset_id
             qa_metadata={
                 "generation_timestamp": datetime.now(timezone.utc).isoformat(),
                 "context_length": len(context) if context else 0,

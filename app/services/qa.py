@@ -9,6 +9,7 @@ class QAService:
     
     def process_qa_pairs(self, qa_list: List[Any], cleaned_text: str, url: str, 
                         page_snapshot_id: int, dataset_name: str, model: str, 
+                        dataset_id: str = None,
                         similarity_threshold: float = 0.9) -> Dict[str, int]:
         """Processes and saves QA pairs, checking for duplicates"""
         qa_records = []
@@ -42,6 +43,7 @@ class QAService:
                     confidence=getattr(qa_item, 'confidence', 1.0),
                     source_url=url,
                     page_snapshot_id=page_snapshot_id,
+                    dataset_id=dataset_id,  # Passage du dataset_id
                     index=i
                 )
                 

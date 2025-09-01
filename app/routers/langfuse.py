@@ -14,6 +14,7 @@ from app.services.langfuse import (
 )
 
 router = APIRouter(
+    prefix="/langfuse",
     tags=["langfuse"],
 )
 
@@ -22,32 +23,6 @@ qa_dir = base / "datasets" / "qa"
 
 AVAILABLE_DATASETS = scan_dataset_files(qa_dir)
 logging.info(f"Available datasets for dropdown: {AVAILABLE_DATASETS}")
-
-
-@router.post(
-    "/langfuse",
-    description="Initialize the Langfuse client with environment variables",
-)
-async def langfuse_endpoint():
-    try:
-        langfuse = get_langfuse_client()
-        return {"message": "Langfuse initialized", "client_repr": str(langfuse)}
-    except Exception:
-        logging.exception("Error during serialization of the Langfuse client")
-        raise HTTPException(status_code=500, detail="Internal error during Langfuse initialization")
-
-
-@router.get("/langfuse/datasets", response_model=List[str])
-async def list_datasets():
-    logging.info(f"Base directory: {base}")
-    logging.info(f"qa directory: {qa_dir}")
-
-    if not qa_dir.exists() or not qa_dir.is_dir():
-        logging.error(f"Directory not found: {qa_dir}")
-        raise HTTPException(status_code=404, detail="Directory datasets/qa not found")
-
-    files = scan_dataset_files(qa_dir)
-    return files
 
 
 @router.post("/langfuse/dataset/export")
@@ -102,7 +77,7 @@ async def export_dataset(
         )
     
 
-@router.get("/langfuse/dataset/preview")
+@router.get("/dataset/preview")
 async def preview_dataset_transformation(
     filename: str = Query(..., description="Name of the JSON file in datasets/qa", enum=AVAILABLE_DATASETS)
 ):

@@ -38,6 +38,7 @@ class Config:
     )
 
     # Defaults for runtime overrides (set via route)
+    target_language: str = field(
         default_factory=lambda: os.getenv("DEFAULT_TARGET_LANGUAGE", "en")
     )
     model_cleaning: str = field(
