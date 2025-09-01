@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Body, Query
 from typing import List, Optional
 from langfuse import get_client
 
-from app.utils.langfuse import (
+from app.services.langfuse import (
     prepare_langfuse_dataset,
     load_json_dataset,
     scan_dataset_files,

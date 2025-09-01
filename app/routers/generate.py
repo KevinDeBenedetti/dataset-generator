@@ -3,7 +3,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.utils.common import print_summary, qa_to_dict_list, flatten_urls, is_valid_url
 from app.schemas.dataset import TargetLanguage, ModelName
 from app.services.database import get_db
 from app.pipelines.dataset import DatasetPipeline
@@ -24,7 +23,6 @@ async def create_dataset_for_url(
     similarity_threshold: float = Query(0.9, description="Similarity threshold to detect duplicates (0.0-1.0)")
 ):
     try:
-        # Use the pipeline to process the URL
         pipeline = DatasetPipeline(db)
         result = await pipeline.process_url(
             url=url,
