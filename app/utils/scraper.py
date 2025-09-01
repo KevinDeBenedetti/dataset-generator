@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from app.config import config
-from app.models import PageSnapShot
+from app.models.scraper import PageSnapShot
 from datetime import datetime, timezone
 
 class WebScraper:
