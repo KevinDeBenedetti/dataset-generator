@@ -19,7 +19,7 @@ class Dataset(Base):
 class QASource(Base):
     __tablename__ = "qa_sources"
 
-    id = Column(String, primary_key=True)  # Supprime le default
+    id = Column(String, primary_key=True)  # Remove the default
     dataset_name = Column(String, index=True)
     dataset_run_id = Column(String, index=True)
     source_trace_id = Column(String)
@@ -35,10 +35,8 @@ class QASource(Base):
     @staticmethod
     def compute_hash_from_content(question: str, answer: str, context: str, source_url: str = "") -> str:
         question_normalized = ' '.join(question.strip().split())
-        # answer_normalized = ' '.join(answer.strip().split())
         context_normalized = ' '.join(context.strip().split())
 
-        # content = f"{question_normalized}|{answer_normalized}|{context_normalized}|{source_url}"
         content = f"{question_normalized}|{context_normalized}|{source_url}"
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
@@ -51,29 +49,29 @@ class QASource(Base):
         source_url: str,
         threshold: float = 0.9
     ) -> Optional[str]:
-        # Récupérer tous les enregistrements et filtrer en Python
-        # Cela évite les problèmes avec l'opérateur .astext dans certaines versions de SQLAlchemy
+        # Retrieve all records and filter in Python
+        # This avoids issues with the .astext operator in some SQLAlchemy versions
         all_records = db.query(cls).all()
         
-        # Filtrer manuellement les enregistrements avec la même URL source
+        # Manually filter records with the same source URL
         similar_records = []
         for record in all_records:
             record_source_url = record.input.get('source_url', '')
             if record_source_url == source_url:
                 similar_records.append(record)
 
-        # Vérifier la similarité des questions
+        # Check question similarity
         for record in similar_records:
             existing_question = record.input.get('question', '')
             existing_context = record.input.get('context', '')
             
-            # Calculer la similarité de la question
+            # Calculate question similarity
             question_similarity = SequenceMatcher(None, question, existing_question).ratio()
             
-            # Optionnel : vérifier aussi la similarité du contexte
+            # Optional: also check context similarity
             context_similarity = SequenceMatcher(None, context, existing_context).ratio()
             
-            # Si la question est très similaire ET le contexte est identique ou très similaire
+            # If the question is very similar AND the context is identical or very similar
             if question_similarity >= threshold and context_similarity >= 0.95:
                 return record.id
         
@@ -89,9 +87,9 @@ class QASource(Base):
         source_url: str,
         similarity_threshold: float = 0.9
     ) -> Dict[str, Optional[str]]:
-        """Vérifie les doublons par hash exact ET par similarité"""
+        """Checks for duplicates by exact hash AND similarity"""
         
-        # 1. Vérification par hash exact
+        # 1. Check by exact hash
         exact_hash = cls.compute_hash_from_content(question, answer, context, source_url)
         exact_duplicate = db.query(cls).filter(cls.id == exact_hash).first()
         
@@ -102,13 +100,13 @@ class QASource(Base):
                 "similarity_score": 1.0
             }
         
-        # 2. Vérification par similarité
+        # 2. Check by similarity
         similar_id = cls.is_duplicate_by_similarity(
             db, question, context, source_url, similarity_threshold
         )
         
         if similar_id:
-            # Calculer le score de similarité pour information
+            # Calculate similarity score for information
             similar_record = db.query(cls).filter(cls.id == similar_id).first()
             existing_question = similar_record.input.get('question', '')
             similarity_score = SequenceMatcher(None, question, existing_question).ratio()
@@ -140,7 +138,7 @@ class QASource(Base):
         if not question or not answer:
             raise ValueError("Question and answer are required")
         
-        # Générer l'ID basé sur le contenu
+        # Generate ID based on content
         qa_id = cls.compute_hash_from_content(question, answer, context, source_url)
         
         return cls(

@@ -13,7 +13,7 @@ class PageSnapshot(Base):
     retrieved_at = Column(DateTime, nullable=False)
     content = Column(Text, nullable=False)
     url_hash = Column(String, nullable=False, index=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)  # Rendre nullable pour éviter problèmes circulaires
+    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)  # Make nullable to avoid circular problems
 
     @staticmethod
     def compute_hash_from_url(url: str) -> str:

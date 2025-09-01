@@ -10,7 +10,7 @@ class ScraperService:
         self.scraper = WebScraper()
     
     def scrape_url(self, url: str, dataset_id: int) -> PageSnapshot:
-        """Scrape une URL et enregistre le résultat dans la base de données"""
+        """Scrapes a URL and saves the result to the database"""
         logging.info(f"Scraping URL: {url}")
         page_snapshot = self.scraper.scrape_url(url)
         page_snapshot.dataset_id = dataset_id
@@ -22,7 +22,7 @@ class ScraperService:
         return page_snapshot
     
     def save_cleaned_text(self, page_snapshot_id: int, content: str, language: str, model: str) -> CleanedText:
-        """Enregistre le texte nettoyé dans la base de données"""
+        """Saves cleaned text to the database"""
         cleaned_text_record = CleanedText(
             page_snapshot_id=page_snapshot_id,
             content=content,

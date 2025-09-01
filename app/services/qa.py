@@ -10,7 +10,7 @@ class QAService:
     def process_qa_pairs(self, qa_list: List[Any], cleaned_text: str, url: str, 
                         page_snapshot_id: int, dataset_name: str, model: str, 
                         similarity_threshold: float = 0.9) -> Dict[str, int]:
-        """Traite et sauvegarde les paires QA, en vérifiant les doublons"""
+        """Processes and saves QA pairs, checking for duplicates"""
         qa_records = []
         exact_duplicates = 0
         similar_duplicates = 0
@@ -34,7 +34,7 @@ class QAService:
                 similarity_score = duplicate_check["similarity_score"]
                 logging.info(f"Similar question found (similarity: {similarity_score:.2f}, ID: {duplicate_check['duplicate_id'][:8]}...), skipping")
                 
-            else:  # nouveau
+            else:  # new
                 qa_record = QASource.from_qa_generation(
                     question=qa_item.question,
                     answer=qa_item.answer,

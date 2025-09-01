@@ -1,22 +1,22 @@
-# Langfuse — Intégration et guide d'usage
+# Langfuse — Integration and Usage Guide
 
-Résumé
-Langfuse est utilisé ici pour tracer et stocker des interactions modèles/utilisateurs et produire des datasets exportables pour annotation et analyse. Ce document décrit la configuration, cas d'utilisation pour l'export de datasets et les structures de données attendues pour les datasets et les items.
+Summary
+Langfuse is used here to trace and store model/user interactions and produce exportable datasets for annotation and analysis. This document describes the configuration, use cases for dataset export, and expected data structures for datasets and items.
 
-## 2. Configuration (variables d'environnement et options)
-Variables d'environnement recommandées :
-- LANGFUSE_API_KEY — clé privée.
-- LANGFUSE_PROJECT_ID — identifiant du projet Langfuse.
-- LANGFUSE_ENDPOINT — URL personnalisée de l'API (facultatif).
+## 2. Configuration (environment variables and options)
+Recommended environment variables:
+- LANGFUSE_API_KEY — private key.
+- LANGFUSE_PROJECT_ID — Langfuse project identifier.
+- LANGFUSE_ENDPOINT — custom API URL (optional).
 
-## 5. Structures de données
+## 5. Data structures
 
 ### General Architecture
 
 ```mermaid
 graph TB
-    subgraph "Données source"
-        JSON[Fichier JSON Q&A]
+    subgraph "Source Data"
+        JSON[JSON Q&A File]
     end
     
     subgraph "Transformation"
@@ -32,7 +32,7 @@ graph TB
     end
 ```
 
-### Modèle de données
+### Data Model
 
 ```mermaid
 erDiagram
@@ -61,7 +61,7 @@ erDiagram
   LANGFUSE_DATASET ||--o{ LANGFUSE_ITEM : "contains"
 ```
 
-### Flux de transformation
+### Transformation Flow
 
 ```mermaid
 sequenceDiagram
@@ -82,24 +82,24 @@ sequenceDiagram
     UTILS-->>API: creation_summary
 ```
 
-### 5.1 Objet Dataset (méta)
-Champs recommandés :
-- id (string) — identifiant unique.
-- name (string) — nom lisible.
+### 5.1 Dataset Object (metadata)
+Recommended fields:
+- id (string) — unique identifier.
+- name (string) — readable name.
 - description (string) — description.
 - created_at (ISO timestamp)
 - updated_at (ISO timestamp)
-- tags (array[string]) — filtres/labels.
+- tags (array[string]) — filters/labels.
 - item_count (integer)
-- schema_version (string) — version du schéma des items.
-- metadata (object) — libre pour infos custom.
+- schema_version (string) — version of the items schema.
+- metadata (object) — free for custom info.
 
-Exemple JSON :
+JSON example:
 ```json
 {
   "id": "ds_123",
   "name": "support-conversations-2025",
-  "description": "Conversations clientes pour annotation intent/response",
+  "description": "Customer conversations for intent/response annotation",
   "created_at": "2025-08-01T12:34:56Z",
   "tags": ["support", "english"],
   "item_count": 12456,
@@ -108,18 +108,18 @@ Exemple JSON :
 }
 ```
 
-### 5.2 Objet Item (entrée d'un dataset)
-Champs recommandés (version commune) :
-- item_id (string) — identifiant unique.
+### 5.2 Item Object (dataset entry)
+Recommended fields (common version):
+- item_id (string) — unique identifier.
 - dataset_id (string)
 - type (string) — "text" | "image" | "audio" | "multimodal"
-- content (object) — payload dépendant du type.
-- labels (array/object) — annotations (facultatif).
+- content (object) — type-dependent payload.
+- labels (array/object) — annotations (optional).
 - status (string) — "new" | "in_review" | "validated"
 - created_at, updated_at (timestamps)
-- metadata (object) — clés additionnelles (user_id, session_id, source)
+- metadata (object) — additional keys (user_id, session_id, source)
 
-Exemples concrets :
+Concrete examples:
 
 Text item
 ```json
@@ -128,8 +128,8 @@ Text item
   "dataset_id": "ds_123",
   "type": "text",
   "content": {
-    "text": "Bonjour, j'ai un problème avec ma commande #1234",
-    "language": "fr"
+    "text": "Hello, I have a problem with my order #1234",
+    "language": "en"
   },
   "labels": [{"label":"intent", "value":"order_issue"}],
   "status": "new",
@@ -138,7 +138,7 @@ Text item
 }
 ```
 
-Image item (référence externe pour assets)
+Image item (external reference for assets)
 ```json
 {
   "item_id": "itm_img_01",
@@ -161,24 +161,24 @@ Audio item
   "content": {
     "url": "https://cdn.example.com/audio/rec_01.wav",
     "duration_seconds": 12.4,
-    "transcript": "Bonjour..."
+    "transcript": "Hello..."
   }
 }
 ```
 
-Multimodal item (texte + image)
+Multimodal item (text + image)
 ```json
 {
   "item_id": "itm_mm_01",
   "type": "multimodal",
   "content": {
-    "text": "Voici la photo du produit.",
+    "text": "Here is the product photo.",
     "images": [{"url":"https://.../1.jpg"}, {"url":"https://.../2.jpg"}]
   }
 }
 ```
 
-### 5.3 Schéma JSON minimal (exemple)
+### 5.3 Minimal JSON Schema (example)
 ```json
 {
   "type": "object",
@@ -194,18 +194,18 @@ Multimodal item (texte + image)
 }
 ```
 
-## 6. Bonnes pratiques
-- Utiliser des IDs stables et lisibles (préfixes ds_/itm_).
-- Garder la "content" extensible mais documentée par schema_version.
-- Ajouter un champ schema_version dans le dataset pour gérer évolutions.
-- Préserver l'asset original (URL + checksum) et référencer localement si besoin.
+## 6. Best practices
+- Use stable and readable IDs (prefixes ds_/itm_).
+- Keep "content" extensible but documented by schema_version.
+- Add a schema_version field in the dataset to manage evolutions.
+- Preserve the original asset (URL + checksum) and reference locally if needed.
 
-## 7. Validation et contrôle qualité
-- Valider JSONL via un schéma JSON avant import/annotation.
-- Vérifier l'existence et l'accessibilité des URLs d'assets.
-- Contrôler doublons via item_id.
+## 7. Validation and quality control
+- Validate JSONL via a JSON schema before import/annotation.
+- Check existence and accessibility of asset URLs.
+- Control duplicates via item_id.
 
-## 8. Versioning des datasets
-- Chaque export peut inclure metadata.version (ex: "v2025-08-01").
-- Garder historique des exports et appliquer tags (dry-run, validated, gold).
+## 8. Dataset versioning
+- Each export can include metadata.version (ex: "v2025-08-01").
+- Keep history of exports and apply tags (dry-run, validated, gold).
 
