@@ -10,7 +10,7 @@ class TargetLanguage(str, Enum):
     en = "en"
     es = "es"
     
-# Au lieu de créer dynamiquement une Enum, créons une classe str Enum
+# Instead of creating an Enum dynamically, let's create a str Enum class
 class ModelName(str, Enum):
     pass
 
