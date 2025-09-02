@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
-from app.services.database import Base
+from services.database import Base
 
 class PageSnapshot(Base):
     __tablename__ = "page_snapshots"

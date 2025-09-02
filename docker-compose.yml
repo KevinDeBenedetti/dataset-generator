@@ -1,0 +1,14 @@
+services:
+  server:
+    container_name: dataset-api
+    platform: linux/amd64
+    env_file:
+      - .env
+    build:
+      context: apps/server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/server:/app
+    restart: always

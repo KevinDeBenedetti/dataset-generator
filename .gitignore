@@ -15,7 +15,7 @@ wheels/
 # DEVELOPMENT ENVIRONMENTS
 # =============================================================================
 # Python virtual environment
-.venv
+*.venv
 
 # =============================================================================
 # DATA AND CACHE
@@ -43,3 +43,4 @@ urls.json
 urls/
 
 *.db
+*.DS_Store

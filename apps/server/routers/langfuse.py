@@ -4,9 +4,9 @@ from typing import Optional
 from enum import Enum
 from sqlalchemy.orm import Session
 
-from app.models.dataset import Dataset, QASource
-from app.services.database import get_db
-from app.services.langfuse import (
+from models.dataset import Dataset, QASource
+from services.database import get_db
+from services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
 )

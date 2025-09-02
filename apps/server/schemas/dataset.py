@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, field_validator, HttpUrl
 from typing import List, Optional, Literal, Union, Annotated
 from enum import Enum
 from datetime import datetime
-from app.utils.config import config
+from utils.config import config
 
 # Verify next code
 class TargetLanguage(str, Enum):

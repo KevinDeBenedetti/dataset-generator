@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List
 import os
+
 from dotenv import load_dotenv
-import logging
 
 load_dotenv()
 

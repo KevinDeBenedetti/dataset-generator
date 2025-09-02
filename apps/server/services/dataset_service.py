@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 
-from app.models.dataset import Dataset, QASource
+from models.dataset import Dataset, QASource
 
 def get_dataset_names(db: Session) -> List[str]:
     """Récupère la liste des noms de datasets depuis la base de données"""

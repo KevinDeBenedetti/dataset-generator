@@ -6,9 +6,9 @@ from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.models.dataset import Dataset, QASource
-from app.services.database import get_db
-from app.services.dataset_service import get_dataset_names, get_datasets
+from models.dataset import Dataset, QASource
+from services.database import get_db
+from services.dataset_service import get_dataset_names, get_datasets
 
 router = APIRouter(
     prefix="/dataset",

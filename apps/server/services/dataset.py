@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.models.dataset import Dataset
+from models.dataset import Dataset
 
 class DatasetService:
     def __init__(self, db: Session):

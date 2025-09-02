@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
-from app.models.dataset import QASource
+from models.dataset import QASource
 
 class QAService:
     def __init__(self, db: Session):

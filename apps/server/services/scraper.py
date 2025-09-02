@@ -4,12 +4,13 @@ import re
 import time
 from scrapy import Selector
 from fake_useragent import UserAgent
+from sqlalchemy.orm import Session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from app.utils.config import config
-from app.models.scraper import PageSnapshot, CleanedText
-from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+
+from utils.config import config
+from models.scraper import PageSnapshot, CleanedText
 
 class ScraperService:
     def __init__(self, db: Session):

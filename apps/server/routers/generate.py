@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.schemas.dataset import TargetLanguage
-from app.services.database import get_db
-from app.pipelines.dataset import DatasetPipeline
-from app.utils.config import config
+from schemas.dataset import TargetLanguage
+from services.database import get_db
+from pipelines.dataset import DatasetPipeline
+from utils.config import config
 
 router = APIRouter(
     prefix="/generate",

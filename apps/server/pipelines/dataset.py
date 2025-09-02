@@ -2,11 +2,11 @@ import logging
 from typing import Dict, Any, Union
 from sqlalchemy.orm import Session
 
-from app.services.scraper import ScraperService
-from app.services.llm import LLMService
-from app.services.dataset import DatasetService
-from app.services.qa import QAService
-from app.schemas.dataset import TargetLanguage, ModelName
+from services.scraper import ScraperService
+from services.llm import LLMService
+from services.dataset import DatasetService
+from services.qa import QAService
+from schemas.dataset import TargetLanguage, ModelName
 
 class DatasetPipeline:
     """Pipeline to process a URL and generate a QA dataset"""

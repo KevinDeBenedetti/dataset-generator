@@ -10,7 +10,9 @@ help: ## Show helper
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 clean: ## Clean cache, datasets, and scrapes
+	docker compose down
 	rm -rf scraper.log
+	rm -rf apps/server/.venv apps/server/uv.lock
 
 dev: ## Start the FastAPI server
 	@echo "Starting API server..."
@@ -19,5 +21,9 @@ dev: ## Start the FastAPI server
 
 start: clean ## Start the FastAPI server
 	@echo "Starting API server..."
+	cd apps/server && \
+	uv venv --clear && \
+	source .venv/bin/activate && \
 	uv sync
-	uv run -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	docker compose up -d
+# 	uv run -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

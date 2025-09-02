@@ -1,4 +1,4 @@
-from app.utils.logger import setup_logging
+from utils.logger import setup_logging
 
 setup_logging()
 
@@ -10,10 +10,10 @@ from typing import List
 from importlib import import_module
 from fastapi.responses import RedirectResponse
 
-from app.models import dataset
-from app.routers import dataset, generate
-from app.services import langfuse, database
-from app.utils.config import config
+from models import dataset
+from routers import dataset, generate
+from services import langfuse, database
+from utils.config import config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

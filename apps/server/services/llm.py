@@ -2,8 +2,8 @@ import logging
 import openai
 import instructor
 from typing import List
-from app.utils.config import config
-from app.schemas.dataset import QA
+from utils.config import config
+from schemas.dataset import QA
 
 class PromptManager:
     CLEANING_PROMPT = """
