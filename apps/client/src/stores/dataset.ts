@@ -18,7 +18,8 @@ export const useDatasetStore = defineStore('dataset', () => {
         dataset_name: datasetName,
       })
 
-      const response = await fetch(`http://localhost:8000/generate/dataset/url?${params}`, {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+      const response = await fetch(`${apiBaseUrl}/generate/dataset/url?${params}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
