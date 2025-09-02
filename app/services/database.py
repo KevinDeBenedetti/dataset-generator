@@ -14,14 +14,12 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expi
 Base = declarative_base()
 Session = scoped_session(SessionLocal)
 
-
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
 
 def create_db_and_tables():
     try:

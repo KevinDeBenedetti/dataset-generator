@@ -2,7 +2,7 @@ import logging
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Optional
 
 from langfuse import get_client, Langfuse
 
@@ -57,7 +57,6 @@ def load_json_dataset(file_path: Path) -> List[Dict]:
     except Exception as e:
         raise ValueError(f"Error reading the file: {e}")
 
-
 def scan_dataset_files(qa_dir: Path) -> List[str]:
     """
     Scans the directory to find available JSON files
@@ -65,7 +64,6 @@ def scan_dataset_files(qa_dir: Path) -> List[str]:
     if qa_dir.exists() and qa_dir.is_dir():
         return sorted([p.name for p in qa_dir.glob("*.json") if p.is_file()])
     return []
-
 
 def create_langfuse_dataset_with_items(
     dataset_config: Dict[str, Any], 
@@ -83,8 +81,8 @@ def create_langfuse_dataset_with_items(
     # Create the dataset in Langfuse
     dataset = langfuse_client.create_dataset(
         name=dataset_config["name"],
-        description=dataset_config["description"],
-        metadata=dataset_config["metadata"]
+        description=dataset_config.get("description", "Dataset créé automatiquement"),
+        metadata=dataset_config.get("metadata", {})
     )
     
     # Create the dataset items
@@ -117,25 +115,11 @@ def create_langfuse_dataset_with_items(
         "failed_count": len(failed_items)
     }
 
-
 def normalize_dataset_name(filename: str) -> str:
     """
     Normalizes a filename to create a valid dataset name
     """
     return Path(filename).stem.replace("_", "-").replace(" ", "-")
-
-
-def get_langfuse_client() -> Langfuse:
-    """
-    Wrapper to get the Langfuse client with error handling
-    """
-    try:
-        client = get_client()
-        logging.info("Langfuse client initialized successfully")
-        return client
-    except Exception as e:
-        logging.error(f"Error initializing Langfuse client: {e}")
-        raise
 
 def is_langfuse_configured() -> bool:
     """
