@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+import GenerateStatus from '@/components/GenerateStatus.vue';
+import GenerateDataset from '@/components/GenerateDataset.vue';
 </script>
 
 <template>
-  <main>
-    <TheWelcome />
+  <main class="p-4 flex justify-center">
+    <section class="min-w-md mx-auto flex flex-col gap-4">
+      <GenerateStatus />
+      <GenerateDataset />
+    </section>
   </main>
 </template>

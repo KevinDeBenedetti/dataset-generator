@@ -1,4 +1,20 @@
 services:
+  client:
+    container_name: dataset-client
+    restart: always
+    working_dir: /app
+    build:
+      context: ./apps/client
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - .env
+    ports:
+      - 8081:5173
+    volumes:
+      - ./apps/client:/app
+      - /app/node_modules
+
   server:
     container_name: dataset-api
     platform: linux/amd64
