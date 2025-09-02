@@ -24,7 +24,6 @@ export const useDatasetStore = defineStore('dataset', () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        // body: JSON.stringify({ url })
       })
 
       console.log(response)
