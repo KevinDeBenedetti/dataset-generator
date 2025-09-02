@@ -11,19 +11,21 @@ help: ## Show helper
 
 clean: ## Clean cache, datasets, and scrapes
 	docker compose down
-	rm -rf scraper.log
-	rm -rf apps/server/.venv apps/server/uv.lock
+	rm -rf apps/client/node_modules
+	rm -rf apps/server/.venv apps/server/uv.lock apps/server/scraper.log
 
-dev: ## Start the FastAPI server
-	@echo "Starting API server..."
-	uv sync
-	uv run fastapi dev
+init-client: ## Initialize client
+	@echo "Initializing client..."
+	cd apps/client && \
+	pnpm install
 
-start: clean ## Start the FastAPI server
-	@echo "Starting API server..."
+init-server: ## Initialize server
+	@echo "Initializing server..."
 	cd apps/server && \
 	uv venv --clear && \
 	source .venv/bin/activate && \
 	uv sync
+
+start: clean init-client init-server ## Start the FastAPI server
+	@echo "Starting API server..."
 	docker compose up -d
-# 	uv run -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
