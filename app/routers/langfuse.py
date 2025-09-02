@@ -1,13 +1,14 @@
 import logging
-from pathlib import Path
-from fastapi import APIRouter, HTTPException, Body, Query
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional
+from enum import Enum
+from sqlalchemy.orm import Session
 from langfuse import get_client
 
+from app.models.dataset import Dataset, QASource
+from app.services.database import get_db
 from app.services.langfuse import (
     prepare_langfuse_dataset,
-    load_json_dataset,
-    scan_dataset_files,
     get_langfuse_client,
     normalize_dataset_name,
     create_langfuse_dataset_with_items,
@@ -18,87 +19,43 @@ router = APIRouter(
     tags=["langfuse"],
 )
 
-base = Path(__file__).resolve().parents[2]
-qa_dir = base / "datasets" / "qa"
-
-AVAILABLE_DATASETS = scan_dataset_files(qa_dir)
-logging.info(f"Available datasets for dropdown: {AVAILABLE_DATASETS}")
-
-
-@router.post("/langfuse/dataset/export")
-async def export_dataset(
-    filename: str = Query(..., description="Name of the JSON file in datasets/qa", enum=AVAILABLE_DATASETS),
-    dataset_name: Optional[str] = Query(None, description="Custom name for the dataset in Langfuse")
-):
-    requested = Path(filename).name
-    file_path = qa_dir / requested
-
-    try:
-        # Load file data
-        payload = load_json_dataset(file_path)
-
-        # Resolve dataset name: use provided param or derive from filename.
-        dataset_name_used = dataset_name if dataset_name else normalize_dataset_name(requested)
-
-        # Determine the actual list of items from the payload.
-        if isinstance(payload, list):
-            data_list = payload
-        elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
-            data_list = payload["items"]
-        elif isinstance(payload, dict) and "question" in payload and "answer" in payload:
-            # single-object QA -> wrap into a list
-            data_list = [payload]
-        else:
-            raise ValueError("JSON dataset must be a list of items, a dict with an 'items' list, or a single QA object")
-
-        dataset_config, dataset_items = prepare_langfuse_dataset(data_list, dataset_name_used)
-
-        result = create_langfuse_dataset_with_items(dataset_config, dataset_items)
-
-        logging.info(f"Dataset {dataset_name_used} successfully exported to Langfuse")
-
-        return {
-            "message": "Dataset exported successfully",
-            "filename": requested,
-            **result
-        }
+def get_dataset_enum(db: Session):
+    """Crée une énumération dynamique des noms de datasets disponibles"""
+    datasets = db.query(Dataset.name).distinct().all()
+    dataset_names = [d.name for d in datasets]
     
-    except FileNotFoundError:
-        logging.error(f"File not found: {file_path}")
-        raise HTTPException(status_code=404, detail="Requested file not found in datasets/qa")
-    except ValueError as e:
-        logging.error(f"Data error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logging.exception("Error during export to Langfuse")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during export to Langfuse: {str(e)}"
-        )
+    if not dataset_names:
+        return type('DatasetEnum', (str, Enum), {'__empty__': 'Aucun dataset disponible'})
     
+    enum_dict = {name.replace('-', '_').replace(' ', '_'): name for name in dataset_names}
+    return type('DatasetEnum', (str, Enum), enum_dict)
 
 @router.get("/dataset/preview")
 async def preview_dataset_transformation(
-    filename: str = Query(..., description="Name of the JSON file in datasets/qa", enum=AVAILABLE_DATASETS)
+    db: Session = Depends(get_db),
+    dataset_name: str = Query(..., description="Nom du dataset en base de données")
 ):
-    """Preview how the data will be transformed for Langfuse without sending it"""
-    requested = Path(filename).name
-    file_path = qa_dir / requested
-
+    """Prévisualise la transformation du dataset pour Langfuse sans l'envoyer"""
     try:
-        payload = load_json_dataset(file_path)
-        # use the actual filename (requested) to derive a default dataset name for preview
-        dataset_name = normalize_dataset_name(requested)
-        # Determine list of items like in export to avoid same class-of-type errors
-        if isinstance(payload, list):
-            data_list = payload
-        elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
-            data_list = payload["items"]
-        elif isinstance(payload, dict) and "question" in payload and "answer" in payload:
-            data_list = [payload]
-        else:
-            raise ValueError("JSON dataset must be a list of items, a dict with an 'items' list, or a single QA object")
-
+        # Vérifier que le dataset existe
+        dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+        if not dataset:
+            # Récupérer les datasets disponibles pour le message d'erreur
+            available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+            )
+        
+        # Récupérer les QA pairs associées au dataset
+        qa_records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
+        
+        if not qa_records:
+            raise HTTPException(status_code=404, detail=f"Aucune donnée QA trouvée pour le dataset '{dataset_name}'")
+        
+        # Convertir les enregistrements en format approprié pour Langfuse
+        data_list = [qa.to_langfuse_dataset_item() for qa in qa_records]
+        
         dataset_config, dataset_items = prepare_langfuse_dataset(data_list, dataset_name)
          
         preview_items = dataset_items[:3]
@@ -107,13 +64,63 @@ async def preview_dataset_transformation(
             "dataset_config": dataset_config,
             "sample_items": preview_items,
             "total_items": len(dataset_items),
-            "preview_note": f"Displaying {len(preview_items)} items out of {len(dataset_items)} total"
+            "preview_note": f"Affichage de {len(preview_items)} éléments sur un total de {len(dataset_items)}"
         }
         
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Requested file not found")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.exception("Error during preview")
-        raise HTTPException(status_code=500, detail=f"Error during preview: {str(e)}")
+        logging.exception("Erreur lors de la prévisualisation")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la prévisualisation: {str(e)}")
+
+@router.post("/dataset/export")
+async def export_dataset(
+    db: Session = Depends(get_db),
+    dataset_name: str = Query(..., description="Nom du dataset en base de données"),
+    langfuse_dataset_name: Optional[str] = Query(None, description="Nom personnalisé pour le dataset dans Langfuse")
+):
+    """Exporte un dataset depuis la base de données vers Langfuse"""
+    try:
+        # Vérifier que le dataset existe
+        dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+        if not dataset:
+            # Récupérer les datasets disponibles pour le message d'erreur
+            available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+            )
+        
+        # Récupérer les QA pairs associées au dataset
+        qa_records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
+        
+        if not qa_records:
+            raise HTTPException(status_code=404, detail=f"Aucune donnée QA trouvée pour le dataset '{dataset_name}'")
+        
+        # Résoudre le nom du dataset pour Langfuse
+        langfuse_name = langfuse_dataset_name if langfuse_dataset_name else normalize_dataset_name(dataset_name)
+        
+        # Convertir les enregistrements en format approprié pour Langfuse
+        data_list = [qa.to_langfuse_dataset_item() for qa in qa_records]
+        
+        dataset_config, dataset_items = prepare_langfuse_dataset(data_list, langfuse_name)
+        
+        result = create_langfuse_dataset_with_items(dataset_config, dataset_items)
+        
+        logging.info(f"Dataset {dataset_name} exporté avec succès vers Langfuse sous le nom {langfuse_name}")
+        
+        return {
+            "message": "Dataset exporté avec succès",
+            "dataset_name": dataset_name,
+            "langfuse_dataset_name": langfuse_name,
+            **result
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Erreur lors de l'export vers Langfuse")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de l'export vers Langfuse: {str(e)}"
+        )

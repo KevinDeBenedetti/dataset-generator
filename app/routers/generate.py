@@ -1,8 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
+from typing import Optional
 
 from app.schemas.dataset import TargetLanguage
 from app.services.database import get_db
@@ -13,7 +13,6 @@ router = APIRouter(
     prefix="/generate",
     tags=["generate"],
 )
-
 
 @router.post("/dataset/url")
 async def create_dataset_for_url(
@@ -38,28 +37,26 @@ async def create_dataset_for_url(
     )
 ):
     try:
-        # Check if the models are available
         if model_cleaning not in config.available_models:
             raise HTTPException(
                 status_code=400, 
                 detail=f"Model '{model_cleaning}' not in available models: {config.available_models}"
             )
-        
+
         if target_language not in [l.value for l in TargetLanguage]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid target language: {target_language}. Available options: {[l.value for l in TargetLanguage]}"
             )
-                
+
         if model_qa not in config.available_models:
             raise HTTPException(
                 status_code=400, 
                 detail=f"Model '{model_qa}' not in available models: {config.available_models}"
             )
-            
-        # Convert to the appropriate type for the pipeline
+
         target_language_enum = TargetLanguage(target_language)
-            
+   
         pipeline = DatasetPipeline(db)
         result = await pipeline.process_url(
             url=url,
@@ -75,5 +72,3 @@ async def create_dataset_for_url(
     except Exception as e:
         logging.error(f"Error creating dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-

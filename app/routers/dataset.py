@@ -1,25 +1,30 @@
 import logging
 from difflib import SequenceMatcher
 from typing import List
+from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset, QASource
 from app.services.database import get_db
+from app.services.dataset_service import get_dataset_names, get_datasets
 
 router = APIRouter(
     prefix="/dataset",
     tags=["dataset"],
 )
 
-def get_dataset_names(db: Session) -> List[str]:
-    """Retrieves the list of dataset names for validation"""
-    try:
-        datasets = db.query(Dataset).all()
-        return [dataset.name for dataset in datasets]
-    except Exception:
-        return []
+def get_dataset_enum(db: Session):
+    """Crée une énumération dynamique des noms de datasets disponibles"""
+    datasets = db.query(Dataset.name).distinct().all()
+    dataset_names = [d.name for d in datasets]
+    
+    if not dataset_names:
+        return type('DatasetEnum', (str, Enum), {'__empty__': 'Aucun dataset disponible'})
+    
+    enum_dict = {name.replace('-', '_').replace(' ', '_'): name for name in dataset_names}
+    return type('DatasetEnum', (str, Enum), enum_dict)
 
 @router.post("")
 async def create_dataset(
@@ -48,11 +53,10 @@ async def create_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/datasets")
-async def get_datasets(db: Session = Depends(get_db)):
+async def get_all_datasets(db: Session = Depends(get_db)):
     """Retrieves the list of all available datasets"""
     try:
-        datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
-        return [{"id": dataset.id, "name": dataset.name, "description": dataset.description} for dataset in datasets]
+        return get_datasets(db)
     except Exception as e:
         logging.error(f"Error fetching datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -64,7 +68,16 @@ async def analyze_similarities(
     db: Session = Depends(get_db)
 ):
     """Analyzes similar questions in a dataset"""
-    records = db.query(QASource).filter(QASource.dataset_name == dataset_name).all()
+    # Vérifier que le dataset existe
+    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+    if not dataset:
+        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+        )
+    
+    records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
     
     similarities = []
     processed_pairs = set()
@@ -106,7 +119,16 @@ async def clean_similarities(
     db: Session = Depends(get_db)
 ):
     """Cleans similar questions in a dataset by removing duplicates"""
-    records = db.query(QASource).filter(QASource.dataset_name == dataset_name).all()
+    # Vérifier que le dataset existe
+    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+    if not dataset:
+        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+        )
+    
+    records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
     
     if not records:
         raise HTTPException(status_code=404, detail=f"No records found for dataset '{dataset_name}'")

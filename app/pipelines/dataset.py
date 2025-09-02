@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, Union
 from sqlalchemy.orm import Session
 
 from app.services.scraper import ScraperService
@@ -42,7 +42,7 @@ class DatasetPipeline:
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
             
             # 3. Clean the text with LLM
-            cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning_str)
+            cleaned_text = self.scraper_service.clean_text(page_snapshot.content, model_cleaning_str)
             
             # 4. Save the cleaned text
             cleaned_text_record = self.scraper_service.save_cleaned_text(
