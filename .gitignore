@@ -24,7 +24,7 @@ wheels/
 cache
 
 # Datasets (potentially large)
-datasets
+*datasets
 
 # Scraped data
 scrapes

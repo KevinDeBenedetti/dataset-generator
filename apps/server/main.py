@@ -2,13 +2,14 @@ from utils.logger import setup_logging
 
 setup_logging()
 
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+
+from contextlib import asynccontextmanager
 import logging
 from typing import List
 from importlib import import_module
-from fastapi.responses import RedirectResponse
 
 from models import dataset
 from routers import dataset, generate
@@ -40,7 +41,7 @@ app.include_router(dataset.router)
 
 if langfuse.is_langfuse_available():
     try:
-        langfuse_mod = import_module("app.routers.langfuse")
+        langfuse_mod = import_module("routers.langfuse")
         app.include_router(langfuse_mod.router)
         logging.info("Langfuse routes enabled")
     except Exception as e:
