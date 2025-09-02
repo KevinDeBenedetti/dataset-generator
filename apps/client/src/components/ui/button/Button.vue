@@ -23,7 +23,6 @@ const props = withDefaults(defineProps<Props>(), {
     :as="as"
     :as-child="asChild"
     :class="cn(buttonVariants({ variant, size }), props.class)"
-    class="cursor-pointer w-full hover:bg-gray-400 hover:text-white"
   >
     <slot />
   </Primitive>
