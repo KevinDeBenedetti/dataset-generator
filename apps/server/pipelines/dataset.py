@@ -41,8 +41,8 @@ class DatasetPipeline:
             # 2. Scrape the URL
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
             
-            # 3. Clean the text with LLM
-            cleaned_text = self.scraper_service.clean_text(page_snapshot.content, model_cleaning_str)
+            # 3. Clean the text with LLM (modification ici pour utiliser llm_service au lieu de scraper_service)
+            cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning_str)
             
             # 4. Save the cleaned text
             cleaned_text_record = self.scraper_service.save_cleaned_text(
