@@ -26,43 +26,43 @@ defineProps<{
 
 <template>
   <div class="space-y-6">
-    <!-- Statistiques générales -->
+    <!-- General Statistics -->
     <Card>
       <CardHeader>
-        <CardTitle>Résumé de génération</CardTitle>
-        <CardDescription>Statistiques du dataset généré</CardDescription>
+        <CardTitle>Generation Summary</CardTitle>
+        <CardDescription>Generated dataset statistics</CardDescription>
       </CardHeader>
       <CardContent>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="text-center">
             <div class="text-2xl font-bold text-green-600">{{ result.new_pairs }}</div>
-            <div class="text-sm text-muted-foreground">Nouvelles paires</div>
+            <div class="text-sm text-muted-foreground">New pairs</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-orange-600">
               {{ result.exact_duplicates_skipped }}
             </div>
-            <div class="text-sm text-muted-foreground">Doublons exacts</div>
+            <div class="text-sm text-muted-foreground">Exact duplicates</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-blue-600">
               {{ result.similar_duplicates_skipped }}
             </div>
-            <div class="text-sm text-muted-foreground">Doublons similaires</div>
+            <div class="text-sm text-muted-foreground">Similar duplicates</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold">{{ result.similarity_threshold }}</div>
-            <div class="text-sm text-muted-foreground">Seuil de similarité</div>
+            <div class="text-sm text-muted-foreground">Similarity threshold</div>
           </div>
         </div>
       </CardContent>
     </Card>
 
-    <!-- Liste des paires Q&R -->
+    <!-- Q&A Pairs List -->
     <Card>
       <CardHeader>
-        <CardTitle>Paires Questions-Réponses ({{ result.qa_pairs.length }})</CardTitle>
-        <CardDescription>Dataset généré avec contexte et niveau de confiance</CardDescription>
+        <CardTitle>Question-Answer Pairs ({{ result.qa_pairs.length }})</CardTitle>
+        <CardDescription>Generated dataset with context and confidence level</CardDescription>
       </CardHeader>
       <CardContent>
         <ScrollArea class="h-[600px]">
@@ -72,9 +72,9 @@ defineProps<{
               :key="index"
               class="border rounded-lg p-4 space-y-3"
             >
-              <!-- En-tête avec index et confiance -->
+              <!-- Header with index and confidence -->
               <div class="flex items-center justify-between">
-                <Badge variant="outline">Paire {{ index + 1 }}</Badge>
+                <Badge variant="outline">Pair {{ index + 1 }}</Badge>
                 <Badge
                   :variant="pair.confidence === 1 ? 'default' : 'secondary'"
                   class="flex items-center gap-1"
@@ -92,17 +92,17 @@ defineProps<{
 
               <Separator />
 
-              <!-- Réponse -->
+              <!-- Answer -->
               <div>
-                <h4 class="font-semibold text-green-700 mb-2">✅ Réponse</h4>
+                <h4 class="font-semibold text-green-700 mb-2">✅ Answer</h4>
                 <p class="text-sm">{{ pair.answer }}</p>
               </div>
 
               <Separator />
 
-              <!-- Contexte -->
+              <!-- Context -->
               <div>
-                <h4 class="font-semibold text-gray-700 mb-2">📄 Contexte</h4>
+                <h4 class="font-semibold text-gray-700 mb-2">📄 Context</h4>
                 <p class="text-xs text-muted-foreground italic bg-gray-50 p-2 rounded">
                   {{ pair.context }}
                 </p>
