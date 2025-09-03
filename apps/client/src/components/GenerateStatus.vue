@@ -8,15 +8,23 @@ import {
   StepperTitle,
   StepperTrigger,
 } from '@/components/ui/stepper'
-import { Loader, Check, CircleX } from "lucide-vue-next"
+
+import { Loader, CircleX, Send, Check } from "lucide-vue-next"
+import { useDatasetStore } from '@/stores/dataset'
+import { Loader2 } from "lucide-vue-next"
+
+const datasetStore = useDatasetStore()
 </script>
 
 <template>
-  <Stepper>
+  <Stepper class="flex justify-center">
     <StepperItem :step="1">
       <StepperTrigger>
         <StepperIndicator>
-            <component :is="Check" class="w-4 h-4 text-green-500" />
+            <Loader2 v-if="datasetStore.generationStatus === 'pending'" class="w-4 h-4 animate-spin" />
+            <Check v-else-if="datasetStore.generationStatus === 'success'" class="w-4 h-4 text-green-600" />
+            <CircleX v-else-if="datasetStore.generationStatus === 'error'" class="w-4 h-4 text-red-600" />
+            <Send v-else class="w-4 h-4 text-gray-400" />
         </StepperIndicator>
         <StepperTitle>Generate</StepperTitle>
         <StepperDescription>Scrap & generate from url</StepperDescription>
