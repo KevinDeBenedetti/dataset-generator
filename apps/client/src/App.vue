@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, RouterLink } from 'vue-router'
 import {
   NavigationMenu,
-  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
 } from '@/components/ui/navigation-menu'
 </script>
 
@@ -15,17 +13,22 @@ import {
     <NavigationMenu class="max-w-none w-full p-2">
       <NavigationMenuList>
         <NavigationMenuItem>
-          <NavigationMenuLink href="/">Home</NavigationMenuLink>
+          <NavigationMenuLink as-child>
+            <RouterLink to="/">Home</RouterLink>
+          </NavigationMenuLink>
         </NavigationMenuItem>
         <NavigationMenuItem>
-          <NavigationMenuLink href="/datasets">Datasets</NavigationMenuLink>
+          <NavigationMenuLink as-child>
+            <RouterLink to="/datasets">Datasets</RouterLink>
+          </NavigationMenuLink>
         </NavigationMenuItem>
         <NavigationMenuItem>
-          <NavigationMenuLink href="/about">À propos</NavigationMenuLink>
+          <NavigationMenuLink as-child>
+            <RouterLink to="/about">À propos</RouterLink>
+          </NavigationMenuLink>
         </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>
-
     <main>
       <RouterView />
     </main>
