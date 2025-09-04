@@ -53,7 +53,7 @@ const isAnyProcessing = computed(
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="w-full flex flex-col gap-6">
     <div class="flex flex-col gap-2">
       <Input v-model="url" placeholder="URL" :disabled="isAnyProcessing" />
       <Input v-model="datasetName" placeholder="Dataset Name" :disabled="isAnyProcessing" />
