@@ -20,6 +20,9 @@ const handleGenerate = async () => {
 
   try {
     await datasetStore.generateDataset(url.value, datasetName.value)
+    
+    await handleAnalyze()
+    await handleClean()
   } catch (error) {
     console.error('Erreur lors de la génération:', error)
   }
