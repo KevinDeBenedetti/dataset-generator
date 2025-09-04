@@ -52,7 +52,7 @@ async def create_dataset(
         logging.error(f"Error creating new dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/datasets")
+@router.get("")
 async def get_all_datasets(db: Session = Depends(get_db)):
     """Retrieves the list of all available datasets"""
     try:
@@ -201,3 +201,32 @@ async def clean_similarities(
         "details": sorted(similarities, key=lambda x: x["similarity"], reverse=True),
         "removed_items": removed_records
     }
+
+@router.delete("/{dataset_id}")
+async def delete_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db)
+):
+    """Deletes a dataset and all its associated records"""
+    try:
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail=f"Dataset with ID '{dataset_id}' not found")
+        
+        records_deleted = db.query(QASource).filter(QASource.dataset_id == dataset_id).delete()
+        
+        db.delete(dataset)
+        db.commit()
+        
+        return {
+            "message": f"Dataset '{dataset.name}' deleted successfully",
+            "dataset_id": dataset_id,
+            "records_deleted": records_deleted
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

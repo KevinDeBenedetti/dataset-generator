@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from services.database import Base
 
@@ -13,7 +14,11 @@ class PageSnapshot(Base):
     retrieved_at = Column(DateTime, nullable=False)
     content = Column(Text, nullable=False)
     url_hash = Column(String, nullable=False, index=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)  # Make nullable to avoid circular problems
+    dataset_id = Column(String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True)
+
+    # Relations
+    dataset = relationship("Dataset", back_populates="page_snapshots")
+    cleaned_texts = relationship("CleanedText", back_populates="page_snapshot", cascade="all, delete-orphan")
 
     @staticmethod
     def compute_hash_from_url(url: str) -> str:
@@ -24,7 +29,10 @@ class CleanedText(Base):
     __tablename__ = "cleaned_text"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    page_snapshot_id = Column(String, ForeignKey("page_snapshots.id"), nullable=False)
+    page_snapshot_id = Column(String, ForeignKey("page_snapshots.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     language = Column(String, nullable=False)
     model = Column(String, nullable=False)
+
+    # Relations
+    page_snapshot = relationship("PageSnapshot", back_populates="cleaned_texts")

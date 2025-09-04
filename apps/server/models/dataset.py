@@ -3,7 +3,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, relationship
 from difflib import SequenceMatcher
 
 from services.database import Base
@@ -15,6 +15,9 @@ class Dataset(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relations
+    page_snapshots = relationship("PageSnapshot", back_populates="dataset", cascade="all, delete-orphan")
 
 class QASource(Base):
     __tablename__ = "qa_sources"
