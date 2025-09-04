@@ -14,8 +14,11 @@ export const useDatasetStore = defineStore('dataset', () => {
   const analyzeResult = ref<any>(null)
   const cleanResult = ref<any>(null)
   const currentDatasetName = ref<string>('')
+  const datasets = ref<any[]>([])
+  const loading = ref<boolean>(false)
+  const error = ref<string | null>(null)
 
-  async function generateDataset(url: string, datasetName: string) {
+  const generateDataset = async (url: string, datasetName: string) => {
     generationStatus.value = 'pending'
     errorMessage.value = ''
     currentDatasetName.value = datasetName
@@ -52,7 +55,7 @@ export const useDatasetStore = defineStore('dataset', () => {
     }
   }
 
-  async function analyzeDataset(datasetName?: string) {
+  const analyzeDataset = async (datasetName?: string) => {
     const nameToUse = datasetName || currentDatasetName.value
     if (!nameToUse) {
       throw new Error('Aucun nom de dataset fourni')
@@ -88,7 +91,7 @@ export const useDatasetStore = defineStore('dataset', () => {
     }
   }
 
-  async function cleanDataset(datasetName?: string) {
+  const cleanDataset = async (datasetName?: string) => {
     const nameToUse = datasetName || currentDatasetName.value
     if (!nameToUse) {
       throw new Error('Aucun nom de dataset fourni')
@@ -124,7 +127,60 @@ export const useDatasetStore = defineStore('dataset', () => {
     }
   }
 
-  function resetStatus() {
+  const fetchDatasets = async () => {
+    try {
+      loading.value = true
+      error.value = null
+
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+      const response = await fetch(`${apiBaseUrl}/dataset`)
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      datasets.value = data
+
+      console.log("Données reçues de l'API:", data)
+      return data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Erreur inconnue'
+      console.error('Erreur lors de la récupération des datasets:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const deleteDataset = async (datasetId: string) => {
+    try {
+      loading.value = true
+      error.value = null
+
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+      const response = await fetch(`${apiBaseUrl}/dataset/${datasetId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
+      }
+
+      // Retirer le dataset de la liste locale
+      datasets.value = datasets.value.filter((dataset) => dataset.id !== datasetId)
+
+      console.log('Dataset supprimé:', datasetId)
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Erreur lors de la suppression'
+      console.error('Erreur lors de la suppression du dataset:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const resetStatus = () => {
     generationStatus.value = 'idle'
     analyzeStatus.value = 'idle'
     cleanStatus.value = 'idle'
@@ -144,9 +200,14 @@ export const useDatasetStore = defineStore('dataset', () => {
     analyzeResult,
     cleanResult,
     currentDatasetName,
+    datasets,
+    loading,
+    error,
     generateDataset,
     analyzeDataset,
     cleanDataset,
+    fetchDatasets,
+    deleteDataset,
     resetStatus,
   }
 })
