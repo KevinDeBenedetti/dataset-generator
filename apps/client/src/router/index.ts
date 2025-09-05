@@ -16,6 +16,11 @@ const router = createRouter({
       component: DatasetView
     },
     {
+      path: '/datasets/:id',
+      name: 'dataset-details',
+      component: DatasetView
+    },
+    {
       path: '/about',
       name: 'about',
       // route level code-splitting

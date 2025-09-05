@@ -180,6 +180,31 @@ export const useDatasetStore = defineStore('dataset', () => {
     }
   }
 
+  const fetchDatasetData = async (datasetId: string) => {
+    try {
+      loading.value = true
+      error.value = null
+
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+      const response = await fetch(`${apiBaseUrl}/dataset/?dataset_id=${datasetId}`)
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log('Données du dataset reçues:', data)
+      return data
+    } catch (err) {
+      error.value =
+        err instanceof Error ? err.message : 'Erreur lors de la récupération des données'
+      console.error('Erreur lors de la récupération des données du dataset:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   const resetStatus = () => {
     generationStatus.value = 'idle'
     analyzeStatus.value = 'idle'
@@ -207,6 +232,7 @@ export const useDatasetStore = defineStore('dataset', () => {
     analyzeDataset,
     cleanDataset,
     fetchDatasets,
+    fetchDatasetData,
     deleteDataset,
     resetStatus,
   }

@@ -26,7 +26,7 @@ const { datasets } = storeToRefs(datasetStore)
           <TableHead>Description</TableHead>
           <TableHead class="text-center">Actions</TableHead>
         </TableRow>
-      </TableHeader>
+      </TableHeader> 
       <TableBody>
         <DatasetRow 
           v-for="dataset in datasets" 

@@ -2,6 +2,7 @@
 import { useDatasetStore } from '@/stores/dataset'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { RouterLink } from 'vue-router'
 
 interface Dataset {
   id: string
@@ -18,11 +19,6 @@ const datasetStore = useDatasetStore()
 
 const truncateText = (text: string, maxLength: number) => {
   return text.length > maxLength ? text.substring(0, maxLength) + '…' : text
-}
-
-const handleOpenDataset = () => {
-  // TODO: Implement navigation to dataset detail view
-  console.log('Open dataset:', { id: props.dataset.id, name: props.dataset.name })
 }
 
 const handleDeleteDataset = async () => {
@@ -49,14 +45,15 @@ const handleDeleteDataset = async () => {
     </TableCell>
     <TableCell class="text-center">
       <div class="flex gap-2 justify-center">
-        <Button
-          @click="handleOpenDataset"
-          variant="outline"
-          size="sm"
-          class="text-blue-600 hover:text-blue-700"
-        >
-          Open
-        </Button>
+        <RouterLink :to="`/datasets/${dataset.id}`">
+          <Button
+            variant="outline"
+            size="sm"
+            class="text-blue-600 hover:text-blue-700"
+          >
+            Open
+          </Button>
+        </RouterLink>
         <Button
           @click="handleDeleteDataset"
           variant="outline"

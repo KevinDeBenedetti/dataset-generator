@@ -21,3 +21,24 @@ def get_datasets(db: Session) -> List[Dict[str, Any]]:
     except Exception as e:
         logging.error(f"Erreur lors de la récupération des datasets: {str(e)}")
         raise
+
+def get_dataset_by_id(db: Session, dataset_id: str) -> Dict[str, Any]:
+    """Récupère un dataset spécifique par son ID avec ses détails"""
+    try:
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if not dataset:
+            return None
+        
+        # Compter le nombre de QASource associées
+        qa_count = db.query(QASource).filter(QASource.dataset_id == dataset_id).count()
+        
+        return {
+            "id": dataset.id,
+            "name": dataset.name,
+            "description": dataset.description,
+            "created_at": dataset.created_at,
+            "qa_sources_count": qa_count
+        }
+    except Exception as e:
+        logging.error(f"Erreur lors de la récupération du dataset {dataset_id}: {str(e)}")
+        raise

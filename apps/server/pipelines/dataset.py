@@ -45,7 +45,7 @@ class DatasetPipeline:
             cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning_str)
             
             # 4. Save the cleaned text
-            cleaned_text_record = self.scraper_service.save_cleaned_text(
+            self.scraper_service.save_cleaned_text(
                 page_snapshot_id=page_snapshot.id,
                 content=cleaned_text,
                 language=target_language_str,

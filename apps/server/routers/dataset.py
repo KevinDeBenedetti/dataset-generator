@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from models.dataset import Dataset, QASource
 from services.database import get_db
-from services.dataset_service import get_dataset_names, get_datasets
+from services.dataset_service import get_dataset_names, get_datasets, get_dataset_by_id
 
 router = APIRouter(
     prefix="/dataset",
@@ -53,10 +53,23 @@ async def create_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("")
-async def get_all_datasets(db: Session = Depends(get_db)):
-    """Retrieves the list of all available datasets"""
+async def get_all_datasets(
+    dataset_id: str = Query(None, description="Optional dataset ID to get specific dataset details"),
+    db: Session = Depends(get_db)
+):
+    """Retrieves all datasets or a specific dataset if ID is provided"""
     try:
-        return get_datasets(db)
+        if dataset_id:
+            # Récupérer un dataset spécifique
+            dataset = get_dataset_by_id(db, dataset_id)
+            if not dataset:
+                raise HTTPException(status_code=404, detail=f"Dataset with ID '{dataset_id}' not found")
+            return dataset
+        else:
+            # Récupérer tous les datasets
+            return get_datasets(db)
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error fetching datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -225,6 +238,11 @@ async def delete_dataset(
         }
     
     except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
         raise
     except Exception as e:
         logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
