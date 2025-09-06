@@ -1,239 +1,126 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-
-export type GenerationStatus = 'idle' | 'pending' | 'success' | 'error'
-export type AnalyzeStatus = 'idle' | 'pending' | 'success' | 'error'
-export type CleanStatus = 'idle' | 'pending' | 'success' | 'error'
+import api from '@/composables/useAxios'
+import type { 
+  Dataset, 
+  CleaningResult, 
+  DatasetState, 
+  AnalyzingResult 
+} from '@/types/dataset'
 
 export const useDatasetStore = defineStore('dataset', () => {
-  const generationStatus = ref<GenerationStatus>('idle')
-  const analyzeStatus = ref<AnalyzeStatus>('idle')
-  const cleanStatus = ref<CleanStatus>('idle')
-  const errorMessage = ref<string>('')
-  const lastResult = ref<any>(null)
-  const analyzeResult = ref<any>(null)
-  const cleanResult = ref<any>(null)
-  const currentDatasetName = ref<string>('')
-  const datasets = ref<any[]>([])
-  const loading = ref<boolean>(false)
-  const error = ref<string | null>(null)
+  const state = ref<DatasetState>({
+    datasets: [],
+    dataset: null,
+    analyzingResult: null,
+    cleaningResult: null,
+    loading: false,
+    error: null,
+  })
 
-  const generateDataset = async (url: string, datasetName: string) => {
-    generationStatus.value = 'pending'
-    errorMessage.value = ''
-    currentDatasetName.value = datasetName
+  const setLoading = (isLoading: boolean) => {
+    state.value.loading = isLoading
+  }
 
+  const setError = (err: string | null) => {
+    state.value.error = err
+  }
+
+  const fetchDatasets = async (): Promise<Dataset[]> => {
+    setLoading(true)
     try {
-      const params = new URLSearchParams({
-        url: url,
-        dataset_name: datasetName,
-      })
+      const response = await api.get(`/dataset`)
+      console.log('fetchDatasets response:', response)
 
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/generate/dataset/url?${params}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      datasets.value = response.data
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.message || `Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      generationStatus.value = 'success'
-      lastResult.value = data
-      console.log(data)
-      return data
+      return  response.data
     } catch (error) {
-      generationStatus.value = 'error'
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
-      throw error
+      console.error(error)
+      setError('Error fetching datasets')
+      return []
+    } finally {
+      setLoading(false)
     }
   }
 
-  const analyzeDataset = async (datasetName?: string) => {
-    const nameToUse = datasetName || currentDatasetName.value
-    if (!nameToUse) {
-      throw new Error('Aucun nom de dataset fourni')
-    }
+  const selectDataset = async (datasetId: string): Promise<void> => {
+    const foundDataset = datasets.value.find((d) => d.id === datasetId)
 
-    analyzeStatus.value = 'pending'
-    errorMessage.value = ''
-
-    try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/dataset/${nameToUse}/analyze-similarities`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.message || `Erreur ${response.status}: ${response.statusText}`)
+    if (!foundDataset) {
+      if (datasets.value.length === 0) {
+        await fetchDatasets()
+        const foundDataset = datasets.value.find((d) => d.id === datasetId)
+        if (!foundDataset) {
+          throw new Error('Dataset not found')
+        }
+        dataset.value = foundDataset
+      } else {
+        throw new Error('Dataset not found')
       }
+    } else {
+      dataset.value = foundDataset
+    }
+  }
 
-      const data = await response.json()
-      analyzeStatus.value = 'success'
-      analyzeResult.value = data
-      console.log(data)
-      return data
+  const deleteDataset = async (datasetId: string): Promise<void> => {
+    setLoading(true)
+    try {
+      const response = await api.delete(`/dataset/${datasetId}`)
+
+      console.log('deleteDataset response:', response)
+
+      datasets.value = datasets.value.filter((d) => d.id !== datasetId)
+
+      if (dataset.value?.id === datasetId) {
+        dataset.value = null
+      }
     } catch (error) {
-      analyzeStatus.value = 'error'
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
+      console.error(error)
+      setError('Erreur lors de la suppression du dataset')
       throw error
+    } finally {
+      setLoading(false)
     }
   }
 
-  const cleanDataset = async (datasetName?: string) => {
-    const nameToUse = datasetName || currentDatasetName.value
-    if (!nameToUse) {
-      throw new Error('Aucun nom de dataset fourni')
-    }
-
-    cleanStatus.value = 'pending'
-    errorMessage.value = ''
-
+  const cleanDataset = async (datasetId: string): Promise<CleaningResult | null> => {
+    setLoading(true)
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/dataset/${nameToUse}/clean-similarities`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.message || `Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      cleanStatus.value = 'success'
-      cleanResult.value = data
-      console.log(data)
-      return data
+      const response = await api.post(`/dataset/${datasetId}/clean-similarities`)
+      state.value.cleaningResult = response.data
+      return response.data
     } catch (error) {
-      cleanStatus.value = 'error'
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
-      throw error
-    }
-  }
-
-  const fetchDatasets = async () => {
-    try {
-      loading.value = true
-      error.value = null
-
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/dataset`)
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      datasets.value = data
-
-      console.log("Données reçues de l'API:", data)
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Erreur inconnue'
-      console.error('Erreur lors de la récupération des datasets:', err)
-      throw err
+      console.error(error)
+      setError('Error cleaning dataset')
+      return null
     } finally {
-      loading.value = false
+      setLoading(false)
     }
   }
 
-  const deleteDataset = async (datasetId: string) => {
+  const analyzeDataset = async (datasetId: string): Promise<AnalyzingResult | null> => {
+    setLoading(true)
     try {
-      loading.value = true
-      error.value = null
-
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/dataset/${datasetId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      // Retirer le dataset de la liste locale
-      datasets.value = datasets.value.filter((dataset) => dataset.id !== datasetId)
-
-      console.log('Dataset supprimé:', datasetId)
-      return true
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Erreur lors de la suppression'
-      console.error('Erreur lors de la suppression du dataset:', err)
-      throw err
+      const response = await api.get(`/dataset/${datasetId}/analyze-similarities`)
+      state.value.analyzingResult = response.data
+      return response.data
+    } catch (error) {
+      console.error(error)
+      setError('Error fetching datasets')
+      return null
     } finally {
-      loading.value = false
+      setLoading(false)
     }
-  }
-
-  const fetchDatasetData = async (datasetId: string) => {
-    try {
-      loading.value = true
-      error.value = null
-
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-      const response = await fetch(`${apiBaseUrl}/dataset/?dataset_id=${datasetId}`)
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('Données du dataset reçues:', data)
-      return data
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Erreur lors de la récupération des données'
-      console.error('Erreur lors de la récupération des données du dataset:', err)
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  const resetStatus = () => {
-    generationStatus.value = 'idle'
-    analyzeStatus.value = 'idle'
-    cleanStatus.value = 'idle'
-    errorMessage.value = ''
-    lastResult.value = null
-    analyzeResult.value = null
-    cleanResult.value = null
-    currentDatasetName.value = ''
   }
 
   return {
-    generationStatus,
-    analyzeStatus,
-    cleanStatus,
-    errorMessage,
-    lastResult,
-    analyzeResult,
-    cleanResult,
-    currentDatasetName,
-    datasets,
-    loading,
-    error,
-    generateDataset,
+    state,
+
+    fetchDatasets,
+    selectDataset,
+    deleteDataset,
     analyzeDataset,
     cleanDataset,
-    fetchDatasets,
-    fetchDatasetData,
-    deleteDataset,
-    resetStatus,
   }
 })
