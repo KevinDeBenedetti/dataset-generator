@@ -112,13 +112,13 @@ async def delete_dataset(
         
         db.delete(dataset)
         db.commit()
-        
-        return {
-            "message": f"Dataset '{dataset.name}' deleted successfully",
-            "dataset_id": dataset_id,
-            "records_deleted": records_deleted
-        }
-    
+
+        return DeleteDatasetResponse(
+            message=f"Dataset '{dataset.name}' deleted successfully",
+            dataset_id=dataset_id,
+            records_deleted=records_deleted
+        )
+
     except HTTPException:
         raise
     except Exception as e:

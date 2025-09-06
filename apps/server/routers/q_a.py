@@ -6,28 +6,30 @@ from sqlalchemy.orm import Session
 
 from models.dataset import Dataset, QASource
 from services.database import get_db
+from schemas.q_a import QAListResponse, QAResponse
 
 router = APIRouter(
     prefix="/q_a",
     tags=["q_a"],
 )
 
-@router.get("/{dataset_id}")
+@router.get("/{dataset_id}", response_model=QAListResponse)
 async def get_qa_by_dataset(
     dataset_id: str,
-    limit: Optional[int] = Query(None, description="Limite le nombre de résultats"),
-    offset: Optional[int] = Query(0, description="Décalage pour la pagination"),
+    limit: Optional[int] = Query(None, description="Limit number of results"),
+    offset: Optional[int] = Query(0, description="Pagination offset"),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
-    """Récupère toutes les questions-réponses d'un dataset spécifique par son ID"""
+) -> QAListResponse:
+    """Retrieve all Q&A items for a specific dataset by its ID"""
     try:
         # Vérifier que le dataset existe
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
-            available_datasets = [{"id": d.id, "name": d.name} for d in db.query(Dataset.id, Dataset.name).all()]
+            # build safe list from returned tuples
+            available_datasets = [{"id": d[0], "name": d[1]} for d in db.query(Dataset.id, Dataset.name).all()]
             raise HTTPException(
                 status_code=404,
-                detail=f"Dataset avec l'ID '{dataset_id}' introuvable. Datasets disponibles: {available_datasets}"
+                detail=f"Dataset with ID '{dataset_id}' not found. Available datasets: {available_datasets}"
             )
         
         # Construire la requête pour les QA
@@ -72,22 +74,22 @@ async def get_qa_by_dataset(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Erreur lors de la récupération des Q&A pour le dataset '{dataset_id}': {str(e)}")
+        logging.error(f"Error fetching Q&A for dataset '{dataset_id}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/id/{qa_id}")
+@router.get("/id/{qa_id}", response_model=QAResponse)
 async def get_qa_by_id(
     qa_id: str,
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
-    """Récupère une question-réponse spécifique par son ID"""
+) -> QAResponse:
+    """Retrieve a specific Q&A item by its ID"""
     try:
         qa_record = db.query(QASource).filter(QASource.id == qa_id).first()
         
         if not qa_record:
             raise HTTPException(
                 status_code=404,
-                detail=f"Question-réponse avec l'ID '{qa_id}' introuvable"
+                detail=f"Q&A with ID '{qa_id}' not found"
             )
         
         # Récupérer les informations du dataset associé
@@ -112,7 +114,7 @@ async def get_qa_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Erreur lors de la récupération de la Q&A '{qa_id}': {str(e)}")
+        logging.error(f"Error fetching Q&A '{qa_id}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
