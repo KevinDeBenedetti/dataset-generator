@@ -21,13 +21,13 @@ const api = axios.create({
 //   (error) => Promise.reject(error)
 // )
 
-api.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    // gestion centralisée d'erreur (log, toast, format)
-    const err = error?.response?.data || { message: error.message || 'Erreur réseau' }
-    return Promise.reject(err)
-  },
-)
+// api.interceptors.response.use(
+//   (response) => response.data,
+//   (error) => {
+//     // gestion centralisée d'erreur (log, toast, format)
+//     const err = error?.response?.data || { message: error.message || 'Erreur réseau' }
+//     return Promise.reject(err)
+//   },
+// )
 
 export default api

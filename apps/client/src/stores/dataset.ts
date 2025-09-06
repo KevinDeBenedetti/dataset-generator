@@ -27,14 +27,11 @@ export const useDatasetStore = defineStore('dataset', () => {
   }
 
   const fetchDatasets = async (): Promise<Dataset[]> => {
-    setLoading(true)
     try {
+      setLoading(true)
       const response = await api.get(`/dataset`)
-      console.log('fetchDatasets response:', response)
-
-      datasets.value = response.data
-
-      return  response.data
+      state.value.datasets = response.data
+      return response.data
     } catch (error) {
       console.error(error)
       setError('Error fetching datasets')

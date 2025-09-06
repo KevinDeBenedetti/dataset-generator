@@ -3,6 +3,7 @@ import { useDatasetStore } from '@/stores/dataset'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
 
 interface Dataset {
   id: string
@@ -46,11 +47,7 @@ const handleDeleteDataset = async () => {
     <TableCell class="text-center">
       <div class="flex gap-2 justify-center">
         <RouterLink :to="`/datasets/${dataset.id}`">
-          <Button
-            variant="outline"
-            size="sm"
-            class="text-blue-600 hover:text-blue-700"
-          >
+          <Button variant="outline" size="sm" class="text-blue-600 hover:text-blue-700">
             Open
           </Button>
         </RouterLink>
