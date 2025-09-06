@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 from sqlalchemy.orm import Session
 
 from services.scraper import ScraperService
@@ -24,13 +24,32 @@ class DatasetPipeline:
                          model_cleaning: Union[str, ModelName],
                          target_language: Union[str, TargetLanguage],
                          model_qa: Union[str, ModelName],
-                         similarity_threshold: float = 0.9) -> Dict[str, Any]:
+                         similarity_threshold: Optional[float] = None) -> Dict[str, Any]:
         """Executes the complete pipeline for a URL"""
         try:
+            # Validate and set default for similarity_threshold
+            if similarity_threshold is None:
+                similarity_threshold = 0.9
+                logging.warning("similarity_threshold was None, using default value 0.9")
+            
+            # Ensure similarity_threshold is a valid float
+            try:
+                similarity_threshold = float(similarity_threshold)
+            except (TypeError, ValueError) as e:
+                logging.error(f"Invalid similarity_threshold value: {similarity_threshold}, using default 0.9")
+                similarity_threshold = 0.9
+            
+            # Validate threshold range
+            if not (0.0 <= similarity_threshold <= 1.0):
+                logging.warning(f"similarity_threshold {similarity_threshold} out of range [0.0, 1.0], clamping")
+                similarity_threshold = max(0.0, min(1.0, similarity_threshold))
+            
             # Extract string values from enum objects
             model_cleaning_str = model_cleaning.value if hasattr(model_cleaning, 'value') else str(model_cleaning)
             target_language_str = target_language.value if hasattr(target_language, 'value') else str(target_language)
             model_qa_str = model_qa.value if hasattr(model_qa, 'value') else str(model_qa)
+            
+            logging.info(f"Processing URL with similarity_threshold: {similarity_threshold}")
             
             # 1. Get or create the dataset
             dataset = self.dataset_service.get_or_create_dataset(
@@ -41,7 +60,7 @@ class DatasetPipeline:
             # 2. Scrape the URL
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
             
-            # 3. Clean the text with LLM (modification ici pour utiliser llm_service au lieu de scraper_service)
+            # 3. Clean the text with LLM
             cleaned_text = self.llm_service.clean_text(page_snapshot.content, model_cleaning_str)
             
             # 4. Save the cleaned text

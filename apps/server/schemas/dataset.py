@@ -54,7 +54,6 @@ class QA(BaseModel):
     def validate_text_fields(cls, v):
         return v.strip()
 
-# Modèles pour les réponses des endpoints dataset
 class DatasetResponse(BaseModel):
     id: str
     name: str
