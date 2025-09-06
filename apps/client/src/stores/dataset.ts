@@ -42,21 +42,21 @@ export const useDatasetStore = defineStore('dataset', () => {
   }
 
   const selectDataset = async (datasetId: string): Promise<void> => {
-    const foundDataset = datasets.value.find((d) => d.id === datasetId)
+    const foundDataset = state.value.datasets.find((d) => d.id === datasetId)
 
     if (!foundDataset) {
-      if (datasets.value.length === 0) {
+      if (state.value.datasets.length === 0) {
         await fetchDatasets()
-        const foundDataset = datasets.value.find((d) => d.id === datasetId)
+        const foundDataset = state.value.datasets.find((d) => d.id === datasetId)
         if (!foundDataset) {
           throw new Error('Dataset not found')
         }
-        dataset.value = foundDataset
+        state.value.dataset = foundDataset
       } else {
         throw new Error('Dataset not found')
       }
     } else {
-      dataset.value = foundDataset
+      state.value.dataset = foundDataset
     }
   }
 
@@ -67,10 +67,10 @@ export const useDatasetStore = defineStore('dataset', () => {
 
       console.log('deleteDataset response:', response)
 
-      datasets.value = datasets.value.filter((d) => d.id !== datasetId)
+      state.value.datasets = state.value.datasets.filter((d) => d.id !== datasetId)
 
-      if (dataset.value?.id === datasetId) {
-        dataset.value = null
+      if (state.value.dataset?.id === datasetId) {
+        state.value.dataset = null
       }
     } catch (error) {
       console.error(error)
