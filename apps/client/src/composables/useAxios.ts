@@ -27,7 +27,7 @@ api.interceptors.response.use(
     // gestion centralisée d'erreur (log, toast, format)
     const err = error?.response?.data || { message: error.message || 'Erreur réseau' }
     return Promise.reject(err)
-  }
+  },
 )
 
 export default api

@@ -11,8 +11,12 @@ help: ## Show helper
 
 clean: ## Clean cache, datasets, and scrapes
 	docker compose down
-	rm -rf apps/client/node_modules
-	rm -rf apps/server/.venv apps/server/uv.lock apps/server/scraper.log
+	cd apps/client && \
+		rm -rf node_modules pnpm-lock.yaml && \
+		pnpm store prune
+	
+	cd apps/server && \
+		rm -rf .venv uv.lock scraper.log
 
 init-client: ## Initialize client
 	@echo "Initializing client..."
