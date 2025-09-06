@@ -53,3 +53,52 @@ class QA(BaseModel):
     @classmethod
     def validate_text_fields(cls, v):
         return v.strip()
+
+# Modèles pour les réponses des endpoints dataset
+class DatasetResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    message: Optional[str] = None
+
+class SimilarityPair(BaseModel):
+    record1_id: str
+    record2_id: str
+    similarity: float
+    question1: str
+    question2: str
+
+class SimilarityAnalysisResponse(BaseModel):
+    dataset_id: str
+    dataset_name: str
+    threshold: float
+    total_records: int
+    similar_pairs_found: int
+    similarities: List[SimilarityPair]
+
+class CleanSimilarityPair(BaseModel):
+    keep_id: str
+    remove_id: str
+    similarity: float
+    keep_question: str
+    remove_question: str
+
+class RemovedRecord(BaseModel):
+    id: str
+    question: str
+    similarity: float
+    kept_id: str
+
+class CleanSimilarityResponse(BaseModel):
+    dataset_id: str
+    dataset_name: str
+    threshold: float
+    total_records: int
+    removed_records: int
+    details: List[CleanSimilarityPair]
+    removed_items: List[RemovedRecord]
+
+class DeleteDatasetResponse(BaseModel):
+    message: str
+    dataset_id: str
+    records_deleted: int

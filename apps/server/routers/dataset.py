@@ -1,6 +1,6 @@
 import logging
 from difflib import SequenceMatcher
-from typing import List
+from typing import List, Optional, Dict, Any
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 from models.dataset import Dataset, QASource
 from services.database import get_db
 from services.dataset_service import get_dataset_names, get_datasets, get_dataset_by_id
+from schemas.dataset import (
+    DatasetResponse, 
+    SimilarityAnalysisResponse, 
+    CleanSimilarityResponse, 
+    DeleteDatasetResponse
+)
 
 router = APIRouter(
     prefix="/dataset",
@@ -26,7 +32,7 @@ def get_dataset_enum(db: Session):
     enum_dict = {name.replace('-', '_').replace(' ', '_'): name for name in dataset_names}
     return type('DatasetEnum', (str, Enum), enum_dict)
 
-@router.post("")
+@router.post("", response_model=DatasetResponse)
 async def create_dataset(
     name: str = Query(..., description="Name of the new dataset"),
     description: str = Query(None, description="Optional dataset description"),
@@ -52,7 +58,7 @@ async def create_dataset(
         logging.error(f"Error creating new dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("")
+@router.get("", response_model=List[Dict[str, Any]])
 async def get_all_datasets(
     dataset_id: str = Query(None, description="Optional dataset ID to get specific dataset details"),
     db: Session = Depends(get_db)
@@ -74,20 +80,19 @@ async def get_all_datasets(
         logging.error(f"Error fetching datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{dataset_name}/analyze-similarities")
+@router.get("/{dataset_id}/analyze-similarities", response_model=SimilarityAnalysisResponse)
 async def analyze_similarities(
-    dataset_name: str,
+    dataset_id: str,
     threshold: float = Query(0.8, description="Similarity threshold"),
     db: Session = Depends(get_db)
 ):
     """Analyzes similar questions in a dataset"""
-    # Vérifier que le dataset existe
-    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
-        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+        available_datasets = [d.id for d in db.query(Dataset.id).distinct().all()]
         raise HTTPException(
             status_code=404,
-            detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+            detail=f"Dataset '{dataset_id}' introuvable. Datasets disponibles: {available_datasets}"
         )
     
     records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
@@ -118,27 +123,28 @@ async def analyze_similarities(
             processed_pairs.add(pair_key)
     
     return {
-        "dataset": dataset_name,
+        "dataset_id": dataset.id,
+        "dataset_name": dataset.name,
         "threshold": threshold,
         "total_records": len(records),
         "similar_pairs_found": len(similarities),
         "similarities": sorted(similarities, key=lambda x: x["similarity"], reverse=True)
     }
 
-@router.post("/{dataset_name}/clean-similarities")
+@router.post("/{dataset_id}/clean-similarities", response_model=CleanSimilarityResponse)
 async def clean_similarities(
-    dataset_name: str,
+    dataset_id: str,
     threshold: float = Query(0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"),
     db: Session = Depends(get_db)
 ):
     """Cleans similar questions in a dataset by removing duplicates"""
     # Vérifier que le dataset existe
-    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
-        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+        available_datasets = [d.id for d in db.query(Dataset.id).distinct().all()]
         raise HTTPException(
             status_code=404,
-            detail=f"Dataset '{dataset_name}' introuvable. Datasets disponibles: {available_datasets}"
+            detail=f"Dataset '{dataset_id}' introuvable. Datasets disponibles: {available_datasets}"
         )
     
     records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
@@ -207,7 +213,8 @@ async def clean_similarities(
     db.commit()
     
     return {
-        "dataset": dataset_name,
+        "dataset_id": dataset.id,
+        "dataset_name": dataset.name,
         "threshold": threshold,
         "total_records": len(records),
         "removed_records": len(removed_records),
@@ -215,7 +222,36 @@ async def clean_similarities(
         "removed_items": removed_records
     }
 
-@router.delete("/{dataset_id}")
+@router.delete("/{dataset_id}", response_model=DeleteDatasetResponse)
+async def delete_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db)
+):
+    """Deletes a dataset and all its associated records"""
+    try:
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail=f"Dataset with ID '{dataset_id}' not found")
+        
+        records_deleted = db.query(QASource).filter(QASource.dataset_id == dataset_id).delete()
+        
+        db.delete(dataset)
+        db.commit()
+        
+        return {
+            "message": f"Dataset '{dataset.name}' deleted successfully",
+            "dataset_id": dataset_id,
+            "records_deleted": records_deleted
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{dataset_id}", response_model=DeleteDatasetResponse)
 async def delete_dataset(
     dataset_id: str,
     db: Session = Depends(get_db)
