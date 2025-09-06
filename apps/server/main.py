@@ -12,7 +12,7 @@ from typing import List
 from importlib import import_module
 
 from models import dataset
-from routers import dataset, generate
+from routers import dataset, generate, q_a
 from services import langfuse, database
 from utils.config import config
 
@@ -38,6 +38,7 @@ app.add_middleware(
 
 app.include_router(generate.router)
 app.include_router(dataset.router)
+app.include_router(q_a.router)
 
 if langfuse.is_langfuse_available():
     try:
