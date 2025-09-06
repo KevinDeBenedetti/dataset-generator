@@ -61,8 +61,6 @@ onMounted(async () => {
     <DatasetDetail
       v-if="route.params.id"
       :dataset="dataset"
-      :qa-data="state.qaData"
-      :qa-metadata="state.qaMetadata"
     />
 
     <DatasetTable v-else :datasets="datasets" />
