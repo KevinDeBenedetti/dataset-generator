@@ -15,7 +15,7 @@ import { Slider } from '@/components/ui/slider'
 import { useGenerateStore } from '@/stores/generate'
 import { useDatasetStore } from '@/stores/dataset'
 
-import DatasetResults from './DatasetResults.vue'
+import DatasetResults from '@/components/dataset/Result.vue'
 
 const generateStore = useGenerateStore()
 const datasetStore = useDatasetStore()
@@ -23,18 +23,8 @@ const url = ref('')
 const datasetName = ref('')
 const dataset = computed(() => generateStore.dataset)
 
-// New options added according to the DatasetGenerationRequest schema
-const modelCleaning = ref<string | null>(null)
 const targetLanguage = ref<string | null>('fr')
-const modelQa = ref<string | null>(null)
-// Fix: the slider expects an array
 const similarityThreshold = ref([0.9])
-
-const availableModels = [
-  { value: 'mistral-small-3.1-24b-instruct-2503', label: 'Mistral Small 3.1' },
-  { value: 'mistral-medium-3.1-32b-instruct-2503', label: 'Mistral Medium 3.1' },
-  { value: 'mistral-large-3.1-64b-instruct-2503', label: 'Mistral Large 3.1' },
-]
 
 const availableLanguages = [
   { value: 'fr', label: 'French' },
@@ -50,10 +40,7 @@ const handleGenerate = async () => {
 
   try {
     await generateStore.generateDataset(url.value, datasetName.value, {
-      modelCleaning: modelCleaning.value,
       targetLanguage: targetLanguage.value,
-      modelQa: modelQa.value,
-      // Fix: pass the numeric value
       similarityThreshold: similarityThreshold.value[0],
     })
 
@@ -99,42 +86,6 @@ const isAnyProcessing = computed(
         <h4 class="text-sm font-medium mb-2">Advanced options</h4>
 
         <div class="space-y-3">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs text-gray-500">QA Model</label>
-            <Select v-model="modelQa">
-              <SelectTrigger class="w-full">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="model in availableModels"
-                  :key="model.value"
-                  :value="model.value"
-                >
-                  {{ model.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <label class="text-xs text-gray-500">Cleaning Model</label>
-            <Select v-model="modelCleaning">
-              <SelectTrigger class="w-full">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="model in availableModels"
-                  :key="model.value"
-                  :value="model.value"
-                >
-                  {{ model.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div class="flex flex-col gap-1">
             <label class="text-xs text-gray-500">Target Language</label>
             <Select v-model="targetLanguage">
