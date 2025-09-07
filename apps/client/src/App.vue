@@ -22,11 +22,6 @@ import {
             <RouterLink to="/datasets">Datasets</RouterLink>
           </NavigationMenuLink>
         </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuLink as-child>
-            <RouterLink to="/about">À propos</RouterLink>
-          </NavigationMenuLink>
-        </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>
     <main>
