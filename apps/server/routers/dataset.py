@@ -1,6 +1,6 @@
 import logging
 from difflib import SequenceMatcher
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,11 +17,10 @@ from schemas.dataset import (
 )
 
 router = APIRouter(
-    prefix="/dataset",
     tags=["dataset"],
 )
 
-@router.post("", response_model=DatasetResponse)
+@router.post("/dataset", response_model=DatasetResponse)
 async def create_dataset(
     name: str = Query(..., description="Name of the new dataset"),
     description: str = Query(None, description="Optional dataset description"),
@@ -46,7 +45,7 @@ async def create_dataset(
         logging.error(f"Error creating new dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("", response_model=List[Dict[str, Any]])
+@router.get("/dataset", response_model=Union[DatasetResponse, List[DatasetResponse]])
 async def get_all_datasets(
     dataset_id: str = Query(None, description="Optional dataset ID to get specific dataset details"),
     db: Session = Depends(get_db)
@@ -67,7 +66,7 @@ async def get_all_datasets(
         logging.error(f"Error fetching datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{dataset_id}/analyze-similarities", response_model=SimilarityAnalysisResponse)
+@router.get("/dataset/{dataset_id}/analyze-similarities", response_model=SimilarityAnalysisResponse)
 async def analyze_similarities(
     dataset_id: str,
     threshold: float = Query(0.8, description="Similarity threshold"),
@@ -82,7 +81,7 @@ async def analyze_similarities(
         logging.error(f"Error in analyze_similarities endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{dataset_id}/clean-similarities", response_model=CleanSimilarityResponse)
+@router.post("/dataset/{dataset_id}/clean-similarities", response_model=CleanSimilarityResponse)
 async def clean_similarities(
     dataset_id: str,
     threshold: float = Query(0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"),
@@ -97,7 +96,7 @@ async def clean_similarities(
         logging.error(f"Error in clean_similarities endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/{dataset_id}", response_model=DeleteDatasetResponse)
+@router.delete("/dataset/{dataset_id}", response_model=DeleteDatasetResponse)
 async def delete_dataset(
     dataset_id: str,
     db: Session = Depends(get_db)
@@ -130,7 +129,7 @@ async def delete_dataset(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/{dataset_id}", response_model=DeleteDatasetResponse)
+@router.delete("/dataset/{dataset_id}", response_model=DeleteDatasetResponse)
 async def delete_dataset(
     dataset_id: str,
     db: Session = Depends(get_db)
