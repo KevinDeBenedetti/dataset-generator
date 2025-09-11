@@ -26,9 +26,9 @@ const datasets = computed(() => props.datasets || [])
       <TableCaption> List of {{ datasets?.length || 0 }} available dataset(s) </TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Description</TableHead>
+          <TableHead class="text-center">ID</TableHead>
+          <TableHead class="text-center">Name</TableHead>
+          <TableHead class="text-center">Description</TableHead>
           <TableHead class="text-center">Actions</TableHead>
           <TableHead class="text-center">Langfuse</TableHead>
         </TableRow>

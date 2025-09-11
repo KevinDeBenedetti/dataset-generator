@@ -1,10 +1,11 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 
+import api from '@/composables/useAxios'
+
 import type { QAItem, QAResponse, QAState } from '@/types/qa'
 
 export const useQAStore = defineStore('qa', () => {
-  // États réactifs
   const qaItems = ref<QAItem[]>([])
   const currentQuestion = ref<string | null>(null)
   const currentAnswer = ref<string | null>(null)
@@ -19,7 +20,6 @@ export const useQAStore = defineStore('qa', () => {
     limit: 10,
   })
 
-  // Computed properties
   const questions = computed(() => qaItems.value.map((item) => item.question))
   const answers = computed(() => qaItems.value.map((item) => item.answer))
   const hasData = computed(() => qaItems.value.length > 0)
@@ -28,7 +28,6 @@ export const useQAStore = defineStore('qa', () => {
     () => state.value.offset + state.value.returnedCount < state.value.totalCount,
   )
 
-  // Actions
   const clearError = () => {
     state.value.error = null
   }
@@ -57,34 +56,25 @@ export const useQAStore = defineStore('qa', () => {
 
   const fetchQAByDataset = async (
     datasetId: string,
-    options?: { limit?: number; offset?: number },
+    options?: { limit?: number; offset?: number; replace?: boolean },
   ) => {
     try {
       setLoading(true)
       clearError()
 
-      const { limit = 10, offset = 0 } = options || {}
+      const { limit = 10, offset = 0, replace = true } = options || {}
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
       const url = new URL(`${apiBaseUrl}/q_a/${datasetId}`)
       url.searchParams.set('limit', limit.toString())
       url.searchParams.set('offset', offset.toString())
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      const response = await api.get(url.toString())
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.message || `Erreur ${response.status}: ${response.statusText}`)
-      }
+      const data: QAResponse = response.data
 
-      const data: QAResponse = await response.json()
-
-      // Si offset = 0, on remplace les données, sinon on les ajoute (pagination)
-      if (offset === 0) {
+      // Pour la pagination, on remplace toujours les données
+      // Pour le "load more", on ajoute les données
+      if (replace) {
         qaItems.value = data.qa_data || []
       } else {
         qaItems.value.push(...(data.qa_data || []))
@@ -118,6 +108,20 @@ export const useQAStore = defineStore('qa', () => {
     await fetchQAByDataset(state.value.datasetId, {
       limit: state.value.limit,
       offset: nextOffset,
+      replace: false, // Pour "load more", on ajoute les données
+    })
+  }
+
+  const goToPage = async (page: number) => {
+    if (!state.value.datasetId || state.value.isLoading) {
+      return
+    }
+
+    const offset = (page - 1) * state.value.limit
+    await fetchQAByDataset(state.value.datasetId, {
+      limit: state.value.limit,
+      offset: offset,
+      replace: true, // Pour la pagination, on remplace les données
     })
   }
 
@@ -138,6 +142,7 @@ export const useQAStore = defineStore('qa', () => {
     // Actions
     fetchQAByDataset,
     loadMoreQA,
+    goToPage,
     clearError,
     clearData,
     setLoading,
