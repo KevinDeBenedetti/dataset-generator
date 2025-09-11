@@ -1,8 +1,8 @@
-import logging
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Optional, List, Dict, Any
-from enum import Enum
 from sqlalchemy.orm import Session
+
+import logging
+from typing import Optional
 
 from models.dataset import Dataset, QASource
 from services.database import get_db
@@ -16,8 +16,8 @@ router = APIRouter(
 @router.get("/{dataset_id}", response_model=QAListResponse)
 async def get_qa_by_dataset(
     dataset_id: str,
-    limit: Optional[int] = Query(None, description="Limit number of results"),
-    offset: Optional[int] = Query(0, description="Pagination offset"),
+    limit: Optional[int] = Query(10, ge=1, le=1000, description="Limit number of results"),
+    offset: Optional[int] = Query(0, ge=0, description="Pagination offset"),
     db: Session = Depends(get_db)
 ) -> QAListResponse:
     """Retrieve all Q&A items for a specific dataset by its ID"""
@@ -32,22 +32,20 @@ async def get_qa_by_dataset(
                 detail=f"Dataset with ID '{dataset_id}' not found. Available datasets: {available_datasets}"
             )
         
-        # Construire la requête pour les QA
-        query = db.query(QASource).filter(QASource.dataset_id == dataset_id)
+        base_query = db.query(QASource).filter(QASource.dataset_id == dataset_id)
         
-        # Compter le total
-        total_count = query.count()
+        total_count = base_query.count()
         
-        # Appliquer la pagination
-        if offset:
-            query = query.offset(offset)
-        if limit:
-            query = query.limit(limit)
-        
-        # Récupérer les enregistrements
+        query = base_query.order_by(QASource.created_at.desc())
+        query = query.offset(offset).limit(limit)
+
+        logging.info(f"Query SQL: {query}")
+        logging.info(f"Offset: {offset}, Limit: {limit}")
+
         qa_records = query.all()
         
-        # Formater les données pour la réponse
+        logging.info(f"IDs récupérés: {[record.id[:8] for record in qa_records]}")
+        
         qa_data = []
         for record in qa_records:
             qa_data.append({
