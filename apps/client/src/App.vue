@@ -1,29 +1,15 @@
 <script setup lang="ts">
-import { RouterView, RouterLink } from 'vue-router'
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-} from '@/components/ui/navigation-menu'
+import { RouterView } from 'vue-router'
+
+import AppHeader from '@/components/app/Header.vue'
+import { Toaster } from '@/components/ui/sonner'
+import 'vue-sonner/style.css'
 </script>
 
 <template>
+  <Toaster />
   <div class="min-h-screen">
-    <NavigationMenu class="max-w-none w-full p-2">
-      <NavigationMenuList>
-        <NavigationMenuItem>
-          <NavigationMenuLink as-child>
-            <RouterLink to="/">Home</RouterLink>
-          </NavigationMenuLink>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuLink as-child>
-            <RouterLink to="/datasets">Datasets</RouterLink>
-          </NavigationMenuLink>
-        </NavigationMenuItem>
-      </NavigationMenuList>
-    </NavigationMenu>
+    <AppHeader />
     <main>
       <RouterView />
     </main>

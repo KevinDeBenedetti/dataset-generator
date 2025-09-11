@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { useDatasetStore } from '@/stores/dataset'
+import DatasetRow from '@/components/dataset/DatasetRow.vue'
+
+import type { Dataset } from '@/types/dataset'
+import { computed } from 'vue'
+
 import {
   Table,
   TableBody,
@@ -9,17 +12,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import DatasetRow from '@/components/dataset/DatasetRow.vue'
-
-import type { Dataset } from '@/types/dataset'
-import { computed, onMounted } from 'vue'
 
 const props = defineProps<{
   datasets: Array<Dataset>
 }>()
 
 const datasets = computed(() => props.datasets || [])
-
 </script>
 
 <template>
@@ -32,6 +30,7 @@ const datasets = computed(() => props.datasets || [])
           <TableHead>Name</TableHead>
           <TableHead>Description</TableHead>
           <TableHead class="text-center">Actions</TableHead>
+          <TableHead class="text-center">Langfuse</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

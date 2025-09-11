@@ -44,10 +44,12 @@ onMounted(async () => {
   } else {
     await datasetStore.fetchDatasets()
   }
-  console.log('Mounted DatasetView with datasets:', state.value.datasets)
 })
+
 // TODO : Handle errors globally
+
 // TODO : Add pagination
+
 </script>
 
 <template>
