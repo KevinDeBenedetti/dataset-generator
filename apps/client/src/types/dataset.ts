@@ -54,6 +54,7 @@ export interface QAPair {
 }
 
 export interface GeneratedDataset {
+  id: string // Ajout de l'ID du dataset
   qa_pairs: QAPair[]
   dataset_name: string
   model_cleaning: string
