@@ -26,7 +26,7 @@ export const useGenerateStore = defineStore('generate', () => {
     try {
       const response = await api.post('/dataset/generate', {
         url,
-        name,
+        dataset_name: name,
         target_language: options.targetLanguage,
         similarity_threshold: options.similarityThreshold,
       })
@@ -43,7 +43,7 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
   const analyzeDataset = async (): Promise<AnalyzingResult | null> => {
-    if (!dataset.value) {
+    if (!dataset.value?.id) {
       errorMessage.value = 'No dataset available to analyze'
       return null
     }
@@ -64,7 +64,7 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
   const cleanDataset = async (): Promise<CleaningResult | null> => {
-    if (!dataset.value) {
+    if (!dataset.value?.id) {
       errorMessage.value = 'No dataset available to clean'
       return null
     }

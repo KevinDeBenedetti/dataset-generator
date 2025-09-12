@@ -49,24 +49,36 @@ const handleGenerate = async () => {
       similarityThreshold: similarityThreshold.value[0],
     })
 
-    await handleAnalyze()
-    await handleClean()
+    // Ne pas lancer automatiquement l'analyse et le nettoyage ici
+    // Attendre que l'utilisateur décide de le faire
   } catch (error) {
     console.error('Error during generation:', error)
   }
 }
 
 const handleAnalyze = async () => {
+  if (!generateStore.dataset?.id) {
+    console.error('No dataset ID available for analysis')
+    return
+  }
+
   try {
-    await generateStore.analyzeDataset()
+    // Utiliser l'ID du dataset généré pour l'analyse
+    await datasetStore.analyzeDataset(generateStore.dataset.id)
   } catch (error) {
     console.error('Error during analysis:', error)
   }
 }
 
 const handleClean = async () => {
+  if (!generateStore.dataset?.id) {
+    console.error('No dataset ID available for cleaning')
+    return
+  }
+
   try {
-    await generateStore.cleanDataset()
+    // Utiliser l'ID du dataset généré pour le nettoyage
+    await datasetStore.cleanDataset(generateStore.dataset.id)
   } catch (error) {
     console.error('Error during cleaning:', error)
   }
