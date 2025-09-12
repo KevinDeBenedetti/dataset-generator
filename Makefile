@@ -40,6 +40,17 @@ setup-client: ## Initialize client
 	cd apps/client && \
 	pnpm install
 
+update-client: setup-client ## Upgrade client dependencies
+	@echo "Upgrading client dependencies..."
+	cd apps/client && \
+	pnpm up --latest
+
+lint-client: setup-client ## Run client linting
+	@echo "Running client linting..."
+	cd apps/client && \
+	pnpm lint && \
+	pnpm format
+
 setup-server: ## Initialize server
 	@echo "Initializing server..."
 	cd apps/server && \

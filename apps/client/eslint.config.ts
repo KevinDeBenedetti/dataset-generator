@@ -16,7 +16,30 @@ export default defineConfigWithVueTs(
 
   globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
 
+  // Base configurations
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
   skipFormatting,
+
+  // Custom rules
+  {
+    rules: {
+      // Allow single-word component names for UI components
+      'vue/multi-word-component-names': [
+        'error',
+        {
+          ignores: [
+            'Accordion',
+            'Badge',
+            'Pagination',
+            'Select',
+            'Separator',
+            'Skeleton',
+            'Slider',
+            'Stepper',
+          ],
+        },
+      ],
+    },
+  },
 )
