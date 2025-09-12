@@ -7,9 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+from apps.server.core import database
 from utils.logger import setup_logging
 from api import dataset, generate, q_a
-from services import langfuse, database
+from services import langfuse
 from apps.server.core.config import config
 
 setup_logging()

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from models.dataset import Dataset, QASource
-from services.database import get_db
+from apps.server.core.database import get_db
 from services.dataset import (
     get_datasets,
     get_dataset_by_id,

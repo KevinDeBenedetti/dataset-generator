@@ -11,7 +11,7 @@ from schemas.generate import (
     ErrorResponse,
     QAPair,
 )
-from services.database import get_db
+from apps.server.core.database import get_db
 from pipelines.dataset import DatasetPipeline
 from apps.server.core.config import config
 

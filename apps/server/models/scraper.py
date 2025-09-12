@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
-from services.database import Base
+from apps.server.core.database import Base
 
 
 class PageSnapshot(Base):

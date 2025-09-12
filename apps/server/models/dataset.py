@@ -6,7 +6,7 @@ from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import Session, relationship
 from difflib import SequenceMatcher
 
-from services.database import Base
+from apps.server.core.database import Base
 
 
 class Dataset(Base):
