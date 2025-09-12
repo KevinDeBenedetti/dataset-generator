@@ -1,5 +1,7 @@
-# Server
 cd apps/server && \
-# Execute linting
     uv run ruff check --fix && \
     uv run ruff format
+
+cd apps/client && \
+	pnpm lint && \
+	pnpm format
