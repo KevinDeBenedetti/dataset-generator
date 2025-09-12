@@ -2,7 +2,7 @@ import logging
 import openai
 import instructor
 from typing import List
-from utils.config import config
+from apps.server.core.config import config
 from schemas.dataset import QA
 
 
