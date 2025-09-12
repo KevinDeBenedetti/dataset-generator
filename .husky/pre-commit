@@ -1,5 +1,5 @@
 cd apps/server && \
-    uv run ruff check --fix && \
+    uv run ruff check --fix . && \
     uv run ruff format
 
 cd apps/client && \
