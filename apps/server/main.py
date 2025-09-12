@@ -7,13 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from apps.server.core import database
-from utils.logger import setup_logging
+from core import database, logger
 from api import dataset, generate, q_a
 from services import langfuse
-from apps.server.core.config import config
 
-setup_logging()
+logger.setup_logging()
 
 
 @asynccontextmanager
@@ -43,7 +41,7 @@ app.include_router(q_a.router)
 
 if langfuse.is_langfuse_available():
     try:
-        langfuse_mod = import_module("routers.langfuse")
+        langfuse_mod = import_module("api.langfuse")
         app.include_router(langfuse_mod.router)
         logging.info("Langfuse routes enabled")
     except Exception as e:
@@ -54,17 +52,4 @@ else:
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/docs")
-
-
-def read_root():
     return RedirectResponse(url="/docs", status_code=302)
-
-
-@app.get(
-    "/available-models",
-    response_model=List[str],
-    summary="Simple list of available LLM models",
-)
-async def get_available_models():
-    return config.available_models

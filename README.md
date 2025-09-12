@@ -31,6 +31,7 @@ This project is designed with a modular architecture that separates concerns int
 
 - **Multi-source Scraping**: Support for various web sources and content types
 - **AI-Powered QA Generation**: Leverage state-of-the-art LLMs for intelligent question-answer pair creation
+- **Multi-language Support**: Generate datasets in French, English, Spanish, and German
 - **Langfuse Integration**: Direct export to Langfuse for dataset management and training workflows
 - **Multiple Export Formats**: JSON, CSV, JSONL, and platform-specific formats
 - **Quality Control**: Automated validation and filtering of generated content
@@ -74,3 +75,10 @@ The tool supports extensive configuration options for:
 - Quality thresholds and validation rules
 - Batch processing settings
 - API rate limiting and retry policies
+
+## 🌍 Supported Languages
+
+- **French (fr)**: French language dataset generation
+- **English (en)**: English language dataset generation
+- **Spanish (es)**: Spanish language dataset generation
+- **German (de)**: German language dataset generation

@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from models.dataset import Dataset, QASource
-from apps.server.core.database import get_db
+from core.database import get_db
 from schemas.q_a import QAListResponse, QAResponse
 
 router = APIRouter(
