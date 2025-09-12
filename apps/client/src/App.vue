@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 
-import AppHeader from '@/components/app/Header.vue'
+import AppHeader from '@/components/app/HeaderNav.vue'
 import { Toaster } from '@/components/ui/sonner'
 import 'vue-sonner/style.css'
 </script>

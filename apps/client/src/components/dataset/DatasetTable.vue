@@ -34,7 +34,11 @@ const datasets = computed(() => props.datasets || [])
         </TableRow>
       </TableHeader>
       <TableBody>
-        <DatasetRow v-for="dataset in datasets" :key="dataset.id" :dataset="{ ...dataset, description: dataset.description || '' }" />
+        <DatasetRow
+          v-for="dataset in datasets"
+          :key="dataset.id"
+          :dataset="{ ...dataset, description: dataset.description || '' }"
+        />
       </TableBody>
     </Table>
   </div>

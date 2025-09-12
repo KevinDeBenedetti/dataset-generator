@@ -1,3 +1,5 @@
+import type { QAResponse } from '@/types/globals'
+
 export interface QAItem {
   id: string
   question: string
@@ -7,7 +9,7 @@ export interface QAItem {
   confidence: number
   created_at: string
   metadata: {
-    [key: string]: any
+    [key: string]: QAResponse
   }
 }
 

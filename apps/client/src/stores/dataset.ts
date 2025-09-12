@@ -1,12 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import api from '@/composables/useAxios'
-import type { 
-  Dataset, 
-  CleaningResult, 
-  DatasetState, 
-  AnalyzingResult 
-} from '@/types/dataset'
+import type { Dataset, CleaningResult, DatasetState, AnalyzingResult } from '@/types/dataset'
 
 export const useDatasetStore = defineStore('dataset', () => {
   const state = ref<DatasetState>({

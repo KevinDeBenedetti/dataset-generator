@@ -17,6 +17,11 @@ import { useDatasetStore } from '@/stores/dataset'
 
 import DatasetResults from '@/components/dataset/Result.vue'
 
+// Ajout de nom de composant multi-mot
+defineOptions({
+  name: 'DatasetGenerate',
+})
+
 const generateStore = useGenerateStore()
 const datasetStore = useDatasetStore()
 const url = ref('')

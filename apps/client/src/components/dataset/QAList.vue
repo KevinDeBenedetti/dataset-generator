@@ -10,7 +10,7 @@ interface QA {
   confidence?: number
   created_at?: string
   source_url?: string
-  metadata?: any
+  metadata?: Record<string, unknown>
 }
 
 interface Props {

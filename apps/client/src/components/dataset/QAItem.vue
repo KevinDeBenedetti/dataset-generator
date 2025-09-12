@@ -30,7 +30,9 @@ const toggleContextExpansion = (event: MouseEvent) => {
           <span v-if="props.qa.confidence" class="bg-blue-100 px-2 py-1 rounded">
             Confiance: {{ (props.qa.confidence * 100).toFixed(1) }}%
           </span>
-          <span class="bg-gray-100 px-2 py-1 rounded"> ID: {{ props.qa.id.substring(0, 8) }}... </span>
+          <span class="bg-gray-100 px-2 py-1 rounded">
+            ID: {{ props.qa.id.substring(0, 8) }}...
+          </span>
           <span v-if="props.qa.created_at" class="bg-green-100 px-2 py-1 rounded">
             {{ new Date(props.qa.created_at).toLocaleDateString('fr-FR') }}
           </span>
@@ -67,7 +69,9 @@ const toggleContextExpansion = (event: MouseEvent) => {
           <div class="relative">
             <p
               class="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap"
-              :class="{ 'max-h-32 overflow-hidden': props.qa.context && props.qa.context.length > 300 }"
+              :class="{
+                'max-h-32 overflow-hidden': props.qa.context && props.qa.context.length > 300,
+              }"
             >
               {{ props.qa.context }}
             </p>
@@ -105,7 +109,9 @@ const toggleContextExpansion = (event: MouseEvent) => {
             </div>
             <div class="flex gap-2">
               <span class="font-medium text-yellow-800">ID complet:</span>
-              <span class="font-mono text-xs bg-white px-2 py-1 rounded border">{{ props.qa.id }}</span>
+              <span class="font-mono text-xs bg-white px-2 py-1 rounded border">{{
+                props.qa.id
+              }}</span>
             </div>
             <div v-if="props.qa.metadata" class="flex gap-2">
               <span class="font-medium text-yellow-800">Métadonnées:</span>
