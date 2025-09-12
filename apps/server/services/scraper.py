@@ -15,7 +15,7 @@ from models.scraper import PageSnapshot, CleanedText
 class ScraperService:
     def __init__(self, db: Session):
         self.db = db
-    
+
     def _setup_session(self) -> requests.Session:
         session = requests.Session()
         retries = Retry(
@@ -27,7 +27,7 @@ class ScraperService:
         session.mount("https://", HTTPAdapter(max_retries=retries))
         session.mount("http://", HTTPAdapter(max_retries=retries))
         return session
-    
+
     def _get_user_agent(self) -> str:
         try:
             ua = UserAgent()
@@ -35,7 +35,7 @@ class ScraperService:
         except Exception as e:
             logging.warning(f"fake-useragent failed, using fallback: {e}")
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        
+
     def _extract_text(self, html: str) -> str:
         cleaned_html = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', '', html)
         cleaned_html = re.sub(r'<!--.*?-->', '', cleaned_html, flags=re.S)
@@ -43,7 +43,7 @@ class ScraperService:
         selector = Selector(text=cleaned_html)
         text = ' '.join(selector.xpath('//body//text()').getall())
         return re.sub(r'\s+', ' ', text).strip()
-    
+
     def scrape_url(self, url: str, dataset_id: int) -> PageSnapshot:
         logging.info(f"Scraping URL: {url}")
 
@@ -76,7 +76,7 @@ class ScraperService:
         self.db.refresh(page_snapshot)
         
         return page_snapshot
-    
+
     def save_cleaned_text(self, page_snapshot_id: int, content: str, language: str, model: str) -> CleanedText:
         """Saves cleaned text to the database"""
         cleaned_text_record = CleanedText(
