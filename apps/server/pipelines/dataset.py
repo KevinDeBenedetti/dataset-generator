@@ -116,6 +116,7 @@ class DatasetPipeline:
                 "qa_pairs": qa_list,
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
+                "dataset_id": dataset.id,  # Ajouter explicitement l'ID du dataset dans le résultat
             }
 
         except Exception as e:

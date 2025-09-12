@@ -1,5 +1,12 @@
-from pydantic import BaseModel, HttpUrl, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, HttpUrl
+from typing import List, Optional
+
+
+class QAPair(BaseModel):
+    """Model for a question-answer pair"""
+
+    question: str = Field(..., description="Generated question")
+    answer: str = Field(..., description="Corresponding answer")
 
 
 class DatasetGenerationRequest(BaseModel):
@@ -34,16 +41,10 @@ class DatasetGenerationRequest(BaseModel):
         }
 
 
-class QAPair(BaseModel):
-    """Model for a question-answer pair"""
-
-    question: str = Field(..., description="Generated question")
-    answer: str = Field(..., description="Corresponding answer")
-
-
 class DatasetGenerationResponse(BaseModel):
     """Model for dataset generation response"""
 
+    id: str = Field(..., description="ID of the dataset")
     qa_pairs: List[QAPair] = Field(
         ..., description="List of generated question-answer pairs"
     )
@@ -52,16 +53,13 @@ class DatasetGenerationResponse(BaseModel):
     target_language: str = Field(..., description="Target language used")
     model_qa: str = Field(..., description="Model used for QA generation")
     similarity_threshold: float = Field(..., description="Similarity threshold used")
-    total_questions: Optional[int] = Field(
-        None, description="Total number of generated questions"
-    )
-    processing_time: Optional[float] = Field(
-        None, description="Processing time in seconds"
-    )
+    total_questions: int = Field(..., description="Total number of generated questions")
+    processing_time: float = Field(..., description="Processing time in seconds")
 
     class Config:
         json_schema_extra = {
             "example": {
+                "id": "123e4567-e89b-12d3-a456-426614174000",
                 "qa_pairs": [
                     {
                         "question": "What is the main topic of this document?",

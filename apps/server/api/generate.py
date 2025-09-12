@@ -107,6 +107,7 @@ async def create_dataset_for_url(
 
         # Adapt the result to match our response schema
         response_data = {
+            "id": result.get("dataset_id"),  # Assurer que nous récupérons l'ID du dataset correctement
             "qa_pairs": qa_pairs,
             "dataset_name": request.dataset_name,
             "model_cleaning": model_cleaning,
@@ -116,6 +117,14 @@ async def create_dataset_for_url(
             "total_questions": len(qa_pairs),
             "processing_time": processing_time,
         }
+
+        # Vérification de la présence de l'ID avant de retourner la réponse
+        if not response_data["id"]:
+            logging.error("Dataset ID is missing in the result")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve dataset ID after generation",
+            )
 
         return DatasetGenerationResponse(**response_data)
 
@@ -127,7 +136,6 @@ async def create_dataset_for_url(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
         )
-
     except HTTPException:
         raise
     except Exception as e:
