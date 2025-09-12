@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  test-uv:
+  lint-uv:
     runs-on: ubuntu-latest
 
     strategy:
