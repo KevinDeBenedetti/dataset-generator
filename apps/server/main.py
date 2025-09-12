@@ -8,9 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from utils.logger import setup_logging
-from routers import dataset, generate, q_a
+from api import dataset, generate, q_a
 from services import langfuse, database
-from utils.config import config
+from apps.server.core.config import config
 
 setup_logging()
 

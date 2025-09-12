@@ -9,7 +9,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from datetime import datetime, timezone
 
-from utils.config import config
+from apps.server.core.config import config
 from models.scraper import PageSnapshot, CleanedText
 
 

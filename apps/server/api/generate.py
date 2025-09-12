@@ -13,7 +13,7 @@ from schemas.generate import (
 )
 from services.database import get_db
 from pipelines.dataset import DatasetPipeline
-from utils.config import config
+from apps.server.core.config import config
 
 router = APIRouter(
     prefix="/generate",
