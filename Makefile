@@ -18,18 +18,24 @@ clean: ## Clean cache, datasets, and scrapes
 	cd apps/server && \
 		rm -rf .venv uv.lock scraper.log
 
-init-client: ## Initialize client
+lint: setup-server ## Run linting
+	@echo "Running linting..."
+	cd apps/server && \
+		uv run ruff check --fix && \
+		uv run ruff format
+
+setup-client: ## Initialize client
 	@echo "Initializing client..."
 	cd apps/client && \
 	pnpm install
 
-init-server: ## Initialize server
+setup-server: ## Initialize server
 	@echo "Initializing server..."
 	cd apps/server && \
 	uv venv --clear && \
 	source .venv/bin/activate && \
 	uv sync
 
-start: clean init-client init-server ## Start the FastAPI server
+start: clean setup-client setup-server ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
