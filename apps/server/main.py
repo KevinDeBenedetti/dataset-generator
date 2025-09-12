@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import logging
-from typing import List
 from importlib import import_module
 
 from fastapi import FastAPI
