@@ -107,7 +107,9 @@ async def create_dataset_for_url(
 
         # Adapt the result to match our response schema
         response_data = {
-            "id": result.get("dataset_id"),  # Assurer que nous récupérons l'ID du dataset correctement
+            "id": result.get(
+                "dataset_id"
+            ),  # Assurer que nous récupérons l'ID du dataset correctement
             "qa_pairs": qa_pairs,
             "dataset_name": request.dataset_name,
             "model_cleaning": model_cleaning,
