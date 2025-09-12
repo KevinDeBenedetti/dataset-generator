@@ -1,6 +1,3 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
 set -euo pipefail
 
 echo "🔍 Pre-commit: Lancement des vérifications..."

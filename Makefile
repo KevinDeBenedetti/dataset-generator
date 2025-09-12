@@ -11,18 +11,18 @@ help: ## Show helper
 
 clean: ## Clean cache, datasets, and scrapes
 	docker compose down
-	cd apps/client && \
-		rm -rf node_modules pnpm-lock.yaml && \
-		pnpm store prune
-	
 	cd apps/server && \
 		rm -rf .venv uv.lock scraper.log
 
 	@echo "Removing all..."
+	@find . -type d -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
 	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
 	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
+
+	cd apps/client && \
+		pnpm store prune
 
 lint: setup-server ## Run linting
 	@echo "Running linting..."
