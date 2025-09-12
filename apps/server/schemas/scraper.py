@@ -1,20 +1,22 @@
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field as dc_field
 import time
 
+
 class UrlEntry(BaseModel):
     """An individual URL entry with its description"""
+
     url: str = Field(..., description="URL to scrape")
     description: Optional[str] = Field(None, description="Source description")
 
+
 class UrlsConfig(BaseModel):
     """Configuration of URLs with flexible hierarchical structure"""
+
     # Uses a generic Dict to accept any structure
     model_config = {"extra": "allow"}
-    
+
     def __init__(self, **data):
         # Allows initialization with any structure
         super().__init__(**data)
@@ -22,21 +24,24 @@ class UrlsConfig(BaseModel):
         for key, value in data.items():
             setattr(self, key, value)
 
+
 class ScrapingTask(BaseModel):
     """Scraping task with hierarchical structure as in urls.json"""
+
     urls_config: Dict[str, Any] = Field(
-        ...,
-        description="Configuration of URLs with hierarchical structure"
+        ..., description="Configuration of URLs with hierarchical structure"
     )
     target_language: Optional[str] = Field(
-        None,
-        description="Target language for QA (default: fr)"
+        None, description="Target language for QA (default: fr)"
     )
+
 
 class SimpleUrlList(BaseModel):
     """Simplified format for a list of URLs to scrape"""
+
     urls: List[str] = Field(..., description="Simple list of URLs to scrape")
     category: str = Field("general", description="Category for all URLs")
+
 
 @dataclass
 class ScrapedContent:
@@ -44,6 +49,7 @@ class ScrapedContent:
     text: str
     user_agent: str
     timestamp: str
+
 
 @dataclass
 class ScrapingMetrics:
@@ -55,11 +61,12 @@ class ScrapingMetrics:
     rate: float = 0.0
     _start_time: Optional[float] = None
     _end_time: Optional[float] = None
-    
+
     def add_error(self, error: str):
         from datetime import datetime
+
         self.errors.append(f"{datetime.now().isoformat()}: {error}")
-    
+
     def get_summary(self) -> str:
         self.calculate_rate()
         return f"""
@@ -70,7 +77,7 @@ Scraping Summary:
 - Duration: {self.duration:.2f}s
 - Rate: {self.rate:.2f} QA/s
         """
-    
+
     def start_timer(self):
         self._start_time = time.time()
 

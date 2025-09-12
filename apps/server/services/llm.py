@@ -5,6 +5,7 @@ from typing import List
 from utils.config import config
 from schemas.dataset import QA
 
+
 class PromptManager:
     CLEANING_PROMPT = """
     You are an expert text cleaner. Goal: extract only the main informative content.
@@ -25,7 +26,7 @@ class PromptManager:
     
     Respond only with the cleaned text, no comments.
     """
-    
+
     @classmethod
     def get_qa_prompt(cls, context: str, target_language: str = None) -> str:
         target_language = target_language or config.target_language or "en"
@@ -43,18 +44,17 @@ class PromptManager:
         {context}...
         """
 
+
 class LLMService:
     def __init__(self):
         self.client = openai.OpenAI(
-            api_key=config.openai_api_key,
-            base_url=config.openai_base_url
+            api_key=config.openai_api_key, base_url=config.openai_base_url
         )
         self.instructor_client = instructor.from_openai(
-            self.client, 
-            mode=instructor.Mode.MD_JSON
+            self.client, mode=instructor.Mode.MD_JSON
         )
         self.prompt_manager = PromptManager()
-    
+
     def clean_text(self, text: str, model: str = None) -> str:
         """Clean text using provided model or fallback to config.model_cleaning."""
         model = model or config.model_cleaning
@@ -63,7 +63,7 @@ class LLMService:
                 model=model,
                 messages=[
                     {"role": "system", "content": self.prompt_manager.CLEANING_PROMPT},
-                    {"role": "user", "content": text[:10000]}
+                    {"role": "user", "content": text[:10000]},
                 ],
                 max_tokens=config.max_tokens_cleaning,
                 temperature=config.temperature,
@@ -72,8 +72,10 @@ class LLMService:
         except Exception as e:
             logging.error(f"Text cleaning failed: {e}")
             return text
-    
-    def generate_qa(self, text: str, target_language: str = None, model: str = None) -> List[QA]:
+
+    def generate_qa(
+        self, text: str, target_language: str = None, model: str = None
+    ) -> List[QA]:
         """Generate QA using optional target_language and model; fall back to config."""
         target_language = target_language or config.target_language
         model = model or config.model_qa
@@ -82,7 +84,12 @@ class LLMService:
                 model=model,
                 response_model=list[QA],
                 messages=[
-                    {"role": "user", "content": self.prompt_manager.get_qa_prompt(text, target_language)}
+                    {
+                        "role": "user",
+                        "content": self.prompt_manager.get_qa_prompt(
+                            text, target_language
+                        ),
+                    }
                 ],
                 max_tokens=config.max_tokens_qa,
             )

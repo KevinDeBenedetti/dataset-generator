@@ -1,31 +1,31 @@
-from utils.logger import setup_logging
-
-setup_logging()
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-
 from contextlib import asynccontextmanager
 import logging
 from typing import List
 from importlib import import_module
 
-from models import dataset
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+
+from utils.logger import setup_logging
 from routers import dataset, generate, q_a
 from services import langfuse, database
 from utils.config import config
+
+setup_logging()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.create_db_and_tables()
     yield
 
+
 app = FastAPI(
     title="Datasets Generator API",
     description="API to generate datasets from web scraping",
     version="0.0.1",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -46,15 +46,24 @@ if langfuse.is_langfuse_available():
         app.include_router(langfuse_mod.router)
         logging.info("Langfuse routes enabled")
     except Exception as e:
-        logging.exception(f"Failed to enable Langfuse routes: {e}")
+        logging.warning(f"Failed to load Langfuse routes: {e}")
 else:
-    logging.info("Langfuse routes disabled: missing configuration or client unreachable")
+    logging.info("Langfuse not available, skipping Langfuse routes")
 
 
 @app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
+
+
 def read_root():
     return RedirectResponse(url="/docs", status_code=302)
 
-@app.get("/available-models", response_model=List[str], summary="Simple list of available LLM models")
+
+@app.get(
+    "/available-models",
+    response_model=List[str],
+    summary="Simple list of available LLM models",
+)
 async def get_available_models():
     return config.available_models

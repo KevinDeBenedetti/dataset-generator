@@ -10,9 +10,12 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
+SessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
+)
 Base = declarative_base()
 Session = scoped_session(SessionLocal)
+
 
 def get_db():
     db = SessionLocal()
@@ -20,6 +23,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def create_db_and_tables():
     try:
