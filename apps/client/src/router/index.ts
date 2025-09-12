@@ -13,13 +13,13 @@ const router = createRouter({
     {
       path: '/datasets',
       name: 'datasets',
-      component: DatasetView
+      component: DatasetView,
     },
     {
       path: '/datasets/:id',
       name: 'dataset-details',
-      component: DatasetView
-    }
+      component: DatasetView,
+    },
   ],
 })
 

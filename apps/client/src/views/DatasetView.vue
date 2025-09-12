@@ -49,7 +49,6 @@ onMounted(async () => {
 // TODO : Handle errors globally
 
 // TODO : Add pagination
-
 </script>
 
 <template>
@@ -60,10 +59,7 @@ onMounted(async () => {
 
     <LoadingState v-if="isLoading" />
 
-    <DatasetDetail
-      v-if="route.params.id"
-      :dataset="dataset"
-    />
+    <DatasetDetail v-if="route.params.id" :dataset="dataset" />
 
     <DatasetTable v-else :datasets="datasets" />
 

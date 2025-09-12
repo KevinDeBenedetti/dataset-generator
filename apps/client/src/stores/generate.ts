@@ -1,124 +1,98 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import api from '@/composables/useAxios'
-import { useDatasetStore } from '@/stores/dataset'
-import type { GeneratedDataset, ProcessStatus, DatasetGenerationRequest } from '@/types/dataset'
+import type { Dataset, CleaningResult, AnalyzingResult } from '@/types/dataset'
+
+interface GenerateOptions {
+  targetLanguage: string | null
+  similarityThreshold: number
+}
 
 export const useGenerateStore = defineStore('generate', () => {
-  const datasetStore = useDatasetStore()
-
-  const dataset = ref<GeneratedDataset | null>(null)
-  const generationStatus = ref<ProcessStatus>('idle')
-  const analyzeStatus = ref<ProcessStatus>('idle')
-  const cleanStatus = ref<ProcessStatus>('idle')
+  const dataset = ref<Dataset | null>(null)
+  const generationStatus = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
+  const analyzeStatus = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
+  const cleanStatus = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
   const errorMessage = ref<string | null>(null)
-
-  const state = ref({
-    loading: false,
-    error: null,
-  })
-
-  const setLoading = (isLoading: boolean) => {
-    state.value.loading = isLoading
-  }
-
-  const setError = (err: string | null) => {
-    errorMessage.value = err
-  }
 
   const generateDataset = async (
     url: string,
-    datasetName: string,
-    options: {
-      modelCleaning?: string | null
-      targetLanguage?: string | null
-      modelQa?: string | null
-      similarityThreshold?: number
-    } = {},
-  ): Promise<GeneratedDataset | null> => {
+    name: string,
+    options: GenerateOptions,
+  ): Promise<Dataset | null> => {
+    generationStatus.value = 'pending'
+    errorMessage.value = null
+
     try {
-      generationStatus.value = 'pending'
-      setLoading(true)
-
-      const requestBody: DatasetGenerationRequest = {
+      const response = await api.post('/dataset/generate', {
         url,
-        dataset_name: datasetName,
-        model_cleaning: options.modelCleaning || null,
-        target_language: options.targetLanguage || null,
-        model_qa: options.modelQa || null,
-        similarity_threshold:
-          options.similarityThreshold !== undefined ? options.similarityThreshold : 0.9,
-      }
-
-      const response = await api.post('/generate/dataset/url', requestBody)
+        name,
+        target_language: options.targetLanguage,
+        similarity_threshold: options.similarityThreshold,
+      })
 
       dataset.value = response.data
       generationStatus.value = 'success'
-
-      // Actualiser la liste des datasets
-      await datasetStore.fetchDatasets()
-
       return response.data
     } catch (error) {
-      console.error(error)
-      setError('Error generating dataset')
+      console.error('Error generating dataset:', error)
       generationStatus.value = 'error'
+      errorMessage.value = 'Failed to generate dataset'
       return null
-    } finally {
-      setLoading(false)
     }
   }
 
-  const analyzeDataset = async (): Promise<any> => {
-    if (!dataset.value) return null
+  const analyzeDataset = async (): Promise<AnalyzingResult | null> => {
+    if (!dataset.value) {
+      errorMessage.value = 'No dataset available to analyze'
+      return null
+    }
+
+    analyzeStatus.value = 'pending'
+    errorMessage.value = null
 
     try {
-      analyzeStatus.value = 'pending'
-      const datasetId = datasetStore.state.datasets.find(
-        (d) => d.name === dataset.value?.dataset_name,
-      )?.id
-
-      if (!datasetId) {
-        throw new Error('Dataset not found')
-      }
-
-      const result = await datasetStore.analyzeDataset(datasetId)
+      const response = await api.get(`/dataset/${dataset.value.id}/analyze-similarities`)
       analyzeStatus.value = 'success'
-      return result
+      return response.data
     } catch (error) {
-      console.error(error)
-      setError('Error analyzing dataset')
+      console.error('Error analyzing dataset:', error)
       analyzeStatus.value = 'error'
+      errorMessage.value = 'Failed to analyze dataset'
       return null
     }
   }
 
-  const cleanDataset = async (): Promise<any> => {
-    if (!dataset.value) return null
-
-    try {
-      cleanStatus.value = 'pending'
-      const datasetId = datasetStore.state.datasets.find(
-        (d) => d.name === dataset.value?.dataset_name,
-      )?.id
-
-      if (!datasetId) {
-        throw new Error('Dataset not found')
-      }
-
-      const result = await datasetStore.cleanDataset(datasetId)
-      cleanStatus.value = 'success'
-      return result
-    } catch (error) {
-      console.error(error)
-      setError('Error cleaning dataset')
-      cleanStatus.value = 'error'
+  const cleanDataset = async (): Promise<CleaningResult | null> => {
+    if (!dataset.value) {
+      errorMessage.value = 'No dataset available to clean'
       return null
     }
+
+    cleanStatus.value = 'pending'
+    errorMessage.value = null
+
+    try {
+      const response = await api.post(`/dataset/${dataset.value.id}/clean-similarities`)
+      cleanStatus.value = 'success'
+      return response.data
+    } catch (error: unknown) {
+      console.error('Error cleaning dataset:', error)
+      cleanStatus.value = 'error'
+      errorMessage.value = 'Failed to clean dataset'
+      return null
+    }
+  }
+
+  const resetStatus = () => {
+    generationStatus.value = 'idle'
+    analyzeStatus.value = 'idle'
+    cleanStatus.value = 'idle'
+    errorMessage.value = null
+    dataset.value = null
   }
 
   return {
-    state,
     dataset,
     generationStatus,
     analyzeStatus,
@@ -127,5 +101,6 @@ export const useGenerateStore = defineStore('generate', () => {
     generateDataset,
     analyzeDataset,
     cleanDataset,
+    resetStatus,
   }
 })

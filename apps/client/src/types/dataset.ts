@@ -1,3 +1,5 @@
+import type { DatasetRecord } from '@/types/globals'
+
 export interface Dataset {
   id: string
   name: string
@@ -34,7 +36,7 @@ export interface CleaningResult {
   threshold: number
   total_records: number
   similar_pairs_found: number
-  similarities: any[]
+  similarities: DatasetRecord[]
 }
 
 export interface DatasetState {

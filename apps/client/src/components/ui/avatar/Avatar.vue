@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import type { HTMLAttributes } from "vue"
-import { AvatarRoot } from "reka-ui"
-import { cn } from "@/lib/utils"
+import type { HTMLAttributes } from 'vue'
+import { AvatarRoot } from 'reka-ui'
+import { cn } from '@/lib/utils'
+
+// Ajout de nom de composant multi-mot
+defineOptions({
+  name: 'UiAvatar',
+})
 
 const props = defineProps<{
-  class?: HTMLAttributes["class"]
+  class?: HTMLAttributes['class']
 }>()
 </script>
 

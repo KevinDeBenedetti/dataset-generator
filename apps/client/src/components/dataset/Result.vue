@@ -8,6 +8,11 @@ import type { GeneratedDataset } from '@/types/dataset'
 defineProps<{
   result: GeneratedDataset | null
 }>()
+
+// Ajout de nom de composant multi-mot
+defineOptions({
+  name: 'DatasetResult',
+})
 </script>
 
 <template>
