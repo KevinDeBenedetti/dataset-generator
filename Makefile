@@ -15,7 +15,7 @@ clean: ## Clean cache, datasets, and scrapes
 		rm -rf .venv uv.lock scraper.log
 
 	@echo "Removing all..."
-	@find . -type d -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
+	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
 	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
 	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
