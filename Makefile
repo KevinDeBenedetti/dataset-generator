@@ -18,11 +18,22 @@ clean: ## Clean cache, datasets, and scrapes
 	cd apps/server && \
 		rm -rf .venv uv.lock scraper.log
 
+	@echo "Removing all..."
+	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
+	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
+
 lint: setup-server ## Run linting
 	@echo "Running linting..."
 	cd apps/server && \
 		uv run ruff check --fix && \
 		uv run ruff format
+
+setup-husky: ## Setup husky git hooks
+	@echo "Setting up husky..."
+	pnpm install
+	chmod +x .husky/pre-commit
 
 setup-client: ## Initialize client
 	@echo "Initializing client..."
@@ -36,6 +47,6 @@ setup-server: ## Initialize server
 	source .venv/bin/activate && \
 	uv sync
 
-start: clean setup-client setup-server ## Start the FastAPI server
+start: clean setup-husky setup-client setup-server ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
