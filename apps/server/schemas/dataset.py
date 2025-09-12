@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from enum import Enum
-from apps.server.core.config import config
+from core.config import config
 
 
 # Verify next code
@@ -9,6 +9,7 @@ class TargetLanguage(str, Enum):
     fr = "fr"
     en = "en"
     es = "es"
+    de = "de"
 
 
 # Instead of creating an Enum dynamically, let's create a str Enum class

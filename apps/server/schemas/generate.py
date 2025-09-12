@@ -22,7 +22,7 @@ class DatasetGenerationRequest(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "url": "https://example.com/document.pdf",
                 "dataset_name": "my_dataset",
@@ -60,7 +60,7 @@ class DatasetGenerationResponse(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "qa_pairs": [
                     {
@@ -86,7 +86,7 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = Field(None, description="Specific error code")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "detail": "Model 'invalid-model' not in available models: ['gpt-3.5-turbo', 'gpt-4']",
                 "error_code": "INVALID_MODEL",

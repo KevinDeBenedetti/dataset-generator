@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models.dataset import Dataset, QASource
-from apps.server.core.database import get_db
+from core.database import get_db
 from services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,

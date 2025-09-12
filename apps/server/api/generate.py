@@ -11,18 +11,18 @@ from schemas.generate import (
     ErrorResponse,
     QAPair,
 )
-from apps.server.core.database import get_db
+from core.database import get_db
 from pipelines.dataset import DatasetPipeline
-from apps.server.core.config import config
+from core.config import config
 
 router = APIRouter(
-    prefix="/generate",
+    prefix="/dataset",
     tags=["generate"],
 )
 
 
 @router.post(
-    "/dataset/url",
+    "/generate",
     response_model=DatasetGenerationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Generate a dataset from a URL",
@@ -52,24 +52,12 @@ async def create_dataset_for_url(
     start_time = time.time()
 
     try:
-        # Validate request parameters
-        if request.model not in config.available_models:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model '{request.model}' not available. Available models: {config.available_models}",
-            )
-
-        if request.target_language not in [lang.value for lang in TargetLanguage]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid target language: {request.target_language}. Available options: {[lang.value for lang in TargetLanguage]}",
-            )
-
         # Apply default values if not provided
         model_cleaning = request.model_cleaning or config.model_cleaning
         target_language = request.target_language or config.target_language
         model_qa = request.model_qa or config.model_qa
 
+        # Validate request parameters
         if model_cleaning not in config.available_models:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -130,6 +118,15 @@ async def create_dataset_for_url(
         }
 
         return DatasetGenerationResponse(**response_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in create_dataset_for_url: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your request.",
+        )
 
     except HTTPException:
         raise
