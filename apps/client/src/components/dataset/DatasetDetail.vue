@@ -44,7 +44,7 @@ watch(
       qaStore.clearData()
       await qaStore.fetchQAByDataset(newDatasetId)
     }
-  },
+  }
 )
 </script>
 

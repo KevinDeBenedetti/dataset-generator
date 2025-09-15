@@ -82,10 +82,10 @@ const getVisiblePages = () => {
       @page-change="handlePageChange"
     >
       <PaginationContent>
-        <PaginationFirst @click="handlePageChange(1)" :disabled="currentPage === 1 || disabled" />
+        <PaginationFirst :disabled="currentPage === 1 || disabled" @click="handlePageChange(1)" />
         <PaginationPrevious
-          @click="handlePageChange(currentPage - 1)"
           :disabled="currentPage === 1 || disabled"
+          @click="handlePageChange(currentPage - 1)"
         />
 
         <!-- Pages numérotées -->
@@ -95,13 +95,13 @@ const getVisiblePages = () => {
           </PaginationItem>
           <PaginationItem v-else :value="page as number">
             <button
-              @click="handlePageChange(page as number)"
               :disabled="disabled"
               :class="[
                 'px-3 py-2 text-sm rounded-md transition-colors',
                 page === currentPage ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100',
                 disabled && 'opacity-50 cursor-not-allowed',
               ]"
+              @click="handlePageChange(page as number)"
             >
               {{ page }}
             </button>
@@ -109,12 +109,12 @@ const getVisiblePages = () => {
         </template>
 
         <PaginationNext
-          @click="handlePageChange(currentPage + 1)"
           :disabled="currentPage === totalPages || disabled"
+          @click="handlePageChange(currentPage + 1)"
         />
         <PaginationLast
-          @click="handlePageChange(totalPages)"
           :disabled="currentPage === totalPages || disabled"
+          @click="handlePageChange(totalPages)"
         />
       </PaginationContent>
     </Pagination>

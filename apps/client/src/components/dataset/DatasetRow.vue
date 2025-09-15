@@ -66,10 +66,10 @@ const handleExportDataset = async () => {
           </Button>
         </RouterLink>
         <Button
-          @click="handleDeleteDataset"
           variant="outline"
           size="sm"
           class="text-red-600 hover:text-red-700"
+          @click="handleDeleteDataset"
         >
           Delete
         </Button>
@@ -77,10 +77,10 @@ const handleExportDataset = async () => {
     </TableCell>
     <TableCell class="font-medium">
       <Button
-        @click="handleExportDataset"
         variant="outline"
         size="sm"
         class="text-gray-600 hover:text-gray-700 w-full"
+        @click="handleExportDataset"
       >
         Export
       </Button>

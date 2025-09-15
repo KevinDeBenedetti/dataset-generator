@@ -17,7 +17,7 @@ const props = withDefaults(
   >(),
   {
     size: 'icon',
-  },
+  }
 )
 
 const delegatedProps = reactiveOmit(props, 'class', 'size', 'isActive')
@@ -33,7 +33,7 @@ const delegatedProps = reactiveOmit(props, 'class', 'size', 'isActive')
           variant: isActive ? 'outline' : 'ghost',
           size,
         }),
-        props.class,
+        props.class
       )
     "
   >

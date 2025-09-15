@@ -34,7 +34,7 @@ watch(
       await qaStore.fetchQAByDataset(newId as string)
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 onMounted(async () => {

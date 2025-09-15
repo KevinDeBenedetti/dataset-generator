@@ -18,7 +18,7 @@ export const useGenerateStore = defineStore('generate', () => {
   const generateDataset = async (
     url: string,
     name: string,
-    options: GenerateOptions,
+    options: GenerateOptions
   ): Promise<Dataset | null> => {
     generationStatus.value = 'pending'
     errorMessage.value = null
