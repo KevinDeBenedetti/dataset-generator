@@ -45,7 +45,7 @@ const toggleContextExpansion = (event: MouseEvent) => {
         <!-- Question complète -->
         <div class="bg-blue-50 p-3 rounded-lg">
           <h4 class="font-medium text-blue-900 mb-2 flex items-center">
-            <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+            <span class="w-2 h-2 bg-blue-500 rounded-full mr-2" />
             Question
           </h4>
           <p class="text-blue-800">{{ props.qa.question }}</p>
@@ -54,7 +54,7 @@ const toggleContextExpansion = (event: MouseEvent) => {
         <!-- Réponse -->
         <div class="bg-green-50 p-3 rounded-lg">
           <h4 class="font-medium text-green-900 mb-2 flex items-center">
-            <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            <span class="w-2 h-2 bg-green-500 rounded-full mr-2" />
             Réponse
           </h4>
           <p class="text-green-800">{{ props.qa.answer }}</p>
@@ -63,7 +63,7 @@ const toggleContextExpansion = (event: MouseEvent) => {
         <!-- Contexte -->
         <div v-if="props.qa.context" class="bg-gray-50 p-3 rounded-lg">
           <h4 class="font-medium text-gray-900 mb-2 flex items-center">
-            <span class="w-2 h-2 bg-gray-500 rounded-full mr-2"></span>
+            <span class="w-2 h-2 bg-gray-500 rounded-full mr-2" />
             Contexte
           </h4>
           <div class="relative">
@@ -81,8 +81,8 @@ const toggleContextExpansion = (event: MouseEvent) => {
               class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent flex items-end justify-center"
             >
               <button
-                @click="toggleContextExpansion"
                 class="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
+                @click="toggleContextExpansion"
               >
                 Voir plus
               </button>
@@ -93,7 +93,7 @@ const toggleContextExpansion = (event: MouseEvent) => {
         <!-- Métadonnées -->
         <div class="bg-yellow-50 p-3 rounded-lg">
           <h4 class="font-medium text-yellow-900 mb-2 flex items-center">
-            <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+            <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2" />
             Informations supplémentaires
           </h4>
           <div class="space-y-2 text-sm">
