@@ -1,113 +1,130 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import api from '@/composables/useAxios'
-import type { Dataset, CleaningResult, DatasetState, AnalyzingResult } from '@/types/dataset'
+import type {
+  DatasetResponse,
+  CleanSimilarityResponse,
+  SimilarityAnalysisResponse,
+} from '@/api/types.gen'
+import {
+  getdataset,
+  deletedatasetBydataset_idBy,
+  getdatasetBydataset_idByanalyze_similarities,
+  postdatasetBydataset_idByclean_similarities,
+} from '@/api/sdk.gen'
 
 export const useDatasetStore = defineStore('dataset', () => {
-  const state = ref<DatasetState>({
-    datasets: [],
-    dataset: null,
-    analyzingResult: null,
-    cleaningResult: null,
-    loading: false,
-    error: null,
-  })
+  const datasets = ref<DatasetResponse[]>([])
+  const dataset = ref<DatasetResponse | null>(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-  const setLoading = (isLoading: boolean) => {
-    state.value.loading = isLoading
-  }
+  const analyzingResult = ref<SimilarityAnalysisResponse | null>(null)
+  const cleaningResult = ref<CleanSimilarityResponse | null>(null)
 
-  const setError = (err: string | null) => {
-    state.value.error = err
-  }
-
-  const fetchDatasets = async (): Promise<Dataset[]> => {
+  const fetchDatasets = async (): Promise<DatasetResponse[]> => {
+    loading.value = true
+    error.value = null
     try {
-      setLoading(true)
-      const response = await api.get(`/dataset`)
-      state.value.datasets = response.data
-      return response.data
-    } catch (error) {
-      console.error(error)
-      setError('Error fetching datasets')
+      const response = await getdataset()
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data
+          ? [response.data]
+          : []
+      datasets.value = data as DatasetResponse[]
+      return datasets.value
+    } catch (err) {
+      console.error(err)
+      error.value = 'Error fetching datasets'
       return []
     } finally {
-      setLoading(false)
+      loading.value = false
     }
   }
 
   const selectDataset = async (datasetId: string): Promise<void> => {
-    const foundDataset = state.value.datasets.find((d) => d.id === datasetId)
+    let found = datasets.value.find((d) => d.id === datasetId)
 
-    if (!foundDataset) {
-      if (state.value.datasets.length === 0) {
+    if (!found) {
+      if (datasets.value.length === 0) {
         await fetchDatasets()
-        const foundDataset = state.value.datasets.find((d) => d.id === datasetId)
-        if (!foundDataset) {
+        found = datasets.value.find((d) => d.id === datasetId)
+        if (!found) {
           throw new Error('Dataset not found')
         }
-        state.value.dataset = foundDataset
+        dataset.value = found
       } else {
         throw new Error('Dataset not found')
       }
     } else {
-      state.value.dataset = foundDataset
+      dataset.value = found
     }
   }
 
   const deleteDataset = async (datasetId: string): Promise<void> => {
-    setLoading(true)
+    loading.value = true
+    error.value = null
     try {
-      const response = await api.delete(`/dataset/${datasetId}`)
-
+      const response = await deletedatasetBydataset_idBy({ path: { dataset_id: datasetId } })
       console.log('deleteDataset response:', response)
 
-      state.value.datasets = state.value.datasets.filter((d) => d.id !== datasetId)
+      datasets.value = datasets.value.filter((d) => d.id !== datasetId)
 
-      if (state.value.dataset?.id === datasetId) {
-        state.value.dataset = null
+      if (dataset.value?.id === datasetId) {
+        dataset.value = null
       }
-    } catch (error) {
-      console.error(error)
-      setError('Erreur lors de la suppression du dataset')
-      throw error
+    } catch (err) {
+      console.error(err)
+      error.value = 'Erreur lors de la suppression du dataset'
+      throw err
     } finally {
-      setLoading(false)
+      loading.value = false
     }
   }
 
-  const cleanDataset = async (datasetId: string): Promise<CleaningResult | null> => {
-    setLoading(true)
+  const cleanDataset = async (datasetId: string): Promise<CleanSimilarityResponse | null> => {
+    loading.value = true
+    error.value = null
     try {
-      const response = await api.post(`/dataset/${datasetId}/clean-similarities`)
-      state.value.cleaningResult = response.data
-      return response.data
-    } catch (error) {
-      console.error(error)
-      setError('Error cleaning dataset')
+      const response = await postdatasetBydataset_idByclean_similarities({
+        path: { dataset_id: datasetId },
+      })
+      cleaningResult.value = response.data ?? null
+      return cleaningResult.value
+    } catch (err) {
+      console.error(err)
+      error.value = 'Error cleaning dataset'
       return null
     } finally {
-      setLoading(false)
+      loading.value = false
     }
   }
 
-  const analyzeDataset = async (datasetId: string): Promise<AnalyzingResult | null> => {
-    setLoading(true)
+  const analyzeDataset = async (datasetId: string): Promise<SimilarityAnalysisResponse | null> => {
+    loading.value = true
+    error.value = null
     try {
-      const response = await api.get(`/dataset/${datasetId}/analyze-similarities`)
-      state.value.analyzingResult = response.data
-      return response.data
-    } catch (error) {
-      console.error(error)
-      setError('Error fetching datasets')
+      const response = await getdatasetBydataset_idByanalyze_similarities({
+        path: { dataset_id: datasetId },
+      })
+      analyzingResult.value = response.data ?? null
+      return analyzingResult.value
+    } catch (err) {
+      console.error(err)
+      error.value = 'Error analyzing dataset'
       return null
     } finally {
-      setLoading(false)
+      loading.value = false
     }
   }
 
   return {
-    state,
+    datasets,
+    dataset,
+    loading,
+    error,
+    analyzingResult,
+    cleaningResult,
 
     fetchDatasets,
     selectDataset,

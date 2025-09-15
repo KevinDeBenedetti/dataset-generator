@@ -15,18 +15,10 @@ import { Slider } from '@/components/ui/slider'
 import { useGenerateStore } from '@/stores/generate'
 import { useDatasetStore } from '@/stores/dataset'
 
-import DatasetResults from '@/components/dataset/Result.vue'
-
-// Ajout de nom de composant multi-mot
-defineOptions({
-  name: 'DatasetGenerate',
-})
-
 const generateStore = useGenerateStore()
 const datasetStore = useDatasetStore()
 const url = ref('')
 const datasetName = ref('')
-const dataset = computed(() => generateStore.dataset)
 
 const targetLanguage = ref<string | null>('fr')
 const similarityThreshold = ref([0.9])
@@ -48,9 +40,6 @@ const handleGenerate = async () => {
       targetLanguage: targetLanguage.value,
       similarityThreshold: similarityThreshold.value[0],
     })
-
-    // Ne pas lancer automatiquement l'analyse et le nettoyage ici
-    // Attendre que l'utilisateur décide de le faire
   } catch (error) {
     console.error('Error during generation:', error)
   }
@@ -88,7 +77,7 @@ const isAnyProcessing = computed(
   () =>
     generateStore.generationStatus === 'pending' ||
     generateStore.analyzeStatus === 'pending' ||
-    generateStore.cleanStatus === 'pending',
+    generateStore.cleanStatus === 'pending'
 )
 </script>
 
@@ -135,9 +124,9 @@ const isAnyProcessing = computed(
 
       <div class="flex gap-2 mt-2">
         <Button
-          @click="handleGenerate"
           :disabled="!url || !datasetName || isAnyProcessing"
           class="flex-1"
+          @click="handleGenerate"
         >
           <Loader2
             v-if="generateStore.generationStatus === 'pending'"
@@ -148,10 +137,10 @@ const isAnyProcessing = computed(
 
         <Button
           v-if="generateStore.generationStatus === 'success'"
-          @click="handleAnalyze"
           :disabled="isAnyProcessing"
           variant="outline"
           class="flex-1"
+          @click="handleAnalyze"
         >
           <Loader2
             v-if="generateStore.analyzeStatus === 'pending'"
@@ -162,10 +151,10 @@ const isAnyProcessing = computed(
 
         <Button
           v-if="generateStore.analyzeStatus === 'success'"
-          @click="handleClean"
           :disabled="isAnyProcessing"
           variant="outline"
           class="flex-1"
+          @click="handleClean"
         >
           <Loader2
             v-if="generateStore.cleanStatus === 'pending'"
@@ -184,42 +173,6 @@ const isAnyProcessing = computed(
         class="text-red-500 text-sm"
       >
         {{ generateStore.errorMessage }}
-      </div>
-    </div>
-
-    <!-- Generated dataset display -->
-    <div v-if="generateStore.generationStatus === 'success' && dataset">
-      <h3 class="text-lg font-semibold mb-2">Generated Dataset</h3>
-      <DatasetResults :result="dataset" />
-    </div>
-
-    <!-- Similarity analysis display -->
-    <div v-if="generateStore.analyzeStatus === 'success' && datasetStore.state.analyzingResult">
-      <h3 class="text-lg font-semibold mb-2">Similarity Analysis</h3>
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <p><strong>Dataset:</strong> {{ datasetStore.state.analyzingResult.dataset }}</p>
-        <p>
-          <strong>Total records:</strong> {{ datasetStore.state.analyzingResult.total_records }}
-        </p>
-        <p>
-          <strong>Similar pairs found:</strong>
-          {{ datasetStore.state.analyzingResult.similar_pairs_found }}
-        </p>
-        <p><strong>Threshold:</strong> {{ datasetStore.state.analyzingResult.threshold }}</p>
-      </div>
-    </div>
-
-    <!-- Cleaning results display -->
-    <div v-if="generateStore.cleanStatus === 'success' && datasetStore.state.cleaningResult">
-      <h3 class="text-lg font-semibold mb-2">Cleaning completed</h3>
-      <div class="bg-green-50 p-4 rounded-lg">
-        <p><strong>Dataset:</strong> {{ datasetStore.state.cleaningResult.dataset }}</p>
-        <p><strong>Total records:</strong> {{ datasetStore.state.cleaningResult.total_records }}</p>
-        <p>
-          <strong>Removed records:</strong>
-          {{ datasetStore.state.cleaningResult.removed_records }}
-        </p>
-        <p><strong>Threshold:</strong> {{ datasetStore.state.cleaningResult.threshold }}</p>
       </div>
     </div>
   </div>
