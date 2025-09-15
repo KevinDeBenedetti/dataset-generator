@@ -2936,8 +2936,8 @@ packages:
       '@types/node':
         optional: true
 
-  nypm@0.6.1:
-    resolution: {integrity: sha512-hlacBiRiv1k9hZFiphPUkfSQ/ZfQzZDzC+8z0wL3lvDAOUu/2NnChkKuMoMjNur/9OpKuz2QsIeiPVN0xM5Q0w==}
+  nypm@0.6.2:
+    resolution: {integrity: sha512-7eM+hpOtrKrBDCh7Ypu2lJ9Z7PNZBdi/8AT3AX8xoCj43BBVHD0hPSTEvMtkMpfs8FCqBGhxB+uToIQimA111g==}
     engines: {node: ^14.16.0 || >=16.10.0}
     hasBin: true
 
@@ -4543,7 +4543,7 @@ snapshots:
       httpxy: 0.1.7
       jiti: 2.5.1
       listhen: 1.9.0
-      nypm: 0.6.1
+      nypm: 0.6.2
       ofetch: 1.4.1
       ohash: 2.0.11
       pathe: 2.0.3
@@ -4599,7 +4599,7 @@ snapshots:
       launch-editor: 2.11.1
       local-pkg: 1.1.2
       magicast: 0.3.5
-      nypm: 0.6.1
+      nypm: 0.6.2
       ohash: 2.0.11
       pathe: 2.0.3
       perfect-debounce: 1.0.0
@@ -6391,7 +6391,7 @@ snapshots:
       consola: 3.4.2
       defu: 6.1.4
       node-fetch-native: 1.6.7
-      nypm: 0.6.1
+      nypm: 0.6.2
       pathe: 2.0.3
 
   git-up@8.1.1:
@@ -7055,7 +7055,7 @@ snapshots:
       mocked-exports: 0.1.1
       nanotar: 0.2.0
       nitropack: 2.12.6
-      nypm: 0.6.1
+      nypm: 0.6.2
       ofetch: 1.4.1
       ohash: 2.0.11
       on-change: 5.0.1
@@ -7143,7 +7143,7 @@ snapshots:
       - xml2js
       - yaml
 
-  nypm@0.6.1:
+  nypm@0.6.2:
     dependencies:
       citty: 0.1.6
       consola: 3.4.2

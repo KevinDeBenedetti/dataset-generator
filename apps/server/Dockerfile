@@ -11,7 +11,14 @@ COPY uv.lock /app/uv.lock
 
 RUN uv sync --no-cache
 
-COPY . /app
+# COPY . /app
+COPY api/ /app/api
+COPY core/ /app/core
+COPY models/ /app/models
+COPY models/ /app/models
+COPY schemas/ /app/schemas
+COPY services/ /app/services
+COPY main.py /app/main.py
 
 ENV PYTHONPATH=/app
 
