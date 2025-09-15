@@ -6,11 +6,24 @@
     "package.json": "package-lock.json, pnpm*, .yarnrc*, yarn*, .eslint*, eslint*, .oxlint*, oxlint*, .prettier*, prettier*, .editorconfig"
   },
   "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit"
+    "source.fixAll": "explicit",
+    "source.fixAll.eslint": "explicit"
   },
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue"
+  ],
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
 
   "python.defaultInterpreterPath": "apps/server/.venv/bin/python3",
   "python.terminal.activateEnvironment": true,
@@ -22,5 +35,11 @@
   "files.exclude": {
     "**/__pycache__": true,
     "**/.pytest_cache": true
-  }
+  },
+}
+
+{
+
+
+
 }
