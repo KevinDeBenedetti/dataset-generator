@@ -13,7 +13,9 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "api:generate": "openapi-ts",
+    "api:watch": "openapi-ts --watch"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
@@ -33,6 +35,7 @@
     "vue-sonner": "^2.0.8"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.83.1",
     "@tsconfig/node22": "^22.0.2",
     "@types/node": "^24.3.1",
     "@vitejs/plugin-vue": "^6.0.1",

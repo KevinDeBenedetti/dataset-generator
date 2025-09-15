@@ -12,7 +12,7 @@
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   
 
-  "python.defaultInterpreterPath": "apps/server/.venv/bin/python",
+  "python.defaultInterpreterPath": "apps/server/.venv/bin/python3",
   "python.terminal.activateEnvironment": true,
   "python.linting.enabled": true,
   "python.linting.pylintEnabled": false,
