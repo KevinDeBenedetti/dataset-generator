@@ -1,44 +1,39 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import api from '@/composables/useAxios'
+import type { ExportDatasetLangfuseExportPostData } from '@/api'
+import { postlangfuseexport } from '@/api'
 
 export const useLangfuseStore = defineStore('langfuse', () => {
-  const isExporting = ref(false)
+  const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const setError = (err: string | null) => {
-    error.value = err
-  }
-
-  const exportToLangfuse = async (datasetName: string, langfuseDatasetName?: string) => {
-    isExporting.value = true
+  const exportToLangfuse = async (datasetName: string, langfuseDatasetName?: string | null) => {
+    loading.value = true
     error.value = null
 
     try {
-      const params = new URLSearchParams({
-        dataset_name: datasetName,
-      })
-
-      if (langfuseDatasetName) {
-        params.append('langfuse_dataset_name', langfuseDatasetName)
+      const payload: ExportDatasetLangfuseExportPostData = {
+        url: '/langfuse/export',
+        query: {
+          dataset_name: datasetName,
+          langfuse_dataset_name: langfuseDatasetName ?? undefined,
+        },
       }
 
-      const response = await api.post(`/langfuse/export?${params}`)
-      console.log('Response :', response.data)
+      const response = await postlangfuseexport(payload)
       return response.data
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Export failed'
-      setError(errorMessage)
+      error.value = err instanceof Error ? err.message : 'Export failed'
       throw err
     } finally {
-      isExporting.value = false
+      loading.value = false
     }
   }
 
   return {
-    isExporting,
+    loading,
     error,
-    setError,
+
     exportToLangfuse,
   }
 })
