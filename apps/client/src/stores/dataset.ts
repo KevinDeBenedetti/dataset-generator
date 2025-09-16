@@ -1,10 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type {
-  DatasetResponse,
-  CleanSimilarityResponse,
-  SimilarityAnalysisResponse,
-} from '@/api'
+import type { DatasetResponse, CleanSimilarityResponse, SimilarityAnalysisResponse } from '@/api'
 import {
   getdataset,
   deletedatasetBydataset_idBy,
@@ -141,6 +137,6 @@ export const useDatasetStore = defineStore('dataset', () => {
     deleteDataset,
     analyzeDataset,
     cleanDataset,
-    resetStatus
+    resetStatus,
   }
 })
