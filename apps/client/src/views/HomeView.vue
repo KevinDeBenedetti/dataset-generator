@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 
 import GenerateDataset from '@/components/dataset/DatasetGenerate.vue'
 import DatasetResults from '@/components/dataset/Result.vue'
 import DatasetAnalyze from '@/components/dataset/DatasetAnalyze.vue'
 import DatasetClean from '@/components/dataset/DatasetClean.vue'
+
+import { getdataset } from '@/api/sdk.gen.ts'
 
 import { useGenerateStore } from '@/stores/generate'
 import { useDatasetStore } from '@/stores/dataset'
@@ -12,13 +15,15 @@ import { useDatasetStore } from '@/stores/dataset'
 const generateStore = useGenerateStore()
 const datasetStore = useDatasetStore()
 
-const dataset = computed(() => generateStore.dataset)
-const analyzingResult = computed(() => datasetStore.analyzingResult)
-const cleaningResult = computed(() => datasetStore.cleaningResult)
-const analyzeStatus = computed(() => generateStore.analyzeStatus)
-const cleanStatus = computed(() => generateStore.cleanStatus)
+const { dataset } = storeToRefs(generateStore)
+const { analyzeStatus, analyzingResult, cleanStatus, cleaningResult } = storeToRefs(datasetStore)
 
-import { getdataset } from '@/api/sdk.gen.ts'
+// const dataset = computed(() => generateStore.dataset)
+// const analyzingResult = computed(() => datasetStore.analyzingResult)
+// const cleaningResult = computed(() => datasetStore.cleaningResult)
+
+// const analyzeStatus = computed(() => datasetStore.analyzeStatus)
+// const cleanStatus = computed(() => datasetStore.cleanStatus)
 
 onMounted(async () => {
   try {
