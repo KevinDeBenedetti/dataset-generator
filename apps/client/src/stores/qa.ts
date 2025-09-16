@@ -38,7 +38,6 @@ export const useQAStore = defineStore('qa', () => {
       }
 
       qaResponse.value = data
-
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
       error.value = errorMessage
