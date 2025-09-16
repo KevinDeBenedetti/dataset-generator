@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { useTextUtils } from '@/composables/useTextUtils'
-import type { QAItem } from '@/types/qa'
+import type { QaItem } from '@/api'
 
-const props = defineProps<{ qa: QAItem; index: number; value: string }>()
+const props = defineProps<{ qa: QaItem; index: number; value: string }>()
 
 const { truncateText } = useTextUtils()
 
@@ -42,7 +42,6 @@ const toggleContextExpansion = (event: MouseEvent) => {
 
     <AccordionContent class="px-4 pb-4">
       <div class="space-y-4">
-        <!-- Question complète -->
         <div class="bg-blue-50 p-3 rounded-lg">
           <h4 class="font-medium text-blue-900 mb-2 flex items-center">
             <span class="w-2 h-2 bg-blue-500 rounded-full mr-2" />
@@ -51,7 +50,6 @@ const toggleContextExpansion = (event: MouseEvent) => {
           <p class="text-blue-800">{{ props.qa.question }}</p>
         </div>
 
-        <!-- Réponse -->
         <div class="bg-green-50 p-3 rounded-lg">
           <h4 class="font-medium text-green-900 mb-2 flex items-center">
             <span class="w-2 h-2 bg-green-500 rounded-full mr-2" />
@@ -60,7 +58,6 @@ const toggleContextExpansion = (event: MouseEvent) => {
           <p class="text-green-800">{{ props.qa.answer }}</p>
         </div>
 
-        <!-- Contexte -->
         <div v-if="props.qa.context" class="bg-gray-50 p-3 rounded-lg">
           <h4 class="font-medium text-gray-900 mb-2 flex items-center">
             <span class="w-2 h-2 bg-gray-500 rounded-full mr-2" />
@@ -90,7 +87,6 @@ const toggleContextExpansion = (event: MouseEvent) => {
           </div>
         </div>
 
-        <!-- Métadonnées -->
         <div class="bg-yellow-50 p-3 rounded-lg">
           <h4 class="font-medium text-yellow-900 mb-2 flex items-center">
             <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2" />
@@ -109,15 +105,15 @@ const toggleContextExpansion = (event: MouseEvent) => {
             </div>
             <div class="flex gap-2">
               <span class="font-medium text-yellow-800">ID complet:</span>
-              <span class="font-mono text-xs bg-white px-2 py-1 rounded border">{{
-                props.qa.id
-              }}</span>
+              <span class="font-mono text-xs bg-white px-2 py-1 rounded border">
+                {{ props.qa.id }}
+              </span>
             </div>
             <div v-if="props.qa.metadata" class="flex gap-2">
               <span class="font-medium text-yellow-800">Métadonnées:</span>
-              <pre class="text-xs bg-white p-2 rounded border overflow-x-auto">{{
-                JSON.stringify(props.qa.metadata, null, 2)
-              }}</pre>
+              <pre class="text-xs bg-white p-2 rounded border overflow-x-auto">
+                {{ JSON.stringify(props.qa.metadata, null, 2) }}
+              </pre>
             </div>
           </div>
         </div>

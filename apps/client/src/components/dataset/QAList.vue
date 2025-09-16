@@ -1,20 +1,10 @@
 <script setup lang="ts">
 import { Accordion } from '@/components/ui/accordion'
-import QAItem from './QAItem.vue'
-
-interface QA {
-  id: string
-  question: string
-  answer: string
-  context?: string
-  confidence?: number
-  created_at?: string
-  source_url?: string
-  metadata?: Record<string, unknown>
-}
+import type { QaItem } from '@/api'
+import QAItem from '@/components/dataset/QAItem.vue'
 
 interface Props {
-  qaData: QA[]
+  qaData: QaItem[]
   returnedCount: number
 }
 
