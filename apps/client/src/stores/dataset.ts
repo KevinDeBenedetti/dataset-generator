@@ -4,13 +4,13 @@ import type {
   DatasetResponse,
   CleanSimilarityResponse,
   SimilarityAnalysisResponse,
-} from '@/api/types.gen'
+} from '@/api'
 import {
   getdataset,
   deletedatasetBydataset_idBy,
   getdatasetBydataset_idByanalyze_similarities,
   postdatasetBydataset_idByclean_similarities,
-} from '@/api/sdk.gen'
+} from '@/api'
 
 export const useDatasetStore = defineStore('dataset', () => {
   const datasets = ref<DatasetResponse[]>([])
@@ -20,6 +20,9 @@ export const useDatasetStore = defineStore('dataset', () => {
 
   const analyzingResult = ref<SimilarityAnalysisResponse | null>(null)
   const cleaningResult = ref<CleanSimilarityResponse | null>(null)
+
+  const analyzeStatus = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
+  const cleanStatus = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
 
   const fetchDatasets = async (): Promise<DatasetResponse[]> => {
     loading.value = true
@@ -34,8 +37,7 @@ export const useDatasetStore = defineStore('dataset', () => {
       datasets.value = data as DatasetResponse[]
       return datasets.value
     } catch (err) {
-      console.error(err)
-      error.value = 'Error fetching datasets'
+      error.value = 'Error fetching datasets' + err
       return []
     } finally {
       loading.value = false
@@ -65,17 +67,14 @@ export const useDatasetStore = defineStore('dataset', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await deletedatasetBydataset_idBy({ path: { dataset_id: datasetId } })
-      console.log('deleteDataset response:', response)
-
+      await deletedatasetBydataset_idBy({ path: { dataset_id: datasetId } })
       datasets.value = datasets.value.filter((d) => d.id !== datasetId)
 
       if (dataset.value?.id === datasetId) {
         dataset.value = null
       }
     } catch (err) {
-      console.error(err)
-      error.value = 'Erreur lors de la suppression du dataset'
+      error.value = 'Error deleting dataset' + err
       throw err
     } finally {
       loading.value = false
@@ -85,15 +84,17 @@ export const useDatasetStore = defineStore('dataset', () => {
   const cleanDataset = async (datasetId: string): Promise<CleanSimilarityResponse | null> => {
     loading.value = true
     error.value = null
+    cleanStatus.value = 'pending'
     try {
       const response = await postdatasetBydataset_idByclean_similarities({
         path: { dataset_id: datasetId },
       })
       cleaningResult.value = response.data ?? null
+      cleanStatus.value = 'success'
       return cleaningResult.value
     } catch (err) {
-      console.error(err)
-      error.value = 'Error cleaning dataset'
+      error.value = 'Error cleaning dataset' + err
+      cleanStatus.value = 'error'
       return null
     } finally {
       loading.value = false
@@ -103,19 +104,28 @@ export const useDatasetStore = defineStore('dataset', () => {
   const analyzeDataset = async (datasetId: string): Promise<SimilarityAnalysisResponse | null> => {
     loading.value = true
     error.value = null
+    analyzeStatus.value = 'pending'
     try {
       const response = await getdatasetBydataset_idByanalyze_similarities({
         path: { dataset_id: datasetId },
       })
       analyzingResult.value = response.data ?? null
+      analyzeStatus.value = 'success'
       return analyzingResult.value
     } catch (err) {
-      console.error(err)
-      error.value = 'Error analyzing dataset'
+      error.value = 'Error analyzing dataset' + err
+      analyzeStatus.value = 'error'
       return null
     } finally {
       loading.value = false
     }
+  }
+
+  const resetStatus = () => {
+    analyzeStatus.value = 'idle'
+    cleanStatus.value = 'idle'
+    error.value = null
+    dataset.value = null
   }
 
   return {
@@ -131,5 +141,6 @@ export const useDatasetStore = defineStore('dataset', () => {
     deleteDataset,
     analyzeDataset,
     cleanDataset,
+    resetStatus
   }
 })
