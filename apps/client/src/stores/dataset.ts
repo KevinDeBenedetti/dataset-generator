@@ -131,6 +131,8 @@ export const useDatasetStore = defineStore('dataset', () => {
     error,
     analyzingResult,
     cleaningResult,
+    cleanStatus,
+    analyzeStatus,
 
     fetchDatasets,
     selectDataset,
