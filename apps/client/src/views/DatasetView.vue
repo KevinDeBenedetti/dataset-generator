@@ -13,12 +13,9 @@ const route = useRoute()
 const datasetStore = useDatasetStore()
 const qaStore = useQAStore()
 
-const { state } = storeToRefs(datasetStore)
+const { datasets, dataset, loading } = storeToRefs(datasetStore)
 
-const datasetId = computed(() => route.params.id as string | null)
-const isLoading = computed(() => state.value.loading)
-const datasets = computed(() => state.value.datasets)
-const dataset = computed(() => state.value.dataset)
+const datasetId = computed(() => (route.params.id as string) || null)
 const pageTitle = computed(() => {
   if (dataset.value) {
     return dataset.value.name
@@ -29,26 +26,33 @@ const pageTitle = computed(() => {
 watch(
   datasetId,
   async (newId) => {
-    if (newId) {
-      await datasetStore.selectDataset(newId as string)
-      await qaStore.fetchQAByDataset(newId as string)
+    try {
+      if (newId) {
+        await datasetStore.selectDataset(newId as string)
+        await qaStore.fetchQAByDataset(newId as string)
+      } else {
+        await datasetStore.fetchDatasets()
+      }
+    } catch (err) {
+      console.error('Error during watch datasetId:', err)
     }
   },
   { immediate: true }
 )
 
 onMounted(async () => {
-  if (route.params.id) {
-    await datasetStore.selectDataset(route.params.id as string)
-    await qaStore.fetchQAByDataset(route.params.id as string)
-  } else {
-    await datasetStore.fetchDatasets()
+  try {
+    if (datasetId.value) {
+      await datasetStore.selectDataset(datasetId.value)
+      await qaStore.fetchQAByDataset(datasetId.value)
+    } else {
+      const response = await datasetStore.fetchDatasets()
+      void response
+    }
+  } catch (err) {
+    console.error('Error onMounted:', err)
   }
 })
-
-// TODO : Handle errors globally
-
-// TODO : Add pagination
 </script>
 
 <template>
@@ -57,12 +61,12 @@ onMounted(async () => {
       {{ pageTitle }}
     </h1>
 
-    <LoadingState v-if="isLoading" />
+    <LoadingState v-if="loading" />
 
-    <DatasetDetail v-if="route.params.id" :dataset="dataset" />
+    <DatasetDetail v-if="datasetId" :dataset="dataset" />
 
-    <DatasetTable v-else :datasets="datasets" />
+    <DatasetTable v-else-if="datasets && datasets.length > 0" :datasets="datasets" />
 
-    <EmptyState v-if="datasets && datasets.length === 0" />
+    <EmptyState v-if="!loading && (!datasets || datasets.length === 0)" />
   </section>
 </template>

@@ -5,25 +5,21 @@ import { Loader2 } from 'lucide-vue-next'
 import PaginationWrapper from '@/components/dataset/PaginationWrapper.vue'
 import { useQAStore } from '@/stores/qa'
 import QAList from './QAList.vue'
+import type { DatasetResponse } from '@/api/types.gen'
 
-interface Dataset {
-  id: string
-  name: string
-  description: string
-}
-
-interface Props {
-  dataset: Dataset | null
-}
-
-const props = defineProps<Props>()
+const props = defineProps<{
+  dataset: DatasetResponse | null
+}>()
 
 const qaStore = useQAStore()
-const { qaItems, state } = storeToRefs(qaStore)
+const { qaItems, qaResponse } = storeToRefs(qaStore)
 
-// Computed pour la pagination
-const currentPage = computed(() => Math.floor(state.value.offset / state.value.limit) + 1)
-const totalPages = computed(() => Math.ceil(state.value.totalCount / state.value.limit))
+const currentPage = computed(
+  () => Math.floor((qaResponse.value?.offset || 0) / (qaResponse.value?.limit || 1)) + 1
+)
+const totalPages = computed(() =>
+  Math.ceil((qaResponse.value?.total_count || 0) / (qaResponse.value?.limit || 1))
+)
 
 const handlePageChange = async (page: number) => {
   await qaStore.goToPage(page)
@@ -31,17 +27,14 @@ const handlePageChange = async (page: number) => {
 
 onMounted(async () => {
   if (props.dataset?.id) {
-    console.log('Fetching QA items for dataset:', props.dataset.id)
     await qaStore.fetchQAByDataset(props.dataset.id)
   }
 })
 
-// Watcher pour réagir aux changements de dataset
 watch(
   () => props.dataset?.id,
   async (newDatasetId) => {
     if (newDatasetId) {
-      qaStore.clearData()
       await qaStore.fetchQAByDataset(newDatasetId)
     }
   }
@@ -52,7 +45,7 @@ watch(
   <div class="bg-white rounded-lg shadow p-6">
     <div v-if="!dataset" class="flex items-center justify-center py-8">
       <Loader2 class="h-6 w-6 animate-spin text-gray-500" />
-      <span class="ml-2 text-gray-500">Chargement du dataset...</span>
+      <span class="ml-2 text-gray-500">Loading dataset...</span>
     </div>
 
     <template v-else>
@@ -64,29 +57,28 @@ watch(
           <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span class="font-medium">Total Q&A:</span>
-              <span class="ml-2">{{ state.totalCount ?? '-' }}</span>
+              <span class="ml-2">{{ qaResponse?.total_count ?? '-' }}</span>
             </div>
             <div>
-              <span class="font-medium">Affichées:</span>
-              <span class="ml-2">{{ state.returnedCount ?? '-' }}</span>
+              <span class="font-medium">Displayed:</span>
+              <span class="ml-2">{{ qaResponse?.returned_count ?? '-' }}</span>
             </div>
             <div>
               <span class="font-medium">Dataset ID:</span>
-              <span class="ml-2 text-xs text-gray-600">{{ state.datasetId ?? '-' }}</span>
+              <span class="ml-2 text-xs text-gray-600">{{ qaResponse?.dataset_id ?? '-' }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <QAList :qa-data="qaItems" :returned-count="state.returnedCount" />
+      <QAList :qa-data="qaItems" :returned-count="qaResponse?.returned_count ?? 0" />
 
-      <!-- Pagination -->
       <PaginationWrapper
         v-if="totalPages > 1"
         class="mt-6"
-        :total="state.totalCount"
+        :total="qaResponse?.total_count ?? 0"
         :current-page="currentPage"
-        :items-per-page="state.limit"
+        :items-per-page="qaResponse?.limit ?? 1"
         @page-change="handlePageChange"
       />
     </template>

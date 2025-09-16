@@ -41,12 +41,10 @@ const getVisiblePages = () => {
   const current = props.currentPage
 
   if (total <= 7) {
-    // Si moins de 7 pages, afficher toutes
     for (let i = 1; i <= total; i++) {
       pages.push(i)
     }
   } else {
-    // Logique pour afficher les pages avec ellipses
     pages.push(1)
 
     if (current > 3) {
@@ -90,7 +88,7 @@ const getVisiblePages = () => {
 
         <!-- Pages numérotées -->
         <template v-for="page in getVisiblePages()" :key="page">
-          <PaginationItem v-if="page === '...'" class="text-gray-400">
+          <PaginationItem v-if="page === '...'" :value="-1" as="span" class="text-gray-400">
             <PaginationEllipsis />
           </PaginationItem>
           <PaginationItem v-else :value="page as number">

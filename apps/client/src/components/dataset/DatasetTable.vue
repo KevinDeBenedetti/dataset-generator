@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import DatasetRow from '@/components/dataset/DatasetRow.vue'
 
-import type { Dataset } from '@/types/dataset'
-import { computed } from 'vue'
+import type { DatasetResponse } from '@/api/types.gen'
 
 import {
   Table,
@@ -14,16 +13,14 @@ import {
 } from '@/components/ui/table'
 
 const props = defineProps<{
-  datasets: Array<Dataset>
+  datasets: DatasetResponse[]
 }>()
-
-const datasets = computed(() => props.datasets || [])
 </script>
 
 <template>
   <div class="border rounded-lg overflow-x-auto">
     <Table class="w-full">
-      <TableCaption> List of {{ datasets?.length || 0 }} available dataset(s) </TableCaption>
+      <TableCaption> List of {{ props.datasets?.length || 0 }} available dataset(s) </TableCaption>
       <TableHeader>
         <TableRow>
           <TableHead class="text-center">ID</TableHead>
@@ -35,7 +32,7 @@ const datasets = computed(() => props.datasets || [])
       </TableHeader>
       <TableBody>
         <DatasetRow
-          v-for="dataset in datasets"
+          v-for="dataset in props.datasets"
           :key="dataset.id"
           :dataset="{ ...dataset, description: dataset.description || '' }"
         />
