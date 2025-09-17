@@ -7,8 +7,6 @@ import DatasetResults from '@/components/dataset/Result.vue'
 import DatasetAnalyze from '@/components/dataset/DatasetAnalyze.vue'
 import DatasetClean from '@/components/dataset/DatasetClean.vue'
 
-import { getdataset } from '@/api/sdk.gen.ts'
-
 import { useGenerateStore } from '@/stores/generate'
 import { useDatasetStore } from '@/stores/dataset'
 
@@ -18,16 +16,9 @@ const datasetStore = useDatasetStore()
 const { dataset } = storeToRefs(generateStore)
 const { analyzeStatus, analyzingResult, cleanStatus, cleaningResult } = storeToRefs(datasetStore)
 
-// const dataset = computed(() => generateStore.dataset)
-// const analyzingResult = computed(() => datasetStore.analyzingResult)
-// const cleaningResult = computed(() => datasetStore.cleaningResult)
-
-// const analyzeStatus = computed(() => datasetStore.analyzeStatus)
-// const cleanStatus = computed(() => datasetStore.cleanStatus)
-
 onMounted(async () => {
   try {
-    await getdataset()
+    await datasetStore.fetchDatasets()
   } catch (err) {
     console.error('Error fetching datasets:', err)
   }
@@ -46,11 +37,11 @@ onMounted(async () => {
     </div>
 
     <div v-if="analyzeStatus === 'success' && analyzingResult">
-      <DatasetAnalyze :analyze-status="analyzeStatus" />
+      <DatasetAnalyze />
     </div>
 
     <div v-if="cleanStatus === 'success' && cleaningResult">
-      <DatasetClean :cleaning-result="cleaningResult" />
+      <DatasetClean />
     </div>
   </section>
 </template>
