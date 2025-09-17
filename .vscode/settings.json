@@ -25,21 +25,10 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
 
-  "python.defaultInterpreterPath": "apps/server/.venv/bin/python3",
+  // "python.defaultInterpreterPath": "apps/server/.venv/bin/python3",
   "python.terminal.activateEnvironment": true,
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": false,
-  "python.linting.flake8Enabled": true,
-  "python.formatting.provider": "black",
-  "python.sortImports.args": ["--profile", "black"],
   "files.exclude": {
     "**/__pycache__": true,
     "**/.pytest_cache": true
   },
-}
-
-{
-
-
-
 }
