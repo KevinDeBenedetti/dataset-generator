@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from core import database, logger
-from api import dataset, generate, q_a
+from api import dataset, generate, q_a, openai
 from services import langfuse
 
 logger.setup_logging()
@@ -37,6 +37,7 @@ app.add_middleware(
 app.include_router(generate.router)
 app.include_router(dataset.router)
 app.include_router(q_a.router)
+app.include_router(openai.router)
 
 if langfuse.is_langfuse_available():
     try:
