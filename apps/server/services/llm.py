@@ -1,7 +1,7 @@
 import logging
 import openai
 import instructor
-from typing import List
+from typing import List, Dict
 from core.config import config
 from schemas.dataset import QA
 
@@ -96,4 +96,17 @@ class LLMService:
             return result
         except Exception as e:
             logging.error(f"QA generation failed: {e}")
+            return []
+
+    def get_models(self) -> List[Dict]:
+        """Retourne la liste des modèles disponibles depuis l'API OpenAI."""
+        try:
+            resp = self.client.models.list()
+            # resp.data contient les objets modèles ; on renvoie une liste réduite
+            models = [
+                {"id": m.id, "object": getattr(m, "object", None)} for m in resp.data
+            ]
+            return models
+        except Exception as e:
+            logging.error(f"Failed to list OpenAI models: {e}")
             return []
