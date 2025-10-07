@@ -4,8 +4,8 @@ from typing import List, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from models.dataset import Dataset, QASource
 from core.database import get_db
+from core import Dataset, QASource
 from services.dataset import (
     get_datasets,
     get_dataset_by_id,

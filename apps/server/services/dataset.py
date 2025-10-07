@@ -31,6 +31,22 @@ class DatasetService:
 
         return dataset
 
+    def delete_dataset(self, dataset: Dataset) -> None:
+        """Deletes a dataset"""
+        self.db.delete(dataset)
+        self.db.commit()
+        logging.info(f"Deleted dataset: {dataset.name}")
+
+    def update_dataset_description(
+        self, dataset: Dataset, new_description: str
+    ) -> Dataset:
+        """Updates the description of a dataset"""
+        dataset.description = new_description
+        self.db.commit()
+        self.db.refresh(dataset)
+        logging.info(f"Updated dataset description: {dataset.name}")
+        return dataset
+
 
 def get_datasets(db: Session) -> List[Dict[str, Any]]:
     try:
