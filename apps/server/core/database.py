@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
-
+from contextlib import contextmanager
 
 SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./datasets.db")
 
@@ -20,6 +20,15 @@ Session = scoped_session(SessionLocal)
 
 def get_db():
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def get_scoped_db():
+    db = Session()
     try:
         yield db
     finally:
