@@ -1,6 +1,12 @@
 name: CI – Linting
 
 on:
+  workflow_call:
+    inputs:
+      PYTHON_VERSION:
+        description: Python version used to run tests
+        required: true
+        type: string
   pull_request:
     branches:
       - main

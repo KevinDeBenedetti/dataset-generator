@@ -45,6 +45,12 @@ class ScraperService:
         text = " ".join(selector.xpath("//body//text()").getall())
         return re.sub(r"\s+", " ", text).strip()
 
+    def add_page_snapshot(self, page_snapshot: PageSnapshot) -> None:
+        """Adds a new PageSnapshot record to the database"""
+        self.db.add(page_snapshot)
+        self.db.commit()
+        self.db.refresh(page_snapshot)
+
     def scrape_url(self, url: str, dataset_id: int) -> PageSnapshot:
         logging.info(f"Scraping URL: {url}")
 
