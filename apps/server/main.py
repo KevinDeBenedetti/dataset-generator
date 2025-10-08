@@ -1,21 +1,34 @@
 from contextlib import asynccontextmanager
 import logging
+import asyncio
 from importlib import import_module
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from core import database, logger
-from api import dataset, generate, q_a, openai
+from core import logger
+from api import dataset, generate, q_a, openai, owui
 from services import langfuse
+from migrations.utils.db_utils import upgrade_db
+from core.database import SQLALCHEMY_DATABASE_URL
 
 logger.setup_logging()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    database.create_db_and_tables()
+    db_url = SQLALCHEMY_DATABASE_URL
+    try:
+        logger.info("🚀 Démarrage des migrations...")
+        await asyncio.to_thread(upgrade_db, db_url)
+        logger.info("✅ Migrations terminées")
+    except Exception as exc:
+        logger.exception("Échec des migrations : %s", exc)
+        raise exc
+
     yield
 
 
@@ -38,6 +51,7 @@ app.include_router(generate.router)
 app.include_router(dataset.router)
 app.include_router(q_a.router)
 app.include_router(openai.router)
+app.include_router(owui.owui_router)
 
 if langfuse.is_langfuse_available():
     try:
