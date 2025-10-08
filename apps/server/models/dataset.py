@@ -2,7 +2,7 @@ import uuid
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, String, DateTime, JSON, ForeignKey, Boolean
 from sqlalchemy.orm import Session, relationship
 from difflib import SequenceMatcher
 
@@ -38,6 +38,7 @@ class QASource(Base):
     model = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    human_reviewed = Column(Boolean, default=False)
 
     @staticmethod
     def compute_hash_from_content(
