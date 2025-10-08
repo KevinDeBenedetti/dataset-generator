@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pyproject.toml /app/pyproject.toml
 COPY uv.lock /app/uv.lock
 
-RUN uv sync --no-cache 
+RUN uv sync --no-cache
 
 # COPY . /app
 COPY api/ /app/api
@@ -19,8 +19,6 @@ COPY models/ /app/models
 COPY schemas/ /app/schemas
 COPY services/ /app/services
 COPY main.py /app/main.py
-COPY migrations/ /app/migrations
-COPY alembic.ini /app/alembic.ini
 
 ENV PYTHONPATH=/app
 

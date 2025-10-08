@@ -24,7 +24,7 @@ clean: ## Clean cache, datasets, and scrapes
 	cd apps/client && \
 		pnpm store prune
 
-lint:  ## Run linting
+lint: setup-server ## Run linting
 	@echo "Running linting..."
 	cd apps/server && \
 		uv run ruff check --fix && \
@@ -61,21 +61,3 @@ setup-server: ## Initialize server
 start: clean setup-husky setup-client setup-server ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
-
-install:
-	echo "Installing dependencies..."
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv sync --all-groups --dev
-	
-run-test: install
-	echo "Running tests..."
-	cp .env.example .env
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing 
-	rm .env
-
-up-backend-local: ## Start the FastAPI server without Docker
-	@echo "Starting API server..."
-	cp .env.example apps/server/.env
-	cd apps/server && \
-		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
-
-	rm apps/server/.env

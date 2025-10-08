@@ -8,41 +8,6 @@ class QAService:
     def __init__(self, db: Session):
         self.db = db
 
-    def add_qa_source(self, qa_source: QASource) -> QASource:
-        """Adds a new QASource record to the database"""
-        self.db.add(qa_source)
-        self.db.commit()
-        self.db.refresh(qa_source)
-        return qa_source
-
-    def delete_qa_source(self, id: str) -> None:
-        """Deletes a QASource record from the database"""
-        qa_source = self.db.query(QASource).filter(QASource.id == id).first()
-        if qa_source:
-            self.db.delete(qa_source)
-            self.db.commit()
-            logging.info(f"Deleted QASource: {id}")
-
-    def update_qa_source(self, id: str, updates: Dict[str, Any]) -> QASource:
-        """Updates a QASource record in the database"""
-        qa_source = self.db.query(QASource).filter(QASource.id == id).first()
-        if not qa_source:
-            raise ValueError(f"QASource with id {id} not found")
-
-        for key, value in updates.items():
-            setattr(qa_source, key, value)
-
-        self.db.commit()
-        self.db.refresh(qa_source)
-        return qa_source
-
-    def get_qa_source(self, id: str) -> QASource:
-        """Retrieves a QASource record by ID"""
-        qa_source = self.db.query(QASource).filter(QASource.id == id).first()
-        if not qa_source:
-            raise ValueError(f"QASource with id {id} not found")
-        return qa_source
-
     def process_qa_pairs(
         self,
         qa_list: List[Any],
