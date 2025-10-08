@@ -79,3 +79,6 @@ class UnitQuestionAnswer(BaseModel):
 class UnitQuestionAnswerResponse(UnitQuestionAnswer):
     file_id: str
     dataset_id: str
+    human_reviewed: bool = Field(
+        False, description="Indicates if the Q&A has been human reviewed"
+    )
