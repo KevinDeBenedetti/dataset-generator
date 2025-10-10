@@ -200,24 +200,41 @@ async def get_knowledge_enrichment(
                     max_tokens=1500,
                 )
                 for i, qa in enumerate(question_answer_pairs):
+                    if isinstance(qa, dict):
+                        qa_confidence = qa.get('confidence', 1.0)
+                        qa_question = qa.get('question')
+                        qa_answer = qa.get('answer')
+                        qa_context = qa.get('context')
+                    else:
+                        qa_confidence = getattr(qa, 'confidence', 1.0)
+                        qa_question = getattr(qa, 'question', None)
+                        qa_answer = getattr(qa, 'answer', None)
+                        qa_context = getattr(qa, 'context', None)
+                    
+                    try:
+                        qa_confidence = float(qa_confidence) if qa_confidence is not None else 1.0
+                    except Exception:
+                        qa_confidence = 1.0
+                    
                     file_contents.append(
                         UnitQuestionAnswerResponse(
                             file_id=file_id,
                             dataset_id=dataset_id,
-                            question=qa.question,
-                            answer=qa.answer,
-                            context=qa.context,
+                            question=qa_question,
+                            answer=qa_answer,
+                            context=qa_context,
+                            confidence=qa_confidence,
                         )
                     )
 
                     qa_record = QASource.from_qa_generation(
-                        question=qa.question,
-                        answer=qa.answer,
-                        context=qa.context,
-                        confidence=qa.confidence,
+                        question=qa_question,
+                        answer=qa_answer,
+                        context=qa_context,
+                        confidence=qa_confidence,
                         source_url=file_id,
                         page_snapshot_id=page_snapshot.id,
-                        dataset_id=dataset_id,  # Passage du dataset_id
+                        dataset_id=dataset_id,
                         index=i,
                     )
                     qa_record.dataset_name = knowledge_name
