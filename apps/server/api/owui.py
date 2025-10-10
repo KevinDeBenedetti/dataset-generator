@@ -201,21 +201,23 @@ async def get_knowledge_enrichment(
                 )
                 for i, qa in enumerate(question_answer_pairs):
                     if isinstance(qa, dict):
-                        qa_confidence = qa.get('confidence', 1.0)
-                        qa_question = qa.get('question')
-                        qa_answer = qa.get('answer')
-                        qa_context = qa.get('context')
+                        qa_confidence = qa.get("confidence", 1.0)
+                        qa_question = qa.get("question")
+                        qa_answer = qa.get("answer")
+                        qa_context = qa.get("context")
                     else:
-                        qa_confidence = getattr(qa, 'confidence', 1.0)
-                        qa_question = getattr(qa, 'question', None)
-                        qa_answer = getattr(qa, 'answer', None)
-                        qa_context = getattr(qa, 'context', None)
-                    
+                        qa_confidence = getattr(qa, "confidence", 1.0)
+                        qa_question = getattr(qa, "question", None)
+                        qa_answer = getattr(qa, "answer", None)
+                        qa_context = getattr(qa, "context", None)
+
                     try:
-                        qa_confidence = float(qa_confidence) if qa_confidence is not None else 1.0
+                        qa_confidence = (
+                            float(qa_confidence) if qa_confidence is not None else 1.0
+                        )
                     except Exception:
                         qa_confidence = 1.0
-                    
+
                     file_contents.append(
                         UnitQuestionAnswerResponse(
                             file_id=file_id,
