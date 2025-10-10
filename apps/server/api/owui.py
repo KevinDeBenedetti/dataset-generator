@@ -24,7 +24,7 @@ db = get_db()
 db_session = next(db)
 client_openai = openai.AsyncOpenAI(
     api_key=os.getenv("OPENAI_API_KEY", "sk-xxxxxxxxxxxxxxx"),
-    base_url=os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+    base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 )
 client_instructor = instructor.from_openai(client_openai, mode=instructor.Mode.MD_JSON)
 
