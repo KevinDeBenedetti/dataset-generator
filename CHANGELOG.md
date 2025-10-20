@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.2.0...v0.3.0) (2025-10-20)
+
+
+### Features
+
+* add env vars in ci workflow ([fa00eef](https://github.com/KevinDeBenedetti/dataset-generator/commit/fa00eefa5ce25dd1f28cf1efb84514391734eec1))
+* add make-library ([36874a6](https://github.com/KevinDeBenedetti/dataset-generator/commit/36874a6838d7235d5b2374688ce537cb2d22e2b8))
+* update Makefile and Docker configurations for improved build process and environment variables ([7f1e251](https://github.com/KevinDeBenedetti/dataset-generator/commit/7f1e251283aae14e336fe93d9e675d28d3b3f2ad))
+* update Node.js and pnpm versions in lint workflow ([593e929](https://github.com/KevinDeBenedetti/dataset-generator/commit/593e929bdb1629683fb00e61fb575b2b6601a544))
+
 ## [0.2.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.1.0...v0.2.0) (2025-10-10)
 
 
