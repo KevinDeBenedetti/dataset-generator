@@ -3,17 +3,5 @@ set -euo pipefail
 echo "🔍 Pre-commit: Running checks..."
 
 make lint
-# # Server side checks
-# cd apps/server || exit 1
-# uv run ruff check --fix
-# uv run ruff format
-# echo "✅ Server: Linting and formatting completed successfully"
-
-# # Return to repo root then client side
-# cd - >/dev/null || true
-# cd apps/client || exit 1
-# pnpm lint
-# pnpm format
-# echo "✅ Client: Linting and formatting completed successfully"
 
 echo "🎉 Pre-commit hook executed successfully!"
