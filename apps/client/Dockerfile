@@ -1,30 +1,94 @@
-ARG PNPM_VERSION=10.16.1
-ARG NODE_VERSION=22.17.1-slim
+# Global arguments - must be provided at build time
+ARG PNPM_VERSION
+ARG NODE_VERSION
+ARG APP_PORT
 
-# dev
-FROM docker.io/node:${NODE_VERSION} AS dev
+# =============================================================================
+# Stage: base
+# Common configuration for all stages
+# =============================================================================
+FROM docker.io/node:${NODE_VERSION} AS base
+
+ARG PNPM_VERSION
+ARG APP_PORT
 
 WORKDIR /app
 
+# Install pnpm
 RUN npm install --ignore-scripts --location=global pnpm@${PNPM_VERSION}
-COPY ./package.json ./
-RUN pnpm install --ignore-scripts
+
+# Copy dependency files
+COPY package.json pnpm-lock.yaml* ./
+
+# =============================================================================
+# Stage: dependencies
+# Dependencies installation (with cache)
+# =============================================================================
+FROM base AS dependencies
+
+# Install all dependencies
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# =============================================================================
+# Stage: dev
+# Development environment
+# =============================================================================
+FROM base AS dev
+
+ARG APP_PORT
+
+# Copy dependencies from previous stage
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copy source code
 COPY . .
 
-CMD ["pnpm", "run", "dev"]
+# Expose port
+EXPOSE ${APP_PORT}
 
-# build
-FROM dev AS build
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:${APP_PORT}', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
+# Default command
+CMD ["pnpm", "run", "dev", "--host", "0.0.0.0"]
+
+# =============================================================================
+# Stage: build
+# Build application for production
+# =============================================================================
+FROM dependencies AS build
+
+# Copy source code
+COPY . .
+
+# Environment variables for build (can be overridden)
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
+
+# Build application
 RUN pnpm run build
 
-# prod
-# FROM docker.io/nginxinc/nginx-unprivileged:1.28.0-alpine AS prod
+# =============================================================================
+# Stage: prod
+# Production image with Nginx
+# =============================================================================
+FROM docker.io/nginx:alpine AS prod
 
-# COPY --from=build /app/dist /usr/share/nginx/html
-# COPY nginx/50x.html /usr/share/nginx/html
-# COPY nginx/40x.html /usr/share/nginx/html
-# COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+ARG APP_PORT=80
 
-# EXPOSE 8080
-# CMD ["nginx", "-g", "daemon off;"]
+# Copy nginx configuration (adapt to your needs)
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Custom nginx configuration (optional)
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port
+EXPOSE ${APP_PORT}
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:${APP_PORT}/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
