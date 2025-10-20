@@ -1,9 +1,0 @@
-{
-	"devDependencies": {
-		"husky": "^9.1.7"
-	},
-	"packageManager": "pnpm@10.16.1",
-	"scripts": {
-		"prepare": "husky"
-	}
-}
