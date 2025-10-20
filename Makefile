@@ -1,81 +1,46 @@
-PYTHONPATH=$(PWD)
+MK_DIR := mk
+MK_REPO := https://github.com/KevinDeBenedetti/make-library.git
+MK_BRANCH := main
+PROJECT_NAME := documentation
+STACK := vue fastapi husky
+# VUE
+VUE_DIR := ./apps/client
+JS_PKG_MANAGER := pnpm
+# FASTAPI
+FASTAPI_DIR := ./apps/server
+PY_PKG_MANAGER := uv
+# HUSKY
+HUSKY_DIR := ./apps/client
+# DOCKER
+DOCKER ?= true
 
-.PHONY: help for datasets generator
-.DEFAULT_GOAL := help
+MK_FILES := $(addsuffix .mk,$(STACK))
+SPARSE_CHECKOUT_FILES := common.mk $(MK_FILES)
 
-help: ## Show helper
-	@echo "Usage: make <command>"
-	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
+.PHONY: init
+init:
+	@if [ ! -d $(MK_DIR) ]; then \
+		echo "==> Cloning make-library with sparse checkout..."; \
+		git clone --no-checkout --depth 1 --branch $(MK_BRANCH) --filter=blob:none $(MK_REPO) $(MK_DIR); \
+		cd $(MK_DIR) && \
+		git sparse-checkout init --no-cone && \
+		echo "common.mk" > .git/info/sparse-checkout && \
+		$(foreach file,$(MK_FILES),echo "$(file)" >> .git/info/sparse-checkout &&) true && \
+		git checkout $(MK_BRANCH) && \
+		rm -rf .git; \
+		echo "==> Files added to repository tracking"; \
+	else \
+		echo "==> Updating make-library..."; \
+		cd $(MK_DIR) && \
+		git sparse-checkout init --no-cone && \
+		echo "common.mk" > .git/info/sparse-checkout && \
+		$(foreach file,$(MK_FILES),echo "$(file)" >> .git/info/sparse-checkout &&) true && \
+		git fetch origin && \
+		git reset --hard origin/$(MK_BRANCH) && \
+		rm -rf .git; \
+		echo "==> Files updated and added to repository tracking"; \
+	fi
 
-clean: ## Clean cache, datasets, and scrapes
-	docker compose down
-	cd apps/server && \
-		rm -rf .venv uv.lock scraper.log
+INCLUDES := $(MK_DIR)/common.mk $(addprefix $(MK_DIR)/,$(MK_FILES))
 
-	@echo "Removing all..."
-	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
-	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
-	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
-	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
-	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
-
-	cd apps/client && \
-		pnpm store prune
-
-lint:  ## Run linting
-	@echo "Running linting..."
-	cd apps/server && \
-		uv run ruff check --fix && \
-		uv run ruff format
-
-setup-husky: ## Setup husky git hooks
-	@echo "Setting up husky..."
-	pnpm install
-	chmod +x .husky/pre-commit
-
-setup-client: ## Initialize client
-	@echo "Initializing client..."
-	cd apps/client && \
-	pnpm install
-
-update-client: setup-client ## Upgrade client dependencies
-	@echo "Upgrading client dependencies..."
-	cd apps/client && \
-	pnpm up --latest
-
-lint-client: setup-client ## Run client linting
-	@echo "Running client linting..."
-	cd apps/client && \
-	pnpm lint && \
-	pnpm format
-
-setup-server: ## Initialize server
-	@echo "Initializing server..."
-	cd apps/server && \
-	uv venv --clear && \
-	source .venv/bin/activate && \
-	uv sync
-
-start: clean setup-husky setup-client setup-server ## Start the FastAPI server
-	@echo "Starting API server..."
-	docker compose up -d
-
-install:
-	echo "Installing dependencies..."
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv sync --all-groups --dev
-	
-run-test: install
-	echo "Running tests..."
-	cp .env.example .env
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing 
-	rm .env
-
-up-backend-local: ## Start the FastAPI server without Docker
-	@echo "Starting API server..."
-	cp .env.example apps/server/.env
-	cd apps/server && \
-		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
-
-	rm apps/server/.env
+-include $(INCLUDES)
