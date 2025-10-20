@@ -13,6 +13,9 @@ on:
 
 env:
   PYTHON_VERSION: 3.x
+  NODE_VERSION: 22.20.0
+  PNPM_VERSION: 10.18.3
+  APP_PORT: 5173
 
 jobs:
   expose-vars:
@@ -20,6 +23,9 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     outputs:
       PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+      NODE_VERSION: ${{ env.NODE_VERSION }}
+      PNPM_VERSION: ${{ env.PNPM_VERSION }}
+      APP_PORT: ${{ env.APP_PORT }}
     steps:
       - name: Exposing env vars
         run: echo "Exposing env vars"
@@ -30,6 +36,9 @@ jobs:
       - expose-vars
     with:
       PYTHON_VERSION: ${{ needs.expose-vars.outputs.PYTHON_VERSION }}
+      NODE_VERSION: ${{ needs.expose-vars.outputs.NODE_VERSION }}
+      PNPM_VERSION: ${{ needs.expose-vars.outputs.PNPM_VERSION }}
+      APP_PORT: ${{ needs.expose-vars.outputs.APP_PORT }}
 
   unit-tests:
     uses: ./.github/workflows/unit-tests.yml
@@ -47,6 +56,7 @@ jobs:
       - expose-vars
       - lint
       - unit-tests
+      - build docker
     steps:
       - name: Check status of all required jobs
         run: |-
