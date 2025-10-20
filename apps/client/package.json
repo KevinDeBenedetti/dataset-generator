@@ -15,7 +15,8 @@
     "lint": "eslint . --fix --debug",
     "format": "prettier --write src/",
     "api:generate": "openapi-ts",
-    "api:watch": "openapi-ts --watch"
+    "api:watch": "openapi-ts --watch",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
@@ -50,7 +51,8 @@
     "typescript": "~5.9.2",
     "vite": "^7.1.5",
     "vite-plugin-vue-devtools": "^8.0.2",
-    "vue-tsc": "^3.0.7"
+    "vue-tsc": "^3.0.7",
+    "husky": "^9.1.7"
   },
   "packageManager": "pnpm@10.16.1"
 }
