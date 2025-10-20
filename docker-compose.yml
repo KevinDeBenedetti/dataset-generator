@@ -7,6 +7,10 @@ services:
       context: ./apps/client
       dockerfile: Dockerfile
       target: dev
+      args:
+        PNPM_VERSION: ${PNPM_VERSION:-10.18.3}
+        NODE_VERSION: ${NODE_VERSION:-22.20.0}
+        APP_PORT: ${CLIENT_PORT:-5173}
     env_file:
       - .env
     ports:
@@ -23,6 +27,9 @@ services:
     build:
       context: apps/server
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+        APP_PORT: ${SERVER_PORT:-8000}
     ports:
       - "8000:8000"
     volumes:
