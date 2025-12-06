@@ -22,7 +22,6 @@ jobs:
       python-version: ${{ needs.versions.outputs.python-version }}
       node-version: ${{ needs.versions.outputs.node-version }}
       pnpm-version: ${{ needs.versions.outputs.pnpm-version }}
-      app-port: ${{ needs.versions.outputs.app-port }}
 
   # unit-tests:
   #   uses: ./.github/workflows/unit-tests.yml
