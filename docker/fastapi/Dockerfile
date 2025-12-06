@@ -6,8 +6,8 @@ ENV UV_SYSTEM_PYTHON=1
 
 WORKDIR /app
 
-COPY apps/server/pyproject.toml /app/pyproject.toml
-COPY apps/server/uv.lock /app/uv.lock
+COPY server/pyproject.toml /app/pyproject.toml
+COPY server/uv.lock /app/uv.lock
 
 RUN uv sync --no-cache
 
@@ -22,7 +22,7 @@ RUN uv sync --no-cache
 # COPY migrations/ /app/migrations
 # COPY alembic.ini /app/alembic.ini
 
-COPY apps/server/ /app/
+COPY server/ /app/
 
 ENV PYTHONPATH=/app
 

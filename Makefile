@@ -21,43 +21,43 @@ clean: ## Clean cache, datasets, and scrapes
 	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
 
 	@echo "Server cleaning..."
-	cd apps/server && \
+	cd server && \
 		rm -rf .venv uv.lock scraper.log
 
 	@echo "Client cleaning..."
-	cd apps/client && \
+	cd client && \
 		pnpm store prune
 
 lint:  ## Run linting
 	@echo "Server linting..."
-	cd apps/server && \
+	cd server && \
 		uv run ruff check --fix && \
 		uv run ruff format
 
 	@echo "Client linting..."
-	cd apps/client && \
+	cd client && \
 		pnpm lint && \
 		pnpm format
 
 husky: ## Setup husky git hooks
 	@echo "Setting up husky..."
-	cd apps/client && pnpm install
+	cd client && pnpm install
 	chmod +x .husky/pre-commit
 
 setup: ## Initialize client
 	@echo "Initializing client..."
-	cd apps/client && \
+	cd client && \
 	pnpm install
 
 	@echo "Initializing server..."
-	cd apps/server && \
+	cd server && \
 	uv venv --clear && \
 	source .venv/bin/activate && \
 	uv sync
 
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
-	cd apps/client && \
+	cd client && \
 	pnpm up --latest
 
 dev: clean husky setup ## Start the FastAPI server
@@ -66,21 +66,21 @@ dev: clean husky setup ## Start the FastAPI server
 
 install:
 	@echo "Installing dependencies..."
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv sync --all-groups --dev
+	cd server && PYTHONPATH=$(PWD)/server uv sync --all-groups --dev
 
 test: install
 	echo "Running tests..."
 	cp .env.example .env
-	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing
+	cd server && PYTHONPATH=$(PWD)/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing
 	rm .env
 
 up-backend-local: ## Start the FastAPI server without Docker
 	@echo "Starting API server..."
-	cp .env.example apps/server/.env
-	cd apps/server && \
+	cp .env.example server/.env
+	cd server && \
 		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
 
-	rm apps/server/.env
+	rm server/.env
 
 rmi: clean
 	@echo "Removing dangling images..."
