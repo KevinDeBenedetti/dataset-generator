@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 # import relatif vers le service LLM (api/ -> ../services)
-from services.llm import LLMService
+from server.services.llm import LLMService
 
 router = APIRouter(prefix="/openai", tags=["openai"])
 

@@ -74,33 +74,27 @@ def is_migration_needed(db_url: str, revision: str = "head") -> bool:
         return True  # En cas d'erreur, on assume qu'une migration est nécessaire
 
 
-def upgrade_db(db_url: str | None = None, revision: str = "head"):
-    """
-    Applique les migrations jusqu'à la révision spécifiée (par défaut 'head').
-    Vérifie d'abord si une migration est nécessaire.
-    """
-    if not db_url:
-        db_url = os.getenv("DATABASE_URL", "sqlite:///./datasets.db")
+def upgrade_db(db_url: str, revision: str = "head") -> None:
+    """Applique les migrations Alembic."""
+    # S'assurer que le chemin vers alembic.ini est correct
+    config_path = Path(__file__).parent.parent.parent / "alembic.ini"
+    if not config_path.exists():
+        logger.error(f"❌ Fichier alembic.ini introuvable : {config_path}")
+        raise FileNotFoundError(f"alembic.ini not found at {config_path}")
 
-    # Vérification rapide
-    if not is_migration_needed(db_url, revision):
-        logger.info("✅ Base de données déjà à jour, aucune migration nécessaire")
-        return
-
-    logger.info("🔄 Migration nécessaire, démarrage...")
-    cfg = get_alembic_config(db_url)
-    logger.debug(f"Using Alembic config file at {cfg.config_file_name}")
+    logger.debug(f"Using Alembic config file at {config_path}")
+    cfg = Config(str(config_path))
+    cfg.set_main_option("sqlalchemy.url", db_url)
     logger.debug(f"Upgrading database to revision {revision}")
-    effective_url = db_url or os.getenv("DATABASE_URL") or "<not set>"
-    logger.debug(f"Database URL: {effective_url}")
+    logger.debug(f"Database URL: {db_url}")
     try:
         command.upgrade(cfg, revision)
         logger.info(f"✅ Base de données migrée jusqu'à {revision}")
-    except Exception:
+    except Exception as e:
         logger.warning(
             "⚠️ Échec de l'exécution d'Alembic, fallback : création des tables via SQLAlchemy"
         )
-        raise
+        raise e
 
 
 def downgrade_db(db_url: str | None = None, revision: str = "base"):

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from enum import Enum
-from core.config import config
+from server.core.config import config
 
 
 # Verify next code

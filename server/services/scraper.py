@@ -9,8 +9,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from datetime import datetime, timezone
 
-from core.config import config
-from models.scraper import PageSnapshot, CleanedText
+from server.core.config import config
+from server.models.scraper import PageSnapshot, CleanedText
 
 
 class ScraperService:

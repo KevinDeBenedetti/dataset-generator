@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from difflib import SequenceMatcher
-from models.dataset import Dataset, QASource
+from server.models.dataset import Dataset, QASource
 
 
 class DatasetService:

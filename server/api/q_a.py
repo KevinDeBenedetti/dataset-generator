@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 import logging
 from typing import Optional
 
-from models.dataset import Dataset, QASource
-from core.database import get_db
-from schemas.q_a import QAListResponse, QAResponse
+from server.models.dataset import Dataset, QASource
+from server.core.database import get_db
+from server.schemas.q_a import QAListResponse, QAResponse
 
 router = APIRouter(
     prefix="/q_a",

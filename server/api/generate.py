@@ -4,16 +4,16 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from schemas.dataset import TargetLanguage
-from schemas.generate import (
+from server.schemas.dataset import TargetLanguage
+from server.schemas.generate import (
     DatasetGenerationRequest,
     DatasetGenerationResponse,
     ErrorResponse,
     QAPair,
 )
-from core.database import get_db
-from pipelines.dataset import DatasetPipeline
-from core.config import config
+from server.core.database import get_db
+from server.pipelines.dataset import DatasetPipeline
+from server.core.config import config
 
 router = APIRouter(
     prefix="/dataset",

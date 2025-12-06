@@ -7,11 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from core import logger
-from api import dataset, generate, q_a, openai, owui
-from services import langfuse
-from migrations.utils.db_utils import upgrade_db
-from core.database import SQLALCHEMY_DATABASE_URL
+from server.core import logger
+from server.api import dataset, generate, q_a, openai, owui
+from server.services import langfuse
+from server.migrations.utils.db_utils import upgrade_db
+from server.core.database import SQLALCHEMY_DATABASE_URL
 
 logger.setup_logging()
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ app.include_router(owui.owui_router)
 
 if langfuse.is_langfuse_available():
     try:
-        langfuse_mod = import_module("api.langfuse")
+        langfuse_mod = import_module("server.api.langfuse")
         app.include_router(langfuse_mod.router)
         logging.info("Langfuse routes enabled")
     except Exception as e:

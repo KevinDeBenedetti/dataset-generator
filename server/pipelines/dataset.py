@@ -2,11 +2,11 @@ import logging
 from typing import Dict, Any, Union, Optional
 from sqlalchemy.orm import Session
 
-from services.scraper import ScraperService
-from services.llm import LLMService
-from services.dataset import DatasetService
-from services.qa import QAService
-from schemas.dataset import TargetLanguage, ModelName
+from server.services.scraper import ScraperService
+from server.services.llm import LLMService
+from server.services.dataset import DatasetService
+from server.services.qa import QAService
+from server.schemas.dataset import TargetLanguage, ModelName
 
 
 class DatasetPipeline:
