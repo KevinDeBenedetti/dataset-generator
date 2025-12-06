@@ -2,14 +2,14 @@ import logging
 import openai
 import instructor
 from typing import List, Dict
-from core.config import config
-from schemas.dataset import QA
+from server.core.config import config
+from server.schemas.dataset import QA
 
 
 class PromptManager:
     CLEANING_PROMPT = """
     You are an expert text cleaner. Goal: extract only the main informative content.
-    
+
     Remove ALL of the following:
     - Navigation, menus, headers, footers
     - Bracketed references like [1], [2], etc.
@@ -18,12 +18,12 @@ class PromptManager:
     - "edit" or "edit code" mentions
     - Language lists and navigation links
     - Scripts and technical tags
-    
+
     KEEP ONLY:
     - The main written content
     - Important factual information
     - Logical structure in clear paragraphs
-    
+
     Respond only with the cleaned text, no comments.
     """
 
@@ -32,14 +32,14 @@ class PromptManager:
         target_language = target_language or config.target_language or "en"
         return f"""
         Generate high-quality question-answer pairs based on this text.
-        
+
         Strict rules:
         - Varied questions (what, who, when, where, why, how)
         - Complete and precise answers (minimum 2 sentences)
         - Context must be the exact excerpt that enables the answer
         - Avoid trivial or overly generic questions
         - Questions and answers must be in {target_language} language
-        
+
         Source text:
         {context}...
         """

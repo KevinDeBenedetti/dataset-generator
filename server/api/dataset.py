@@ -4,15 +4,15 @@ from typing import List, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from core.database import get_db
-from core import Dataset, QASource
-from services.dataset import (
+from server.core.database import get_db
+from server.core import Dataset, QASource
+from server.services.dataset import (
     get_datasets,
     get_dataset_by_id,
     analyze_dataset_similarities,
     clean_dataset_similarities,
 )
-from schemas.dataset import (
+from server.schemas.dataset import (
     DatasetResponse,
     SimilarityAnalysisResponse,
     CleanSimilarityResponse,

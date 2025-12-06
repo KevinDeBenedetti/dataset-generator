@@ -6,15 +6,15 @@ import json
 import os
 import openai
 import instructor
-from core import QASource
-from models.scraper import PageSnapshot
-from services.dataset import DatasetService
-from services.scraper import ScraperService
-from services.qa import QAService
-from core.database import get_db
-from core.utils.text import chunk_text
-from core.utils.url import clean_base_url, build_api_url
-from schemas.q_a import UnitQuestionAnswer, UnitQuestionAnswerResponse
+from server.core import QASource
+from server.models.scraper import PageSnapshot
+from server.services.dataset import DatasetService
+from server.services.scraper import ScraperService
+from server.services.qa import QAService
+from server.core.database import get_db
+from server.core.utils.text import chunk_text
+from server.core.utils.url import clean_base_url, build_api_url
+from server.schemas.q_a import UnitQuestionAnswer, UnitQuestionAnswerResponse
 import logging
 
 logger = logging.getLogger(__name__)
