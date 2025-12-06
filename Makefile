@@ -11,46 +11,43 @@ help: ## Show helper
 
 clean: ## Clean cache, datasets, and scrapes
 	@echo "Cleaning up..."
-	docker compose -f docker/docker-compose.yml down
+	docker compose down
 
 	@echo "Removing all..."
+	@find . -type f -name "bun.lock" -prune -print -exec rm -rf {} +
 	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
 	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
 	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".venv" -prune -print -exec rm -rf {} +
+	@find . -type f -name "uv.lock" -prune -print -exec rm -rf {} +
+	@find . -type f -name "*.log" -prune -print -exec rm -rf {} +
 
-	@echo "Server cleaning..."
-	cd server && \
-		rm -rf .venv uv.lock scraper.log
-
-	@echo "Client cleaning..."
-	cd client && \
-		pnpm store prune
+# 	@echo "Server cleaning..."
+# 	cd server && rm -rf scraper.log
 
 lint:  ## Run linting
 	@echo "Server linting..."
-	cd server && \
-		uv run ruff check --fix && \
-		uv run ruff format
+	uv run ruff check --fix && \
+	uv run ruff format
 
 	@echo "Client linting..."
 	cd client && \
-		pnpm lint && \
-		pnpm format
+		bun lint && \
+		bun format
 
 husky: ## Setup husky git hooks
 	@echo "Setting up husky..."
-	cd client && pnpm install
+	cd client && bun install
 	chmod +x .husky/pre-commit
 
 setup: ## Initialize client
 	@echo "Initializing client..."
 	cd client && \
-	pnpm install
+	bun install
 
 	@echo "Initializing server..."
-	cd server && \
 	uv venv --clear && \
 	source .venv/bin/activate && \
 	uv sync
@@ -58,11 +55,17 @@ setup: ## Initialize client
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
 	cd client && \
-	pnpm up --latest
+	bun up --latest
 
 dev: clean husky setup ## Start the FastAPI server
 	@echo "Starting API server..."
-	docker compose -f docker/docker-compose.yml up -d
+	docker compose up -d
+
+dev-local: clean setup ## Start the FastAPI server without Docker
+	@echo "Starting API server..."
+	uv run uvicorn --host 0.0.0.0 server.main:app --reload
+# 	cd server && \
+# 		uv run uvicorn --host 0.0.0.0 main:app --reload
 
 install:
 	@echo "Installing dependencies..."
@@ -78,10 +81,10 @@ up-backend-local: ## Start the FastAPI server without Docker
 	@echo "Starting API server..."
 	cp .env.example server/.env
 	cd server && \
-		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
-
+		uv run uvicorn --host 0.0.0.0 main:app --reload
 	rm server/.env
 
 rmi: clean
 	@echo "Removing dangling images..."
 	docker rmi datasets-client datasets-server || true
+	docker rmi docker-client docker-server || true

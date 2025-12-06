@@ -1,24 +1,19 @@
 # Global arguments - must be provided at build time
-ARG PNPM_VERSION
-ARG NODE_VERSION
+ARG BUN_VERSION
 ARG APP_PORT
 
 # =============================================================================
 # Stage: base
 # Common configuration for all stages
 # =============================================================================
-FROM docker.io/node:${NODE_VERSION} AS base
+FROM docker.io/oven/bun:${BUN_VERSION} AS base
 
-ARG PNPM_VERSION
 ARG APP_PORT
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install --ignore-scripts --location=global pnpm@${PNPM_VERSION}
-
 # Copy dependency files
-COPY client/package.json client/pnpm-lock.yaml* ./
+COPY client/package.json client/bun.lockb* ./
 
 # =============================================================================
 # Stage: dependencies
@@ -27,7 +22,7 @@ COPY client/package.json client/pnpm-lock.yaml* ./
 FROM base AS dependencies
 
 # Install all dependencies
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN bun install --frozen-lockfile
 
 # =============================================================================
 # Stage: dev
@@ -48,10 +43,10 @@ EXPOSE ${APP_PORT}
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:${APP_PORT}', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD bun -e "require('http').get('http://localhost:${APP_PORT}', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Default command
-CMD ["pnpm", "run", "dev", "--host", "0.0.0.0"]
+CMD ["bun", "run", "dev", "--host", "0.0.0.0"]
 
 # =============================================================================
 # Stage: build
@@ -67,7 +62,7 @@ ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
 
 # Build application
-RUN pnpm run build
+RUN bun run build
 
 # =============================================================================
 # Stage: prod
