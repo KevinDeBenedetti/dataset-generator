@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.0...v0.4.1) (2025-12-06)
+
+
+### Chores
+
+* **deps-dev:** bump @hey-api/openapi-ts in /apps/client ([ae20f9b](https://github.com/KevinDeBenedetti/dataset-generator/commit/ae20f9b6cdda04c37ac2bb1af535caaccac7ba95))
+* **deps-dev:** bump eslint-plugin-vue in /apps/client ([3ad03bd](https://github.com/KevinDeBenedetti/dataset-generator/commit/3ad03bd1a49aea8d4d4068d36a2780accf80cde7))
+* **deps-dev:** bump prettier from 3.6.2 to 3.7.4 in /apps/client ([1fa3b3a](https://github.com/KevinDeBenedetti/dataset-generator/commit/1fa3b3abdf73d746d3bb50bd2b6680c10c83814f))
+* **deps:** bump @vueuse/core from 13.9.0 to 14.1.0 in /apps/client ([1d8a84e](https://github.com/KevinDeBenedetti/dataset-generator/commit/1d8a84eddfc77ec637c3360f1db1505933963d26))
+* **deps:** bump lucide-vue-next in /apps/client ([cf40873](https://github.com/KevinDeBenedetti/dataset-generator/commit/cf40873667a5bf06828adf7ab25fdb1fac00d506))
+* update CD workflow and fix package name in release manifest ([00451c2](https://github.com/KevinDeBenedetti/dataset-generator/commit/00451c20cc9cd96b2edd5982384303a5651d5744))
+* update release-please configuration to include changelog sections ([e585732](https://github.com/KevinDeBenedetti/dataset-generator/commit/e585732f6265f25f7ae58493c71aab71260ef11f))
+
+
+### Code Refactoring
+
+* code structure for improved readability and maintainability ([70d25ce](https://github.com/KevinDeBenedetti/dataset-generator/commit/70d25ce11dd8fb38f2f81c82cf9386b4a820bdeb))
+
 ## [0.4.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.3.0...v0.4.0) (2025-12-06)
 
 
