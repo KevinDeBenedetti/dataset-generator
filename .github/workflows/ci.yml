@@ -11,49 +11,34 @@ on:
       - "**"
   workflow_dispatch:
 
-env:
-  PYTHON_VERSION: 3.x
-  NODE_VERSION: 22.20.0
-  PNPM_VERSION: 10.18.3
-  APP_PORT: 5173
-
 jobs:
-  expose-vars:
-    runs-on: ubuntu-24.04
+  versions:
+    uses: ./.github/workflows/version.yml
     if: ${{ !github.event.pull_request.draft }}
-    outputs:
-      PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
-      NODE_VERSION: ${{ env.NODE_VERSION }}
-      PNPM_VERSION: ${{ env.PNPM_VERSION }}
-      APP_PORT: ${{ env.APP_PORT }}
-    steps:
-      - name: Exposing env vars
-        run: echo "Exposing env vars"
 
   lint:
     uses: ./.github/workflows/lint.yml
     needs:
-      - expose-vars
+      - versions
     with:
-      PYTHON_VERSION: ${{ needs.expose-vars.outputs.PYTHON_VERSION }}
-      NODE_VERSION: ${{ needs.expose-vars.outputs.NODE_VERSION }}
-      PNPM_VERSION: ${{ needs.expose-vars.outputs.PNPM_VERSION }}
-      APP_PORT: ${{ needs.expose-vars.outputs.APP_PORT }}
+      PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
+      NODE_VERSION: ${{ needs.versions.outputs.node-version }}
+      PNPM_VERSION: ${{ needs.versions.outputs.pnpm-version }}
+      APP_PORT: ${{ needs.versions.outputs.app-port }}
 
   # unit-tests:
   #   uses: ./.github/workflows/unit-tests.yml
   #   needs:
-  #     - expose-vars
+  #     - versions
   #   with:
-  #     PYTHON_VERSION: ${{ needs.expose-vars.outputs.PYTHON_VERSION }}
+  #     PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
 
-  # Workaround for required status check in protection branches (see. https://github.com/orgs/community/discussions/13690)
   all-jobs-passed:
     name: Check jobs status
     runs-on: ubuntu-24.04
     if: ${{ always() }}
     needs:
-      - expose-vars
+      - versions
       - lint
       # - unit-tests
     steps:
