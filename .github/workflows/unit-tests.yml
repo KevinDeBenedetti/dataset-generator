@@ -30,4 +30,4 @@ jobs:
       - name: Install dependencies and run tests
         run: |
           echo "Running tests"
-          make run-test
+          make test
