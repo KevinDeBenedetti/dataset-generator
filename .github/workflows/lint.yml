@@ -64,6 +64,7 @@ jobs:
         with:
           node-version: "22.20.0"
           cache: "pnpm"
+          cache-dependency-path: "./apps/client/pnpm-lock.yaml"
 
       - name: Install dependencies
         working-directory: ./apps/client
