@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.3.0...v0.4.0) (2025-12-06)
+
+
+### Features
+
+* add dependabot configuration for npm and uv package updates ([2e9a14f](https://github.com/KevinDeBenedetti/dataset-generator/commit/2e9a14f635cff2fa173260ec856455303737806d))
+* restructure Docker setup with new Dockerfiles and docker-compose configuration ([3f145b0](https://github.com/KevinDeBenedetti/dataset-generator/commit/3f145b0f9c0db665f8d656337b213ba68cac2b34))
+
+
+### Bug Fixes
+
+* add path for pnpm cache ([2c4da72](https://github.com/KevinDeBenedetti/dataset-generator/commit/2c4da72be89cb0c002dc3e271fd6af16648a739c))
+* comment out unit-tests job in CI workflow ([5ac98f5](https://github.com/KevinDeBenedetti/dataset-generator/commit/5ac98f5de30ccb914d87b454027a45f9191062b1))
+* correct entries for lint ([b3596bb](https://github.com/KevinDeBenedetti/dataset-generator/commit/b3596bb03e85bf9bd84d189459f8bbebfcc41612))
+* refactor CI workflow to use centralized version management ([7b67816](https://github.com/KevinDeBenedetti/dataset-generator/commit/7b67816a567570238e3b57b499ec3e3efdd32d07))
+* remove obsolete Makefile targets for common, FastAPI, Husky, and Vue setups ([edfa63b](https://github.com/KevinDeBenedetti/dataset-generator/commit/edfa63be29975f3bce78d9d13008e3435907a2b5))
+* remove push trigger from CI workflow ([9849a98](https://github.com/KevinDeBenedetti/dataset-generator/commit/9849a986eaf4034f3692327194f389a7e962546d))
+* remove unused app-port variable from lint job configuration ([64651f9](https://github.com/KevinDeBenedetti/dataset-generator/commit/64651f90371c3070f86248e0bdac08267d606661))
+* update baseline-browser-mapping to version 2.9.4 and fastapi to version 0.124.0 ([f8325b6](https://github.com/KevinDeBenedetti/dataset-generator/commit/f8325b6f25cfc65e9c1037ebd2e94836f68853c1))
+* update client dependencies installation to use frozen lockfile ([551cac3](https://github.com/KevinDeBenedetti/dataset-generator/commit/551cac3c7e016f07b121b513e32b4afffca832ce))
+* update lint job dependencies and configuration ([b95217f](https://github.com/KevinDeBenedetti/dataset-generator/commit/b95217f4a13a1d83293af19d1003b5ada8dbacd1))
+
 ## [0.3.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.2.0...v0.3.0) (2025-10-20)
 
 
