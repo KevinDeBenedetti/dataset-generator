@@ -11,7 +11,7 @@ help: ## Show helper
 
 clean: ## Clean cache, datasets, and scrapes
 	@echo "Cleaning up..."
-	docker compose down
+	docker compose -f docker/docker-compose.yml down
 
 	@echo "Removing all..."
 	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
@@ -62,7 +62,7 @@ update-client: setup ## Upgrade client dependencies
 
 dev: clean husky setup ## Start the FastAPI server
 	@echo "Starting API server..."
-	docker compose up -d
+	docker compose -f docker/docker-compose.yml up -d
 
 install:
 	@echo "Installing dependencies..."
@@ -81,3 +81,7 @@ up-backend-local: ## Start the FastAPI server without Docker
 		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
 
 	rm apps/server/.env
+
+rmi: clean
+	@echo "Removing dangling images..."
+	docker rmi datasets-client datasets-server || true
