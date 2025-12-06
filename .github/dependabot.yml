@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "apps/client/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "uv"
+    directory: "apps/server/"
+    schedule:
+      interval: "weekly"
