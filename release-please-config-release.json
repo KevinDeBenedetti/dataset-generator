@@ -3,7 +3,14 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "prerelease": false
+      "prerelease": false,
+      "include-v-in-tag": true,
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "chore", "section": "Chores", "hidden": false},
+        {"type": "refactor", "section": "Code Refactoring", "hidden": false}
+      ]
     }
   }
 }
