@@ -6,9 +6,6 @@ on:
       PYTHON_VERSION:
         required: true
         type: string
-  push:
-    branches:
-      - "**"
 
 jobs:
   run-test:
