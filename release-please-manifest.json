@@ -1,7 +1,7 @@
 {
     "packages": {
       ".": {
-        "package-name": "src",
+        "package-name": "dataset-generator",
         "include-component-in-tag": false
       }
     }
