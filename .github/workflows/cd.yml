@@ -3,17 +3,10 @@ name: CD
 on:
   push:
     branches:
-    - dev
     - main
   workflow_dispatch:
 
 jobs:
-  expose-vars:
-    runs-on: ubuntu-24.04
-    steps:
-    - name: Exposing env vars
-      run: echo "Exposing env vars"
-
   release:
     uses: ./.github/workflows/release.yml
     permissions:
