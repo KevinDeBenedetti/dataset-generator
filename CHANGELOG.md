@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.1...v0.4.2) (2025-12-06)
+
+
+### Bug Fixes
+
+* code structure for improved readability and maintainability ([37b99b4](https://github.com/KevinDeBenedetti/dataset-generator/commit/37b99b4a455aefb8fcf8bdc0171ac5eddc8718bb))
+* restructure Dockerfiles for client and server services ([c10e069](https://github.com/KevinDeBenedetti/dataset-generator/commit/c10e0695e8520cfb7fa06ffa31998b6253704541))
+* update import paths to reflect new project structure ([886e326](https://github.com/KevinDeBenedetti/dataset-generator/commit/886e32681e8e377d16c9f10ae95c17405c5e2723))
+* update linting workflow to use bun and remove pnpm references ([5f04599](https://github.com/KevinDeBenedetti/dataset-generator/commit/5f045994d3b6517f8e5e32346e23a3af9bb9b72b))
+
 ## [0.4.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.0...v0.4.1) (2025-12-06)
 
 
