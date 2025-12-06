@@ -14,17 +14,15 @@ on:
 jobs:
   versions:
     uses: ./.github/workflows/version.yml
-    if: ${{ !github.event.pull_request.draft }}
 
   lint:
+    needs: versions
     uses: ./.github/workflows/lint.yml
-    needs:
-      - versions
     with:
-      PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
-      NODE_VERSION: ${{ needs.versions.outputs.node-version }}
-      PNPM_VERSION: ${{ needs.versions.outputs.pnpm-version }}
-      APP_PORT: ${{ needs.versions.outputs.app-port }}
+      python-version: ${{ needs.versions.outputs.python-version }}
+      node-version: ${{ needs.versions.outputs.node-version }}
+      pnpm-version: ${{ needs.versions.outputs.pnpm-version }}
+      app-port: ${{ needs.versions.outputs.app-port }}
 
   # unit-tests:
   #   uses: ./.github/workflows/unit-tests.yml
