@@ -1,79 +1,83 @@
+PYTHONPATH=$(PWD)
 
-MK_DIR := mk
-MK_REPO := https://github.com/KevinDeBenedetti/make-library.git
-MK_BRANCH := main
-PROJECT_NAME := documentation
-STACK := vue fastapi husky
-# VUE
-VUE_DIR := ./apps/client
-JS_PKG_MANAGER := pnpm
-VUE_DOCKERFILE := https://raw.githubusercontent.com/KevinDeBenedetti/docker-library/main/vue/Dockerfile
-# FASTAPI
-FASTAPI_DIR := ./apps/server
-PY_PKG_MANAGER := uv
-FASTAPI_DOCKERFILE := https://raw.githubusercontent.com/KevinDeBenedetti/docker-library/main/fastapi/Dockerfile
-# HUSKY
-HUSKY_DIR := ./apps/client
-# DOCKER
-DOCKER ?= true
-
-MK_FILES := $(addsuffix .mk,$(STACK))
-SPARSE_CHECKOUT_FILES := common.mk $(MK_FILES)
-
-.PHONY: help init dockerfiles fix-sparse
+.PHONY: help for datasets generator
+.DEFAULT_GOAL := help clean lint dev
 
 help: ## Show helper
-	@echo "Available commands:"
+	@echo "Usage: make <command>"
+	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":"; prev=""} \
-		{ \
-			file = $$1; \
-			gsub(/^.*\//, "", file); \
-			if (file != prev && prev != "") print ""; \
-			prev = file; \
-			sub(/^[^:]*:/, ""); \
-			split($$0, arr, ":.*?## "); \
-			printf "  \033[36m%-25s\033[0m %s\n", arr[1], arr[2]; \
-		}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-init: ## Initialize or update the make library
-	@echo "==> Checking git sparse-checkout configuration..."
-	@git sparse-checkout disable 2>/dev/null || true
-	@if [ ! -d $(MK_DIR) ]; then \
-		echo "==> Cloning make-library with sparse checkout..."; \
-		git clone --no-checkout --depth 1 --branch $(MK_BRANCH) --filter=blob:none $(MK_REPO) $(MK_DIR); \
-		cd $(MK_DIR) && \
-		git sparse-checkout init --no-cone && \
-		echo "common.mk" > .git/info/sparse-checkout && \
-		$(foreach file,$(MK_FILES),echo "$(file)" >> .git/info/sparse-checkout &&) true && \
-		git checkout $(MK_BRANCH) && \
-		rm -rf .git; \
-		echo "==> Files added to repository tracking"; \
-	else \
-		echo "==> Updating make-library..."; \
-		rm -rf $(MK_DIR); \
-		git clone --no-checkout --depth 1 --branch $(MK_BRANCH) --filter=blob:none $(MK_REPO) $(MK_DIR); \
-		cd $(MK_DIR) && \
-		git sparse-checkout init --no-cone && \
-		echo "common.mk" > .git/info/sparse-checkout && \
-		$(foreach file,$(MK_FILES),echo "$(file)" >> .git/info/sparse-checkout &&) true && \
-		git checkout $(MK_BRANCH) && \
-		rm -rf .git; \
-		echo "==> Files updated and added to repository tracking"; \
-	fi
+clean: ## Clean cache, datasets, and scrapes
+	@echo "Cleaning up..."
+	docker compose down
 
-dockerfiles: ## Download Dockerfiles from GitHub
-	@echo "==> Downloading Dockerfiles..."
-	@if [ -n "$(VUE_DOCKERFILE)" ]; then \
-		echo "  -> Downloading Vue Dockerfile to $(VUE_DIR)/Dockerfile"; \
-		curl -fsSL $(VUE_DOCKERFILE) -o $(VUE_DIR)/Dockerfile; \
-	fi
-# 	@if [ -n "$(FASTAPI_DOCKERFILE)" ]; then \
-# 		echo "  -> Downloading FastAPI Dockerfile to $(FASTAPI_DIR)/Dockerfile"; \
-# 		curl -fsSL $(FASTAPI_DOCKERFILE) -o $(FASTAPI_DIR)/Dockerfile; \
-# 	fi
-	@echo "==> Dockerfiles downloaded successfully"
+	@echo "Removing all..."
+	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
+	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
+	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
 
-INCLUDES := $(MK_DIR)/common.mk $(addprefix $(MK_DIR)/,$(MK_FILES))
+	@echo "Server cleaning..."
+	cd apps/server && \
+		rm -rf .venv uv.lock scraper.log
 
--include $(INCLUDES)
+	@echo "Client cleaning..."
+	cd apps/client && \
+		pnpm store prune
+
+lint:  ## Run linting
+	@echo "Server linting..."
+	cd apps/server && \
+		uv run ruff check --fix && \
+		uv run ruff format
+
+	@echo "Client linting..."
+	cd apps/client && \
+		pnpm lint && \
+		pnpm format
+
+husky: ## Setup husky git hooks
+	@echo "Setting up husky..."
+	cd apps/client && pnpm install
+	chmod +x .husky/pre-commit
+
+setup: ## Initialize client
+	@echo "Initializing client..."
+	cd apps/client && \
+	pnpm install
+
+	@echo "Initializing server..."
+	cd apps/server && \
+	uv venv --clear && \
+	source .venv/bin/activate && \
+	uv sync
+
+update-client: setup ## Upgrade client dependencies
+	@echo "Upgrading client dependencies..."
+	cd apps/client && \
+	pnpm up --latest
+
+dev: clean husky setup ## Start the FastAPI server
+	@echo "Starting API server..."
+	docker compose up -d
+
+install:
+	@echo "Installing dependencies..."
+	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv sync --all-groups --dev
+
+test: install
+	echo "Running tests..."
+	cp .env.example .env
+	cd apps/server && PYTHONPATH=$(PWD)/apps/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing
+	rm .env
+
+up-backend-local: ## Start the FastAPI server without Docker
+	@echo "Starting API server..."
+	cp .env.example apps/server/.env
+	cd apps/server && \
+		uv run uvicorn --host 0.0.0.0 --port 5000 main:app --reload
+
+	rm apps/server/.env

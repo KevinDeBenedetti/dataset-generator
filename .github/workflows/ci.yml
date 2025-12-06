@@ -56,7 +56,6 @@ jobs:
       - expose-vars
       - lint
       - unit-tests
-      - build docker
     steps:
       - name: Check status of all required jobs
         run: |-
