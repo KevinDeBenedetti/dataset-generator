@@ -18,7 +18,7 @@ WORKDIR /app
 RUN npm install --ignore-scripts --location=global pnpm@${PNPM_VERSION}
 
 # Copy dependency files
-COPY apps/client/package.json apps/client/pnpm-lock.yaml* ./
+COPY client/package.json client/pnpm-lock.yaml* ./
 
 # =============================================================================
 # Stage: dependencies
@@ -41,7 +41,7 @@ ARG APP_PORT
 COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copy source code
-COPY apps/client/. .
+COPY client/. .
 
 # Expose port
 EXPOSE ${APP_PORT}

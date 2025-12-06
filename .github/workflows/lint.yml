@@ -37,12 +37,12 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        working-directory: ./apps/server
+        working-directory: ./server
         run: |
           uv sync --dev
 
       - name: Lint with ruff
-        working-directory: ./apps/server
+        working-directory: ./server
         run: |
           uv run ruff check .
           uv run ruff format --check .
@@ -64,13 +64,13 @@ jobs:
         with:
           node-version: "22.20.0"
           cache: "pnpm"
-          cache-dependency-path: "./apps/client/pnpm-lock.yaml"
+          cache-dependency-path: "./client/pnpm-lock.yaml"
 
       - name: Install dependencies
-        working-directory: ./apps/client
+        working-directory: ./client
         run: pnpm install --frozen-lockfile
 
       - name: Lint client
-        working-directory: ./apps/client
+        working-directory: ./client
         run: |
           pnpm lint

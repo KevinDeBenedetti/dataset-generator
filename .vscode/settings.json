@@ -25,13 +25,13 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
 
-  // "python.defaultInterpreterPath": "apps/server/.venv/bin/python3",
+  // "python.defaultInterpreterPath": "server/.venv/bin/python3",
   "python.terminal.activateEnvironment": true,
   "files.exclude": {
     "**/__pycache__": true,
     "**/.pytest_cache": true
   },
-  "python.defaultInterpreterPath": "./apps/server/.venv/bin/python3.13",
+  "python.defaultInterpreterPath": "server/.venv/bin/python3.13",
   "hadolintPath": "hadolint",
   "cliOptions": ["--no-color", "--ignore", "DL3000"],
   "maxNumberOfProblems": 100,
