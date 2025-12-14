@@ -37,16 +37,16 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        working-directory: ./server
+        working-directory: ./apps/server
         run: |
           uv sync --dev
 
       - name: Lint with ruff
-        working-directory: ./server
+        working-directory: ./apps/server
         run: |
           uv run ruff check .
 
-  lint-client:
+  lint-next:
     runs-on: ubuntu-latest
 
     steps:
@@ -62,10 +62,34 @@ jobs:
           node-version: "22.20.0"
 
       - name: Install dependencies
-        working-directory: ./client
+        working-directory: ./apps/next
         run: bun install --frozen-lockfile
 
       - name: Lint client
-        working-directory: ./client
+        working-directory: ./apps/next
+        run: |
+          bun lint
+
+  lint-vue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+
+      - name: Install dependencies
+        working-directory: ./apps/next
+        run: bun install --frozen-lockfile
+
+      - name: Lint client
+        working-directory: ./apps/vue
         run: |
           bun lint
