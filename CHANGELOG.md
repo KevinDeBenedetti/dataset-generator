@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.5.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.2...v0.5.0) (2025-12-14)
+
+
+### Features
+
+* add next to codebase ([dba2a78](https://github.com/KevinDeBenedetti/dataset-generator/commit/dba2a78fdadfee8770bd23398c63f37f49b2ba24))
+* add UI components and hooks for improved functionality ([bf22a8a](https://github.com/KevinDeBenedetti/dataset-generator/commit/bf22a8ae6a2f465177bae249db354fd8aecac889))
+* reorganize release config ([360731e](https://github.com/KevinDeBenedetti/dataset-generator/commit/360731e2e592c6745f6a5a0ecf2aa4f1f244caa4))
+* update linting process and improve logging configuration ([af4d03c](https://github.com/KevinDeBenedetti/dataset-generator/commit/af4d03cc46dba4378143d4e2c168ce381d6ee50f))
+* update setup process and Docker configuration for improved client initialization ([a25dcaa](https://github.com/KevinDeBenedetti/dataset-generator/commit/a25dcaadb08aa6c2914c5080d95dd0664815b8ff))
+
+
+### Bug Fixes
+
+* correct file paths in the Release Please configuration ([b1d664c](https://github.com/KevinDeBenedetti/dataset-generator/commit/b1d664cd12a8d751e4a9b244088ffed2474ffecc))
+* correct the directory paths in the Dependabot configuration file ([208f015](https://github.com/KevinDeBenedetti/dataset-generator/commit/208f0159a735d8a3c80ba4d0db746ef4c0a3feca))
+* correct the working directory for dependency installation in the lint-next job ([3ec4556](https://github.com/KevinDeBenedetti/dataset-generator/commit/3ec4556fef3473cccbf539235a75eb8d7ca22dcf))
+* update directory paths in release-please configuration files for consistency ([b0a1d6d](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0a1d6de9d6e5ffd025869f88c640ae686a4c45c))
+* update lint paths ([55044a3](https://github.com/KevinDeBenedetti/dataset-generator/commit/55044a3d04b6a2d3068981ba1d74b838fe2f7793))
+* update lint script to improve clarity ([b743168](https://github.com/KevinDeBenedetti/dataset-generator/commit/b7431685e9bba5b3ae2f43637bc26910430de644))
+* update package ecosystem from npm to bun in Dependabot configuration ([6529576](https://github.com/KevinDeBenedetti/dataset-generator/commit/65295766c8b08f13b2fbf58786be0af9710f39ac))
+* update package key in configuration files for consistency ([b3cf342](https://github.com/KevinDeBenedetti/dataset-generator/commit/b3cf3428cce84d80f68be2856c523b1d6f75fc5e))
+
+
+### Chores
+
+* **deps-dev:** bump @types/node from 20.19.27 to 25.0.2 in /apps/next ([2ed839e](https://github.com/KevinDeBenedetti/dataset-generator/commit/2ed839e629340cfab6e8482b0727cc606bc46659))
+* **deps:** bump react-dom from 19.2.1 to 19.2.3 in /apps/next ([f56f073](https://github.com/KevinDeBenedetti/dataset-generator/commit/f56f073724af486bb537a6cfa197d336935d89a7))
+
+
+### Code Refactoring
+
+* harmonize code style and improve readability across multiple files ([fe3f1a8](https://github.com/KevinDeBenedetti/dataset-generator/commit/fe3f1a85a7f091d1249d5b837f944c2ba38c6112))
+
 ## [0.4.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.1...v0.4.2) (2025-12-06)
 
 
