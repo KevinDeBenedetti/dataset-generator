@@ -11,6 +11,6 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "uv"
-    directory: "apps/server/"
+    directory: "."
     schedule:
       interval: "weekly"
