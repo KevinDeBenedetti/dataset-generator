@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "lint": "eslint . --fix --debug",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix --debug",
     "format": "prettier --write src/",
     "api:generate": "openapi-ts",
     "api:watch": "openapi-ts --watch"

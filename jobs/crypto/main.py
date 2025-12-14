@@ -21,11 +21,9 @@ log_file = os.path.join(log_dir, "crypto_fetch.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
 )
+
 
 def fetch_all_coins() -> list | None:
     url = API_BASE_URL + ENDPOINT_COINS
@@ -38,6 +36,7 @@ def fetch_all_coins() -> list | None:
         logging.error(f"Error fetching coins list: {e}")
         return None
 
+
 def fetch_coin_by_id(coin_id: str) -> dict | None:
     url = API_BASE_URL + ENDPOINT_COIN_BY_ID.format(coin_id)
     logging.info(f"Fetching data for coin {coin_id} from {url}")
@@ -49,12 +48,14 @@ def fetch_coin_by_id(coin_id: str) -> dict | None:
         logging.error(f"Error fetching coin {coin_id}: {e}")
         return None
 
+
 def save_json(data, filename: str):
     filepath = os.path.join(OUTPUT_DIR, filename)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     logging.info(f"Saved data to {filepath}")
     return filepath
+
 
 def main(limit: int = None):
     coins = fetch_all_coins()
@@ -89,6 +90,7 @@ def main(limit: int = None):
 
     # 3) Sauvegarder les détails complets
     save_json(detailed, f"all_coins_details_{timestamp}.json")
+
 
 if __name__ == "__main__":
     main(limit=10)
