@@ -30,14 +30,14 @@ jobs:
       pull-requests: write
     if: ${{ !contains(github.event.head_commit.message, '[skip gha]') }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Run Release Please
-      uses: googleapis/release-please-action@v4
-      id: release
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        target-branch: ${{ github.ref_name }}
-        manifest-file: ./release/.release-please-manifest.json
-        config-file: ${{ (github.ref_name == 'main' && './release/release-please-config-release.json') || (github.ref_name == 'dev' && './release/release-please-config-prerelease.json') }}
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
+          manifest-file: release/.release-please-manifest.json
+          config-file: ${{ (github.ref_name == 'main' && 'release/release-please-config-release.json') || (github.ref_name == 'dev' && 'release/release-please-config-prerelease.json') }}
