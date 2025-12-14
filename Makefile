@@ -46,10 +46,10 @@ lint:  ## Run linting
 	uv run ruff format
 
 	@echo "Client linting..."
-	cd client && \
-		bun lint && \
-		bun format
-
+	cd ./apps/vue && \
+		bun lint
+	cd ./apps/next && \
+		bun lint
 
 # --------------------------------------
 # SETUP
@@ -63,7 +63,7 @@ setup: ## Initialize client
 	@echo "Initializing..."
 	cd ./apps/vue && bun install
 	cd ./apps/next && bun install
-	
+
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
 	cd client && \
