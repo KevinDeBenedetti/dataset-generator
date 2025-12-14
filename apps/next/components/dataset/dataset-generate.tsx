@@ -1,63 +1,64 @@
-'use client'
+"use client";
 
-import { useState, useMemo, useEffect } from 'react'
-import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
-import { DatasetGenerateAnalyse } from './dataset-generate-analyse'
-import { DatasetGenerateClean } from './dataset-generate-clean'
-import { useGenerateStore } from '@/stores/generate'
-import { useDatasetStore } from '@/stores/dataset'
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { DatasetGenerateAnalyse } from "./dataset-generate-analyse";
+import { DatasetGenerateClean } from "./dataset-generate-clean";
+import { useGenerateStore } from "@/stores/generate";
+import { useDatasetStore } from "@/stores/dataset";
 import {
   useDatasets,
   useGenerateDataset,
   useAnalyzeDataset,
   useCleanDataset,
-} from '@/hooks'
+} from "@/hooks";
 
 const availableLanguages = [
-  { value: 'fr', label: 'French' },
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'de', label: 'German' },
-]
+  { value: "fr", label: "French" },
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "de", label: "German" },
+];
 
 export function DatasetGenerate() {
-  const [url, setUrl] = useState('')
-  const [datasetName, setDatasetName] = useState('')
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null)
-  const [targetLanguage, setTargetLanguage] = useState<string>('fr')
-  const [similarityThreshold, setSimilarityThreshold] = useState([0.9])
+  const [url, setUrl] = useState("");
+  const [manualDatasetName, setManualDatasetName] = useState("");
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(
+    null
+  );
+  const [targetLanguage, setTargetLanguage] = useState<string>("fr");
+  const [similarityThreshold, setSimilarityThreshold] = useState([0.9]);
 
-  const { data: datasets = [] } = useDatasets()
-  const generateMutation = useGenerateDataset()
-  const analyzeMutation = useAnalyzeDataset()
-  const cleanMutation = useCleanDataset()
+  const { data: datasets = [] } = useDatasets();
+  const generateMutation = useGenerateDataset();
+  const analyzeMutation = useAnalyzeDataset();
+  const cleanMutation = useCleanDataset();
 
-  const generationStatus = useGenerateStore((state) => state.generationStatus)
-  const dataset = useGenerateStore((state) => state.dataset)
-  const error = useGenerateStore((state) => state.error)
-  const analyzeStatus = useDatasetStore((state) => state.analyzeStatus)
-  const cleanStatus = useDatasetStore((state) => state.cleanStatus)
+  const generationStatus = useGenerateStore((state) => state.generationStatus);
+  const dataset = useGenerateStore((state) => state.dataset);
+  const error = useGenerateStore((state) => state.error);
+  const analyzeStatus = useDatasetStore((state) => state.analyzeStatus);
+  const cleanStatus = useDatasetStore((state) => state.cleanStatus);
 
-  // Sync select with input
-  useEffect(() => {
+  // Derive datasetName from selected dataset or use manual input
+  const datasetName = useMemo(() => {
     if (selectedDatasetId) {
-      const found = datasets.find((d) => d.id === selectedDatasetId)
-      if (found) {
-        setDatasetName(found.name)
-      }
+      const found = datasets.find((d) => d.id === selectedDatasetId);
+      return found?.name || manualDatasetName;
     }
-  }, [selectedDatasetId, datasets])
+    return manualDatasetName;
+  }, [selectedDatasetId, datasets, manualDatasetName]);
 
   // Show analyze/clean when an existing dataset is selected or when the entered name matches one
   const showActions = useMemo(() => {
@@ -65,17 +66,17 @@ export function DatasetGenerate() {
       selectedDatasetId !== null ||
       datasets.some((d) => d.name === datasetName) ||
       !!dataset
-    )
-  }, [selectedDatasetId, datasets, datasetName, dataset])
+    );
+  }, [selectedDatasetId, datasets, datasetName, dataset]);
 
   const isAnyProcessing =
-    generationStatus === 'pending' ||
-    analyzeStatus === 'pending' ||
-    cleanStatus === 'pending'
+    generationStatus === "pending" ||
+    analyzeStatus === "pending" ||
+    cleanStatus === "pending";
 
   const handleGenerate = async () => {
     if (!url || !datasetName) {
-      return
+      return;
     }
 
     try {
@@ -84,36 +85,36 @@ export function DatasetGenerate() {
         name: datasetName,
         targetLanguage,
         similarityThreshold: similarityThreshold[0] ?? 0.9,
-      })
+      });
 
       // Only call analyze/clean with a definite string id
-      const id = selectedDatasetId ?? result?.id
+      const id = selectedDatasetId ?? result?.id;
       if (id) {
-        await analyzeMutation.mutateAsync(id)
-        toast.success('Dataset analyzed successfully!')
-        await cleanMutation.mutateAsync(id)
-        toast.success('Dataset cleaned successfully!')
+        await analyzeMutation.mutateAsync(id);
+        toast.success("Dataset analyzed successfully!");
+        await cleanMutation.mutateAsync(id);
+        toast.success("Dataset cleaned successfully!");
       }
     } catch (err) {
-      toast.error('Error during dataset generation')
-      toast.error(err instanceof Error ? err.message : String(err))
+      toast.error("Error during dataset generation");
+      toast.error(err instanceof Error ? err.message : String(err));
     }
-  }
+  };
 
   const handleDatasetSelect = (value: string) => {
-    if (value === 'none') {
-      setSelectedDatasetId(null)
-      return
+    if (value === "none") {
+      setSelectedDatasetId(null);
+      return;
     }
-    setSelectedDatasetId(value)
-  }
+    setSelectedDatasetId(value);
+  };
 
   return (
     <div className="w-full flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         {/* Select for existing dataset */}
         <Select
-          value={selectedDatasetId || 'none'}
+          value={selectedDatasetId || "none"}
           onValueChange={handleDatasetSelect}
           disabled={isAnyProcessing}
         >
@@ -132,7 +133,7 @@ export function DatasetGenerate() {
 
         <Input
           value={datasetName}
-          onChange={(e) => setDatasetName(e.target.value)}
+          onChange={(e) => setManualDatasetName(e.target.value)}
           placeholder="Dataset name"
           disabled={isAnyProcessing}
         />
@@ -167,7 +168,9 @@ export function DatasetGenerate() {
 
             <div className="flex flex-col gap-1">
               <div className="flex justify-between">
-                <label className="text-xs text-gray-500">Similarity Threshold</label>
+                <label className="text-xs text-gray-500">
+                  Similarity Threshold
+                </label>
                 <span className="text-xs">{similarityThreshold[0]}</span>
               </div>
               <Slider
@@ -187,7 +190,7 @@ export function DatasetGenerate() {
             className="flex-1"
             onClick={handleGenerate}
           >
-            {generationStatus === 'pending' ? (
+            {generationStatus === "pending" ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <span>Generate Dataset</span>
@@ -198,12 +201,12 @@ export function DatasetGenerate() {
           {showActions && <DatasetGenerateClean />}
         </div>
 
-        {(generationStatus === 'error' ||
-          analyzeStatus === 'error' ||
-          cleanStatus === 'error') && (
+        {(generationStatus === "error" ||
+          analyzeStatus === "error" ||
+          cleanStatus === "error") && (
           <div className="text-red-500 text-sm">{error}</div>
         )}
       </div>
     </div>
-  )
+  );
 }
