@@ -72,7 +72,7 @@ def get_dataset_by_id(db: Session, dataset_id: str) -> Dict[str, Any]:
             "id": dataset.id,
             "name": dataset.name,
             "description": dataset.description,
-            "created_at": dataset.created_at,
+            "created_at": dataset.created_at.isoformat() if dataset.created_at else None,
             "qa_sources_count": qa_count,
         }
     except Exception as e:
