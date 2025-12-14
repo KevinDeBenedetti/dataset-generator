@@ -3,13 +3,21 @@ PYTHONPATH=$(PWD)
 .PHONY: help for datasets generator
 .DEFAULT_GOAL := help clean lint dev
 
+# --------------------------------------
+# HELPER
+# --------------------------------------
 help: ## Show helper
 	@echo "Usage: make <command>"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-clean: ## Clean cache, datasets, and scrapes
+
+# --------------------------------------
+# CLEAN
+# --------------------------------------
+
+clean:  ## Clean cache, datasets, and scrapes
 	@echo "Cleaning up..."
 	docker compose down
 
@@ -24,8 +32,13 @@ clean: ## Clean cache, datasets, and scrapes
 	@find . -type f -name "uv.lock" -prune -print -exec rm -rf {} +
 	@find . -type f -name "*.log" -prune -print -exec rm -rf {} +
 
-# 	@echo "Server cleaning..."
-# 	cd server && rm -rf scraper.log
+rmi: clean
+	@echo "Removing dangling images..."
+	docker rmi datasets-next datasets-server datasets-vue || true
+
+# --------------------------------------
+# LINT
+# --------------------------------------
 
 lint:  ## Run linting
 	@echo "Server linting..."
@@ -37,15 +50,14 @@ lint:  ## Run linting
 		bun lint && \
 		bun format
 
-husky: ## Setup husky git hooks
-	@echo "Setting up husky..."
-	cd client && bun install
-	chmod +x .husky/pre-commit
 
+# --------------------------------------
+# SETUP
+# --------------------------------------
 setup: ## Initialize client
-	@echo "Initializing client..."
-	cd client && \
-	bun install
+	@echo "Initializing..."
+	cd ./apps/vue && bun install
+	cd ./apps/next && bun install
 
 	@echo "Initializing server..."
 	uv venv --clear && \
@@ -57,7 +69,7 @@ update-client: setup ## Upgrade client dependencies
 	cd client && \
 	bun up --latest
 
-dev: clean husky setup ## Start the FastAPI server
+dev: clean setup ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
 
@@ -84,7 +96,3 @@ up-backend-local: ## Start the FastAPI server without Docker
 		uv run uvicorn --host 0.0.0.0 main:app --reload
 	rm server/.env
 
-rmi: clean
-	@echo "Removing dangling images..."
-	docker rmi datasets-client datasets-server || true
-	docker rmi docker-client docker-server || true

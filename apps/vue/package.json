@@ -15,8 +15,7 @@
     "lint": "eslint . --fix --debug",
     "format": "prettier --write src/",
     "api:generate": "openapi-ts",
-    "api:watch": "openapi-ts --watch",
-    "prepare": "husky"
+    "api:watch": "openapi-ts --watch"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
@@ -25,7 +24,7 @@
     "axios": "^1.12.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-vue-next": "^0.556.0",
+    "lucide-vue-next": "^0.561.0",
     "pinia": "^3.0.3",
     "reka-ui": "^2.5.0",
     "tailwind-merge": "^3.3.1",
@@ -36,9 +35,9 @@
     "vue-sonner": "^2.0.8"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.88.0",
+    "@hey-api/openapi-ts": "0.89.0",
     "@tsconfig/node22": "^22.0.2",
-    "@types/node": "^24.3.1",
+    "@types/node": "^25.0.2",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.6.0",
@@ -51,8 +50,6 @@
     "typescript": "~5.9.2",
     "vite": "^7.1.5",
     "vite-plugin-vue-devtools": "^8.0.2",
-    "vue-tsc": "^3.0.7",
-    "husky": "^9.1.7"
-  },
-  "packageManager": "pnpm@10.18.3"
+    "vue-tsc": "^3.0.7"
+  }
 }

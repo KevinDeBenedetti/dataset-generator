@@ -25,6 +25,8 @@
 
 FROM python:3.13-slim
 
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -37,7 +39,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Copier dans un sous-dossier server/
-COPY server ./server
+COPY ./apps/server .
 
 EXPOSE 8000
 
