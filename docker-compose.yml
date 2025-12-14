@@ -2,7 +2,6 @@ services:
   next:
     container_name: next
     restart: always
-    working_dir: /app
     depends_on:
       server:
         condition: service_healthy
@@ -24,7 +23,6 @@ services:
   vue:
     container_name: vue
     restart: always
-    working_dir: /app
     depends_on:
       server:
         condition: service_healthy
