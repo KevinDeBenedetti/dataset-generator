@@ -55,21 +55,21 @@ lint:  ## Run linting
 # SETUP
 # --------------------------------------
 setup: ## Initialize client
-	@echo "Initializing..."
-	cd ./apps/vue && bun install
-	cd ./apps/next && bun install
-
 	@echo "Initializing server..."
 	uv venv --clear && \
 	source .venv/bin/activate && \
 	uv sync
 
+	@echo "Initializing..."
+	cd ./apps/vue && bun install
+	cd ./apps/next && bun install
+	
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
 	cd client && \
 	bun up --latest
 
-dev: clean setup ## Start the FastAPI server
+dev: clean rmi setup ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
 

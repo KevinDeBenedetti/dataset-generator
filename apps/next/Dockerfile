@@ -1,9 +1,10 @@
 FROM oven/bun:1 AS base
 
 RUN apt-get update -y \
-&& apt-get install -y openssl nodejs npm
+&& apt-get install -y openssl nodejs npm \
+&& rm -rf /var/lib/apt/lists/*
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
 COPY package.json bun.lock ./
 
@@ -13,4 +14,4 @@ COPY . .
 
 EXPOSE ${APP_PORT}
 
-CMD ["sh", "-c", "bun run dev", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "bun install && bun run dev"]
