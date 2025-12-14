@@ -1,7 +1,0 @@
-set -euo pipefail
-
-echo "🔍 Pre-commit: Running checks..."
-
-make lint
-
-echo "🎉 Pre-commit hook executed successfully!"

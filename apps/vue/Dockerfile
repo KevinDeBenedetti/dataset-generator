@@ -6,14 +6,14 @@ ARG APP_PORT
 # Stage: base
 # Common configuration for all stages
 # =============================================================================
-FROM docker.io/oven/bun:${BUN_VERSION} AS base
+FROM oven/bun:1 AS base
 
 ARG APP_PORT
 
 WORKDIR /app
 
 # Copy dependency files
-COPY client/package.json client/bun.lockb* ./
+COPY package.json bun.lock ./
 
 # =============================================================================
 # Stage: dependencies
@@ -36,7 +36,7 @@ ARG APP_PORT
 COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copy source code
-COPY client/. .
+COPY . .
 
 # Expose port
 EXPOSE ${APP_PORT}

@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/macos,python,node,vue,vuejs
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,python,node,vue,vuejs
 
+### Custom ###
+data/
+
 ### macOS ###
 # General
 .DS_Store

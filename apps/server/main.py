@@ -67,3 +67,8 @@ else:
 @app.get("/")
 async def root():
     return RedirectResponse(url="/docs", status_code=302)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
