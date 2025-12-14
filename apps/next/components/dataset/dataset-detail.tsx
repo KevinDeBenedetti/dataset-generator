@@ -1,42 +1,37 @@
-'use client'
+"use client";
 
-import { useState, useMemo, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
-import { QAList } from './qa-list'
-import { PaginationWrapper } from './pagination-wrapper'
-import { useQAByDataset } from '@/hooks/use-qa'
-import type { DatasetResponse } from '@/api/types'
+import { useState, useMemo } from "react";
+import { Loader2 } from "lucide-react";
+import { QAList } from "./qa-list";
+import { PaginationWrapper } from "./pagination-wrapper";
+import { useQAByDataset } from "@/hooks/use-qa";
+import type { DatasetResponse } from "@/api/types";
 
 interface DatasetDetailProps {
-  dataset: DatasetResponse | null
+  dataset: DatasetResponse | null;
 }
 
 export function DatasetDetail({ dataset }: DatasetDetailProps) {
-  const [page, setPage] = useState(1)
-  const limit = 10
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
-  const { data: qaResponse, isLoading } = useQAByDataset(dataset?.id || '', {
+  const { data: qaResponse, isLoading } = useQAByDataset(dataset?.id || "", {
     limit,
     offset: (page - 1) * limit,
     enabled: !!dataset?.id,
-  })
-
-  // Reset page when dataset changes
-  useEffect(() => {
-    setPage(1)
-  }, [dataset?.id])
+  });
 
   const currentPage = useMemo(() => {
-    return Math.floor((qaResponse?.offset || 0) / (qaResponse?.limit || 1)) + 1
-  }, [qaResponse])
+    return Math.floor((qaResponse?.offset || 0) / (qaResponse?.limit || 1)) + 1;
+  }, [qaResponse]);
 
   const totalPages = useMemo(() => {
-    return Math.ceil((qaResponse?.total_count || 0) / (qaResponse?.limit || 1))
-  }, [qaResponse])
+    return Math.ceil((qaResponse?.total_count || 0) / (qaResponse?.limit || 1));
+  }, [qaResponse]);
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-  }
+    setPage(newPage);
+  };
 
   if (!dataset) {
     return (
@@ -46,7 +41,7 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
           <span className="ml-2 text-gray-500">Loading dataset...</span>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -61,16 +56,16 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="font-medium">Total Q&A:</span>
-              <span className="ml-2">{qaResponse?.total_count ?? '-'}</span>
+              <span className="ml-2">{qaResponse?.total_count ?? "-"}</span>
             </div>
             <div>
               <span className="font-medium">Displayed:</span>
-              <span className="ml-2">{qaResponse?.returned_count ?? '-'}</span>
+              <span className="ml-2">{qaResponse?.returned_count ?? "-"}</span>
             </div>
             <div>
               <span className="font-medium">Dataset ID:</span>
               <span className="ml-2 text-xs text-gray-600">
-                {qaResponse?.dataset_id ?? '-'}
+                {qaResponse?.dataset_id ?? "-"}
               </span>
             </div>
           </div>
@@ -101,5 +96,5 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
         </>
       )}
     </div>
-  )
+  );
 }
