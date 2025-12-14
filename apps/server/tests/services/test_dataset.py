@@ -1,6 +1,7 @@
 """
 Tests for dataset service.
 """
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,7 @@ def test_dataset_service_get_or_create_new(test_db: Session):
     """Test getting or creating a new dataset."""
     service = DatasetService(test_db)
     dataset = service.get_or_create_dataset("new_dataset", "New description")
-    
+
     assert dataset is not None
     assert dataset.name == "new_dataset"
     assert dataset.description == "New description"
@@ -32,10 +33,10 @@ def test_dataset_service_get_or_create_existing(test_db: Session):
     test_db.add(existing)
     test_db.commit()
     test_db.refresh(existing)
-    
+
     service = DatasetService(test_db)
     dataset = service.get_or_create_dataset("existing_dataset", "New description")
-    
+
     # Should return existing dataset with original description
     assert dataset.id == existing.id
     assert dataset.description == "Original description"
@@ -48,9 +49,9 @@ def test_dataset_service_delete_dataset(test_db: Session):
     test_db.add(dataset)
     test_db.commit()
     test_db.refresh(dataset)
-    
+
     service.delete_dataset(dataset)
-    
+
     # Verify deletion
     deleted = test_db.query(Dataset).filter(Dataset.id == dataset.id).first()
     assert deleted is None
@@ -63,9 +64,9 @@ def test_dataset_service_update_description(test_db: Session):
     test_db.add(dataset)
     test_db.commit()
     test_db.refresh(dataset)
-    
+
     updated = service.update_dataset_description(dataset, "New description")
-    
+
     assert updated.description == "New description"
     assert updated.id == dataset.id
 
@@ -87,9 +88,9 @@ def test_get_datasets(test_db: Session):
     for ds in datasets:
         test_db.add(ds)
     test_db.commit()
-    
+
     result = get_datasets(test_db)
-    
+
     assert len(result) == 3
     assert all("id" in item for item in result)
     assert all("name" in item for item in result)
@@ -102,9 +103,9 @@ def test_get_dataset_by_id_success(test_db: Session):
     test_db.add(dataset)
     test_db.commit()
     test_db.refresh(dataset)
-    
+
     result = get_dataset_by_id(test_db, dataset.id)
-    
+
     assert result is not None
     assert result["id"] == dataset.id
     assert result["name"] == "test_dataset"
@@ -123,7 +124,7 @@ def test_get_dataset_by_id_with_qa_count(test_db: Session):
     test_db.add(dataset)
     test_db.commit()
     test_db.refresh(dataset)
-    
+
     # Add some QA records
     for i in range(5):
         qa = QASource.from_qa_generation(
@@ -137,9 +138,9 @@ def test_get_dataset_by_id_with_qa_count(test_db: Session):
         )
         test_db.add(qa)
     test_db.commit()
-    
+
     result = get_dataset_by_id(test_db, dataset.id)
-    
+
     assert result["qa_sources_count"] == 5
 
 
@@ -155,9 +156,9 @@ def test_analyze_dataset_similarities_empty(test_db: Session):
     test_db.add(dataset)
     test_db.commit()
     test_db.refresh(dataset)
-    
+
     result = analyze_dataset_similarities(test_db, dataset.id, threshold=0.8)
-    
+
     # Should handle empty dataset gracefully
     assert result is not None
 

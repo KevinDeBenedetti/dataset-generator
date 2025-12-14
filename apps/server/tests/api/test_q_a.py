@@ -1,7 +1,7 @@
 """
 Tests for Q&A API endpoints.
 """
-import pytest
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -38,7 +38,10 @@ def test_get_qa_by_dataset_empty(
 
 
 def test_get_qa_by_dataset(
-    client: TestClient, test_db: Session, sample_dataset_data: dict, sample_qa_data: dict
+    client: TestClient,
+    test_db: Session,
+    sample_dataset_data: dict,
+    sample_qa_data: dict,
 ):
     """Test getting Q&A records for a dataset."""
     # Create dataset
@@ -149,7 +152,10 @@ def test_get_qa_by_dataset_limit_validation(
 
 
 def test_get_qa_by_id(
-    client: TestClient, test_db: Session, sample_dataset_data: dict, sample_qa_data: dict
+    client: TestClient,
+    test_db: Session,
+    sample_dataset_data: dict,
+    sample_qa_data: dict,
 ):
     """Test getting a specific Q&A by ID."""
     # Create dataset
@@ -195,7 +201,10 @@ def test_get_qa_by_id_not_found(client: TestClient):
 
 
 def test_qa_response_includes_metadata(
-    client: TestClient, test_db: Session, sample_dataset_data: dict, sample_qa_data: dict
+    client: TestClient,
+    test_db: Session,
+    sample_dataset_data: dict,
+    sample_qa_data: dict,
 ):
     """Test that Q&A response includes metadata."""
     # Create dataset

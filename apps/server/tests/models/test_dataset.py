@@ -1,6 +1,7 @@
 """
 Tests for Dataset and QASource models.
 """
+
 import pytest
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -89,14 +90,14 @@ def test_qa_source_compute_hash():
         context="AI is a field of computer science.",
         source_url="https://example.com",
     )
-    
+
     hash2 = QASource.compute_hash_from_content(
         question="What is AI?",
         answer="Artificial Intelligence",
         context="AI is a field of computer science.",
         source_url="https://example.com",
     )
-    
+
     # Same content should produce same hash
     assert hash1 == hash2
     assert isinstance(hash1, str)
@@ -111,14 +112,14 @@ def test_qa_source_hash_different_for_different_content():
         context="Context 1",
         source_url="https://example.com",
     )
-    
+
     hash2 = QASource.compute_hash_from_content(
         question="What is ML?",
         answer="Machine Learning",
         context="Context 2",
         source_url="https://example.com",
     )
-    
+
     assert hash1 != hash2
 
 
@@ -148,7 +149,7 @@ def test_qa_source_check_for_duplicates_exact(test_db: Session):
         context="Python context",
         source_url="https://example.com",
     )
-    
+
     assert duplicate_check["type"] == "exact"
     assert duplicate_check["duplicate_id"] == qa1.id
     assert duplicate_check["similarity_score"] == 1.0
@@ -180,7 +181,7 @@ def test_qa_source_check_for_duplicates_new(test_db: Session):
         context="Java context",
         source_url="https://example.com/java",
     )
-    
+
     assert duplicate_check["type"] == "new"
     assert duplicate_check["duplicate_id"] is None
     assert duplicate_check["similarity_score"] == 0.0
@@ -213,7 +214,7 @@ def test_qa_source_check_for_duplicates_similar(test_db: Session):
         source_url="https://example.com",  # Same URL
         similarity_threshold=0.9,
     )
-    
+
     # This should detect as similar if similarity is high enough
     assert duplicate_check["type"] in ["similar", "exact"]
 
@@ -237,7 +238,7 @@ def test_qa_source_to_langfuse_dataset_item(test_db: Session):
     test_db.refresh(qa)
 
     langfuse_item = qa.to_langfuse_dataset_item()
-    
+
     assert "input" in langfuse_item
     assert "id" in langfuse_item
     assert "expected_output" in langfuse_item

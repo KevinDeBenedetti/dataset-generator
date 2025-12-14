@@ -1,8 +1,8 @@
 """
 Tests for LLM service.
 """
-import pytest
-from unittest.mock import MagicMock, patch, Mock
+
+from unittest.mock import MagicMock, patch
 from server.services.llm import LLMService, PromptManager
 
 
@@ -42,16 +42,16 @@ def test_clean_text_success(mock_openai_class):
     # Setup mock
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
-    
+
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "Cleaned text content"
     mock_client.chat.completions.create.return_value = mock_response
-    
+
     with patch("server.services.llm.instructor.from_openai"):
         service = LLMService()
         result = service.clean_text("Dirty text with ads and navigation")
-    
+
     assert result == "Cleaned text content"
     mock_client.chat.completions.create.assert_called_once()
 
@@ -63,12 +63,12 @@ def test_clean_text_failure_returns_original(mock_openai_class):
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
     mock_client.chat.completions.create.side_effect = Exception("API Error")
-    
+
     with patch("server.services.llm.instructor.from_openai"):
         service = LLMService()
         original_text = "Original text"
         result = service.clean_text(original_text)
-    
+
     assert result == original_text
 
 
@@ -79,19 +79,19 @@ def test_generate_qa_success(mock_instructor_from, mock_openai_class):
     # Setup mocks
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
-    
+
     mock_instructor_client = MagicMock()
     mock_instructor_from.return_value = mock_instructor_client
-    
+
     # Mock QA response
     mock_qa = MagicMock()
     mock_qa.question = "Test question?"
     mock_qa.answer = "Test answer"
     mock_instructor_client.chat.completions.create.return_value = [mock_qa]
-    
+
     service = LLMService()
     result = service.generate_qa("Sample text for QA generation")
-    
+
     assert len(result) == 1
     assert result[0].question == "Test question?"
     assert result[0].answer == "Test answer"
@@ -104,14 +104,14 @@ def test_generate_qa_failure_returns_empty(mock_instructor_from, mock_openai_cla
     # Setup mocks
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
-    
+
     mock_instructor_client = MagicMock()
     mock_instructor_from.return_value = mock_instructor_client
     mock_instructor_client.chat.completions.create.side_effect = Exception("API Error")
-    
+
     service = LLMService()
     result = service.generate_qa("Sample text")
-    
+
     assert result == []
 
 
@@ -121,23 +121,23 @@ def test_get_models_success(mock_openai_class):
     # Setup mock
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
-    
+
     mock_model1 = MagicMock()
     mock_model1.id = "gpt-4"
     mock_model1.object = "model"
-    
+
     mock_model2 = MagicMock()
     mock_model2.id = "gpt-3.5-turbo"
     mock_model2.object = "model"
-    
+
     mock_response = MagicMock()
     mock_response.data = [mock_model1, mock_model2]
     mock_client.models.list.return_value = mock_response
-    
+
     with patch("server.services.llm.instructor.from_openai"):
         service = LLMService()
         result = service.get_models()
-    
+
     assert len(result) == 2
     assert result[0]["id"] == "gpt-4"
     assert result[1]["id"] == "gpt-3.5-turbo"
@@ -150,9 +150,9 @@ def test_get_models_failure_returns_empty(mock_openai_class):
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
     mock_client.models.list.side_effect = Exception("API Error")
-    
+
     with patch("server.services.llm.instructor.from_openai"):
         service = LLMService()
         result = service.get_models()
-    
+
     assert result == []

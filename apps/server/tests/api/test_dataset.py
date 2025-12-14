@@ -1,7 +1,7 @@
 """
 Tests for dataset API endpoints.
 """
-import pytest
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -88,7 +88,9 @@ def test_get_all_datasets(client: TestClient, test_db: Session):
     assert all("name" in item for item in data)
 
 
-def test_get_dataset_by_id(client: TestClient, test_db: Session, sample_dataset_data: dict):
+def test_get_dataset_by_id(
+    client: TestClient, test_db: Session, sample_dataset_data: dict
+):
     """Test getting a specific dataset by ID."""
     dataset = Dataset(
         name=sample_dataset_data["name"],
@@ -112,7 +114,9 @@ def test_get_dataset_by_id_not_found(client: TestClient):
     assert "not found" in response.json()["detail"]
 
 
-def test_delete_dataset(client: TestClient, test_db: Session, sample_dataset_data: dict):
+def test_delete_dataset(
+    client: TestClient, test_db: Session, sample_dataset_data: dict
+):
     """Test deleting a dataset."""
     dataset = Dataset(
         name=sample_dataset_data["name"],
@@ -141,7 +145,10 @@ def test_delete_dataset_not_found(client: TestClient):
 
 
 def test_delete_dataset_with_qa_records(
-    client: TestClient, test_db: Session, sample_dataset_data: dict, sample_qa_data: dict
+    client: TestClient,
+    test_db: Session,
+    sample_dataset_data: dict,
+    sample_qa_data: dict,
 ):
     """Test deleting a dataset that has associated Q&A records."""
     # Create dataset

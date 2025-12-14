@@ -1,7 +1,7 @@
 """
 Tests for main application endpoints (health, root).
 """
-import pytest
+
 from fastapi.testclient import TestClient
 
 
