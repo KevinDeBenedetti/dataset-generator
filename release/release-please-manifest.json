@@ -1,6 +1,6 @@
 {
     "packages": {
-      ".": {
+      "release": {
         "package-name": "dataset-generator",
         "include-component-in-tag": false
       }
