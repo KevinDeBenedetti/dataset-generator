@@ -151,7 +151,3 @@ async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
         logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))

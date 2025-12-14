@@ -1,11 +1,12 @@
 import logging
-from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 
-from models.dataset import Dataset, QASource
-from core.database import get_db
-from services.langfuse import (
+from server.models.dataset import Dataset, QASource
+from server.core.database import get_db
+from server.services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
 )
@@ -120,10 +121,6 @@ async def export_dataset(
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception("Error exporting to Langfuse")
-        raise HTTPException(
-            status_code=500, detail=f"Error exporting to Langfuse: {str(e)}"
-        )
         logging.exception("Error exporting to Langfuse")
         raise HTTPException(
             status_code=500, detail=f"Error exporting to Langfuse: {str(e)}"
