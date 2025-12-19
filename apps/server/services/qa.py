@@ -110,7 +110,7 @@ class QAService:
         )
 
         return {
-            "new_pairs": len(qa_records),
-            "exact_duplicates_skipped": exact_duplicates,
-            "similar_duplicates_skipped": similar_duplicates,
+            "total": len(qa_records),
+            "exact_duplicates": exact_duplicates,
+            "similar_duplicates": similar_duplicates,
         }

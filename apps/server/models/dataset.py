@@ -177,6 +177,31 @@ class QASource(Base):
             },
         )
 
+    @property
+    def question(self) -> str:
+        """Get question from input JSON"""
+        return self.input.get("question", "")
+
+    @property
+    def answer(self) -> str:
+        """Get answer from expected_output JSON"""
+        return self.expected_output.get("answer", "")
+
+    @property
+    def context(self) -> str:
+        """Get context from input JSON"""
+        return self.input.get("context", "")
+
+    @property
+    def source_url(self) -> str:
+        """Get source_url from input JSON"""
+        return self.input.get("source_url", "")
+
+    @property
+    def confidence(self) -> float:
+        """Get confidence from expected_output JSON"""
+        return self.expected_output.get("confidence", 1.0)
+
     def to_langfuse_dataset_item(self) -> Dict[str, Any]:
         """Convert to Langfuse Dataset Item format"""
         item = {"input": self.input, "id": self.id}

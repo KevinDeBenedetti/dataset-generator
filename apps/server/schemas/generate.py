@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 from typing import List, Optional
 
 
@@ -28,8 +28,8 @@ class DatasetGenerationRequest(BaseModel):
         description="Similarity threshold to detect duplicates (0.0-1.0)",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "url": "https://example.com/document.pdf",
                 "dataset_name": "my_dataset",
@@ -39,6 +39,7 @@ class DatasetGenerationRequest(BaseModel):
                 "similarity_threshold": 0.9,
             }
         }
+    )
 
 
 class DatasetGenerationResponse(BaseModel):
@@ -56,8 +57,8 @@ class DatasetGenerationResponse(BaseModel):
     total_questions: int = Field(..., description="Total number of generated questions")
     processing_time: float = Field(..., description="Processing time in seconds")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "qa_pairs": [
@@ -75,6 +76,7 @@ class DatasetGenerationResponse(BaseModel):
                 "processing_time": 45.2,
             }
         }
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -83,10 +85,11 @@ class ErrorResponse(BaseModel):
     detail: str = Field(..., description="Detailed error description")
     error_code: Optional[str] = Field(None, description="Specific error code")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "detail": "Model 'invalid-model' not in available models: ['gpt-3.5-turbo', 'gpt-4']",
                 "error_code": "INVALID_MODEL",
             }
         }
+    )

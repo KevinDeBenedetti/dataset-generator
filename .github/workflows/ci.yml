@@ -21,14 +21,12 @@ jobs:
     with:
       python-version: ${{ needs.versions.outputs.python-version }}
       node-version: ${{ needs.versions.outputs.node-version }}
-      pnpm-version: ${{ needs.versions.outputs.pnpm-version }}
 
-  # unit-tests:
-  #   uses: ./.github/workflows/unit-tests.yml
-  #   needs:
-  #     - versions
-  #   with:
-  #     PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
+  test:
+    uses: ./.github/workflows/test.yml
+    needs: versions
+    with:
+      PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
 
   all-jobs-passed:
     name: Check jobs status
@@ -37,7 +35,7 @@ jobs:
     needs:
       - versions
       - lint
-      # - unit-tests
+      - test
     steps:
       - name: Check status of all required jobs
         run: |-

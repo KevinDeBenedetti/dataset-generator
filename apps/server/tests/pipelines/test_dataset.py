@@ -49,7 +49,7 @@ class TestDatasetPipeline:
         mock_dataset_service_class.return_value = mock_dataset_service
 
         mock_page_snapshot = Mock()
-        mock_page_snapshot.id = 1
+        mock_page_snapshot.id = "1"
         mock_page_snapshot.content = "Original scraped content"
 
         mock_scraper_service = Mock()
@@ -80,7 +80,7 @@ class TestDatasetPipeline:
             url="https://example.com",
             dataset_name="test_dataset",
             model_cleaning="gpt-4o-mini",
-            target_language="french",
+            target_language="fr",
             model_qa="gpt-4o-mini",
             similarity_threshold=0.9,
         )
@@ -110,7 +110,7 @@ class TestDatasetPipeline:
                 url="https://example.com",
                 dataset_name="test_dataset",
                 model_cleaning="gpt-4o-mini",
-                target_language="french",
+                target_language="fr",
                 model_qa="gpt-4o-mini",
                 similarity_threshold=None,
             )
@@ -124,12 +124,21 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
-            with patch.object(pipeline.scraper_service, "scrape_url"):
-                with patch.object(pipeline.llm_service, "clean_text"):
-                    with patch.object(pipeline.llm_service, "generate_qa"):
+            with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
+                mock_page = Mock()
+                mock_page.id = "1"
+                mock_page.content = "Test content"
+                mock_scrape.return_value = mock_page
+
+                with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
+                    mock_clean.return_value = "cleaned text"
+
+                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                        mock_gen_qa.return_value = []
+
                         with patch.object(
                             pipeline.qa_service, "process_qa_pairs"
                         ) as mock_process_qa:
@@ -143,13 +152,13 @@ class TestDatasetPipeline:
                                 url="https://example.com",
                                 dataset_name="test_dataset",
                                 model_cleaning="gpt-4o-mini",
-                                target_language="french",
+                                target_language="fr",
                                 model_qa="gpt-4o-mini",
-                                similarity_threshold="invalid",  # Invalid type
+                                similarity_threshold="0.5",  # String type - should be converted to float
                             )
 
-                            # Should convert to 0.9 (default)
-                            assert result["similarity_threshold"] == 0.9
+                            # Should convert string to float successfully
+                            assert result["similarity_threshold"] == 0.5
 
     @pytest.mark.asyncio
     async def test_process_url_out_of_range_similarity_threshold(
@@ -160,12 +169,21 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
-            with patch.object(pipeline.scraper_service, "scrape_url"):
-                with patch.object(pipeline.llm_service, "clean_text"):
-                    with patch.object(pipeline.llm_service, "generate_qa"):
+            with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
+                mock_page = Mock()
+                mock_page.id = "1"
+                mock_page.content = "Test content"
+                mock_scrape.return_value = mock_page
+
+                with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
+                    mock_clean.return_value = "cleaned text"
+
+                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                        mock_gen_qa.return_value = []
+
                         with patch.object(
                             pipeline.qa_service, "process_qa_pairs"
                         ) as mock_process_qa:
@@ -180,7 +198,7 @@ class TestDatasetPipeline:
                                 url="https://example.com",
                                 dataset_name="test_dataset",
                                 model_cleaning="gpt-4o-mini",
-                                target_language="french",
+                                target_language="fr",
                                 model_qa="gpt-4o-mini",
                                 similarity_threshold=1.5,
                             )
@@ -191,7 +209,7 @@ class TestDatasetPipeline:
                                 url="https://example.com",
                                 dataset_name="test_dataset2",
                                 model_cleaning="gpt-4o-mini",
-                                target_language="french",
+                                target_language="fr",
                                 model_qa="gpt-4o-mini",
                                 similarity_threshold=-0.5,
                             )
@@ -204,12 +222,12 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
             with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
                 mock_page = Mock()
-                mock_page.id = 1
+                mock_page.id = "1"
                 mock_page.content = "content"
                 mock_scrape.return_value = mock_page
 
@@ -249,7 +267,7 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
             with patch.object(
@@ -262,7 +280,7 @@ class TestDatasetPipeline:
                         url="https://example.com",
                         dataset_name="test_dataset",
                         model_cleaning="gpt-4o-mini",
-                        target_language="french",
+                        target_language="fr",
                         model_qa="gpt-4o-mini",
                     )
 
@@ -273,12 +291,12 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
             with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
                 mock_page = Mock()
-                mock_page.id = 1
+                mock_page.id = "1"
                 mock_page.content = "content"
                 mock_scrape.return_value = mock_page
 
@@ -292,7 +310,7 @@ class TestDatasetPipeline:
                             url="https://example.com",
                             dataset_name="test_dataset",
                             model_cleaning="gpt-4o-mini",
-                            target_language="french",
+                            target_language="fr",
                             model_qa="gpt-4o-mini",
                         )
 
@@ -303,12 +321,12 @@ class TestDatasetPipeline:
             pipeline.dataset_service, "get_or_create_dataset"
         ) as mock_get_dataset:
             mock_dataset = Mock()
-            mock_dataset.id = 1
+            mock_dataset.id = "1"
             mock_get_dataset.return_value = mock_dataset
 
             with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
                 mock_page = Mock()
-                mock_page.id = 1
+                mock_page.id = "1"
                 mock_page.content = "content"
                 mock_scrape.return_value = mock_page
 
@@ -326,7 +344,7 @@ class TestDatasetPipeline:
                                     url="https://example.com",
                                     dataset_name="test_dataset",
                                     model_cleaning="gpt-4o-mini",
-                                    target_language="french",
+                                    target_language="fr",
                                     model_qa="gpt-4o-mini",
                                 )
 
@@ -337,7 +355,7 @@ class TestDatasetPipeline:
         """Test that a new dataset is created if it doesn't exist"""
         with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
             mock_page = Mock()
-            mock_page.id = 1
+            mock_page.id = "1"
             mock_page.content = "content"
             mock_scrape.return_value = mock_page
 
@@ -363,7 +381,7 @@ class TestDatasetPipeline:
                                 url="https://example.com",
                                 dataset_name="brand_new_dataset",
                                 model_cleaning="gpt-4o-mini",
-                                target_language="french",
+                                target_language="fr",
                                 model_qa="gpt-4o-mini",
                             )
 
@@ -383,7 +401,7 @@ class TestDatasetPipeline:
         """Test complete flow from URL to QA pairs"""
         with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
             mock_page = Mock()
-            mock_page.id = 1
+            mock_page.id = "1"
             mock_page.content = "Raw content from web page"
             mock_scrape.return_value = mock_page
 
@@ -417,7 +435,7 @@ class TestDatasetPipeline:
                                 url="https://example.com/article",
                                 dataset_name="complete_flow_test",
                                 model_cleaning="gpt-4o-mini",
-                                target_language="french",
+                                target_language="fr",
                                 model_qa="gpt-4o-mini",
                                 similarity_threshold=0.85,
                             )
@@ -429,7 +447,7 @@ class TestDatasetPipeline:
                             )
                             mock_save.assert_called_once()
                             mock_gen_qa.assert_called_once_with(
-                                "Cleaned and formatted content", "french", "gpt-4o-mini"
+                                "Cleaned and formatted content", "fr", "gpt-4o-mini"
                             )
                             mock_process.assert_called_once()
 
