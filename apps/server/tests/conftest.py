@@ -58,10 +58,8 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
         version="0.0.1",
     )
 
-    from typing import cast
-
     test_app.add_middleware(
-        cast(Any, CORSMiddleware),
+        CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],

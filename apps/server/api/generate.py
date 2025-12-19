@@ -116,17 +116,7 @@ async def create_dataset_for_url(
                 detail="Failed to retrieve dataset ID after generation",
             )
 
-        return DatasetGenerationResponse(
-            id=dataset_id,
-            qa_pairs=qa_pairs,
-            dataset_name=request.dataset_name,
-            model_cleaning=model_cleaning,
-            target_language=target_language,
-            model_qa=model_qa,
-            similarity_threshold=request.similarity_threshold,
-            total_questions=len(qa_pairs),
-            processing_time=processing_time,
-        )
+        return DatasetGenerationResponse(**response_data)
 
     except HTTPException:
         raise
