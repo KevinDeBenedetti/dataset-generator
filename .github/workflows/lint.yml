@@ -19,6 +19,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-cache-${{ runner.os }}-py-${{ inputs.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
+          restore-keys: |
+            pip-cache-${{ runner.os }}-py-
+
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
@@ -35,10 +43,19 @@ jobs:
 
   lint-next:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Cache bun
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun
+            apps/next/node_modules
+          key: bun-cache-${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('apps/next/bun.lockb', 'apps/next/package.json') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-node-
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
@@ -56,10 +73,19 @@ jobs:
 
   lint-vue:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Cache bun
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun
+            apps/vue/node_modules
+          key: bun-cache-${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('apps/vue/bun.lockb', 'apps/vue/package.json') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-node-
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
