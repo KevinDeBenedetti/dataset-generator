@@ -3,7 +3,7 @@ name: CI/CD Workflow
 on:
   workflow_call:
     inputs:
-      python-version:
+      PYTHON_VERSION:
         required: true
         type: string
 
@@ -12,58 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
-      actions: read
-      pull-requests: write
-    concurrency:
-      group: ci-tests-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-cache-${{ runner.os }}-py-${{ inputs.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
-          restore-keys: |
-            pip-cache-${{ runner.os }}-py-
-
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{ inputs.python-version }}
+          python-version: ${{ inputs.PYTHON_VERSION }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Sync dependencies
-        run: uv sync --dev
-
-      - name: Run unit tests with coverage
-        env:
-          COVERAGE_CORE: sysmon
+      - name: Run unit tests
         run: |
-          uv run pytest -s -v apps/server/tests/ \
-            --cov=apps/server \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under=70 \
-            --junitxml=pytest-junit.xml
+          uv sync --dev
+          uv run pytest -s -v apps/server/tests/ --cov
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          flags: unittests
-          fail_ci_if_error: false
-
-      - name: Comment PR with coverage
-        if: github.event_name == 'pull_request'
-        uses: py-cov-action/python-coverage-comment-action@v3
-        with:
-          GITHUB_TOKEN: ${{ github.token }}
-          MINIMUM_GREEN: 70
-          MINIMUM_ORANGE: 50

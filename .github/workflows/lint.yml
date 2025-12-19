@@ -11,10 +11,19 @@ on:
         description: "Node.js version to use"
         required: true
         type: string
+      bun-image:
+        description: "Bun image to use"
+        required: true
+        type: string
 
 jobs:
   lint-server:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ${{ inputs.python-version }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
