@@ -45,14 +45,15 @@ jobs:
         env:
           COVERAGE_CORE: sysmon
         run: |
-          uv run pytest -s -v apps/server/tests/ \
-            --cov=apps/server \
-            --cov-config=pytest.ini \
+          cd apps/server
+          uv run pytest -s -v tests/ \
+            --cov=. \
+            --cov-config=../../pytest.ini \
             --cov-report=term-missing \
-            --cov-report=html:apps/server/htmlcov \
-            --cov-report=xml:apps/server/coverage.xml \
+            --cov-report=html:htmlcov \
+            --cov-report=xml:coverage.xml \
             --cov-fail-under=70 \
-            --junitxml=apps/server/pytest-junit.xml
+            --junitxml=pytest-junit.xml
 
       - name: Ensure coverage HTML exists
         if: always()
@@ -85,6 +86,6 @@ jobs:
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
-          COVERAGE_PATH: apps/server/coverage.xml
+          COVERAGE_PATH: apps/server
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
