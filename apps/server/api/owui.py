@@ -191,7 +191,7 @@ async def get_knowledge_enrichment(
                 ] = await client_instructor.chat.completions.create(
                     model=model,
                     response_model=list[UnitQuestionAnswer],
-                    messages=[  # type: ignore
+                    messages=[
                         {
                             "role": "user",
                             "content": f"Generate question answer pairs from the following content:\n{chunk}",
@@ -219,7 +219,7 @@ async def get_knowledge_enrichment(
                         qa_confidence = 1.0
 
                     file_contents.append(
-                        UnitQuestionAnswerResponse(  # type: ignore
+                        UnitQuestionAnswerResponse(
                             file_id=file_id,
                             dataset_id=dataset_id,
                             question=qa_question,

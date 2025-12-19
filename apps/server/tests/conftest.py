@@ -58,7 +58,7 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
         version="0.0.1",
     )
 
-    test_app.add_middleware(  # type: ignore
+    test_app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,

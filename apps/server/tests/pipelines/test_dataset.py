@@ -145,7 +145,7 @@ class TestDatasetPipeline:
                                 model_cleaning="gpt-4o-mini",
                                 target_language="french",
                                 model_qa="gpt-4o-mini",
-                                similarity_threshold="invalid",  # type: ignore  # Invalid type
+                                similarity_threshold="invalid",  # Invalid type
                             )
 
                             # Should convert to 0.9 (default)
@@ -233,9 +233,9 @@ class TestDatasetPipeline:
                             await pipeline.process_url(
                                 url="https://example.com",
                                 dataset_name="test_dataset",
-                                model_cleaning=ModelName.gpt_4o_mini,  # type: ignore
+                                model_cleaning=ModelName.gpt_4o_mini,
                                 target_language=TargetLanguage.fr,
-                                model_qa=ModelName.gpt_4o_mini,  # type: ignore
+                                model_qa=ModelName.gpt_4o_mini,
                             )
 
                             # Verify enum values were converted to strings

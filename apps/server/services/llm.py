@@ -83,7 +83,7 @@ class LLMService:
         target_language = target_language or config.target_language
         model = model or config.model_qa
         try:
-            result = self.instructor_client.chat.completions.create(  # type: ignore
+            result = self.instructor_client.chat.completions.create(
                 model=model,
                 response_model=list[QA],
                 messages=[

@@ -128,7 +128,7 @@ async def create_dataset_for_url(
                 detail="Failed to retrieve dataset ID after generation",
             )
 
-        return DatasetGenerationResponse(**response_data)  # type: ignore
+        return DatasetGenerationResponse(**response_data)
 
     except HTTPException:
         raise

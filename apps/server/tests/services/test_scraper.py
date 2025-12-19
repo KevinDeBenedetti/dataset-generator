@@ -253,7 +253,7 @@ class TestScraperService:
         )
 
         assert result.url_hash is not None
-        assert len(result.url_hash) > 0  # type: ignore
+        assert len(result.url_hash) > 0
         # Verify hash is consistent
         expected_hash = PageSnapshot.compute_hash_from_url("https://example.com/page")
         assert result.url_hash == expected_hash
@@ -296,7 +296,7 @@ class TestScraperService:
 
         # Save cleaned text
         cleaned = scraper_service.save_cleaned_text(
-            page_snapshot_id=int(snapshot.id),  # type: ignore
+            page_snapshot_id=int(snapshot.id),
             content="Cleaned content here",
             language="french",
             model="gpt-4o-mini",
@@ -325,7 +325,7 @@ class TestScraperService:
         db.refresh(snapshot)
 
         cleaned = scraper_service.save_cleaned_text(
-            page_snapshot_id=int(snapshot.id),  # type: ignore
+            page_snapshot_id=int(snapshot.id),
             content="",
             language="english",
             model="gpt-4o-mini",
