@@ -64,35 +64,37 @@ setup: ## Initialize client
 	cd ./apps/vue && bun install
 	cd ./apps/next && bun install
 
+
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
 	cd client && \
 	bun up --latest
 
+
 dev: clean rmi setup ## Start the FastAPI server
 	@echo "Starting API server..."
 	docker compose up -d
 
+
 dev-local: clean setup ## Start the FastAPI server without Docker
 	@echo "Starting API server..."
 	uv run uvicorn --host 0.0.0.0 server.main:app --reload
-# 	cd server && \
-# 		uv run uvicorn --host 0.0.0.0 main:app --reload
+
 
 install:
 	@echo "Installing dependencies..."
-	cd server && PYTHONPATH=$(PWD)/server uv sync --all-groups --dev
+	uv sync --all-groups --dev
+
 
 test: install
 	echo "Running tests..."
-	cp .env.example .env
-	cd server && PYTHONPATH=$(PWD)/server uv run pytest -s -v tests/ --cov=api --cov-report=term-missing
-	rm .env
+	uv run pytest -s -v apps/server/tests/ --cov
+
 
 up-backend-local: ## Start the FastAPI server without Docker
 	@echo "Starting API server..."
-	cp .env.example server/.env
-	cd server && \
+	cp .env.example apps/server/.env
+	cd apps/server && \
 		uv run uvicorn --host 0.0.0.0 main:app --reload
 	rm server/.env
 

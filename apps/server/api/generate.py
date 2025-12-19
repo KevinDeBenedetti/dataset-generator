@@ -138,11 +138,3 @@ async def create_dataset_for_url(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Unexpected error in create_dataset_for_url: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while processing your request.",
-        )
