@@ -36,7 +36,9 @@ def valid_request_data():
 class TestGenerateDataset:
     """Tests for the generate dataset endpoint"""
 
-    def test_create_dataset_success(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_success(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test successful dataset creation"""
         # Mock successful pipeline execution
         mock_pipeline.process_url.return_value = {
@@ -78,7 +80,9 @@ class TestGenerateDataset:
         call_args = mock_pipeline.process_url.call_args
         assert call_args is not None
 
-    def test_create_dataset_invalid_cleaning_model(self, valid_request_data, db: Session):
+    def test_create_dataset_invalid_cleaning_model(
+        self, valid_request_data, db: Session
+    ):
         """Test dataset creation with invalid cleaning model"""
         valid_request_data["model_cleaning"] = "invalid-model"
 
@@ -128,7 +132,9 @@ class TestGenerateDataset:
 
         assert response.status_code == 422
 
-    def test_create_dataset_with_qa_pairs(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_with_qa_pairs(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test dataset creation that returns QA pairs"""
         # Mock QA pair objects
         mock_qa = Mock()
@@ -151,7 +157,9 @@ class TestGenerateDataset:
         assert data["qa_pairs"][0]["question"] == "What is this?"
         assert data["total_questions"] == 1
 
-    def test_create_dataset_with_dict_qa_pairs(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_with_dict_qa_pairs(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test dataset creation with QA pairs as dictionaries"""
         mock_pipeline.process_url.return_value = {
             "qa_pairs": [
@@ -171,7 +179,9 @@ class TestGenerateDataset:
         assert len(data["qa_pairs"]) == 2
         assert data["total_questions"] == 2
 
-    def test_create_dataset_pipeline_exception(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_pipeline_exception(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test handling of pipeline exceptions"""
         mock_pipeline.process_url.side_effect = Exception("Pipeline error")
 
@@ -226,6 +236,7 @@ class TestGenerateDataset:
 
     def test_create_dataset_all_languages(self, mock_pipeline, db: Session):
         """Test dataset creation with all supported languages"""
+
         def mock_process(*args, **kwargs):
             return {
                 "qa_pairs": [],
@@ -248,7 +259,9 @@ class TestGenerateDataset:
             response = client.post("/dataset/generate", json=request_data)
             assert response.status_code == 201, f"Failed for language {lang}"
 
-    def test_create_dataset_response_structure(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_response_structure(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test that response has correct structure"""
         mock_pipeline.process_url.return_value = {
             "qa_pairs": [],
@@ -274,7 +287,9 @@ class TestGenerateDataset:
         assert "similarity_threshold" in data
         assert "total_questions" in data
 
-    def test_create_dataset_missing_dataset_id(self, mock_pipeline, valid_request_data, db: Session):
+    def test_create_dataset_missing_dataset_id(
+        self, mock_pipeline, valid_request_data, db: Session
+    ):
         """Test handling when dataset_id is missing from pipeline result"""
         mock_pipeline.process_url.return_value = {
             "qa_pairs": [],
@@ -288,4 +303,3 @@ class TestGenerateDataset:
 
         assert response.status_code == 500
         assert "dataset ID" in response.json()["detail"].lower()
-

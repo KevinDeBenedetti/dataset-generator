@@ -65,9 +65,11 @@ class TestQAService:
         assert result.question == "What is FastAPI?"
         assert result.answer == "A modern web framework"
 
-    def test_delete_qa_source(self, qa_service: QAService, sample_qa_source: QASource, db: Session):
+    def test_delete_qa_source(
+        self, qa_service: QAService, sample_qa_source: QASource, db: Session
+    ):
         """Test deleting a QASource"""
-        qa_id = sample_qa_source.id
+        qa_id = str(sample_qa_source.id)
 
         qa_service.delete_qa_source(qa_id)
 
@@ -87,7 +89,7 @@ class TestQAService:
             "confidence": 0.95,
         }
 
-        result = qa_service.update_qa_source(sample_qa_source.id, updates)
+        result = qa_service.update_qa_source(str(sample_qa_source.id), updates)
 
         assert result.question == "What is Python used for?"
         assert result.confidence == 0.95
@@ -99,7 +101,7 @@ class TestQAService:
 
     def test_get_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
         """Test retrieving a QASource by ID"""
-        result = qa_service.get_qa_source(sample_qa_source.id)
+        result = qa_service.get_qa_source(str(sample_qa_source.id))
 
         assert result.id == sample_qa_source.id
         assert result.question == sample_qa_source.question
@@ -140,7 +142,9 @@ class TestQAService:
         assert result["similar_duplicates"] == 0
 
         # Verify QA records were saved
-        qa_records = db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
+        qa_records = (
+            db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
+        )
         assert len(qa_records) == 2
 
     def test_process_qa_pairs_exact_duplicate(
@@ -216,7 +220,9 @@ class TestQAService:
 
         assert result["total"] == 1
         # Should use default confidence of 1.0
-        qa_record = db.query(QASource).filter(QASource.question == "What is Redis?").first()
+        qa_record = (
+            db.query(QASource).filter(QASource.question == "What is Redis?").first()
+        )
         assert qa_record.confidence == 1.0
 
     def test_process_qa_pairs_mixed_results(

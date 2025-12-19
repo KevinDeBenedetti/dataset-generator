@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from server.models.dataset import QASource
 
@@ -51,7 +51,7 @@ class QAService:
         page_snapshot_id: int,
         dataset_name: str,
         model: str,
-        dataset_id: str = None,
+        dataset_id: Optional[str] = None,
         similarity_threshold: float = 0.9,
     ) -> Dict[str, int]:
         """Processes and saves QA pairs, checking for duplicates"""
@@ -71,15 +71,17 @@ class QAService:
 
             if duplicate_check["type"] == "exact":
                 exact_duplicates += 1
-                logging.info(
-                    f"Exact duplicate found (ID: {duplicate_check['duplicate_id'][:8]}...), skipping"
-                )
+                dup_id = duplicate_check.get("duplicate_id")
+                dup_id_str = dup_id[:8] if dup_id else "unknown"
+                logging.info(f"Exact duplicate found (ID: {dup_id_str}...), skipping")
 
             elif duplicate_check["type"] == "similar":
                 similar_duplicates += 1
                 similarity_score = duplicate_check["similarity_score"]
+                dup_id = duplicate_check.get("duplicate_id")
+                dup_id_str = dup_id[:8] if dup_id else "unknown"
                 logging.info(
-                    f"Similar question found (similarity: {similarity_score:.2f}, ID: {duplicate_check['duplicate_id'][:8]}...), skipping"
+                    f"Similar question found (similarity: {similarity_score:.2f}, ID: {dup_id_str}...), skipping"
                 )
 
             else:  # new

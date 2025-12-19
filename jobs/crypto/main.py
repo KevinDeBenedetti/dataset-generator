@@ -3,7 +3,8 @@ import requests
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 import logging
 
 # --- Configuration ---
@@ -57,7 +58,7 @@ def save_json(data, filename: str):
     return filepath
 
 
-def main(limit: int = None):
+def main(limit: Optional[int] = None):
     coins = fetch_all_coins()
     if not coins:
         logging.error("No coins fetched; exiting.")
@@ -66,7 +67,7 @@ def main(limit: int = None):
     if limit is not None:
         coins = coins[:limit]
 
-    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     # 1) Save full list of coins
     save_json(coins, f"all_coins_{timestamp}.json")
 

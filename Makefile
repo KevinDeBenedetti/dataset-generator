@@ -42,8 +42,9 @@ rmi: clean
 
 lint:  ## Run linting
 	@echo "Server linting..."
-	uv run ruff check --fix && \
+	uv run ruff check --fix
 	uv run ruff format
+	uv run ty check
 
 	@echo "Client linting..."
 	cd ./apps/vue && \
@@ -84,6 +85,7 @@ dev-local: clean setup ## Start the FastAPI server without Docker
 install:
 	@echo "Installing dependencies..."
 	uv sync --all-groups --dev
+
 
 
 test: install

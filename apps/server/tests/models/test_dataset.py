@@ -44,7 +44,7 @@ def test_qa_source_from_qa_generation(test_db: Session):
         context="Python is widely used for web development.",
         confidence=0.95,
         source_url="https://example.com/python",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
         index=0,
     )
     test_db.add(qa)
@@ -136,7 +136,7 @@ def test_qa_source_check_for_duplicates_exact(test_db: Session):
         context="Python context",
         confidence=0.9,
         source_url="https://example.com",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa1)
     test_db.commit()
@@ -168,7 +168,7 @@ def test_qa_source_check_for_duplicates_new(test_db: Session):
         context="Python context",
         confidence=0.9,
         source_url="https://example.com",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa1)
     test_db.commit()
@@ -200,7 +200,7 @@ def test_qa_source_check_for_duplicates_similar(test_db: Session):
         context="Python is great for web development.",
         confidence=0.9,
         source_url="https://example.com",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa1)
     test_db.commit()
@@ -231,7 +231,7 @@ def test_qa_source_to_langfuse_dataset_item(test_db: Session):
         context="Test context",
         confidence=0.95,
         source_url="https://example.com",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa)
     test_db.commit()
@@ -264,7 +264,7 @@ def test_qa_source_metadata_generation(test_db: Session):
         context=context,
         confidence=0.92,
         source_url="https://example.com/ml",
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa)
     test_db.commit()

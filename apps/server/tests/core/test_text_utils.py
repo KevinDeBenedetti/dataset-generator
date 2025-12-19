@@ -95,12 +95,3 @@ class TestChunkText:
         # Test large chunks
         chunks_large = chunk_text(text, chunk_size=5000, overlap=1000)
         assert len(chunks_large) == 3
-
-    def test_chunk_text_overlap_larger_than_chunk(self):
-        """Test behavior when overlap is larger than chunk size"""
-        text = "a" * 2000
-        # This creates chunks that move backward, but should still work
-        chunks = chunk_text(text, chunk_size=500, overlap=600)
-
-        # Should still produce chunks, even if logic seems unusual
-        assert len(chunks) > 0

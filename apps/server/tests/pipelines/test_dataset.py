@@ -106,7 +106,7 @@ class TestDatasetPipeline:
             mock_process.return_value = {"similarity_threshold": 0.9}
 
             pipeline = DatasetPipeline(db)
-            result = await pipeline.process_url(
+            await pipeline.process_url(
                 url="https://example.com",
                 dataset_name="test_dataset",
                 model_cleaning="gpt-4o-mini",
@@ -116,9 +116,13 @@ class TestDatasetPipeline:
             )
 
     @pytest.mark.asyncio
-    async def test_process_url_invalid_similarity_threshold_type(self, pipeline: DatasetPipeline):
+    async def test_process_url_invalid_similarity_threshold_type(
+        self, pipeline: DatasetPipeline
+    ):
         """Test handling of invalid similarity threshold type"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
@@ -126,7 +130,9 @@ class TestDatasetPipeline:
             with patch.object(pipeline.scraper_service, "scrape_url"):
                 with patch.object(pipeline.llm_service, "clean_text"):
                     with patch.object(pipeline.llm_service, "generate_qa"):
-                        with patch.object(pipeline.qa_service, "process_qa_pairs") as mock_process_qa:
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
                             mock_process_qa.return_value = {
                                 "total": 0,
                                 "exact_duplicates": 0,
@@ -139,16 +145,20 @@ class TestDatasetPipeline:
                                 model_cleaning="gpt-4o-mini",
                                 target_language="french",
                                 model_qa="gpt-4o-mini",
-                                similarity_threshold="invalid",  # Invalid type
+                                similarity_threshold="invalid",  # type: ignore  # Invalid type
                             )
 
                             # Should convert to 0.9 (default)
                             assert result["similarity_threshold"] == 0.9
 
     @pytest.mark.asyncio
-    async def test_process_url_out_of_range_similarity_threshold(self, pipeline: DatasetPipeline):
+    async def test_process_url_out_of_range_similarity_threshold(
+        self, pipeline: DatasetPipeline
+    ):
         """Test clamping of out-of-range similarity threshold"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
@@ -156,7 +166,9 @@ class TestDatasetPipeline:
             with patch.object(pipeline.scraper_service, "scrape_url"):
                 with patch.object(pipeline.llm_service, "clean_text"):
                     with patch.object(pipeline.llm_service, "generate_qa"):
-                        with patch.object(pipeline.qa_service, "process_qa_pairs") as mock_process_qa:
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
                             mock_process_qa.return_value = {
                                 "total": 0,
                                 "exact_duplicates": 0,
@@ -188,7 +200,9 @@ class TestDatasetPipeline:
     @pytest.mark.asyncio
     async def test_process_url_with_enum_parameters(self, pipeline: DatasetPipeline):
         """Test processing with enum parameters instead of strings"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
@@ -202,38 +216,46 @@ class TestDatasetPipeline:
                 with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                     mock_clean.return_value = "cleaned"
 
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
-                        with patch.object(pipeline.qa_service, "process_qa_pairs") as mock_process_qa:
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
                             mock_process_qa.return_value = {
                                 "total": 0,
                                 "exact_duplicates": 0,
                                 "similar_duplicates": 0,
                             }
 
-                            result = await pipeline.process_url(
+                            await pipeline.process_url(
                                 url="https://example.com",
                                 dataset_name="test_dataset",
-                                model_cleaning=ModelName.GPT4O_MINI,
-                                target_language=TargetLanguage.FRENCH,
-                                model_qa=ModelName.GPT4O_MINI,
+                                model_cleaning=ModelName.gpt_4o_mini,  # type: ignore
+                                target_language=TargetLanguage.fr,
+                                model_qa=ModelName.gpt_4o_mini,  # type: ignore
                             )
 
                             # Verify enum values were converted to strings
                             assert mock_clean.call_args[0][1] == "gpt-4o-mini"
-                            assert mock_gen_qa.call_args[0][1] == "french"
+                            assert mock_gen_qa.call_args[0][1] == "fr"
 
     @pytest.mark.asyncio
     async def test_process_url_scraping_error(self, pipeline: DatasetPipeline):
         """Test handling of scraping errors"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
 
             with patch.object(
-                pipeline.scraper_service, "scrape_url", side_effect=Exception("Scraping failed")
+                pipeline.scraper_service,
+                "scrape_url",
+                side_effect=Exception("Scraping failed"),
             ):
                 with pytest.raises(Exception, match="Scraping failed"):
                     await pipeline.process_url(
@@ -247,7 +269,9 @@ class TestDatasetPipeline:
     @pytest.mark.asyncio
     async def test_process_url_llm_cleaning_error(self, pipeline: DatasetPipeline):
         """Test handling of LLM cleaning errors"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
@@ -259,7 +283,9 @@ class TestDatasetPipeline:
                 mock_scrape.return_value = mock_page
 
                 with patch.object(
-                    pipeline.llm_service, "clean_text", side_effect=Exception("LLM error")
+                    pipeline.llm_service,
+                    "clean_text",
+                    side_effect=Exception("LLM error"),
                 ):
                     with pytest.raises(Exception, match="LLM error"):
                         await pipeline.process_url(
@@ -273,7 +299,9 @@ class TestDatasetPipeline:
     @pytest.mark.asyncio
     async def test_process_url_qa_generation_error(self, pipeline: DatasetPipeline):
         """Test handling of QA generation errors"""
-        with patch.object(pipeline.dataset_service, "get_or_create_dataset") as mock_get_dataset:
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
             mock_dataset = Mock()
             mock_dataset.id = 1
             mock_get_dataset.return_value = mock_dataset
@@ -303,7 +331,9 @@ class TestDatasetPipeline:
                                 )
 
     @pytest.mark.asyncio
-    async def test_process_url_creates_new_dataset(self, pipeline: DatasetPipeline, db: Session):
+    async def test_process_url_creates_new_dataset(
+        self, pipeline: DatasetPipeline, db: Session
+    ):
         """Test that a new dataset is created if it doesn't exist"""
         with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
             mock_page = Mock()
@@ -315,10 +345,14 @@ class TestDatasetPipeline:
                 mock_clean.return_value = "cleaned"
 
                 with patch.object(pipeline.scraper_service, "save_cleaned_text"):
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
-                        with patch.object(pipeline.qa_service, "process_qa_pairs") as mock_process_qa:
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
                             mock_process_qa.return_value = {
                                 "total": 0,
                                 "exact_duplicates": 0,
@@ -343,7 +377,9 @@ class TestDatasetPipeline:
                             assert result["dataset_id"] == dataset.id
 
     @pytest.mark.asyncio
-    async def test_process_url_complete_flow(self, pipeline: DatasetPipeline, db: Session):
+    async def test_process_url_complete_flow(
+        self, pipeline: DatasetPipeline, db: Session
+    ):
         """Test complete flow from URL to QA pairs"""
         with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
             mock_page = Mock()
@@ -354,8 +390,12 @@ class TestDatasetPipeline:
             with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                 mock_clean.return_value = "Cleaned and formatted content"
 
-                with patch.object(pipeline.scraper_service, "save_cleaned_text") as mock_save:
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                with patch.object(
+                    pipeline.scraper_service, "save_cleaned_text"
+                ) as mock_save:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_qa1 = Mock()
                         mock_qa1.question = "Q1?"
                         mock_qa1.answer = "A1"
@@ -364,7 +404,9 @@ class TestDatasetPipeline:
                         mock_qa2.answer = "A2"
                         mock_gen_qa.return_value = [mock_qa1, mock_qa2]
 
-                        with patch.object(pipeline.qa_service, "process_qa_pairs") as mock_process:
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process:
                             mock_process.return_value = {
                                 "total": 2,
                                 "exact_duplicates": 0,
@@ -382,9 +424,13 @@ class TestDatasetPipeline:
 
                             # Verify all services were called
                             mock_scrape.assert_called_once()
-                            mock_clean.assert_called_once_with("Raw content from web page", "gpt-4o-mini")
+                            mock_clean.assert_called_once_with(
+                                "Raw content from web page", "gpt-4o-mini"
+                            )
                             mock_save.assert_called_once()
-                            mock_gen_qa.assert_called_once_with("Cleaned and formatted content", "french", "gpt-4o-mini")
+                            mock_gen_qa.assert_called_once_with(
+                                "Cleaned and formatted content", "french", "gpt-4o-mini"
+                            )
                             mock_process.assert_called_once()
 
                             # Verify result
