@@ -141,6 +141,7 @@ def test_get_dataset_by_id_with_qa_count(test_db: Session):
 
     result = get_dataset_by_id(test_db, str(dataset.id))
 
+    assert result is not None
     assert result["qa_sources_count"] == 5
 
 

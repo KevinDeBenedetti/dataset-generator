@@ -100,7 +100,7 @@ class QASource(Base):
         context: str,
         source_url: str,
         similarity_threshold: float = 0.9,
-    ) -> Dict[str, Optional[str]]:
+    ) -> Dict[str, Optional[str] | float]:
         """Checks for duplicates by exact hash AND similarity"""
 
         # 1. Check by exact hash
@@ -146,7 +146,7 @@ class QASource(Base):
         confidence: float = 1.0,
         source_url: str = "",
         source_trace_id: Optional[str] = None,
-        page_snapshot_id: Optional[int] = None,
+        page_snapshot_id: Optional[str] = None,
         dataset_id: Optional[str] = None,  # Ajout du paramètre dataset_id
         index: int = 0,
     ) -> "QASource":

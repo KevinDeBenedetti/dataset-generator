@@ -107,7 +107,7 @@ def downgrade_db(db_url: str | None = None, revision: str = "base"):
     logger.info(f"🔻 Base de données rétrogradée à {revision}")
 
 
-def reset_db(db_url: str | None = None):
+def reset_db(db_url: str):
     """
     Rétablit une base propre en refaisant toutes les migrations depuis zéro.
     db_url doit être passé en premier (positionnel ou nommé).

@@ -67,15 +67,15 @@ async def get_qa_by_dataset(
                 }
             )
 
-        return {
-            "dataset_name": dataset.name,
-            "dataset_id": dataset.id,
-            "total_count": total_count,
-            "returned_count": len(qa_data),
-            "offset": offset or 0,
-            "limit": limit,
-            "qa_data": qa_data,
-        }
+        return QAListResponse(
+            dataset_name=dataset.name,
+            dataset_id=dataset.id,
+            total_count=total_count,
+            returned_count=len(qa_data),
+            offset=offset or 0,
+            limit=limit,
+            qa_data=qa_data,
+        )
 
     except HTTPException:
         raise
@@ -98,21 +98,21 @@ async def get_qa_by_id(qa_id: str, db: Session = Depends(get_db)) -> QAResponse:
         # Récupérer les informations du dataset associé
         dataset = db.query(Dataset).filter(Dataset.id == qa_record.dataset_id).first()
 
-        return {
-            "id": qa_record.id,
-            "question": qa_record.input.get("question", ""),
-            "answer": qa_record.expected_output.get("answer", ""),
-            "context": qa_record.input.get("context", ""),
-            "source_url": qa_record.input.get("source_url", ""),
-            "confidence": qa_record.expected_output.get("confidence", 0.0),
-            "created_at": qa_record.created_at,
-            "updated_at": qa_record.updated_at,
-            "metadata": qa_record.qa_metadata,
-            "dataset": {
+        return QAResponse(
+            id=qa_record.id,
+            question=qa_record.input.get("question", ""),
+            answer=qa_record.expected_output.get("answer", ""),
+            context=qa_record.input.get("context", ""),
+            source_url=qa_record.input.get("source_url", ""),
+            confidence=qa_record.expected_output.get("confidence", 0.0),
+            created_at=qa_record.created_at,
+            updated_at=qa_record.updated_at,
+            metadata=qa_record.qa_metadata,
+            dataset={
                 "id": dataset.id if dataset else None,
                 "name": dataset.name if dataset else None,
             },
-        }
+        )
 
     except HTTPException:
         raise

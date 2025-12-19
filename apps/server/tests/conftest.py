@@ -4,7 +4,7 @@ Pytest configuration and shared fixtures for FastAPI server tests.
 
 import os
 import pytest
-from typing import Generator
+from typing import Any, Generator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -58,8 +58,10 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
         version="0.0.1",
     )
 
-    test_app.add_middleware(  # type: ignore
-        CORSMiddleware,
+    from typing import cast
+
+    test_app.add_middleware(
+        cast(Any, CORSMiddleware),
         allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],

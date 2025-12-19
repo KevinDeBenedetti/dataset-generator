@@ -1,7 +1,7 @@
 import logging
 import openai
 import instructor
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional, cast
 from server.core.config import config
 from server.schemas.dataset import QA
 
@@ -28,7 +28,7 @@ class PromptManager:
     """
 
     @classmethod
-    def get_qa_prompt(cls, context: str, target_language: str = None) -> str:
+    def get_qa_prompt(cls, context: str, target_language: Optional[str] = None) -> str:
         target_language = target_language or config.target_language or "en"
         return f"""
         Generate high-quality question-answer pairs based on this text.
@@ -50,12 +50,12 @@ class LLMService:
         self.client = openai.OpenAI(
             api_key=config.openai_api_key, base_url=config.openai_base_url
         )
-        self.instructor_client = instructor.from_openai(
-            self.client, mode=instructor.Mode.MD_JSON
+        self.instructor_client = cast(
+            Any, instructor.from_openai(self.client, mode=instructor.Mode.MD_JSON)
         )
         self.prompt_manager = PromptManager()
 
-    def clean_text(self, text: str, model: str = None) -> str:
+    def clean_text(self, text: str, model: Optional[str] = None) -> str:
         """Clean text using provided model or fallback to config.model_cleaning."""
         model = model or config.model_cleaning
         try:
@@ -83,7 +83,7 @@ class LLMService:
         target_language = target_language or config.target_language
         model = model or config.model_qa
         try:
-            result = self.instructor_client.chat.completions.create(  # type: ignore
+            result = self.instructor_client.chat.completions.create(
                 model=model,
                 response_model=list[QA],
                 messages=[

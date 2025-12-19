@@ -2,12 +2,14 @@ import logging
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from langfuse import get_client, Langfuse
 
 
-def prepare_langfuse_dataset(data: List[Dict], dataset_name: str) -> Dict[str, Any]:
+def prepare_langfuse_dataset(
+    data: List[Dict], dataset_name: str
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Transforms JSON data into Langfuse Dataset format
     """

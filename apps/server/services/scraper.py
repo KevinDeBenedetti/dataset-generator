@@ -51,7 +51,7 @@ class ScraperService:
         self.db.commit()
         self.db.refresh(page_snapshot)
 
-    def scrape_url(self, url: str, dataset_id: int) -> PageSnapshot:
+    def scrape_url(self, url: str, dataset_id: str) -> PageSnapshot:
         logging.info(f"Scraping URL: {url}")
 
         session = self._setup_session()
@@ -85,7 +85,7 @@ class ScraperService:
         return page_snapshot
 
     def save_cleaned_text(
-        self, page_snapshot_id: int, content: str, language: str, model: str
+        self, page_snapshot_id: str, content: str, language: str, model: str
     ) -> CleanedText:
         """Saves cleaned text to the database"""
         cleaned_text_record = CleanedText(

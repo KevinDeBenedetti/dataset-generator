@@ -106,29 +106,27 @@ async def create_dataset_for_url(
                 )
 
         # Adapt the result to match our response schema
-        response_data = {
-            "id": result.get(
-                "dataset_id"
-            ),  # Assurer que nous récupérons l'ID du dataset correctement
-            "qa_pairs": qa_pairs,
-            "dataset_name": request.dataset_name,
-            "model_cleaning": model_cleaning,
-            "target_language": target_language,
-            "model_qa": model_qa,
-            "similarity_threshold": request.similarity_threshold,
-            "total_questions": len(qa_pairs),
-            "processing_time": processing_time,
-        }
+        dataset_id = result.get("dataset_id")
 
         # Vérification de la présence de l'ID avant de retourner la réponse
-        if not response_data["id"]:
+        if not dataset_id or not isinstance(dataset_id, str):
             logging.error("Dataset ID is missing in the result")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to retrieve dataset ID after generation",
             )
 
-        return DatasetGenerationResponse(**response_data)  # type: ignore
+        return DatasetGenerationResponse(
+            id=dataset_id,
+            qa_pairs=qa_pairs,
+            dataset_name=request.dataset_name,
+            model_cleaning=model_cleaning,
+            target_language=target_language,
+            model_qa=model_qa,
+            similarity_threshold=request.similarity_threshold,
+            total_questions=len(qa_pairs),
+            processing_time=processing_time,
+        )
 
     except HTTPException:
         raise

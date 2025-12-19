@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any, cast
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 import httpx
@@ -26,7 +27,9 @@ client_openai = openai.AsyncOpenAI(
     api_key=os.getenv("OPENAI_API_KEY", "sk-xxxxxxxxxxxxxxx"),
     base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 )
-client_instructor = instructor.from_openai(client_openai, mode=instructor.Mode.MD_JSON)
+client_instructor = cast(
+    Any, instructor.from_openai(client_openai, mode=instructor.Mode.MD_JSON)
+)
 
 dataset_service = DatasetService(db_session)
 qa_service = QAService(db_session)
@@ -191,7 +194,7 @@ async def get_knowledge_enrichment(
                 ] = await client_instructor.chat.completions.create(
                     model=model,
                     response_model=list[UnitQuestionAnswer],
-                    messages=[  # type: ignore
+                    messages=[
                         {
                             "role": "user",
                             "content": f"Generate question answer pairs from the following content:\n{chunk}",
@@ -218,8 +221,20 @@ async def get_knowledge_enrichment(
                     except Exception:
                         qa_confidence = 1.0
 
+                    # Skip if required fields are missing
+                    if not qa_question or not qa_answer or not qa_context:
+                        logger.warning(
+                            f"Skipping QA pair {i} due to missing required fields"
+                        )
+                        continue
+
+                    assert page_snapshot.id is not None
+                    assert isinstance(page_snapshot.id, str)
+                    assert dataset_id is not None
+                    assert isinstance(dataset_id, str)
+
                     file_contents.append(
-                        UnitQuestionAnswerResponse(  # type: ignore
+                        UnitQuestionAnswerResponse(
                             file_id=file_id,
                             dataset_id=dataset_id,
                             question=qa_question,
