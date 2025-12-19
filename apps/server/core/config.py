@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 import os
 
 from dotenv import load_dotenv
@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def parse_list_env(env_var: str, default: List[str] = None) -> List[str]:
+def parse_list_env(env_var: str, default: Optional[List[str]] = None) -> List[str]:
     """Parse a comma-separated environment variable into a list."""
     value = os.getenv(env_var)
     if not value:

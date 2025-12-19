@@ -6,7 +6,7 @@ from server.services.scraper import ScraperService
 from server.services.llm import LLMService
 from server.services.dataset import DatasetService
 from server.services.qa import QAService
-from server.schemas.dataset import TargetLanguage, ModelName
+from server.schemas.dataset import TargetLanguage
 
 
 class DatasetPipeline:
@@ -23,9 +23,9 @@ class DatasetPipeline:
         self,
         url: str,
         dataset_name: str,
-        model_cleaning: Union[str, ModelName],
+        model_cleaning: Union[str, Any],
         target_language: Union[str, TargetLanguage],
-        model_qa: Union[str, ModelName],
+        model_qa: Union[str, Any],
         similarity_threshold: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Executes the complete pipeline for a URL"""
@@ -54,18 +54,18 @@ class DatasetPipeline:
                 similarity_threshold = max(0.0, min(1.0, similarity_threshold))
 
             # Extract string values from enum objects
-            model_cleaning_str = (
+            model_cleaning_str = str(
                 model_cleaning.value
                 if hasattr(model_cleaning, "value")
-                else str(model_cleaning)
+                else model_cleaning
             )
-            target_language_str = (
+            target_language_str = str(
                 target_language.value
                 if hasattr(target_language, "value")
-                else str(target_language)
+                else target_language
             )
-            model_qa_str = (
-                model_qa.value if hasattr(model_qa, "value") else str(model_qa)
+            model_qa_str = str(
+                model_qa.value if hasattr(model_qa, "value") else model_qa
             )
 
             logging.info(
@@ -79,14 +79,20 @@ class DatasetPipeline:
             )
 
             # 2. Scrape the URL
+            assert dataset.id is not None
+            assert isinstance(dataset.id, str)
             page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
 
             # 3. Clean the text with LLM
+            assert page_snapshot.content is not None
+            assert isinstance(page_snapshot.content, str)
             cleaned_text = self.llm_service.clean_text(
                 page_snapshot.content, model_cleaning_str
             )
 
             # 4. Save the cleaned text
+            assert page_snapshot.id is not None
+            assert isinstance(page_snapshot.id, str)
             self.scraper_service.save_cleaned_text(
                 page_snapshot_id=page_snapshot.id,
                 content=cleaned_text,
@@ -100,6 +106,8 @@ class DatasetPipeline:
             )
 
             # 6. Process and save QA pairs
+            assert dataset.id is not None
+            assert isinstance(dataset.id, str)
             qa_stats = self.qa_service.process_qa_pairs(
                 qa_list=qa_list,
                 cleaned_text=cleaned_text,

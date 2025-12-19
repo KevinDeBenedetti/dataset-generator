@@ -48,7 +48,7 @@ class QAService:
         qa_list: List[Any],
         cleaned_text: str,
         url: str,
-        page_snapshot_id: int,
+        page_snapshot_id: str,
         dataset_name: str,
         model: str,
         dataset_id: Optional[str] = None,

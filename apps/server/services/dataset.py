@@ -60,7 +60,7 @@ def get_datasets(db: Session) -> List[Dict[str, Any]]:
         raise
 
 
-def get_dataset_by_id(db: Session, dataset_id: str) -> Dict[str, Any]:
+def get_dataset_by_id(db: Session, dataset_id: str) -> Optional[Dict[str, Any]]:
     try:
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
