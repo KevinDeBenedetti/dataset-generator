@@ -46,6 +46,7 @@ jobs:
         run: |
           uv run pytest -s -v tests/ \
             --cov=. \
+            --cov-config=../../pytest.ini \
             --cov-report=term-missing \
             --cov-report=html \
             --cov-report=xml \
