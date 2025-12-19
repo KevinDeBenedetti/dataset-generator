@@ -42,6 +42,8 @@ jobs:
         run: uv sync --dev
 
       - name: Run unit tests with coverage
+        env:
+          COVERAGE_CORE: sysmon
         run: |
           uv run pytest -s -v apps/server/tests/ \
             --cov=apps/server \
