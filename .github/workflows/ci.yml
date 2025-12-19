@@ -11,6 +11,10 @@ on:
       - "**"
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   versions:
     uses: ./.github/workflows/version.yml
@@ -26,7 +30,7 @@ jobs:
     uses: ./.github/workflows/test.yml
     needs: versions
     with:
-      PYTHON_VERSION: ${{ needs.versions.outputs.python-version }}
+      python-version: ${{ needs.versions.outputs.python-version }}
 
   all-jobs-passed:
     name: Check jobs status
