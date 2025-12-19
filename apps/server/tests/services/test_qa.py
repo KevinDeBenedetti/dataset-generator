@@ -27,16 +27,16 @@ def sample_dataset(db: Session):
 @pytest.fixture
 def sample_qa_source(db: Session, sample_dataset):
     """Create a sample QASource"""
-    qa = QASource(
+    qa = QASource.from_qa_generation(
         question="What is Python?",
         answer="A programming language",
         context="Python is a high-level programming language.",
         source_url="https://example.com",
         dataset_id=sample_dataset.id,
         page_snapshot_id="1",
-        model="gpt-4o-mini",
-        dataset_name=sample_dataset.name,
     )
+    qa.model = "gpt-4o-mini"
+    qa.dataset_name = sample_dataset.name
     db.add(qa)
     db.commit()
     db.refresh(qa)
@@ -48,16 +48,16 @@ class TestQAService:
 
     def test_add_qa_source(self, qa_service: QAService, db: Session, sample_dataset):
         """Test adding a new QASource"""
-        qa = QASource(
+        qa = QASource.from_qa_generation(
             question="What is FastAPI?",
             answer="A modern web framework",
             context="FastAPI is a modern, fast web framework for building APIs.",
             source_url="https://example.com",
             dataset_id=sample_dataset.id,
             page_snapshot_id="1",
-            model="gpt-4o-mini",
-            dataset_name=sample_dataset.name,
         )
+        qa.model = "gpt-4o-mini"
+        qa.dataset_name = sample_dataset.name
 
         result = qa_service.add_qa_source(qa)
 
@@ -85,8 +85,8 @@ class TestQAService:
     def test_update_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
         """Test updating a QASource"""
         updates = {
-            "question": "What is Python used for?",
-            "confidence": 0.95,
+            "input": {**sample_qa_source.input, "question": "What is Python used for?"},
+            "expected_output": {**sample_qa_source.expected_output, "confidence": 0.95},
         }
 
         result = qa_service.update_qa_source(str(sample_qa_source.id), updates)
@@ -220,10 +220,9 @@ class TestQAService:
 
         assert result["total"] == 1
         # Should use default confidence of 1.0
-        qa_record = (
-            db.query(QASource).filter(QASource.question == "What is Redis?").first()
-        )
-        assert qa_record.confidence == 1.0
+        qa_records = db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
+        redis_qa = [qa for qa in qa_records if qa.question == "What is Redis?"][0]
+        assert redis_qa.confidence == 1.0
 
     def test_process_qa_pairs_mixed_results(
         self, qa_service: QAService, db: Session, sample_dataset, sample_qa_source
@@ -239,6 +238,7 @@ class TestQAService:
         mock_qa2 = Mock()
         mock_qa2.question = sample_qa_source.question
         mock_qa2.answer = sample_qa_source.answer
+        mock_qa2.confidence = 0.9  # Add confidence to avoid Mock in getattr
 
         # Third QA - new
         mock_qa3 = Mock()
@@ -248,8 +248,8 @@ class TestQAService:
 
         result = qa_service.process_qa_pairs(
             qa_list=[mock_qa1, mock_qa2, mock_qa3],
-            cleaned_text="Various topics discussed",
-            url="https://example.com",
+            cleaned_text=sample_qa_source.context,  # Use same context as sample for duplicate detection
+            url=sample_qa_source.source_url,  # Use same URL for duplicate detection
             page_snapshot_id="1",
             dataset_name=sample_dataset.name,
             model="gpt-4o-mini",

@@ -11,8 +11,8 @@ on:
         description: "Node.js version to use"
         required: true
         type: string
-      pnpm-version:
-        description: "pnpm version to use"
+      bun-image:
+        description: "Bun image to use"
         required: true
         type: string
 
@@ -22,7 +22,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.13"]
+        python-version: ${{ inputs.python-version }}
 
     steps:
       - name: Checkout code
@@ -36,15 +36,11 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        working-directory: ./apps/server
+      - name: Lint server
         run: |
           uv sync --dev
-
-      - name: Lint with ruff
-        working-directory: ./apps/server
-        run: |
-          uv run ruff check .
+          uv run ruff check
+          uv run ty check
 
   lint-next:
     runs-on: ubuntu-latest
@@ -59,15 +55,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.20.0"
+          node-version: ${{ inputs.node-version }}
 
       - name: Install dependencies
         working-directory: ./apps/next
-        run: bun install --frozen-lockfile
-
-      - name: Lint client
-        working-directory: ./apps/next
         run: |
+          bun install --frozen-lockfile
           bun lint
 
   lint-vue:
@@ -83,13 +76,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.20.0"
+          node-version: ${{ inputs.node-version }}
 
       - name: Install dependencies
         working-directory: ./apps/vue
-        run: bun install --frozen-lockfile
-
-      - name: Lint client
-        working-directory: ./apps/vue
         run: |
+          bun install --frozen-lockfile
           bun lint

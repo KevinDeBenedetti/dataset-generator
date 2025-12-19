@@ -27,7 +27,7 @@ def valid_request_data():
         "url": "https://example.com",
         "dataset_name": "test_dataset",
         "model_cleaning": "gpt-4o-mini",
-        "target_language": "french",
+        "target_language": "fr",
         "model_qa": "gpt-4o-mini",
         "similarity_threshold": 0.9,
     }
@@ -248,7 +248,7 @@ class TestGenerateDataset:
 
         mock_pipeline.process_url = AsyncMock(side_effect=mock_process)
 
-        languages = ["french", "english", "spanish", "german"]
+        languages = ["fr", "en", "es", "de"]
         for i, lang in enumerate(languages):
             request_data = {
                 "url": "https://example.com",
@@ -302,4 +302,4 @@ class TestGenerateDataset:
         response = client.post("/dataset/generate", json=valid_request_data)
 
         assert response.status_code == 500
-        assert "dataset ID" in response.json()["detail"].lower()
+        assert "dataset id" in response.json()["detail"].lower()

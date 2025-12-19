@@ -3,6 +3,14 @@ Pytest configuration and shared fixtures for FastAPI server tests.
 """
 
 import os
+
+# Set test environment variables BEFORE any imports that load config
+os.environ["OPENAI_API_KEY"] = "test-api-key"
+os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
+os.environ["AVAILABLE_LLMS"] = "gpt-4o-mini,mistral-small-3.1-24b-instruct-2503,gpt-4-0613,gpt-3.5-turbo-1106"
+os.environ["DEFAULT_CLEANING_MODEL"] = "gpt-4o-mini"
+os.environ["DEFAULT_QA_MODEL"] = "gpt-4o-mini"
+
 import pytest
 from typing import Any, Generator
 from fastapi import FastAPI
@@ -89,10 +97,6 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
             pass
 
     test_app.dependency_overrides[get_db] = override_get_db
-
-    # Set test environment variables
-    os.environ["OPENAI_API_KEY"] = "test-api-key"
-    os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
 
     with TestClient(test_app) as test_client:
         yield test_client
