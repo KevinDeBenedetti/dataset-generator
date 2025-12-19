@@ -54,8 +54,10 @@ jobs:
             --cov-fail-under=70 \
             --junitxml=apps/server/pytest-junit.xml
 
-      - name: Move coverage data file
-        run: mv .coverage apps/server/.coverage
+      - name: Convert coverage paths to relative
+        run: |
+          uv run coverage combine --keep
+          mv .coverage apps/server/.coverage
 
       - name: Ensure coverage HTML exists
         if: always()
