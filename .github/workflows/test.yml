@@ -54,11 +54,6 @@ jobs:
             --cov-fail-under=70 \
             --junitxml=apps/server/pytest-junit.xml
 
-      - name: Convert coverage paths to relative
-        run: |
-          uv run coverage combine --keep
-          mv .coverage apps/server/.coverage
-
       - name: Ensure coverage HTML exists
         if: always()
         run: |
@@ -90,4 +85,3 @@ jobs:
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
-          COVERAGE_PATH: apps/server
