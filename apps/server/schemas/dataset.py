@@ -4,7 +4,6 @@ from enum import Enum
 from server.core.config import config
 
 
-# Verify next code
 class TargetLanguage(str, Enum):
     fr = "fr"
     en = "en"
@@ -12,19 +11,17 @@ class TargetLanguage(str, Enum):
     de = "de"
 
 
-# Instead of creating an Enum dynamically, let's create a str Enum class
-class ModelName(str, Enum):
-    pass
+def _build_model_enum() -> Enum:
+    """Return a str-based Enum containing configured model names."""
+    members = {
+        model.replace("-", "_"): model for model in config.available_models
+    }
+    if not members:
+        members = {"default_model": "default-model"}
+    return Enum("ModelName", members, type=str)
 
 
-# Then extend it dynamically
-for model in config.available_models:
-    model_attr = model.replace("-", "_")
-    setattr(ModelName, model_attr, model)
-
-# Ensure that ModelName has at least one attribute to be a valid Enum
-if not ModelName.__members__:
-    setattr(ModelName, "default_model", "default-model")
+ModelName = _build_model_enum()
 
 
 class DatasetResult(BaseModel):
