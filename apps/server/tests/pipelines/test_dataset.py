@@ -154,7 +154,7 @@ class TestDatasetPipeline:
                                 model_cleaning="gpt-4o-mini",
                                 target_language="fr",
                                 model_qa="gpt-4o-mini",
-                                similarity_threshold="0.5",  # String type - should be converted to float
+                                similarity_threshold="invalid",  # Invalid type
                             )
 
                             # Should convert string to float successfully
