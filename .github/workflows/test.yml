@@ -45,7 +45,7 @@ jobs:
         working-directory: apps/server
         run: |
           uv run pytest -s -v tests/ \
-            --cov=. \
+            --cov=server \
             --cov-config=../../pytest.ini \
             --cov-report=term-missing \
             --cov-report=html \
