@@ -34,3 +34,6 @@ migration = [
 
 [tool.uv]
 package = false
+
+[tool.coverage.run]
+relative_files = true
