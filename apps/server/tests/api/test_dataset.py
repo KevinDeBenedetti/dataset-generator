@@ -100,7 +100,7 @@ def test_get_dataset_by_id(
     test_db.commit()
     test_db.refresh(dataset)
 
-    response = client.get("/dataset", params={"dataset_id": dataset.id})
+    response = client.get("/dataset", params={"dataset_id": str(dataset.id)})
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == dataset.id
@@ -167,7 +167,7 @@ def test_delete_dataset_with_qa_records(
         context=sample_qa_data["context"],
         confidence=sample_qa_data["confidence"],
         source_url=sample_qa_data["source_url"],
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa_record)
     test_db.commit()

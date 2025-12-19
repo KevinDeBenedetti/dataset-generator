@@ -73,13 +73,17 @@ class TestScraperService:
         )
 
     @patch("server.services.scraper.UserAgent")
-    def test_get_user_agent_fallback(self, mock_ua_class, scraper_service: ScraperService):
+    def test_get_user_agent_fallback(
+        self, mock_ua_class, scraper_service: ScraperService
+    ):
         """Test user agent fallback when fake-useragent fails"""
         mock_ua_class.side_effect = Exception("fake-useragent error")
 
         user_agent = scraper_service._get_user_agent()
 
-        assert user_agent == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        assert (
+            user_agent == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
 
     def test_extract_text_basic(self, scraper_service: ScraperService, sample_html):
         """Test basic text extraction from HTML"""
@@ -163,14 +167,24 @@ class TestScraperService:
         scraper_service.add_page_snapshot(snapshot)
 
         # Verify it was added
-        saved_snapshot = db.query(PageSnapshot).filter(PageSnapshot.url == "https://example.com").first()
+        saved_snapshot = (
+            db.query(PageSnapshot)
+            .filter(PageSnapshot.url == "https://example.com")
+            .first()
+        )
         assert saved_snapshot is not None
         assert saved_snapshot.content == "Test content"
 
     @patch("server.services.scraper.requests.Session.get")
     @patch("server.services.scraper.time.sleep")
     def test_scrape_url_success(
-        self, mock_sleep, mock_get, scraper_service: ScraperService, db: Session, sample_dataset, sample_html
+        self,
+        mock_sleep,
+        mock_get,
+        scraper_service: ScraperService,
+        db: Session,
+        sample_dataset,
+        sample_html,
     ):
         """Test successful URL scraping"""
         # Mock response
@@ -221,7 +235,12 @@ class TestScraperService:
     @patch("server.services.scraper.requests.Session.get")
     @patch("server.services.scraper.time.sleep")
     def test_scrape_url_creates_hash(
-        self, mock_sleep, mock_get, scraper_service: ScraperService, db: Session, sample_dataset
+        self,
+        mock_sleep,
+        mock_get,
+        scraper_service: ScraperService,
+        db: Session,
+        sample_dataset,
     ):
         """Test that URL hash is created correctly"""
         mock_response = Mock()
@@ -229,10 +248,12 @@ class TestScraperService:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        result = scraper_service.scrape_url("https://example.com/page", sample_dataset.id)
+        result = scraper_service.scrape_url(
+            "https://example.com/page", sample_dataset.id
+        )
 
         assert result.url_hash is not None
-        assert len(result.url_hash) > 0
+        assert len(result.url_hash) > 0  # type: ignore
         # Verify hash is consistent
         expected_hash = PageSnapshot.compute_hash_from_url("https://example.com/page")
         assert result.url_hash == expected_hash
@@ -275,7 +296,7 @@ class TestScraperService:
 
         # Save cleaned text
         cleaned = scraper_service.save_cleaned_text(
-            page_snapshot_id=snapshot.id,
+            page_snapshot_id=int(snapshot.id),  # type: ignore
             content="Cleaned content here",
             language="french",
             model="gpt-4o-mini",
@@ -304,7 +325,7 @@ class TestScraperService:
         db.refresh(snapshot)
 
         cleaned = scraper_service.save_cleaned_text(
-            page_snapshot_id=snapshot.id,
+            page_snapshot_id=int(snapshot.id),  # type: ignore
             content="",
             language="english",
             model="gpt-4o-mini",
@@ -315,7 +336,12 @@ class TestScraperService:
     @patch("server.services.scraper.requests.Session.get")
     @patch("server.services.scraper.time.sleep")
     def test_scrape_url_with_complex_html(
-        self, mock_sleep, mock_get, scraper_service: ScraperService, db: Session, sample_dataset
+        self,
+        mock_sleep,
+        mock_get,
+        scraper_service: ScraperService,
+        db: Session,
+        sample_dataset,
     ):
         """Test scraping URL with complex HTML structure"""
         complex_html = """

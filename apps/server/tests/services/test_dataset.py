@@ -104,7 +104,7 @@ def test_get_dataset_by_id_success(test_db: Session):
     test_db.commit()
     test_db.refresh(dataset)
 
-    result = get_dataset_by_id(test_db, dataset.id)
+    result = get_dataset_by_id(test_db, str(dataset.id))
 
     assert result is not None
     assert result["id"] == dataset.id
@@ -133,13 +133,13 @@ def test_get_dataset_by_id_with_qa_count(test_db: Session):
             context=f"Context {i}",
             confidence=0.9,
             source_url=f"https://example.com/{i}",
-            dataset_id=dataset.id,
+            dataset_id=str(dataset.id),
             index=i,
         )
         test_db.add(qa)
     test_db.commit()
 
-    result = get_dataset_by_id(test_db, dataset.id)
+    result = get_dataset_by_id(test_db, str(dataset.id))
 
     assert result["qa_sources_count"] == 5
 
@@ -157,7 +157,7 @@ def test_analyze_dataset_similarities_empty(test_db: Session):
     test_db.commit()
     test_db.refresh(dataset)
 
-    result = analyze_dataset_similarities(test_db, dataset.id, threshold=0.8)
+    result = analyze_dataset_similarities(test_db, str(dataset.id), threshold=0.8)
 
     # Should handle empty dataset gracefully
     assert result is not None

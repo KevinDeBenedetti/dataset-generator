@@ -146,7 +146,7 @@ class QASource(Base):
         confidence: float = 1.0,
         source_url: str = "",
         source_trace_id: Optional[str] = None,
-        page_snapshot_id: Optional[str] = None,
+        page_snapshot_id: Optional[int] = None,
         dataset_id: Optional[str] = None,  # Ajout du paramètre dataset_id
         index: int = 0,
     ) -> "QASource":

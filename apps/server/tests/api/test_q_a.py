@@ -62,7 +62,7 @@ def test_get_qa_by_dataset(
             context=f"Context {i}",
             confidence=0.9,
             source_url=f"https://example.com/{i}",
-            dataset_id=dataset.id,
+            dataset_id=str(dataset.id),
             index=i,
         )
         test_db.add(qa)
@@ -99,7 +99,7 @@ def test_get_qa_by_dataset_with_pagination(
             context=f"Context {i}",
             confidence=0.9,
             source_url=f"https://example.com/{i}",
-            dataset_id=dataset.id,
+            dataset_id=str(dataset.id),
             index=i,
         )
         test_db.add(qa)
@@ -174,7 +174,7 @@ def test_get_qa_by_id(
         context=sample_qa_data["context"],
         confidence=sample_qa_data["confidence"],
         source_url=sample_qa_data["source_url"],
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa)
     test_db.commit()
@@ -223,7 +223,7 @@ def test_qa_response_includes_metadata(
         context=sample_qa_data["context"],
         confidence=sample_qa_data["confidence"],
         source_url=sample_qa_data["source_url"],
-        dataset_id=dataset.id,
+        dataset_id=str(dataset.id),
     )
     test_db.add(qa)
     test_db.commit()

@@ -1,7 +1,7 @@
 import logging
 import openai
 import instructor
-from typing import List, Dict
+from typing import List, Dict, Optional
 from server.core.config import config
 from server.schemas.dataset import QA
 
@@ -74,13 +74,16 @@ class LLMService:
             return text
 
     def generate_qa(
-        self, text: str, target_language: str = None, model: str = None
+        self,
+        text: str,
+        target_language: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> List[QA]:
         """Generate QA using optional target_language and model; fall back to config."""
         target_language = target_language or config.target_language
         model = model or config.model_qa
         try:
-            result = self.instructor_client.chat.completions.create(
+            result = self.instructor_client.chat.completions.create(  # type: ignore
                 model=model,
                 response_model=list[QA],
                 messages=[
