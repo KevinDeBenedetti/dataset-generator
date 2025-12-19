@@ -136,7 +136,9 @@ class TestDatasetPipeline:
                 with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                     mock_clean.return_value = "cleaned text"
 
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
                         with patch.object(
@@ -181,7 +183,9 @@ class TestDatasetPipeline:
                 with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                     mock_clean.return_value = "cleaned text"
 
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
                         with patch.object(

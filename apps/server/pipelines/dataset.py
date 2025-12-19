@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Union, Optional
+from typing import Any, Dict, Optional, Union
 from sqlalchemy.orm import Session
 
 from server.services.scraper import ScraperService
@@ -26,9 +26,18 @@ class DatasetPipeline:
         model_cleaning: Union[str, Any],
         target_language: Union[str, TargetLanguage],
         model_qa: Union[str, Any],
-        similarity_threshold: Optional[float] = None,
+        similarity_threshold: Optional[Union[float, str]] = None,
     ) -> Dict[str, Any]:
         """Executes the complete pipeline for a URL"""
+        # Normalize similarity_threshold: accept float or numeric string
+        if isinstance(similarity_threshold, str):
+            try:
+                similarity_threshold = float(similarity_threshold)
+            except ValueError:
+                # invalid string — set to None (or raise if you prefer)
+                similarity_threshold = None
+
+        # use similarity_threshold as a float | None from here on
         try:
             # Validate and set default for similarity_threshold
             if similarity_threshold is None:
