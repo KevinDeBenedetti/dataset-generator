@@ -7,7 +7,9 @@ import os
 # Set test environment variables BEFORE any imports that load config
 os.environ["OPENAI_API_KEY"] = "test-api-key"
 os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
-os.environ["AVAILABLE_LLMS"] = "gpt-4o-mini,mistral-small-3.1-24b-instruct-2503,gpt-4-0613,gpt-3.5-turbo-1106"
+os.environ["AVAILABLE_LLMS"] = (
+    "gpt-4o-mini,mistral-small-3.1-24b-instruct-2503,gpt-4-0613,gpt-3.5-turbo-1106"
+)
 os.environ["DEFAULT_CLEANING_MODEL"] = "gpt-4o-mini"
 os.environ["DEFAULT_QA_MODEL"] = "gpt-4o-mini"
 
