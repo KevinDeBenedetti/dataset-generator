@@ -220,9 +220,7 @@ class TestQAService:
 
         assert result["total"] == 1
         # Should use default confidence of 1.0
-        qa_records = (
-            db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
-        )
+        qa_records = db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
         redis_qa = [qa for qa in qa_records if qa.question == "What is Redis?"][0]
         assert redis_qa.confidence == 1.0
 

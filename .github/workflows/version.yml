@@ -8,14 +8,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       python-version: ${{ steps.set.outputs.python-version }}
+      bun-image: ${{ steps.set.outputs.bun-image }}
       node-version: ${{ steps.set.outputs.node-version }}
     steps:
       - name: Set versions
         id: set
         run: |
           echo "python-version=3.x" >> $GITHUB_OUTPUT
+          echo "bun-image=oven/bun:latest" >> $GITHUB_OUTPUT
           echo "node-version=22.20.0" >> $GITHUB_OUTPUT
       - name: Output versions
         run: |
           echo "Python: ${{ steps.set.outputs.python-version }}"
+          echo "Bun Image: ${{ steps.set.outputs.bun-image }}"
           echo "Node: ${{ steps.set.outputs.node-version }}"
