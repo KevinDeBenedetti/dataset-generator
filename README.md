@@ -1,5 +1,7 @@
 # Dataset Generator
 
+[![CI](https://github.com/KevinDeBenedetti/dataset-generator/workflows/CI/badge.svg)](https://github.com/KevinDeBenedetti/dataset-generator/actions)
+
 Web scraping and automatic dataset generation tool for question-answer datasets with advanced export capabilities and LLM integration.
 
 ## 🎯 Objective

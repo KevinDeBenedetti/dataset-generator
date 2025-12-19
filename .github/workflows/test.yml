@@ -14,6 +14,7 @@ jobs:
       contents: read
       checks: write
       actions: read
+      pull-requests: write # Pour les commentaires PR
     concurrency:
       group: ci-tests-${{ github.ref }}
       cancel-in-progress: true
@@ -30,43 +31,56 @@ jobs:
             pip-cache-${{ runner.os }}-py-
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Run unit tests, generate coverage (HTML + XML) and junit
-        run: |
-          uv sync --dev
-          cd apps/server
-          uv run pytest -s -v tests/ --cov=apps/server --cov-report=term-missing --cov-report=html:coverage_html --cov-report=xml:coverage.xml --junitxml=pytest-junit.xml
+      - name: Sync dependencies
+        run: uv sync --dev
 
-      - name: Ensure coverage HTML exists (create placeholder if missing)
+      - name: Run unit tests with coverage
+        working-directory: apps/server
         run: |
-          if [ ! -d apps/server/coverage_html ]; then
-            mkdir -p apps/server/coverage_html
-            echo "<html><body><p>No coverage report generated.</p></body></html>" > apps/server/coverage_html/index.html
+          uv run pytest -s -v tests/ \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=html \
+            --cov-report=xml \
+            --cov-fail-under=70 \
+            --junitxml=pytest-junit.xml
+
+      - name: Ensure coverage HTML exists
+        if: always()
+        run: |
+          if [ ! -d apps/server/htmlcov ]; then
+            mkdir -p apps/server/htmlcov
+            echo "<html><body><p>No coverage report generated.</p></body></html>" > apps/server/htmlcov/index.html
           fi
 
       - name: Upload coverage HTML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
-          path: apps/server/coverage_html
+          path: apps/server/htmlcov
+          retention-days: 30
 
       - name: Upload coverage XML and junit
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: |
             apps/server/coverage.xml
             apps/server/pytest-junit.xml
+          retention-days: 30
 
-      - name: Optional: send to Codecov
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
-        uses: codecov/codecov-action@v4
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: py-cov-action/python-coverage-comment-action@v3
         with:
-          files: apps/server/coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          COVERAGE_PATH: apps/server/coverage.xml
