@@ -45,58 +45,25 @@ jobs:
         env:
           COVERAGE_CORE: sysmon
         run: |
-          cd apps/server
-          uv run pytest -s -v tests/ \
-            --cov=. \
-            --cov-config=../../pytest.ini \
+          uv run pytest -s -v apps/server/tests/ \
+            --cov=apps/server \
             --cov-report=term-missing \
-            --cov-report=html:htmlcov \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=70 \
             --junitxml=pytest-junit.xml
 
-      - name: Ensure coverage HTML exists
-        if: always()
-        run: |
-          if [ ! -d apps/server/htmlcov ]; then
-            mkdir -p apps/server/htmlcov
-            echo "<html><body><p>No coverage report generated.</p></body></html>" > apps/server/htmlcov/index.html
-          fi
-
-      - name: Upload coverage HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-html
-          path: apps/server/htmlcov
-          retention-days: 30
-
-      - name: Upload coverage XML and junit
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            apps/server/coverage.xml
-            apps/server/pytest-junit.xml
-          retention-days: 30
-
       - name: Upload coverage to Codecov
-        if: always()
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: apps/server/coverage.xml
+          files: coverage.xml
           flags: unittests
-          name: codecov-umbrella
           fail_ci_if_error: false
-          verbose: true
 
       - name: Comment PR with coverage
         if: github.event_name == 'pull_request'
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
-          COVERAGE_PATH: apps/server
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
