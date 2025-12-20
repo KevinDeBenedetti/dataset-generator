@@ -40,22 +40,6 @@ This project is designed with a modular architecture that separates concerns int
 - **Batch Processing**: Efficient handling of large-scale data generation
 - **API Interface**: RESTful API for programmatic access and integration
 
-## 📚 Libraries Used
-
-- **requests** >= 2.32.5 — HTTP requests for scraping
-- **scrapy** >= 2.13.3 — Structured data extraction from HTML
-- **fake-useragent** >= 2.2.0 — User-agent rotation to avoid scraping detection
-- **openai** >= 1.102.0 — OpenAI API client for text processing
-- **instructor** >= 1.10.0 — Tools to build structured LLM prompts / structured outputs
-- **python-dotenv** >= 0.9.9 — Load environment variables from a .env file
-- **fastapi** >= 0.116.1 — API framework used by the service
-- **pydantic** >= 2.11.0 — Data validation and settings management
-- **sqlalchemy** >= 2.0.23 — SQL toolkit and ORM
-- **uvicorn** >= 0.27.1 — ASGI server implementation
-- **langfuse** >= 2.14.1 — Integration with Langfuse platform for dataset management
-- **pytest** >= 8.4.1 — Testing framework
-- **difflib** — Sequence comparison tools from standard library
-
 ## 🔄 Workflow
 
 1. **Scraping**: Retrieving raw web data from multiple sources
