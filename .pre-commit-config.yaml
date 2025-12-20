@@ -1,0 +1,182 @@
+# Prek configuration - https://prek.j178.dev/
+# Minimum prek version required
+minimum_prek_version: "0.2.23"
+
+# Default settings for all repos
+default_language_version:
+  python: python3.11
+  node: "22.0.0"
+
+default_stages: [pre-commit, pre-push]
+
+# Global file filters
+files: ""
+exclude: |
+  (?x)^(
+    # Dependencies
+    .*/node_modules/.*|
+    .*/__pycache__/.*|
+    .*/\.venv/.*|
+    .*/.cache/.*|
+    # Generated files
+    .*/migrations/versions/.*|
+    apps/next/api/.*|
+    # Assets (generated/external)
+    .*\.(svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot)$|
+    .*/public/.*\.svg|
+    # Data & logs
+    data/.*|
+    .*\.log|
+    # Lock files
+    bun\.lock|
+    pnpm-lock\.yaml|
+    uv\.lock
+  )$
+
+repos:
+  # ===============================
+  # Built-in fast hooks (zero setup, no network)
+  # ===============================
+  - repo: builtin
+    hooks:
+      - id: trailing-whitespace
+        name: ✂️ Trim trailing whitespace
+        args: ["--markdown-linebreak-ext=md,markdown"]
+        priority: 0
+
+      - id: end-of-file-fixer
+        name: 🔚 Fix EOF
+        priority: 0
+
+      - id: check-yaml
+        name: 🔍 Check YAML
+        args: ["--allow-multiple-documents"]
+        exclude: |
+          (?x)^(
+            docker-compose\.yml|
+            docker-compose\.yaml
+          )$
+        priority: 0
+
+      - id: check-json
+        name: 🔍 Check JSON
+        exclude: |
+          (?x)^(
+            # VSCode settings use JSONC (JSON with Comments)
+            \.vscode/.*\.json
+          )$
+        priority: 0
+
+      - id: check-toml
+        name: 🔍 Check TOML
+        priority: 0
+
+      - id: check-added-large-files
+        name: 🚫 Check large files
+        args: ["--maxkb=1000"]
+        priority: 0
+
+      - id: check-merge-conflict
+        name: 🔍 Check merge conflicts
+        priority: 0
+
+      - id: detect-private-key
+        name: 🔐 Detect private keys
+        priority: 0
+
+      - id: check-case-conflict
+        name: 🔍 Check case conflicts
+        priority: 0
+
+      - id: mixed-line-ending
+        name: 🔍 Check line endings
+        args: ["--fix=lf"]
+        priority: 0
+
+  # ===============================
+  # Python - Backend (apps/server)
+  # ===============================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.0
+    hooks:
+      - id: ruff
+        name: 🐍 Ruff lint
+        args: ["--fix"]
+        files: ^apps/server/
+        priority: 10
+
+      - id: ruff-format
+        name: 🐍 Ruff format
+        files: ^apps/server/
+        priority: 10
+
+  # Type checking with ty (used in Makefile)
+  - repo: local
+    hooks:
+      - id: ty-check
+        name: 🔍 Type check (ty)
+        entry: uv run ty check
+        language: system
+        files: ^apps/server/.*\.py$
+        pass_filenames: false
+        always_run: true
+        priority: 20
+
+  # ===============================
+  # JavaScript/TypeScript - Frontend
+  # ===============================
+  - repo: local
+    hooks:
+      - id: eslint-next
+        name: 🔍 ESLint (Next.js)
+        entry: bash -c 'cd apps/next && bun run lint:fix'
+        language: system
+        files: ^apps/next/.*\.(ts|tsx|js|jsx|mjs)$
+        pass_filenames: false
+        priority: 10
+
+      - id: eslint-vue
+        name: 🔍 ESLint (Vue)
+        entry: bash -c 'cd apps/vue && bun run lint:fix'
+        language: system
+        files: ^apps/vue/.*\.(ts|vue)$
+        pass_filenames: false
+        priority: 10
+
+  # ===============================
+  # Docker & Infrastructure
+  # ===============================
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint-docker
+        name: 🐳 Lint Dockerfiles
+        files: ^apps/.*/Dockerfile.*
+        args: ["--ignore", "DL3008"] # Allow unpinned apt packages
+        priority: 10
+
+  # ===============================
+  # Documentation
+  # ===============================
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+        name: 🔍 Check blanket noqa
+        files: ^apps/server/
+        priority: 0
+
+      - id: python-check-blanket-type-ignore
+        name: 🔍 Check blanket type:ignore
+        files: ^apps/server/
+        priority: 0
+
+# CI mode: fail fast on first error
+ci:
+  autofix_commit_msg: "ci: auto fixes from pre-commit hooks"
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "ci: pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

@@ -1,7 +1,7 @@
 FROM oven/bun:1 AS base
 
 RUN apt-get update -y \
-&& apt-get install -y openssl nodejs npm \
+&& apt-get install -y --no-install-recommends openssl nodejs npm \
 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
