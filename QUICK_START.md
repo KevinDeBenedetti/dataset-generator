@@ -1,128 +1,128 @@
-# 🚀 Guide de Démarrage Rapide - Docker Optimisé
+# Quick Start Guide - Optimized Docker
 
-## ⚡ Installation Initiale
+## Initial Installation
 
-1. **Copier les variables d'environnement**
+1. **Copy environment variables**
    ```bash
    cp .env.example .env
    ```
 
-2. **Activer BuildKit** (ajoutez à votre `.env`)
+2. **Enable BuildKit** (add to your `.env`)
    ```bash
    echo "DOCKER_BUILDKIT=1" >> .env
    echo "COMPOSE_DOCKER_CLI_BUILD=1" >> .env
    ```
 
-3. **Exporter les variables** (une seule fois par session)
+3. **Export variables** (once per session)
    ```bash
    export DOCKER_BUILDKIT=1
    export COMPOSE_DOCKER_CLI_BUILD=1
    ```
 
-## 🎯 Commandes Essentielles
+## Essential Commands
 
-### Première fois
+### First time
 ```bash
-# Build optimisé avec cache
+# Optimized build with cache
 make build-cache
 
-# Ou tout en un (clean + build + start)
+# Or all-in-one (clean + build + start)
 make dev
 ```
 
-### Développement quotidien
+### Daily development
 ```bash
-# Démarrer sans rebuild (très rapide)
+# Start without rebuild (very fast)
 make start
 
-# Arrêter les services
+# Stop services
 make stop
 
-# Voir les logs
+# View logs
 docker compose logs -f
 ```
 
-### Après modifications
+### After modifications
 
-**Code seulement modifié** (apps/next/app/*.tsx, apps/server/api/*.py)
+**Code only modified** (apps/next/app/*.tsx, apps/server/api/*.py)
 ```bash
-# Rebuild rapide ~30-60s
+# Fast rebuild ~30-60s
 make start
 ```
 
-**Dépendances modifiées** (package.json, pyproject.toml)
+**Dependencies modified** (package.json, pyproject.toml)
 ```bash
-# Rebuild avec cache
+# Rebuild with cache
 make build-cache
 ```
 
-**Tout casser et recommencer** 😅
+**Break everything and start over**
 ```bash
 make rebuild
 ```
 
-## 🔍 Diagnostic
+## Diagnostics
 
-### Vérifier la configuration
+### Check configuration
 ```bash
 make check-docker
 ```
 
-### Mesurer les performances
+### Measure performance
 ```bash
 make benchmark
 ```
 
-### Problèmes courants
+### Common problems
 
-**❌ "ERROR: failed to solve"**
+**"ERROR: failed to solve"**
 ```bash
-# Nettoyer le cache
+# Clean cache
 docker builder prune -af
 make rebuild
 ```
 
-**❌ "Cannot connect to Docker daemon"**
+**"Cannot connect to Docker daemon"**
 ```bash
-# Démarrer Docker Desktop
+# Start Docker Desktop
 open -a Docker
 ```
 
-**❌ "Port already in use"**
+**"Port already in use"**
 ```bash
-# Trouver le processus
+# Find the process
 lsof -i :8000
-# Ou changer le port dans .env
+# Or change the port in .env
 ```
 
-**❌ Builds toujours lents**
+**Builds still slow**
 ```bash
-# Vérifier BuildKit
-echo $DOCKER_BUILDKIT  # doit afficher "1"
+# Check BuildKit
+echo $DOCKER_BUILDKIT  # should display "1"
 
-# Réactiver
+# Re-enable
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 ```
 
-## 📊 Temps de Build Attendus
+## Expected Build Times
 
-| Scénario                   | Temps       |
-| -------------------------- | ----------- |
-| Premier build (cold cache) | ~3-5 min    |
-| Rebuild sans changement    | ~30-60s ⚡   |
-| Code modifié               | ~45s-1.5min |
-| Dépendances modifiées      | ~2-3 min    |
+| Scenario                  | Time        |
+| ------------------------- | ----------- |
+| First build (cold cache)  | ~3-5 min    |
+| Rebuild without changes   | ~30-60s     |
+| Code modified             | ~45s-1.5min |
+| Dependencies modified     | ~2-3 min    |
 
-## 💡 Astuces Pro
+## Pro Tips
 
-1. **Ne jamais utiliser `--no-cache`** sauf si vraiment nécessaire
-2. **Utiliser `make start`** au lieu de `make dev` pour les redémarrages
-3. **Garder Docker Desktop à jour** pour les dernières optimisations
-4. **Lancer `make clean`** de temps en temps pour libérer de l'espace
+1. **Never use `--no-cache`** unless absolutely necessary
+2. **Use `make start`** instead of `make dev` for restarts
+3. **Keep Docker Desktop up to date** for the latest optimizations
+4. **Run `make clean`** occasionally to free up space
 
-## 🎓 Pour aller plus loin
+## Going Further
 
-- Lire [DOCKER_OPTIMIZATIONS.md](./DOCKER_OPTIMIZATIONS.md) pour les détails techniques
-- Utiliser `docker compose build --progress=plain` pour voir le cache en action
-- Monitorer avec `docker stats` pour voir l'utilisation des ressources
+- Read [DOCKER_OPTIMIZATIONS.md](./DOCKER_OPTIMIZATIONS.md) for technical details
+- Use `docker compose build --progress=plain` to see cache in action
+- Monitor with `docker stats` to see resource usage
