@@ -147,7 +147,7 @@ class QASource(Base):
         source_url: str = "",
         source_trace_id: Optional[str] = None,
         page_snapshot_id: Optional[str] = None,
-        dataset_id: Optional[str] = None,  # Ajout du paramètre dataset_id
+        dataset_id: Optional[str] = None,  # Added dataset_id parameter
         index: int = 0,
     ) -> "QASource":
         if not question or not answer:
@@ -167,7 +167,7 @@ class QASource(Base):
             expected_output={"answer": answer, "confidence": float(confidence)},
             source_trace_id=source_trace_id,
             page_snapshot_id=page_snapshot_id,
-            dataset_id=dataset_id,  # Utilisation du dataset_id
+            dataset_id=dataset_id,  # Using the dataset_id
             qa_metadata={
                 "generation_timestamp": datetime.now(timezone.utc).isoformat(),
                 "context_length": len(context) if context else 0,

@@ -86,10 +86,10 @@ def main(limit: Optional[int] = None):
         # Log / inform
         if count % 100 == 0:
             logging.info(f"Fetched details for {count}/{total} coins")
-        # Pause pour éviter d'exploser le rate limit (ajuster selon besoin)
+        # Pause to avoid hitting the rate limit (adjust as needed)
         time.sleep(0.2)
 
-    # 3) Sauvegarder les détails complets
+    # 3) Save the complete details
     save_json(detailed, f"all_coins_details_{timestamp}.json")
 
 

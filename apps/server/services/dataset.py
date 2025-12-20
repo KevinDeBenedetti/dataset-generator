@@ -56,7 +56,7 @@ def get_datasets(db: Session) -> List[Dict[str, Any]]:
             for dataset in datasets
         ]
     except Exception as e:
-        logging.error(f"Erreur lors de la récupération des datasets: {str(e)}")
+        logging.error(f"Error retrieving datasets: {str(e)}")
         raise
 
 
@@ -78,9 +78,7 @@ def get_dataset_by_id(db: Session, dataset_id: str) -> Optional[Dict[str, Any]]:
             "qa_sources_count": qa_count,
         }
     except Exception as e:
-        logging.error(
-            f"Erreur lors de la récupération du dataset {dataset_id}: {str(e)}"
-        )
+        logging.error(f"Error retrieving dataset {dataset_id}: {str(e)}")
         raise
 
 

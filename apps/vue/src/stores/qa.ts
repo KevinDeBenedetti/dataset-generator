@@ -39,7 +39,7 @@ export const useQAStore = defineStore('qa', () => {
 
       qaResponse.value = data
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       error.value = errorMessage
       console.error('Failed to fetch QA:', error)
       throw error
@@ -57,7 +57,7 @@ export const useQAStore = defineStore('qa', () => {
     await fetchQAByDataset(qaResponse.value!.dataset_id, {
       limit: qaResponse.value?.limit ?? 10,
       offset: nextOffset,
-      replace: false, // Pour "load more", on ajoute les données
+      replace: false, // For "load more", we append the data
     })
   }
 
@@ -71,7 +71,7 @@ export const useQAStore = defineStore('qa', () => {
     await fetchQAByDataset(qaResponse.value!.dataset_id, {
       limit: limit,
       offset: offset,
-      replace: true, // Pour la pagination, on remplace les données
+      replace: true, // For pagination, we replace the data
     })
   }
 

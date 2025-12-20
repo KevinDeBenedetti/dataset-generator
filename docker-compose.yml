@@ -13,7 +13,7 @@ services:
         BUN_VERSION: ${BUN_VERSION:-1.3.3}
         NODE_VERSION: ${NODE_VERSION:-22.20.0}
         APP_PORT: ${NEXT_PORT:-3000}
-      # Activer BuildKit pour les optimisations
+      # Enable BuildKit for optimizations
       x-bake:
         cache-from:
           - type=local,src=/tmp/.buildx-cache
@@ -73,7 +73,7 @@ services:
       args:
         PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
         APP_PORT: ${SERVER_PORT:-8000}
-      # Activer BuildKit pour les optimisations
+      # Enable BuildKit for optimizations
       x-bake:
         cache-from:
           - type=local,src=/tmp/.buildx-cache

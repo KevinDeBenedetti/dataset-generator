@@ -25,7 +25,7 @@ async def get_qa_by_dataset(
 ) -> QAListResponse:
     """Retrieve all Q&A items for a specific dataset by its ID"""
     try:
-        # Vérifier que le dataset existe
+        # Verify that the dataset exists
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
             # build safe list from returned tuples
@@ -50,7 +50,7 @@ async def get_qa_by_dataset(
 
         qa_records = query.all()
 
-        logging.info(f"IDs récupérés: {[record.id[:8] for record in qa_records]}")
+        logging.info(f"Retrieved IDs: {[record.id[:8] for record in qa_records]}")
 
         qa_data = []
         for record in qa_records:
@@ -95,7 +95,7 @@ async def get_qa_by_id(qa_id: str, db: Session = Depends(get_db)) -> QAResponse:
                 status_code=404, detail=f"Q&A with ID '{qa_id}' not found"
             )
 
-        # Récupérer les informations du dataset associé
+        # Retrieve the associated dataset information
         dataset = db.query(Dataset).filter(Dataset.id == qa_record.dataset_id).first()
 
         return QAResponse(
