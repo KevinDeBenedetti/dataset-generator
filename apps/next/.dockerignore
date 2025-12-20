@@ -1,0 +1,45 @@
+# Dépendances
+node_modules
+.next
+.cache
+.turbo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# Tests
+coverage
+.nyc_output
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Documentation
+*.md
+!README.md
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+
+# Env
+.env.local
+.env.*.local
+
+# Build
+dist
+build
+out

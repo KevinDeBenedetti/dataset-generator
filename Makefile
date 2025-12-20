@@ -16,7 +16,6 @@ help: ## Show helper
 # --------------------------------------
 # CLEAN
 # --------------------------------------
-
 clean:  ## Clean cache, datasets, and scrapes
 	@echo "Cleaning up..."
 	docker compose down
@@ -32,25 +31,63 @@ clean:  ## Clean cache, datasets, and scrapes
 	@find . -type f -name "uv.lock" -prune -print -exec rm -rf {} +
 	@find . -type f -name "*.log" -prune -print -exec rm -rf {} +
 
-rmi: clean
+rmi:
 	@echo "Removing dangling images..."
 	docker rmi datasets-next datasets-server datasets-vue || true
 
 # --------------------------------------
+# BUILD OPTIMIZATION
+# --------------------------------------
+build-cache: ## Build with BuildKit cache for faster rebuilds
+	@echo "Building with cache optimization..."
+	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose build
+
+rebuild: clean rmi build-cache ## Clean rebuild with optimizations
+	@echo "Clean rebuild complete"
+
+start: ## Start services (skip build if images exist)
+	@echo "Starting services..."
+	docker compose up -d
+
+stop: ## Stop services
+	@echo "Stopping services..."
+	docker compose down
+
+check-docker: ## Check Docker optimization setup
+	@echo "Checking Docker setup..."
+	./scripts/check-docker-setup.sh
+
+benchmark: ## Benchmark Docker build performance
+	@echo "Running Docker build benchmark..."
+	cp .env.example scripts/.env
+	./scripts/benchmark-docker.sh
+	rm scripts/.env
+
+# --------------------------------------
 # LINT
 # --------------------------------------
-
-lint:  ## Run linting
+lint-server: ## Run server linting
 	@echo "Server linting..."
 	uv run ruff check --fix
 	uv run ruff format
 	uv run ty check
 
+lint-client: ## Run client linting
 	@echo "Client linting..."
 	cd ./apps/vue && \
-		bun lint
+		bun lint --fix
 	cd ./apps/next && \
-		bun lint
+		bun lint --fix
+
+lint: lint-server lint-client  ## Run linting
+
+precommit:  ## Run pre-commit hooks on all files
+	@echo "Running pre-commit hooks..."
+	uv run prek run --all-files
+
+precommit-update:  ## Update pre-commit hooks
+	@echo "Updating pre-commit hooks..."
+	uv run prek auto-update
 
 # --------------------------------------
 # SETUP
@@ -87,12 +124,6 @@ install:
 	uv sync --all-groups --dev
 
 
-
-test: install
-	echo "Running tests..."
-	uv run pytest -s -v apps/server/tests/ --cov
-
-
 up-backend-local: ## Start the FastAPI server without Docker
 	@echo "Starting API server..."
 	cp .env.example apps/server/.env
@@ -100,3 +131,10 @@ up-backend-local: ## Start the FastAPI server without Docker
 		uv run uvicorn --host 0.0.0.0 main:app --reload
 	rm server/.env
 
+
+# --------------------------------------
+# TEST
+# --------------------------------------
+test: install
+	echo "Running tests..."
+	uv run pytest -s -v apps/server/tests/ --cov
