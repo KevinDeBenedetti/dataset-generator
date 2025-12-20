@@ -156,6 +156,20 @@ repos:
         priority: 10
 
   # ===============================
+  # Tests
+  # ===============================
+  - repo: local
+    hooks:
+      - id: pytest
+        name: 🧪 Run tests
+        entry: uv run pytest -s -v apps/server/tests/ --cov
+        language: system
+        files: ^apps/server/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]
+        priority: 30
+
+  # ===============================
   # Documentation
   # ===============================
   - repo: https://github.com/pre-commit/pygrep-hooks

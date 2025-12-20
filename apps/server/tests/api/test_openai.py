@@ -45,7 +45,7 @@ def test_list_openai_models_service_failure(client: TestClient):
 
         response = client.get("/openai/models")
         assert response.status_code == 500
-        assert "Impossible de récupérer les modèles OpenAI" in response.json()["detail"]
+        assert "Unable to retrieve OpenAI models" in response.json()["detail"]
 
 
 def test_list_openai_models_exception(client: TestClient):
