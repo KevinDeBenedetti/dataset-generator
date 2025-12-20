@@ -1,6 +1,7 @@
 # Dataset Generator
 
 [![CI](https://github.com/KevinDeBenedetti/dataset-generator/workflows/CI/badge.svg)](https://github.com/KevinDeBenedetti/dataset-generator/actions)
+[![codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator/graph/badge.svg)](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
 
 Web scraping and automatic dataset generation tool for question-answer datasets with advanced export capabilities and LLM integration.
 
@@ -72,3 +73,23 @@ The tool supports extensive configuration options for:
 - **English (en)**: English language dataset generation
 - **Spanish (es)**: Spanish language dataset generation
 - **German (de)**: German language dataset generation
+
+## 🧪 Testing & Coverage
+
+This project maintains high test coverage to ensure code quality and reliability.
+
+```bash
+# Run tests with coverage
+make test
+
+# Run pre-commit hooks (includes tests on push)
+uv run prek run --all-files
+```
+
+### Coverage Reports
+
+- **Local**: After running tests, view `htmlcov/index.html` for detailed coverage report
+- **CI/CD**: Coverage reports are automatically generated on every PR
+- **Codecov**: [View detailed coverage on Codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
+
+Current coverage threshold: **70%** minimum required for CI to pass
