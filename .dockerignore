@@ -1,1 +1,59 @@
+# Fichiers système
 *.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Logs
+*.log
+
+# Env
+.env.local
+.env.*.local
+
+# Apps non nécessaires pour le server
+apps/next
+apps/vue
+
+# Cache Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual env
+.venv
+venv
+ENV
+env
+
+# Tests Python
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Build Python
+dist
+build
+*.egg-info
+
+# Alembic
+alembic/versions/*.pyc
+
+# Documentation
+*.md
+!README.md
+
+# Scripts locaux
+scripts/

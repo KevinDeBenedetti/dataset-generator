@@ -1,0 +1,28 @@
+# Dépendances
+node_modules
+.vite
+dist
+
+# Logs
+*.log
+npm-debug.log*
+
+# Tests
+coverage
+.nyc_output
+
+# Fichiers système
+.DS_Store
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Git
+.git
+.gitignore
+
+# Env
+.env.local
+.env.*.local
