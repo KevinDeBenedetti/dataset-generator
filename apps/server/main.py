@@ -23,11 +23,11 @@ logger.setLevel(logging.INFO)
 async def lifespan(app: FastAPI):
     db_url = SQLALCHEMY_DATABASE_URL
     try:
-        logger.info("🚀 Démarrage des migrations...")
+        logger.info("Starting migrations...")
         await asyncio.to_thread(upgrade_db, db_url)
-        logger.info("✅ Migrations terminées")
+        logger.info("Migrations completed")
     except Exception as exc:
-        logger.exception("Échec des migrations : %s", exc)
+        logger.exception("Migration failed: %s", exc)
         raise exc
 
     yield

@@ -16,7 +16,7 @@ DEFAULT_PATH = Path(__file__).parent.parent.parent / "alembic.ini"
 
 def get_alembic_config(db_url: str | None = None, path: Path = DEFAULT_PATH) -> Config:
     """
-    Charge la configuration Alembic et remplace l'URL de base de données si besoin.
+    Loads the Alembic configuration and replaces the database URL if needed.
     """
     if not path.exists():
         raise FileNotFoundError(f"Alembic config file not found at {path}")
@@ -25,7 +25,7 @@ def get_alembic_config(db_url: str | None = None, path: Path = DEFAULT_PATH) -> 
 
     alembic_cfg.set_main_option("script_location", "migrations")
 
-    # Définit explicitement sqlalchemy.url pour éviter les erreurs d'interpolation
+    # Explicitly set sqlalchemy.url to avoid interpolation errors
     if db_url:
         alembic_cfg.set_main_option("sqlalchemy.url", db_url)
     else:
@@ -33,7 +33,7 @@ def get_alembic_config(db_url: str | None = None, path: Path = DEFAULT_PATH) -> 
         if env_url:
             alembic_cfg.set_main_option("sqlalchemy.url", env_url)
         else:
-            # valeur vide pour éviter que configparser tente une interpolation sur %(DATABASE_URL)s
+            # Empty value to prevent configparser from attempting interpolation on %(DATABASE_URL)s
             alembic_cfg.set_main_option("sqlalchemy.url", "")
 
     return alembic_cfg
@@ -41,45 +41,45 @@ def get_alembic_config(db_url: str | None = None, path: Path = DEFAULT_PATH) -> 
 
 def is_migration_needed(db_url: str, revision: str = "head") -> bool:
     """
-    Vérifie rapidement si des migrations sont nécessaires.
+    Quickly checks if migrations are needed.
     """
     try:
         cfg = get_alembic_config(db_url)
 
-        # Créer une connexion temporaire
+        # Create a temporary connection
         engine = create_engine(db_url)
 
         with engine.connect() as connection:
             context = MigrationContext.configure(connection)
             current_rev = context.get_current_revision()
 
-            # Obtenir la révision head
+            # Get the head revision
             script = ScriptDirectory.from_config(cfg)
             head_rev = script.get_current_head()
 
             logger.debug(f"Current revision: {current_rev}, Head revision: {head_rev}")
 
-            # Si current_rev est None, la base n'est pas initialisée
+            # If current_rev is None, the database is not initialized
             if current_rev is None:
-                logger.debug("Base de données non initialisée, migration nécessaire")
+                logger.debug("Database not initialized, migration needed")
                 return True
 
-            # Si les révisions sont différentes, migration nécessaire
+            # If revisions are different, migration is needed
             needs_migration = current_rev != head_rev
-            logger.debug(f"Migration nécessaire: {needs_migration}")
+            logger.debug(f"Migration needed: {needs_migration}")
             return needs_migration
 
     except Exception as e:
-        logger.debug(f"Erreur lors de la vérification, migration nécessaire: {e}")
-        return True  # En cas d'erreur, on assume qu'une migration est nécessaire
+        logger.debug(f"Error during verification, migration needed: {e}")
+        return True  # In case of error, assume migration is needed
 
 
 def upgrade_db(db_url: str, revision: str = "head") -> None:
-    """Applique les migrations Alembic."""
-    # S'assurer que le chemin vers alembic.ini est correct
+    """Applies Alembic migrations."""
+    # Ensure the path to alembic.ini is correct
     config_path = Path(__file__).parent.parent.parent / "alembic.ini"
     if not config_path.exists():
-        logger.error(f"❌ Fichier alembic.ini introuvable : {config_path}")
+        logger.error(f"alembic.ini file not found: {config_path}")
         raise FileNotFoundError(f"alembic.ini not found at {config_path}")
 
     logger.debug(f"Using Alembic config file at {config_path}")
@@ -89,29 +89,29 @@ def upgrade_db(db_url: str, revision: str = "head") -> None:
     logger.debug(f"Database URL: {db_url}")
     try:
         command.upgrade(cfg, revision)
-        logger.info(f"✅ Base de données migrée jusqu'à {revision}")
+        logger.info(f"Database migrated to {revision}")
     except Exception as e:
         logger.warning(
-            "⚠️ Échec de l'exécution d'Alembic, fallback : création des tables via SQLAlchemy"
+            "Alembic execution failed, fallback: creating tables via SQLAlchemy"
         )
         raise e
 
 
 def downgrade_db(db_url: str | None = None, revision: str = "base"):
     """
-    Reviens en arrière jusqu'à la révision spécifiée (par défaut 'base').
-    db_url doit être passé en premier (positionnel ou nommé).
+    Rolls back to the specified revision (default 'base').
+    db_url must be passed first (positional or named).
     """
     cfg = get_alembic_config(db_url)
     command.downgrade(cfg, revision)
-    logger.info(f"🔻 Base de données rétrogradée à {revision}")
+    logger.info(f"Database downgraded to {revision}")
 
 
 def reset_db(db_url: str):
     """
-    Rétablit une base propre en refaisant toutes les migrations depuis zéro.
-    db_url doit être passé en premier (positionnel ou nommé).
+    Restores a clean database by redoing all migrations from scratch.
+    db_url must be passed first (positional or named).
     """
     downgrade_db(db_url, "base")
     upgrade_db(db_url, "head")
-    logger.info("🔄 Base de données réinitialisée avec succès.")
+    logger.info("Database reset successfully.")

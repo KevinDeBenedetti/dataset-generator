@@ -10,15 +10,15 @@ export default defineConfig({
   plugins: [
     {
       name: '@hey-api/typescript',
-      // Génère des types plus stricts
+      // Generate stricter types
       enums: 'typescript',
       tree: true
     },
     {
       name: '@hey-api/sdk',
-      // Génère un SDK avec toutes les méthodes
+      // Generate an SDK with all methods
       methodNameBuilder: (operation) => {
-        // Personnalise les noms des méthodes
+        // Customize method names
         return `${operation.method}${operation.path.replace(/[{}]/g, 'By').replace(/\//g, '')}`;
       }
     },

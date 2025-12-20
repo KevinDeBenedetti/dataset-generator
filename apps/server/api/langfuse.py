@@ -103,7 +103,7 @@ async def export_dataset(
         # Create the dataset in Langfuse with the data
         dataset_config = {
             "name": langfuse_name,
-            "description": f"Dataset {langfuse_name} exporté depuis l'application",
+            "description": f"Dataset {langfuse_name} exported from the application",
         }
         result = create_langfuse_dataset_with_items(dataset_config, data_list)
 

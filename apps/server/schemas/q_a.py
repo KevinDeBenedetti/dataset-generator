@@ -4,61 +4,53 @@ from datetime import datetime
 
 
 class QAItem(BaseModel):
-    """Modèle pour un élément Q&A individuel"""
+    """Model for an individual Q&A item"""
 
-    id: str = Field(..., description="ID unique de la question-réponse")
+    id: str = Field(..., description="Unique ID of the question-answer")
     question: str = Field(..., description="Question")
-    answer: str = Field(..., description="Réponse")
-    context: str = Field(..., description="Contexte source")
-    source_url: Optional[str] = Field(None, description="URL source")
-    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Niveau de confiance")
-    created_at: datetime = Field(..., description="Date de création")
-    metadata: Optional[Dict[str, Any]] = Field(
-        None, description="Métadonnées additionnelles"
-    )
+    answer: str = Field(..., description="Answer")
+    context: str = Field(..., description="Source context")
+    source_url: Optional[str] = Field(None, description="Source URL")
+    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
+    created_at: datetime = Field(..., description="Creation date")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
 
 class QAItemDetailed(QAItem):
-    """Modèle pour un élément Q&A avec détails complets"""
+    """Model for a Q&A item with full details"""
 
-    updated_at: Optional[datetime] = Field(
-        None, description="Date de dernière modification"
-    )
+    updated_at: Optional[datetime] = Field(None, description="Last modification date")
     dataset: Optional[Dict[str, Optional[str]]] = Field(
-        None, description="Informations du dataset associé"
+        None, description="Associated dataset information"
     )
 
 
 class QAListResponse(BaseModel):
-    """Modèle de réponse pour la liste des Q&A d'un dataset"""
+    """Response model for a dataset's Q&A list"""
 
-    dataset_name: str = Field(..., description="Nom du dataset")
-    dataset_id: str = Field(..., description="ID du dataset")
-    total_count: int = Field(..., description="Nombre total d'éléments")
-    returned_count: int = Field(..., description="Nombre d'éléments retournés")
-    offset: int = Field(0, description="Décalage appliqué")
-    limit: Optional[int] = Field(None, description="Limite appliquée")
-    qa_data: List[QAItem] = Field(..., description="Liste des questions-réponses")
+    dataset_name: str = Field(..., description="Dataset name")
+    dataset_id: str = Field(..., description="Dataset ID")
+    total_count: int = Field(..., description="Total number of items")
+    returned_count: int = Field(..., description="Number of items returned")
+    offset: int = Field(0, description="Applied offset")
+    limit: Optional[int] = Field(None, description="Applied limit")
+    qa_data: List[QAItem] = Field(..., description="List of question-answers")
 
 
 class QAResponse(BaseModel):
-    """Modèle de réponse pour une Q&A individuelle"""
+    """Response model for an individual Q&A"""
 
-    id: str = Field(..., description="ID unique de la question-réponse")
+    id: str = Field(..., description="Unique ID of the question-answer")
     question: str = Field(..., description="Question")
-    answer: str = Field(..., description="Réponse")
-    context: str = Field(..., description="Contexte source")
-    source_url: Optional[str] = Field(None, description="URL source")
-    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Niveau de confiance")
-    created_at: datetime = Field(..., description="Date de création")
-    updated_at: Optional[datetime] = Field(
-        None, description="Date de dernière modification"
-    )
-    metadata: Optional[Dict[str, Any]] = Field(
-        None, description="Métadonnées additionnelles"
-    )
+    answer: str = Field(..., description="Answer")
+    context: str = Field(..., description="Source context")
+    source_url: Optional[str] = Field(None, description="Source URL")
+    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
+    created_at: datetime = Field(..., description="Creation date")
+    updated_at: Optional[datetime] = Field(None, description="Last modification date")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
     dataset: Optional[Dict[str, Optional[str]]] = Field(
-        None, description="Informations du dataset associé"
+        None, description="Associated dataset information"
     )
 
 

@@ -102,10 +102,10 @@ class LLMService:
             return []
 
     def get_models(self) -> List[Dict]:
-        """Retourne la liste des modèles disponibles depuis l'API OpenAI."""
+        """Returns the list of available models from the OpenAI API."""
         try:
             resp = self.client.models.list()
-            # resp.data contient les objets modèles ; on renvoie une liste réduite
+            # resp.data contains model objects; we return a reduced list
             models = [
                 {"id": m.id, "object": getattr(m, "object", None)} for m in resp.data
             ]

@@ -83,7 +83,7 @@ def create_langfuse_dataset_with_items(
     # Create the dataset in Langfuse
     dataset = langfuse_client.create_dataset(
         name=dataset_config["name"],
-        description=dataset_config.get("description", "Dataset créé automatiquement"),
+        description=dataset_config.get("description", "Automatically created dataset"),
         metadata=dataset_config.get("metadata", {}),
     )
 

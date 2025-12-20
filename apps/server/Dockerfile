@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Stage: base
-# Configuration de base avec UV
+# Base configuration with UV
 # =============================================================================
 FROM python:3.13-slim AS base
 
@@ -18,39 +18,39 @@ WORKDIR /app
 
 # =============================================================================
 # Stage: dependencies
-# Installation des dépendances avec cache
+# Install dependencies with cache
 # =============================================================================
 FROM base AS dependencies
 
-# Copier uniquement les fichiers de dépendances pour maximiser le cache
+# Copy only dependency files to maximize cache
 COPY pyproject.toml uv.lock ./
 
-# Utiliser le cache mount pour accélérer l'installation
+# Use cache mount to speed up installation
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # =============================================================================
 # Stage: dev
-# Environnement de développement
+# Development environment
 # =============================================================================
 FROM base AS dev
 
 ARG APP_PORT=8000
 ENV PYTHON_ENV=development
 
-# Installer curl pour healthcheck
+# Install curl for healthcheck
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier les dépendances depuis le stage précédent
+# Copy dependencies from the previous stage
 COPY --from=dependencies /app/.venv /app/.venv
 COPY pyproject.toml uv.lock ./
 
-# Copier le code source
+# Copy source code
 COPY ./apps/server .
 
 EXPOSE ${APP_PORT}
 
-# Import depuis server.main
+# Import from server.main
 CMD ["uv", "run", "--no-sync", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
