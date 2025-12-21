@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.6.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.5.0...v0.6.0) (2025-12-21)
+
+
+### Features
+
+* add coverage cover HTML ([c0473f9](https://github.com/KevinDeBenedetti/dataset-generator/commit/c0473f9a23526ae227ce9c41a2c38276f9c6127c))
+* add global tests pytest ([656825f](https://github.com/KevinDeBenedetti/dataset-generator/commit/656825fa94db56c329faeb5cae042d3ad614ae7d))
+* add optimization Docker & benchmark scripts ([44881ac](https://github.com/KevinDeBenedetti/dataset-generator/commit/44881ac05bf8683a1b4f6ec84adc345dc851bc6f))
+* add unit tests and coverage reporting to CI/CD workflow ([58aee1d](https://github.com/KevinDeBenedetti/dataset-generator/commit/58aee1d7fcdf099b913df3d1e8099a31615d447d))
+* add unit tests and refactor CI workflows for improved testing coverage ([1f9f693](https://github.com/KevinDeBenedetti/dataset-generator/commit/1f9f6934fe11784ee379d7137b112b3561dc3694))
+* add unit tests and refactor CI workflows for improved testing coverage ([75b83be](https://github.com/KevinDeBenedetti/dataset-generator/commit/75b83bec2de6aaf3eaa8a9de924431910f7633a6))
+* add unit tests and refactor CI workflows for improved testing coverage ([6a549ed](https://github.com/KevinDeBenedetti/dataset-generator/commit/6a549ede0a991016d3b7e7574aa66aac64602111))
+* add unit tests for Langfuse integration ([67f9562](https://github.com/KevinDeBenedetti/dataset-generator/commit/67f95624d98eb921d5740a13cd8da82b6ebc6abd))
+
+
+### Bug Fixes
+
+* add config relative files pytest ([47adc00](https://github.com/KevinDeBenedetti/dataset-generator/commit/47adc00e2432e4e27522f77a70a3f901b870bdfe))
+* add coverage configuration for relative file paths ([81e423b](https://github.com/KevinDeBenedetti/dataset-generator/commit/81e423b4e6aa39c72eea9cb2ebb3339ffa1c79ad))
+* add environment variable for coverage and update coverage source in pytest configuration ([257c74d](https://github.com/KevinDeBenedetti/dataset-generator/commit/257c74dc859e4fbdf3a2f31f594b3979535c1fd4))
+* add minimum coverage thresholds for coverage reports ([7503d94](https://github.com/KevinDeBenedetti/dataset-generator/commit/7503d943bcfa37ab2e47b11a708c439804976368))
+* add relative_files to coverage config ([434506b](https://github.com/KevinDeBenedetti/dataset-generator/commit/434506bb3191dd4f12d6ea449bd6a216e5652aa0))
+* correct paths ([7b601ad](https://github.com/KevinDeBenedetti/dataset-generator/commit/7b601adb9087377b1bacb680636ad1f217c4ff07))
+* improve ci & warnings ([8a1a6d5](https://github.com/KevinDeBenedetti/dataset-generator/commit/8a1a6d592d07328687951e6397bbf048fe3533ec))
+* normalize similarity_threshold handling and improve test readability ([e63a63b](https://github.com/KevinDeBenedetti/dataset-generator/commit/e63a63b5c8538cd96521e46425e3e75b7259a3f2))
+* refactor CI/CD workflow for unit tests and coverage reporting ([a46dcea](https://github.com/KevinDeBenedetti/dataset-generator/commit/a46dcea8943808bdcc0703badc3fe8bd8ba8d735))
+* remove bun-image references from CI workflows ([e59e02d](https://github.com/KevinDeBenedetti/dataset-generator/commit/e59e02d7d9f6051508467b6a50bb237758d743ff))
+* remove redundant coverage path conversion step ([852a43c](https://github.com/KevinDeBenedetti/dataset-generator/commit/852a43c2d3e552b1abf878525c6fc2e7b0abadc5))
+* remove type ignore comments for better type checking ([3e218c0](https://github.com/KevinDeBenedetti/dataset-generator/commit/3e218c0dea316240ef2e547558a823cd1688eb7f))
+* remove type ignore comments for better type checking ([3c5172e](https://github.com/KevinDeBenedetti/dataset-generator/commit/3c5172edc0caef5e3ce5eb556f8ea3fba607d0b3))
+* remove type ignore comments for better type checking ([b3d1752](https://github.com/KevinDeBenedetti/dataset-generator/commit/b3d1752b85af97dfe8b0485a2cd4640c37e594bc))
+* remove type ignore comments for better type checking ([ea0c2e4](https://github.com/KevinDeBenedetti/dataset-generator/commit/ea0c2e4ce83e876a35e24b0b3b2f8556f6227105))
+* translate to english ([6f557fe](https://github.com/KevinDeBenedetti/dataset-generator/commit/6f557fead82630d8a20cf220616eb96a4a158e97))
+* update coverage configuration for pytest to include relative paths ([cd62aeb](https://github.com/KevinDeBenedetti/dataset-generator/commit/cd62aeb360da3389abc99178355f8759db989c09))
+* update coverage path for PR comments ([44ad708](https://github.com/KevinDeBenedetti/dataset-generator/commit/44ad7086556ddf132459ea853d63908f56c834b3))
+* update coverage paths and reports in CI workflow ([4b812ef](https://github.com/KevinDeBenedetti/dataset-generator/commit/4b812ef7070abceb699ea3a7c99896790f409bb7))
+* update coverage source configuration to use current directory ([6b6a791](https://github.com/KevinDeBenedetti/dataset-generator/commit/6b6a791faefdacac2fe85bd3a84019945c21b07c))
+* update coverage source path to apps/server ([5395ad5](https://github.com/KevinDeBenedetti/dataset-generator/commit/5395ad59e3fb8286fce9c7b7b9ded7286f601b2a))
+* update coverage source to target the server directory ([321422a](https://github.com/KevinDeBenedetti/dataset-generator/commit/321422a80f73b3fe1090dc5f7150a3f2624abfc1))
+* update coverage step to convert paths to relative and move coverage data file ([d6d0249](https://github.com/KevinDeBenedetti/dataset-generator/commit/d6d02490864d78dd84819248786931470d35366e))
+* update dependencies and improve configuration files ([9b098cd](https://github.com/KevinDeBenedetti/dataset-generator/commit/9b098cdfc2bd0669507f0f14e563de0ed5234558))
+* update documentation and scripts for consistency and clarity ([abe76d1](https://github.com/KevinDeBenedetti/dataset-generator/commit/abe76d117e00a01525cb93cb9e933b5aff51d35b))
+* update unit test coverage configuration and paths ([5e4f046](https://github.com/KevinDeBenedetti/dataset-generator/commit/5e4f046914aff1ec93491ae63d5ff376e621e9b2))
+* update uv setup in lint workflow for consistency and versioning ([874bfd1](https://github.com/KevinDeBenedetti/dataset-generator/commit/874bfd18b30fbfe65aa7ba9d4b39c3d4e4b64404))
+* update workflow CI for improve cov ([4c52853](https://github.com/KevinDeBenedetti/dataset-generator/commit/4c52853c47232af94480d6340615856af8677b1e))
+
+
+### Chores
+
+* update dependencies and improve Makefile commands ([4866843](https://github.com/KevinDeBenedetti/dataset-generator/commit/4866843d855020bf0fa07750c93b7b053378f0e4))
+
+
+### Code Refactoring
+
+* update response models and type hints across multiple services and pipelines ([ac7d113](https://github.com/KevinDeBenedetti/dataset-generator/commit/ac7d113a32069c4000f6ebab09d7bc2e07057273))
+
 ## [0.5.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.4.2...v0.5.0) (2025-12-14)
 
 
