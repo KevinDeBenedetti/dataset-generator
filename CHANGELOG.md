@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.6.0...v0.7.0) (2025-12-21)
+
+
+### Features
+
+* add generation & download code cover Codecov ([c3278a3](https://github.com/KevinDeBenedetti/dataset-generator/commit/c3278a3c826e616431ab915e6cbb6224ed875cdf))
+
+
+### Bug Fixes
+
+* normalize python-version input in CI workflows ([01f865d](https://github.com/KevinDeBenedetti/dataset-generator/commit/01f865d5c81bd69899782de8d8b367f11ccb50c3))
+* remove bun-image references from CI workflows ([435dee4](https://github.com/KevinDeBenedetti/dataset-generator/commit/435dee497addbbda6346ec67a5f50e190d51f98a))
+* update CI workflows for linting and testing steps ([e03a270](https://github.com/KevinDeBenedetti/dataset-generator/commit/e03a270bb11ab97c4d666fb5d84cf96a4d728623))
+
 ## [0.6.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.5.0...v0.6.0) (2025-12-21)
 
 
