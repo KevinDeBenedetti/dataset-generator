@@ -79,8 +79,11 @@ The tool supports extensive configuration options for:
 This project maintains high test coverage to ensure code quality and reliability.
 
 ```bash
-# Run tests with coverage
+# Run tests with coverage (HTML report)
 make test
+
+# Run tests for CI (XML report, enforces 70% minimum)
+make test-ci
 
 # Run pre-commit hooks (includes tests on push)
 uv run prek run --all-files
@@ -89,7 +92,7 @@ uv run prek run --all-files
 ### Coverage Reports
 
 - **Local**: After running tests, view `htmlcov/index.html` for detailed coverage report
-- **CI/CD**: Coverage reports are automatically generated on every PR
+- **CI/CD**: Coverage reports are automatically generated and uploaded on every PR
 - **Codecov**: [View detailed coverage on Codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
 
 Current coverage threshold: **70%** minimum required for CI to pass

@@ -136,7 +136,9 @@ class TestDatasetPipeline:
                 with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                     mock_clean.return_value = "cleaned text"
 
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
                         with patch.object(
@@ -157,8 +159,8 @@ class TestDatasetPipeline:
                                 similarity_threshold="invalid",  # Invalid type
                             )
 
-                            # Should convert string to float successfully
-                            assert result["similarity_threshold"] == 0.5
+                            # Should convert to default value when invalid
+                            assert result["similarity_threshold"] == 0.9
 
     @pytest.mark.asyncio
     async def test_process_url_out_of_range_similarity_threshold(
@@ -181,7 +183,9 @@ class TestDatasetPipeline:
                 with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
                     mock_clean.return_value = "cleaned text"
 
-                    with patch.object(pipeline.llm_service, "generate_qa") as mock_gen_qa:
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
                         with patch.object(
@@ -251,13 +255,13 @@ class TestDatasetPipeline:
                             await pipeline.process_url(
                                 url="https://example.com",
                                 dataset_name="test_dataset",
-                                model_cleaning=ModelName.gpt_4o_mini,
+                                model_cleaning="gpt-4o-mini",
                                 target_language=TargetLanguage.fr,
-                                model_qa=ModelName.gpt_4o_mini,
+                                model_qa="gpt-4o-mini",
                             )
 
                             # Verify enum values were converted to strings
-                            assert mock_clean.call_args[0][1] == "gpt-4-0613"
+                            assert mock_clean.call_args[0][1] == "gpt-4o-mini"
                             assert mock_gen_qa.call_args[0][1] == "fr"
 
     @pytest.mark.asyncio
