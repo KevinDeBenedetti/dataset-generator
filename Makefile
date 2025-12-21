@@ -1,7 +1,7 @@
 PYTHONPATH=$(PWD)
 
 .PHONY: help for datasets generator
-.DEFAULT_GOAL := help clean lint dev
+.DEFAULT_GOAL := help
 
 # --------------------------------------
 # HELPER
@@ -105,9 +105,10 @@ setup: ## Initialize client
 
 update-client: setup ## Upgrade client dependencies
 	@echo "Upgrading client dependencies..."
-	cd client && \
-	bun up --latest
-
+	cd apps/vue && \
+	bun update --latest
+	cd apps/next && \
+	bun update --latest
 
 dev: clean rmi setup ## Start the FastAPI server
 	@echo "Starting API server..."
