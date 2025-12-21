@@ -168,3 +168,188 @@ def test_clean_dataset_similarities_not_found(test_db: Session):
     """Test clean similarities with non-existent dataset."""
     with pytest.raises(ValueError, match="not found"):
         clean_dataset_similarities(test_db, "non-existent-id")
+
+
+def test_analyze_dataset_similarities_with_similar_questions(test_db: Session):
+    """Test analyze similarities finds similar questions."""
+    dataset = Dataset(name="similar_dataset")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add similar questions
+    qa1 = QASource.from_qa_generation(
+        question="What is Python programming language?",
+        answer="A high-level language",
+        context="Context 1",
+        source_url="https://example.com/1",
+        dataset_id=str(dataset.id),
+    )
+    qa2 = QASource.from_qa_generation(
+        question="What is Python programming?",
+        answer="A scripting language",
+        context="Context 2",
+        source_url="https://example.com/2",
+        dataset_id=str(dataset.id),
+    )
+    qa3 = QASource.from_qa_generation(
+        question="What is JavaScript?",
+        answer="A web language",
+        context="Context 3",
+        source_url="https://example.com/3",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa1, qa2, qa3])
+    test_db.commit()
+
+    result = analyze_dataset_similarities(test_db, str(dataset.id), threshold=0.7)
+
+    assert result["dataset_id"] == dataset.id
+    assert result["total_records"] == 3
+    assert result["similar_pairs_found"] >= 1
+    assert len(result["similarities"]) >= 1
+
+
+def test_analyze_dataset_similarities_no_similar(test_db: Session):
+    """Test analyze similarities with no similar questions."""
+    dataset = Dataset(name="unique_dataset")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add unique questions
+    qa1 = QASource.from_qa_generation(
+        question="What is Python?",
+        answer="A language",
+        context="Context 1",
+        source_url="https://example.com/1",
+        dataset_id=str(dataset.id),
+    )
+    qa2 = QASource.from_qa_generation(
+        question="How do airplanes fly?",
+        answer="Using aerodynamics",
+        context="Context 2",
+        source_url="https://example.com/2",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa1, qa2])
+    test_db.commit()
+
+    result = analyze_dataset_similarities(test_db, str(dataset.id), threshold=0.9)
+
+    assert result["similar_pairs_found"] == 0
+
+
+def test_clean_dataset_similarities_empty_records(test_db: Session):
+    """Test clean similarities with empty dataset."""
+    dataset = Dataset(name="empty_clean_dataset")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    with pytest.raises(ValueError, match="No records found"):
+        clean_dataset_similarities(test_db, str(dataset.id))
+
+
+def test_clean_dataset_similarities_removes_duplicates(test_db: Session):
+    """Test clean similarities removes duplicate questions."""
+    dataset = Dataset(name="clean_test_dataset")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add very similar questions (one with higher confidence)
+    qa1 = QASource.from_qa_generation(
+        question="What is Python programming language?",
+        answer="A high-level language",
+        context="Context 1",
+        confidence=0.9,
+        source_url="https://example.com/1",
+        dataset_id=str(dataset.id),
+    )
+    qa2 = QASource.from_qa_generation(
+        question="What is Python programming language?",
+        answer="A scripting language",
+        context="Context 2",
+        confidence=0.5,
+        source_url="https://example.com/2",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa1, qa2])
+    test_db.commit()
+
+    result = clean_dataset_similarities(test_db, str(dataset.id), threshold=0.9)
+
+    assert result["removed_records"] >= 1
+    # Verify one record was removed
+    remaining = (
+        test_db.query(QASource).filter(QASource.dataset_id == dataset.id).count()
+    )
+    assert remaining == 1
+
+
+def test_clean_dataset_similarities_keeps_higher_confidence(test_db: Session):
+    """Test clean similarities keeps record with higher confidence."""
+    dataset = Dataset(name="confidence_test")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add identical questions with different confidence
+    qa_low = QASource.from_qa_generation(
+        question="Exactly the same question",
+        answer="Low confidence answer",
+        context="Context 1",
+        confidence=0.3,
+        source_url="https://example.com/low",
+        dataset_id=str(dataset.id),
+    )
+    qa_high = QASource.from_qa_generation(
+        question="Exactly the same question",
+        answer="High confidence answer",
+        context="Context 2",
+        confidence=0.95,
+        source_url="https://example.com/high",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa_low, qa_high])
+    test_db.commit()
+
+    clean_dataset_similarities(test_db, str(dataset.id), threshold=0.99)
+
+    # Verify the high confidence one was kept
+    remaining = (
+        test_db.query(QASource).filter(QASource.dataset_id == dataset.id).first()
+    )
+    assert remaining is not None
+    assert remaining.expected_output.get("confidence") == 0.95
+
+
+def test_clean_dataset_similarities_no_duplicates(test_db: Session):
+    """Test clean similarities with no duplicates to remove."""
+    dataset = Dataset(name="no_dup_dataset")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    qa1 = QASource.from_qa_generation(
+        question="What is Python?",
+        answer="A language",
+        context="Context 1",
+        source_url="https://example.com/1",
+        dataset_id=str(dataset.id),
+    )
+    qa2 = QASource.from_qa_generation(
+        question="What is JavaScript?",
+        answer="Another language",
+        context="Context 2",
+        source_url="https://example.com/2",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa1, qa2])
+    test_db.commit()
+
+    result = clean_dataset_similarities(test_db, str(dataset.id), threshold=0.99)
+
+    assert result["removed_records"] == 0
+    assert result["total_records"] == 2

@@ -459,3 +459,97 @@ class TestDatasetPipeline:
                             assert result["total"] == 2
                             assert result["similarity_threshold"] == 0.85
                             assert len(result["qa_pairs"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_process_url_with_invalid_string_similarity_threshold(
+        self, pipeline: DatasetPipeline
+    ):
+        """Test processing with invalid string similarity threshold"""
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
+            mock_dataset = Mock()
+            mock_dataset.id = "1"
+            mock_get_dataset.return_value = mock_dataset
+
+            with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
+                mock_page = Mock()
+                mock_page.id = "1"
+                mock_page.content = "content"
+                mock_scrape.return_value = mock_page
+
+                with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
+                    mock_clean.return_value = "cleaned"
+
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
+                        mock_gen_qa.return_value = []
+
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
+                            mock_process_qa.return_value = {
+                                "total": 0,
+                                "exact_duplicates": 0,
+                                "similar_duplicates": 0,
+                            }
+
+                            # Test with invalid string
+                            result = await pipeline.process_url(
+                                url="https://example.com",
+                                dataset_name="test_invalid_string",
+                                model_cleaning="gpt-4o-mini",
+                                target_language="fr",
+                                model_qa="gpt-4o-mini",
+                                similarity_threshold="not-a-number",
+                            )
+                            # Should use default 0.9
+                            assert result["similarity_threshold"] == 0.9
+
+    @pytest.mark.asyncio
+    async def test_process_url_with_none_similarity_threshold(
+        self, pipeline: DatasetPipeline
+    ):
+        """Test processing with None similarity threshold"""
+        with patch.object(
+            pipeline.dataset_service, "get_or_create_dataset"
+        ) as mock_get_dataset:
+            mock_dataset = Mock()
+            mock_dataset.id = "1"
+            mock_get_dataset.return_value = mock_dataset
+
+            with patch.object(pipeline.scraper_service, "scrape_url") as mock_scrape:
+                mock_page = Mock()
+                mock_page.id = "1"
+                mock_page.content = "content"
+                mock_scrape.return_value = mock_page
+
+                with patch.object(pipeline.llm_service, "clean_text") as mock_clean:
+                    mock_clean.return_value = "cleaned"
+
+                    with patch.object(
+                        pipeline.llm_service, "generate_qa"
+                    ) as mock_gen_qa:
+                        mock_gen_qa.return_value = []
+
+                        with patch.object(
+                            pipeline.qa_service, "process_qa_pairs"
+                        ) as mock_process_qa:
+                            mock_process_qa.return_value = {
+                                "total": 0,
+                                "exact_duplicates": 0,
+                                "similar_duplicates": 0,
+                            }
+
+                            # Test with None
+                            result = await pipeline.process_url(
+                                url="https://example.com",
+                                dataset_name="test_none",
+                                model_cleaning="gpt-4o-mini",
+                                target_language="fr",
+                                model_qa="gpt-4o-mini",
+                                similarity_threshold=None,
+                            )
+                            # Should use default 0.9
+                            assert result["similarity_threshold"] == 0.9

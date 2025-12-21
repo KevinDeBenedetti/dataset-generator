@@ -1,0 +1,29 @@
+[run]
+source = apps/server
+omit =
+    */tests/*
+    */migrations/*
+    */__pycache__/*
+    */venv/*
+    */.venv/*
+    */alembic.ini
+    apps/server/migrations/*
+    apps/server/migrations/env.py
+    apps/server/migrations/utils/*
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+
+[html]
+directory = htmlcov

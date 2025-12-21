@@ -137,4 +137,4 @@ up-backend-local: ## Start the FastAPI server without Docker
 # --------------------------------------
 test: install
 	echo "Running tests..."
-	uv run pytest -s -v apps/server/tests/ --cov
+	uv run pytest -s -v apps/server/tests/ --cov=apps/server --cov-config=.coveragerc --cov-report=term-missing --cov-report=html
