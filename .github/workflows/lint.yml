@@ -16,10 +16,6 @@ jobs:
   lint-server:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        python-version: ${{ inputs.python-version }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,9 +68,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./apps/next
-        run: |
-          bun install --frozen-lockfile
-          bun lint
+        run: bun install --frozen-lockfile
+
+      - name: Lint Next.js app
+        working-directory: ./apps/next
+        run: bun lint
 
   lint-vue:
     runs-on: ubuntu-latest
@@ -102,6 +100,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./apps/vue
-        run: |
-          bun install --frozen-lockfile
-          bun lint
+        run: bun install --frozen-lockfile
+
+      - name: Lint Vue app
+        working-directory: ./apps/vue
+        run: bun lint
