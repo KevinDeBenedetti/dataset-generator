@@ -1,4 +1,4 @@
-name: CI/CD Workflow
+name: Tests
 
 on:
   workflow_call:
@@ -24,8 +24,22 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         run: |
           uv sync --dev
-          uv run pytest -s -v apps/server/tests/ --cov
+          uv run pytest -s -v apps/server/tests/ \
+            --cov=apps/server \
+            --cov-config=.coveragerc \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          verbose: true

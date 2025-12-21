@@ -195,3 +195,80 @@ def test_clean_similarities_dataset_not_found(client: TestClient):
     """Test clean similarities with non-existent dataset."""
     response = client.post("/dataset/non-existent-id/clean-similarities")
     assert response.status_code == 404
+
+
+def test_analyze_similarities_success(
+    client: TestClient, test_db: Session, sample_dataset_data: dict
+):
+    """Test successful analyze similarities."""
+    # Create dataset with QA records
+    dataset = Dataset(
+        name=sample_dataset_data["name"],
+        description=sample_dataset_data["description"],
+    )
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add some QA records
+    qa1 = QASource.from_qa_generation(
+        question="What is Python programming language?",
+        answer="Python is a high-level programming language.",
+        context="Python is widely used for web development.",
+        confidence=0.9,
+        source_url="https://example.com",
+        dataset_id=str(dataset.id),
+    )
+    qa2 = QASource.from_qa_generation(
+        question="What is Python used for?",
+        answer="Python is used for various applications.",
+        context="Python is versatile.",
+        confidence=0.85,
+        source_url="https://example.com",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add_all([qa1, qa2])
+    test_db.commit()
+
+    response = client.get(
+        f"/dataset/{dataset.id}/analyze-similarities", params={"threshold": 0.8}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "dataset_id" in data
+    assert "total_records" in data
+    assert data["dataset_id"] == dataset.id
+
+
+def test_clean_similarities_success(
+    client: TestClient, test_db: Session, sample_dataset_data: dict
+):
+    """Test successful clean similarities."""
+    # Create dataset
+    dataset = Dataset(
+        name=sample_dataset_data["name"],
+        description=sample_dataset_data["description"],
+    )
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    # Add some QA records
+    qa1 = QASource.from_qa_generation(
+        question="What is Python programming?",
+        answer="Python is a programming language.",
+        context="Python context here.",
+        confidence=0.9,
+        source_url="https://example.com",
+        dataset_id=str(dataset.id),
+    )
+    test_db.add(qa1)
+    test_db.commit()
+
+    response = client.post(
+        f"/dataset/{dataset.id}/clean-similarities", params={"threshold": 0.8}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "dataset_id" in data
+    assert "removed_records" in data

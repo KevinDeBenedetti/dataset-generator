@@ -7,12 +7,14 @@ import os
 # Set test environment variables BEFORE any imports that load config
 os.environ["OPENAI_API_KEY"] = "test-api-key"
 os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
-os.environ["AVAILABLE_LLMS"] = "gpt-4o-mini,mistral-small-3.1-24b-instruct-2503,gpt-4-0613,gpt-3.5-turbo-1106"
+os.environ["AVAILABLE_LLMS"] = (
+    "gpt-4o-mini,mistral-small-3.1-24b-instruct-2503,gpt-4-0613,gpt-3.5-turbo-1106"
+)
 os.environ["DEFAULT_CLEANING_MODEL"] = "gpt-4o-mini"
 os.environ["DEFAULT_QA_MODEL"] = "gpt-4o-mini"
 
 import pytest
-from typing import Any, Generator
+from typing import Generator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -67,7 +69,7 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
     )
 
     test_app.add_middleware(
-        CORSMiddleware,
+        CORSMiddleware,  # type: ignore[arg-type]
         allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
