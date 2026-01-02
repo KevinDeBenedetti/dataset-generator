@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.0...v0.7.1) (2026-01-02)
+
+
+### Chores
+
+* **deps-dev:** bump eslint-config-next in /apps/next ([20b737e](https://github.com/KevinDeBenedetti/dataset-generator/commit/20b737ebcb23b61ae462efc24ff46eff1e5848e7))
+* **deps-dev:** bump prek from 0.2.23 to 0.2.25 ([7318809](https://github.com/KevinDeBenedetti/dataset-generator/commit/7318809def44cd8ea04725db42531d29168dd724))
+* **deps-dev:** bump ty from 0.0.5 to 0.0.7 ([df49c45](https://github.com/KevinDeBenedetti/dataset-generator/commit/df49c45397194cabd440734c0bc42fe787e01087))
+* **deps-dev:** bump vue-tsc from 3.2.0 to 3.2.1 in /apps/vue ([546f7cf](https://github.com/KevinDeBenedetti/dataset-generator/commit/546f7cf284677e6486ea59b6a3d31d34a4b7488b))
+* **deps:** bump langfuse from 3.11.1 to 3.11.2 ([d5b95a6](https://github.com/KevinDeBenedetti/dataset-generator/commit/d5b95a666b67091518bc5a83d194f83342237f6f))
+* **deps:** bump sqlmodel from 0.0.27 to 0.0.30 ([abae2f3](https://github.com/KevinDeBenedetti/dataset-generator/commit/abae2f3ac02b32fd8d825f5a3356c3ec7054b56b))
+
 ## [0.7.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.6.0...v0.7.0) (2025-12-21)
 
 
