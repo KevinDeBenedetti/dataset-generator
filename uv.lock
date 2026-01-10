@@ -1172,7 +1172,7 @@ wheels = [
 
 [[package]]
 name = "instructor"
-version = "1.13.0"
+version = "1.14.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1190,9 +1190,9 @@ dependencies = [
     { name = "ty" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/f0/7f31609ec2fb84b140ff573abf1cce78cd3a2a3c6479b60aa82b69d40d2a/instructor-1.13.0.tar.gz", hash = "sha256:bf838a5c503fafdd034a9b1f8544c5e1f62462eea9f89932bc75c116ad35ab5a", size = 69898121, upload-time = "2025-11-06T04:19:31.034Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/0b/03c6da331b6795bb88db326ab5e8f00c3d6024e67ac351712f6df8fc4a88/instructor-1.14.1.tar.gz", hash = "sha256:7feaf63a8bf701d5b1e8af836264482c5ea6e7dac72a27ea3e7bbf296fea66c2", size = 69929794, upload-time = "2026-01-08T16:11:30.121Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/64/6542ac826a4c9b937b67c096a785af1aaa26b22fcb7c81223cfe4038205b/instructor-1.13.0-py3-none-any.whl", hash = "sha256:2b735b6ea0d3194548369a18254f1dde83cb5ec0b182de77adbadd8be73caddc", size = 160904, upload-time = "2025-11-06T04:19:24.674Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/a5/6ac3c4c1f52523055ab82199e4a506a04339bc75c93706601280c3529f53/instructor-1.14.1-py3-none-any.whl", hash = "sha256:4dcb9cc6fa7d6fde23f9632838e90f6b74cdc02b4d0ff2fe2116073b8a53695c", size = 169600, upload-time = "2026-01-08T16:11:32.997Z" },
 ]
 
 [[package]]
