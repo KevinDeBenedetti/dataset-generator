@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.1...v0.7.2) (2026-01-11)
+
+
+### Chores
+
+* **deps-dev:** bump @hey-api/openapi-ts in /apps/next ([e24ddf4](https://github.com/KevinDeBenedetti/dataset-generator/commit/e24ddf41b420bfe05b86e929ffc49bc265acd8c5))
+* **deps-dev:** bump @hey-api/openapi-ts in /apps/vue ([3c3d080](https://github.com/KevinDeBenedetti/dataset-generator/commit/3c3d0809deb7cbeb350781fa948ad4c0bf13ffb2))
+* **deps-dev:** bump @types/node from 25.0.3 to 25.0.6 in /apps/next ([cd7aeff](https://github.com/KevinDeBenedetti/dataset-generator/commit/cd7aeff40181d8f1f930b7bba24a6770ca88c96a))
+* **deps-dev:** bump @types/node from 25.0.3 to 25.0.6 in /apps/vue ([ed72542](https://github.com/KevinDeBenedetti/dataset-generator/commit/ed725428616f0b3a31b630b41e2e7b497b2deb41))
+* **deps-dev:** bump @types/react from 19.2.7 to 19.2.8 in /apps/next ([5041245](https://github.com/KevinDeBenedetti/dataset-generator/commit/5041245faa08c994c291ba539d71cb333d51d151))
+* **deps-dev:** bump ty from 0.0.7 to 0.0.11 ([7c58c23](https://github.com/KevinDeBenedetti/dataset-generator/commit/7c58c2315327b31d052775369ad6d535d7c515e9))
+* **deps-dev:** bump vite from 7.3.0 to 7.3.1 in /apps/vue ([c7b962b](https://github.com/KevinDeBenedetti/dataset-generator/commit/c7b962bd798e9c3474aa408b44d1eb5f2d71f6bd))
+* **deps-dev:** bump vue-tsc from 3.2.1 to 3.2.2 in /apps/vue ([587e0e1](https://github.com/KevinDeBenedetti/dataset-generator/commit/587e0e1031acb1423c123387e8a5629d464de720))
+* **deps:** bump @tanstack/react-query in /apps/next ([7f5093e](https://github.com/KevinDeBenedetti/dataset-generator/commit/7f5093ebb299073ac7a1ad98fa28760e4d7b7daf))
+* **deps:** bump instructor from 1.13.0 to 1.14.1 ([bb7e1b8](https://github.com/KevinDeBenedetti/dataset-generator/commit/bb7e1b80eeda807c0ddc6f1716ccd5c9334d10d5))
+* **deps:** bump openai from 2.14.0 to 2.15.0 ([e84c48e](https://github.com/KevinDeBenedetti/dataset-generator/commit/e84c48e40dba8f53f0df32b0c30147c31b6b3d2d))
+* **deps:** bump scrapy from 2.13.4 to 2.14.0 ([64dcbb1](https://github.com/KevinDeBenedetti/dataset-generator/commit/64dcbb157940182e1fcb685e18aec8a5c5cb2d4d))
+* **deps:** bump sqlmodel from 0.0.30 to 0.0.31 ([cc14626](https://github.com/KevinDeBenedetti/dataset-generator/commit/cc14626008f59aaf4e6030fb2610dcd2dedbf375))
+
 ## [0.7.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.0...v0.7.1) (2026-01-02)
 
 
