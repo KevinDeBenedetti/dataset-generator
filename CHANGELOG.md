@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.2...v0.7.3) (2026-01-13)
+
+
+### Chores
+
+* **deps:** bump virtualenv in the uv group across 1 directory ([471002d](https://github.com/KevinDeBenedetti/dataset-generator/commit/471002d55d02beb349d0be29df022130b883ed99))
+
 ## [0.7.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.1...v0.7.2) (2026-01-11)
 
 
