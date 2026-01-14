@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.3...v0.7.4) (2026-01-14)
+
+
+### Bug Fixes
+
+* for code scanning alert no. 8: Workflow does not contain permissions ([24ebfb3](https://github.com/KevinDeBenedetti/dataset-generator/commit/24ebfb3e1ac8e49e7bee448f6ec4816678144e5e))
+
 ## [0.7.3](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.2...v0.7.3) (2026-01-13)
 
 
