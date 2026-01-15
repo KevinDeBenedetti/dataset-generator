@@ -30,10 +30,11 @@ FROM base AS dev
 ARG APP_PORT=3000
 ENV NODE_ENV=development
 
-# Install only openssl (nodejs is already in bun:1-slim)
+# Install openssl, curl, and create non-root user
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 appuser
 
 # Copy dependencies from the previous stage
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -41,6 +42,10 @@ COPY package.json bun.lock ./
 
 # Copy source code
 COPY . .
+
+# Change ownership and switch to non-root user
+RUN chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE ${APP_PORT}
 

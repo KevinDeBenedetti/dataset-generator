@@ -3,6 +3,7 @@ Tests for LLM service.
 """
 
 from unittest.mock import MagicMock, patch
+
 from server.services.llm import LLMService, PromptManager
 
 

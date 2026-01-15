@@ -1,16 +1,17 @@
 import logging
-import requests
 import re
 import time
-from scrapy import Selector
+from datetime import UTC, datetime
+
+import requests
 from fake_useragent import UserAgent
-from sqlalchemy.orm import Session
 from requests.adapters import HTTPAdapter
+from scrapy import Selector
+from sqlalchemy.orm import Session
 from urllib3.util.retry import Retry
-from datetime import datetime, timezone
 
 from server.core.config import config
-from server.models.scraper import PageSnapshot, CleanedText
+from server.models.scraper import CleanedText, PageSnapshot
 
 
 class ScraperService:
@@ -73,7 +74,7 @@ class ScraperService:
             url=url,
             user_agent=user_agent,
             content=text,
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             url_hash=url_hash,
             dataset_id=dataset_id,
         )

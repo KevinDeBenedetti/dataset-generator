@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
 from enum import Enum
+
+from pydantic import BaseModel, Field, field_validator
+
 from server.core.config import config
 
 
@@ -29,8 +30,8 @@ class DatasetResult(BaseModel):
     status: str = Field(..., description="Status: success, error, processing")
     urls_processed: int = Field(0, description="Number of URLs processed")
     qa_pairs_generated: int = Field(0, description="Number of QA pairs generated")
-    files_generated: List[str] = Field([], description="Paths of generated files")
-    errors: List[str] = Field([], description="Potential errors")
+    files_generated: list[str] = Field([], description="Paths of generated files")
+    errors: list[str] = Field([], description="Potential errors")
     duration: float = Field(0.0, description="Duration of the task in seconds")
     rate: float = Field(0.0, description="QA generation rate (QA/s)")
 
@@ -50,7 +51,7 @@ class QA(BaseModel):
     context: str = Field(
         ..., min_length=50, description="Source text that enabled the answer"
     )
-    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
     @field_validator("question")
     @classmethod
@@ -69,10 +70,10 @@ class QA(BaseModel):
 class DatasetResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
-    qa_sources_count: Optional[int] = None
-    created_at: Optional[str] = None
-    message: Optional[str] = None
+    description: str | None = None
+    qa_sources_count: int | None = None
+    created_at: str | None = None
+    message: str | None = None
 
 
 class SimilarityPair(BaseModel):
@@ -89,7 +90,7 @@ class SimilarityAnalysisResponse(BaseModel):
     threshold: float
     total_records: int
     similar_pairs_found: int
-    similarities: List[SimilarityPair]
+    similarities: list[SimilarityPair]
 
 
 class CleanSimilarityPair(BaseModel):
@@ -113,8 +114,8 @@ class CleanSimilarityResponse(BaseModel):
     threshold: float
     total_records: int
     removed_records: int
-    details: List[CleanSimilarityPair]
-    removed_items: List[RemovedRecord]
+    details: list[CleanSimilarityPair]
+    removed_items: list[RemovedRecord]
 
 
 class DeleteDatasetResponse(BaseModel):

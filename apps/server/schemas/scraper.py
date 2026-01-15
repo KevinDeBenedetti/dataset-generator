@@ -1,14 +1,16 @@
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field as dc_field
 import time
+from dataclasses import dataclass
+from dataclasses import field as dc_field
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class UrlEntry(BaseModel):
     """An individual URL entry with its description"""
 
     url: str = Field(..., description="URL to scrape")
-    description: Optional[str] = Field(None, description="Source description")
+    description: str | None = Field(None, description="Source description")
 
 
 class UrlsConfig(BaseModel):
@@ -28,10 +30,10 @@ class UrlsConfig(BaseModel):
 class ScrapingTask(BaseModel):
     """Scraping task with hierarchical structure as in urls.json"""
 
-    urls_config: Dict[str, Any] = Field(
+    urls_config: dict[str, Any] = Field(
         ..., description="Configuration of URLs with hierarchical structure"
     )
-    target_language: Optional[str] = Field(
+    target_language: str | None = Field(
         None, description="Target language for QA (default: fr)"
     )
 
@@ -39,7 +41,7 @@ class ScrapingTask(BaseModel):
 class SimpleUrlList(BaseModel):
     """Simplified format for a list of URLs to scrape"""
 
-    urls: List[str] = Field(..., description="Simple list of URLs to scrape")
+    urls: list[str] = Field(..., description="Simple list of URLs to scrape")
     category: str = Field("general", description="Category for all URLs")
 
 
@@ -55,12 +57,12 @@ class ScrapedContent:
 class ScrapingMetrics:
     urls_processed: int = 0
     qa_pairs_generated: int = 0
-    errors: List[str] = dc_field(default_factory=list)
+    errors: list[str] = dc_field(default_factory=list)
     start_time: float = dc_field(default_factory=time.time)
     duration: float = 0.0
     rate: float = 0.0
-    _start_time: Optional[float] = None
-    _end_time: Optional[float] = None
+    _start_time: float | None = None
+    _end_time: float | None = None
 
     def add_error(self, error: str):
         from datetime import datetime

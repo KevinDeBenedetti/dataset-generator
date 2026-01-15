@@ -1,6 +1,8 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 from sqlalchemy.orm import Session
+
 from server.models.dataset import QASource
 
 
@@ -23,7 +25,7 @@ class QAService:
             self.db.commit()
             logging.info(f"Deleted QASource: {id}")
 
-    def update_qa_source(self, id: str, updates: Dict[str, Any]) -> QASource:
+    def update_qa_source(self, id: str, updates: dict[str, Any]) -> QASource:
         """Updates a QASource record in the database"""
         qa_source = self.db.query(QASource).filter(QASource.id == id).first()
         if not qa_source:
@@ -45,15 +47,15 @@ class QAService:
 
     def process_qa_pairs(
         self,
-        qa_list: List[Any],
+        qa_list: list[Any],
         cleaned_text: str,
         url: str,
         page_snapshot_id: str,
         dataset_name: str,
         model: str,
-        dataset_id: Optional[str] = None,
+        dataset_id: str | None = None,
         similarity_threshold: float = 0.9,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Processes and saves QA pairs, checking for duplicates"""
         qa_records = []
         exact_duplicates = 0

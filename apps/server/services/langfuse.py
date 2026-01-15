@@ -1,15 +1,15 @@
-import logging
 import json
+import logging
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
 
-from langfuse import get_client, Langfuse
+from langfuse import Langfuse, get_client
 
 
 def prepare_langfuse_dataset(
-    data: List[Dict], dataset_name: str
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    data: list[dict], dataset_name: str
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Transforms JSON data into Langfuse Dataset format
     """
@@ -42,7 +42,7 @@ def prepare_langfuse_dataset(
     return dataset, items
 
 
-def load_json_dataset(file_path: Path) -> List[Dict]:
+def load_json_dataset(file_path: Path) -> list[dict]:
     """
     Loads a JSON dataset file
     """
@@ -53,12 +53,12 @@ def load_json_dataset(file_path: Path) -> List[Dict]:
         with file_path.open("r", encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON file: {e}")
+        raise ValueError(f"Invalid JSON file: {e}") from e
     except Exception as e:
-        raise ValueError(f"Error reading the file: {e}")
+        raise ValueError(f"Error reading the file: {e}") from e
 
 
-def scan_dataset_files(qa_dir: Path) -> List[str]:
+def scan_dataset_files(qa_dir: Path) -> list[str]:
     """
     Scans the directory to find available JSON files
     """
@@ -68,10 +68,10 @@ def scan_dataset_files(qa_dir: Path) -> List[str]:
 
 
 def create_langfuse_dataset_with_items(
-    dataset_config: Dict[str, Any],
-    dataset_items: List[Dict[str, Any]],
-    langfuse_client: Optional[Langfuse] = None,
-) -> Dict[str, Any]:
+    dataset_config: dict[str, Any],
+    dataset_items: list[dict[str, Any]],
+    langfuse_client: Langfuse | None = None,
+) -> dict[str, Any]:
     """
     Creates a dataset in Langfuse with its items
     """

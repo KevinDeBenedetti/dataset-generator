@@ -1,11 +1,12 @@
 # myapp/db_utils.py
+import logging
+import os
+from pathlib import Path
+
 from alembic import command
 from alembic.config import Config
-from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-import logging
-from pathlib import Path
-import os
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 logger = logging.getLogger(__name__)

@@ -1,25 +1,22 @@
-from dataclasses import dataclass, field
-from typing import List, Optional
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def parse_list_env(env_var: str, default: Optional[List[str]] = None) -> List[str]:
-    """Parse a comma-separated environment variable into a list."""
-    value = os.getenv(env_var)
-    if not value:
-        return default or []
-    return [item.strip() for item in value.split(",")]
+class Settings(BaseSettings):
+    """Application settings with Pydantic validation and .env support."""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-@dataclass
-class Config:
     # API Configuration
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
-    openai_base_url: str = field(default_factory=lambda: os.getenv("OPENAI_BASE_URL"))
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+
+    # CORS - configurable origins for security
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8080"]
 
     # Scraping
     max_retries: int = 3
@@ -31,44 +28,43 @@ class Config:
     max_tokens_qa: int = 4000
     temperature: float = 0.0
 
-    # Available LLMs
-    available_models: List[str] = field(
-        default_factory=lambda: parse_list_env(
-            "AVAILABLE_LLMS",
-            ["mistral-small-3.1-24b-instruct-2503", "gpt-4-0613", "gpt-3.5-turbo-1106"],
-        )
-    )
+    # Available LLMs (comma-separated in env)
+    available_models: list[str] = [
+        "mistral-small-3.1-24b-instruct-2503",
+        "gpt-4-0613",
+        "gpt-3.5-turbo-1106",
+    ]
 
-    # Defaults for runtime overrides (set via route)
-    target_language: str = field(
-        default_factory=lambda: os.getenv("DEFAULT_TARGET_LANGUAGE", "en")
-    )
-    model_cleaning: str = field(
-        default_factory=lambda: os.getenv(
-            "DEFAULT_CLEANING_MODEL", "mistral-small-3.1-24b-instruct-2503"
-        )
-    )
-    model_qa: str = field(
-        default_factory=lambda: os.getenv(
-            "DEFAULT_QA_MODEL", "mistral-small-3.1-24b-instruct-2503"
-        )
-    )
+    # Defaults for runtime overrides
+    target_language: str = "en"
+    model_cleaning: str = "mistral-small-3.1-24b-instruct-2503"
+    model_qa: str = "mistral-small-3.1-24b-instruct-2503"
 
     # Output
-    output_formats: List[str] = field(default_factory=lambda: ["json", "jsonl", "csv"])
+    output_formats: list[str] = ["json", "jsonl", "csv"]
     scrapes_dir: str = "scrapes"
     datasets_dir: str = "datasets"
 
-    # Validation
-    def __post_init__(self):
-        if not self.openai_api_key:
-            raise EnvironmentError("OPENAI_API_KEY missing in .env")
+    @field_validator("available_models", "cors_origins", mode="before")
+    @classmethod
+    def parse_comma_separated(cls, v):
+        """Parse comma-separated string into list."""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
-        # Ensure default models are in available models
+    @model_validator(mode="after")
+    def ensure_models_in_available(self):
+        """Ensure default models are in available models list."""
         if self.model_cleaning not in self.available_models:
             self.available_models.append(self.model_cleaning)
         if self.model_qa not in self.available_models:
             self.available_models.append(self.model_qa)
+        return self
 
 
-config = Config()
+config = Settings()
+
+
+# Backwards compatibility alias
+Config = Settings

@@ -1,7 +1,8 @@
 """Tests for generate API endpoints"""
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -26,9 +27,9 @@ def valid_request_data():
     return {
         "url": "https://example.com",
         "dataset_name": "test_dataset",
-        "model_cleaning": "gpt-4o-mini",
+        "model_cleaning": "gpt-4-0613",
         "target_language": "fr",
-        "model_qa": "gpt-4o-mini",
+        "model_qa": "gpt-4-0613",
         "similarity_threshold": 0.9,
     }
 
@@ -231,7 +232,7 @@ class TestGenerateDataset:
         assert response.status_code == 201
         data = response.json()
         assert "processing_time" in data
-        assert isinstance(data["processing_time"], (int, float))
+        assert isinstance(data["processing_time"], int | float)
         assert data["processing_time"] >= 0
 
     def test_create_dataset_all_languages(self, mock_pipeline, db: Session):

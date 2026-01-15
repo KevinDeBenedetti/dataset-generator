@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class QAPair(BaseModel):
@@ -14,13 +13,13 @@ class DatasetGenerationRequest(BaseModel):
 
     url: HttpUrl = Field(..., description="URL to process to generate the dataset")
     dataset_name: str = Field(..., description="Name of the dataset to create")
-    model_cleaning: Optional[str] = Field(
+    model_cleaning: str | None = Field(
         None, description="Model to use for text cleaning"
     )
-    target_language: Optional[str] = Field(
+    target_language: str | None = Field(
         None, description="Target language for QA generation"
     )
-    model_qa: Optional[str] = Field(None, description="Model to use for QA generation")
+    model_qa: str | None = Field(None, description="Model to use for QA generation")
     similarity_threshold: float = Field(
         default=0.9,
         ge=0.0,
@@ -46,7 +45,7 @@ class DatasetGenerationResponse(BaseModel):
     """Model for dataset generation response"""
 
     id: str = Field(..., description="ID of the dataset")
-    qa_pairs: List[QAPair] = Field(
+    qa_pairs: list[QAPair] = Field(
         ..., description="List of generated question-answer pairs"
     )
     dataset_name: str = Field(..., description="Name of the dataset")
@@ -83,7 +82,7 @@ class ErrorResponse(BaseModel):
     """Model for error responses"""
 
     detail: str = Field(..., description="Detailed error description")
-    error_code: Optional[str] = Field(None, description="Specific error code")
+    error_code: str | None = Field(None, description="Specific error code")
 
     model_config = ConfigDict(
         json_schema_extra={

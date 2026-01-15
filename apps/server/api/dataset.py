@@ -1,22 +1,21 @@
 import logging
-from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from server.core.database import get_db
 from server.core import Dataset, QASource
+from server.core.database import get_db
+from server.schemas.dataset import (
+    CleanSimilarityResponse,
+    DatasetResponse,
+    DeleteDatasetResponse,
+    SimilarityAnalysisResponse,
+)
 from server.services.dataset import (
-    get_datasets,
-    get_dataset_by_id,
     analyze_dataset_similarities,
     clean_dataset_similarities,
-)
-from server.schemas.dataset import (
-    DatasetResponse,
-    SimilarityAnalysisResponse,
-    CleanSimilarityResponse,
-    DeleteDatasetResponse,
+    get_dataset_by_id,
+    get_datasets,
 )
 
 router = APIRouter(
@@ -53,11 +52,11 @@ async def create_dataset(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error creating new dataset: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error creating new dataset: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/dataset", response_model=Union[DatasetResponse, List[DatasetResponse]])
+@router.get("/dataset", response_model=DatasetResponse | list[DatasetResponse])
 async def get_all_datasets(
     dataset_id: str = Query(
         None, description="Optional dataset ID to get specific dataset details"
@@ -79,8 +78,8 @@ async def get_all_datasets(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching datasets: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error fetching datasets: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(
@@ -96,10 +95,10 @@ async def analyze_similarities(
     try:
         return analyze_dataset_similarities(db, dataset_id, threshold)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logging.error(f"Error in analyze_similarities endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error in analyze_similarities endpoint: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -116,10 +115,10 @@ async def clean_similarities(
     try:
         return clean_dataset_similarities(db, dataset_id, threshold)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logging.error(f"Error in clean_similarities endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error in clean_similarities endpoint: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/dataset/{dataset_id}", response_model=DeleteDatasetResponse)
@@ -148,6 +147,6 @@ async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
+        logging.error(f"Error deleting dataset {dataset_id}: {e!s}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

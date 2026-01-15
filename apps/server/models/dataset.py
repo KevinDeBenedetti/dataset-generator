@@ -1,10 +1,11 @@
-import uuid
 import hashlib
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from sqlalchemy import Column, String, DateTime, JSON, ForeignKey, Boolean
-from sqlalchemy.orm import Session, relationship
+import uuid
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
+from typing import Any
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy.orm import Session, relationship
 
 from server.core.database import Base
 
@@ -15,7 +16,7 @@ class Dataset(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relations
     page_snapshots = relationship(
@@ -36,8 +37,8 @@ class QASource(Base):
     qa_metadata = Column(JSON, nullable=False, default=dict)
     status = Column(String, default="ACTIVE", index=True)
     model = Column(String)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC))
     human_reviewed = Column(Boolean, default=False)
 
     @staticmethod
@@ -58,7 +59,7 @@ class QASource(Base):
         context: str,
         source_url: str,
         threshold: float = 0.9,
-    ) -> Optional[str]:
+    ) -> str | None:
         # Retrieve all records and filter in Python
         # This avoids issues with the .astext operator in some SQLAlchemy versions
         all_records = db.query(cls).all()
@@ -100,7 +101,7 @@ class QASource(Base):
         context: str,
         source_url: str,
         similarity_threshold: float = 0.9,
-    ) -> Dict[str, Optional[str] | float]:
+    ) -> dict[str, str | None | float]:
         """Checks for duplicates by exact hash AND similarity"""
 
         # 1. Check by exact hash
@@ -145,9 +146,9 @@ class QASource(Base):
         context: str,
         confidence: float = 1.0,
         source_url: str = "",
-        source_trace_id: Optional[str] = None,
-        page_snapshot_id: Optional[str] = None,
-        dataset_id: Optional[str] = None,  # Added dataset_id parameter
+        source_trace_id: str | None = None,
+        page_snapshot_id: str | None = None,
+        dataset_id: str | None = None,  # Added dataset_id parameter
         index: int = 0,
     ) -> "QASource":
         if not question or not answer:
@@ -169,7 +170,7 @@ class QASource(Base):
             page_snapshot_id=page_snapshot_id,
             dataset_id=dataset_id,  # Using the dataset_id
             qa_metadata={
-                "generation_timestamp": datetime.now(timezone.utc).isoformat(),
+                "generation_timestamp": datetime.now(UTC).isoformat(),
                 "context_length": len(context) if context else 0,
                 "question_length": len(question),
                 "answer_length": len(answer),
@@ -202,7 +203,7 @@ class QASource(Base):
         """Get confidence from expected_output JSON"""
         return self.expected_output.get("confidence", 1.0)
 
-    def to_langfuse_dataset_item(self) -> Dict[str, Any]:
+    def to_langfuse_dataset_item(self) -> dict[str, Any]:
         """Convert to Langfuse Dataset Item format"""
         item = {"input": self.input, "id": self.id}
 

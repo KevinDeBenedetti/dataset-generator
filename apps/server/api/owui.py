@@ -1,22 +1,24 @@
+import json
+import logging
+import os
 from datetime import datetime
 from typing import Any, cast
+
+import httpx
+import instructor
+import openai
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
-import httpx
-import json
-import os
-import openai
-import instructor
+
 from server.core import QASource
-from server.models.scraper import PageSnapshot
-from server.services.dataset import DatasetService
-from server.services.scraper import ScraperService
-from server.services.qa import QAService
 from server.core.database import get_db
 from server.core.utils.text import chunk_text
-from server.core.utils.url import clean_base_url, build_api_url
+from server.core.utils.url import build_api_url, clean_base_url
+from server.models.scraper import PageSnapshot
 from server.schemas.q_a import UnitQuestionAnswer, UnitQuestionAnswerResponse
-import logging
+from server.services.dataset import DatasetService
+from server.services.qa import QAService
+from server.services.scraper import ScraperService
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -57,11 +59,11 @@ async def health_check():
                 content=response.json(), status_code=response.status_code
             )
     except httpx.HTTPStatusError as e:
-        logger.error(f"Health check failed: {str(e)}")
+        logger.error(f"Health check failed: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="OWUI service is unreachable",
-        )
+        ) from e
 
 
 @owui_router.get("/owui/knowledge")
@@ -75,11 +77,11 @@ async def get_knowledge():
                 content=response.json(), status_code=response.status_code
             )
     except httpx.HTTPStatusError as e:
-        logger.error(f"Failed to fetch knowledge list: {str(e)}")
+        logger.error(f"Failed to fetch knowledge list: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch knowledge list",
-        )
+        ) from e
 
 
 @owui_router.get("/owui/knowledge/{knowledge_id}")
@@ -91,11 +93,11 @@ async def get_knowledge_by_id(knowledge_id: str):
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error while fetching knowledge {knowledge_id}: {str(e)}")
+        logger.error(f"HTTP error while fetching knowledge {knowledge_id}: {e!s}")
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"Failed to fetch knowledge {knowledge_id}",
-        )
+        ) from e
 
 
 @owui_router.get("/owui/files/{id}/data/content")
@@ -109,11 +111,11 @@ async def get_file_content(id: str):
                 content=response.json(), status_code=response.status_code
             )
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error while fetching file content {id}: {str(e)}")
+        logger.error(f"HTTP error while fetching file content {id}: {e!s}")
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"Failed to fetch file content {id}",
-        )
+        ) from e
 
 
 @owui_router.get(
@@ -131,8 +133,8 @@ async def get_knowledge_enrichment(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch knowledge {knowledge_id}: {str(e)}",
-        )
+            detail=f"Failed to fetch knowledge {knowledge_id}: {e!s}",
+        ) from e
 
     logger.info(f"Fetched knowledge for ID: {knowledge_id}")
     knowledge_name = knowledge.get("name", f"dataset_{knowledge_id}")
@@ -144,8 +146,8 @@ async def get_knowledge_enrichment(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create or retrieve dataset: {str(e)}",
-        )
+            detail=f"Failed to create or retrieve dataset: {e!s}",
+        ) from e
     dataset_id = dataset.id
     logger.info(
         f"Dataset created with ID: {dataset_id} for knowledge ID: {knowledge_id}"
@@ -166,11 +168,11 @@ async def get_knowledge_enrichment(
 
             content = json.loads(content.body)
         except Exception as e:
-            logger.error(f"Failed to fetch content for file ID {file_id}: {str(e)}")
+            logger.error(f"Failed to fetch content for file ID {file_id}: {e!s}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to fetch content for file ID {file_id}: {str(e)}",
-            )
+                detail=f"Failed to fetch content for file ID {file_id}: {e!s}",
+            ) from e
         page_snapshot = PageSnapshot(
             url=file_id,
             user_agent="owui-integration",
@@ -261,11 +263,11 @@ async def get_knowledge_enrichment(
                     qa_service.add_qa_source(qa_record)
             except Exception as e:
                 logger.error(
-                    f"Failed to generate QA pairs for file ID {file_id}: {str(e)}"
+                    f"Failed to generate QA pairs for file ID {file_id}: {e!s}"
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to generate QA pairs for file ID {file_id}: {str(e)}",
-                )
+                    detail=f"Failed to generate QA pairs for file ID {file_id}: {e!s}",
+                ) from e
 
     return file_contents

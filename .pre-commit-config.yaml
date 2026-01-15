@@ -98,7 +98,7 @@ repos:
   # Python - Backend (apps/server)
   # ===============================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+    rev: v0.11.12
     hooks:
       - id: ruff
         name: 🐍 Ruff lint
