@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class QAItem(BaseModel):
@@ -10,17 +11,17 @@ class QAItem(BaseModel):
     question: str = Field(..., description="Question")
     answer: str = Field(..., description="Answer")
     context: str = Field(..., description="Source context")
-    source_url: Optional[str] = Field(None, description="Source URL")
+    source_url: str | None = Field(None, description="Source URL")
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
     created_at: datetime = Field(..., description="Creation date")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
 
 
 class QAItemDetailed(QAItem):
     """Model for a Q&A item with full details"""
 
-    updated_at: Optional[datetime] = Field(None, description="Last modification date")
-    dataset: Optional[Dict[str, Optional[str]]] = Field(
+    updated_at: datetime | None = Field(None, description="Last modification date")
+    dataset: dict[str, str | None] | None = Field(
         None, description="Associated dataset information"
     )
 
@@ -33,8 +34,8 @@ class QAListResponse(BaseModel):
     total_count: int = Field(..., description="Total number of items")
     returned_count: int = Field(..., description="Number of items returned")
     offset: int = Field(0, description="Applied offset")
-    limit: Optional[int] = Field(None, description="Applied limit")
-    qa_data: List[QAItem] = Field(..., description="List of question-answers")
+    limit: int | None = Field(None, description="Applied limit")
+    qa_data: list[QAItem] = Field(..., description="List of question-answers")
 
 
 class QAResponse(BaseModel):
@@ -44,12 +45,12 @@ class QAResponse(BaseModel):
     question: str = Field(..., description="Question")
     answer: str = Field(..., description="Answer")
     context: str = Field(..., description="Source context")
-    source_url: Optional[str] = Field(None, description="Source URL")
+    source_url: str | None = Field(None, description="Source URL")
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
     created_at: datetime = Field(..., description="Creation date")
-    updated_at: Optional[datetime] = Field(None, description="Last modification date")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
-    dataset: Optional[Dict[str, Optional[str]]] = Field(
+    updated_at: datetime | None = Field(None, description="Last modification date")
+    metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
+    dataset: dict[str, str | None] | None = Field(
         None, description="Associated dataset information"
     )
 

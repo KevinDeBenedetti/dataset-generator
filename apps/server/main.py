@@ -1,18 +1,19 @@
-from typing import Any, cast
-from contextlib import asynccontextmanager
-import logging
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 from importlib import import_module
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+from server.api import dataset, generate, openai, owui, q_a
 from server.core import logger as logger_module
-from server.api import dataset, generate, q_a, openai, owui
-from server.services import langfuse
-from server.migrations.utils.db_utils import upgrade_db
+from server.core.config import config
 from server.core.database import SQLALCHEMY_DATABASE_URL
+from server.migrations.utils.db_utils import upgrade_db
+from server.services import langfuse
 
 logger_module.setup_logging()
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ app = FastAPI(
 
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    allow_origins=["*"],
+    allow_origins=config.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

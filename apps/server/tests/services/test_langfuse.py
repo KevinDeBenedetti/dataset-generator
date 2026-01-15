@@ -2,20 +2,21 @@
 Tests for Langfuse service functions.
 """
 
-import pytest
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from server.services.langfuse import (
-    prepare_langfuse_dataset,
-    load_json_dataset,
-    scan_dataset_files,
     create_langfuse_dataset_with_items,
-    normalize_dataset_name,
-    is_langfuse_configured,
     is_langfuse_available,
+    is_langfuse_configured,
+    load_json_dataset,
+    normalize_dataset_name,
+    prepare_langfuse_dataset,
+    scan_dataset_files,
 )
 
 
@@ -48,7 +49,7 @@ class TestPrepareLangfuseDataset:
         """Test dataset preparation when optional fields are missing."""
         data = [{"question": "Test?", "answer": "Answer"}]
 
-        dataset, items = prepare_langfuse_dataset(data, "minimal-dataset")
+        _dataset, items = prepare_langfuse_dataset(data, "minimal-dataset")
 
         assert len(items) == 1
         assert items[0]["id"] == "item_0"
@@ -103,9 +104,11 @@ class TestLoadJsonDataset:
 
     def test_load_directory_instead_of_file(self):
         """Test loading a directory instead of a file."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with pytest.raises(FileNotFoundError):
-                load_json_dataset(Path(temp_dir))
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            pytest.raises(FileNotFoundError),
+        ):
+            load_json_dataset(Path(temp_dir))
 
 
 class TestScanDatasetFiles:
@@ -256,12 +259,12 @@ class TestIsLangfuseAvailable:
 
     def test_available_when_configured_and_client_works(self):
         """Test availability when configured and client initializes."""
-        with patch(
-            "server.services.langfuse.is_langfuse_configured", return_value=True
+        with (
+            patch("server.services.langfuse.is_langfuse_configured", return_value=True),
+            patch("server.services.langfuse.get_client") as mock_get,
         ):
-            with patch("server.services.langfuse.get_client") as mock_get:
-                mock_get.return_value = MagicMock()
-                assert is_langfuse_available() is True
+            mock_get.return_value = MagicMock()
+            assert is_langfuse_available() is True
 
     def test_not_available_when_not_configured(self):
         """Test not available when not configured."""
@@ -272,9 +275,9 @@ class TestIsLangfuseAvailable:
 
     def test_not_available_when_client_fails(self):
         """Test not available when client initialization fails."""
-        with patch(
-            "server.services.langfuse.is_langfuse_configured", return_value=True
+        with (
+            patch("server.services.langfuse.is_langfuse_configured", return_value=True),
+            patch("server.services.langfuse.get_client") as mock_get,
         ):
-            with patch("server.services.langfuse.get_client") as mock_get:
-                mock_get.side_effect = Exception("Connection failed")
-                assert is_langfuse_available() is False
+            mock_get.side_effect = Exception("Connection failed")
+            assert is_langfuse_available() is False

@@ -1,7 +1,9 @@
 import logging
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
 from difflib import SequenceMatcher
+from typing import Any
+
+from sqlalchemy.orm import Session
+
 from server.models.dataset import Dataset, QASource
 
 
@@ -10,7 +12,7 @@ class DatasetService:
         self.db = db
 
     def get_or_create_dataset(
-        self, name: str, description: Optional[str] = None
+        self, name: str, description: str | None = None
     ) -> Dataset:
         """Retrieves an existing dataset or creates a new one"""
         existing_dataset = self.db.query(Dataset).filter(Dataset.name == name).first()
@@ -48,7 +50,7 @@ class DatasetService:
         return dataset
 
 
-def get_datasets(db: Session) -> List[Dict[str, Any]]:
+def get_datasets(db: Session) -> list[dict[str, Any]]:
     try:
         datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
         return [
@@ -56,11 +58,11 @@ def get_datasets(db: Session) -> List[Dict[str, Any]]:
             for dataset in datasets
         ]
     except Exception as e:
-        logging.error(f"Error retrieving datasets: {str(e)}")
+        logging.error(f"Error retrieving datasets: {e!s}")
         raise
 
 
-def get_dataset_by_id(db: Session, dataset_id: str) -> Optional[Dict[str, Any]]:
+def get_dataset_by_id(db: Session, dataset_id: str) -> dict[str, Any] | None:
     try:
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
@@ -78,13 +80,13 @@ def get_dataset_by_id(db: Session, dataset_id: str) -> Optional[Dict[str, Any]]:
             "qa_sources_count": qa_count,
         }
     except Exception as e:
-        logging.error(f"Error retrieving dataset {dataset_id}: {str(e)}")
+        logging.error(f"Error retrieving dataset {dataset_id}: {e!s}")
         raise
 
 
 def analyze_dataset_similarities(
     db: Session, dataset_id: str, threshold: float = 0.8
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Analyzes similar questions in a dataset"""
     try:
         # Check if dataset exists
@@ -102,7 +104,7 @@ def analyze_dataset_similarities(
         processed_pairs = set()
 
         for i, record1 in enumerate(records):
-            for j, record2 in enumerate(records[i + 1 :], i + 1):
+            for _j, record2 in enumerate(records[i + 1 :], i + 1):
                 pair_key = tuple(sorted([record1.id, record2.id]))
                 if pair_key in processed_pairs:
                     continue
@@ -141,15 +143,13 @@ def analyze_dataset_similarities(
         }
 
     except Exception as e:
-        logging.error(
-            f"Error analyzing similarities for dataset {dataset_id}: {str(e)}"
-        )
+        logging.error(f"Error analyzing similarities for dataset {dataset_id}: {e!s}")
         raise
 
 
 def clean_dataset_similarities(
     db: Session, dataset_id: str, threshold: float = 0.8
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Cleans similar questions in a dataset by removing duplicates"""
     try:
         # Check if dataset exists
@@ -171,7 +171,7 @@ def clean_dataset_similarities(
         removed_records = []
 
         for i, record1 in enumerate(records):
-            for j, record2 in enumerate(records[i + 1 :], i + 1):
+            for _j, record2 in enumerate(records[i + 1 :], i + 1):
                 pair_key = tuple(sorted([record1.id, record2.id]))
                 if pair_key in processed_pairs:
                     continue
@@ -260,5 +260,5 @@ def clean_dataset_similarities(
 
     except Exception as e:
         db.rollback()
-        logging.error(f"Error cleaning similarities for dataset {dataset_id}: {str(e)}")
+        logging.error(f"Error cleaning similarities for dataset {dataset_id}: {e!s}")
         raise

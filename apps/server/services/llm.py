@@ -1,7 +1,9 @@
 import logging
-import openai
+from typing import Any, cast
+
 import instructor
-from typing import Any, List, Dict, Optional, cast
+import openai
+
 from server.core.config import config
 from server.schemas.dataset import QA
 
@@ -28,7 +30,7 @@ class PromptManager:
     """
 
     @classmethod
-    def get_qa_prompt(cls, context: str, target_language: Optional[str] = None) -> str:
+    def get_qa_prompt(cls, context: str, target_language: str | None = None) -> str:
         target_language = target_language or config.target_language or "en"
         return f"""
         Generate high-quality question-answer pairs based on this text.
@@ -55,7 +57,7 @@ class LLMService:
         )
         self.prompt_manager = PromptManager()
 
-    def clean_text(self, text: str, model: Optional[str] = None) -> str:
+    def clean_text(self, text: str, model: str | None = None) -> str:
         """Clean text using provided model or fallback to config.model_cleaning."""
         model = model or config.model_cleaning
         try:
@@ -76,9 +78,9 @@ class LLMService:
     def generate_qa(
         self,
         text: str,
-        target_language: Optional[str] = None,
-        model: Optional[str] = None,
-    ) -> List[QA]:
+        target_language: str | None = None,
+        model: str | None = None,
+    ) -> list[QA]:
         """Generate QA using optional target_language and model; fall back to config."""
         target_language = target_language or config.target_language
         model = model or config.model_qa
@@ -101,7 +103,7 @@ class LLMService:
             logging.error(f"QA generation failed: {e}")
             return []
 
-    def get_models(self) -> List[Dict]:
+    def get_models(self) -> list[dict]:
         """Returns the list of available models from the OpenAI API."""
         try:
             resp = self.client.models.list()

@@ -5,20 +5,21 @@ description = "A collection of web scraping datasets powered by FastAPI and Scra
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "dotenv>=0.9.9",
     "fake-useragent>=2.2.0",
-    "fastapi[standard]>=0.126.0",
+    "fastapi[standard]>=0.128.0",
     "httpx>=0.28.1",
-    "instructor>=1.10.0",
-    "langfuse>=3.3.2",
-    "openai>=2.9.0",
+    "instructor>=1.14.3",
+    "langfuse>=3.12.0",
+    "openai>=2.15.0",
     "pydantic>=2.0.0",
+    "pydantic-settings>=2.7.0",
     "pytest>=9.0.2",
+    "python-dotenv>=1.0.0",
     "requests>=2.32.5",
-    "scrapy>=2.13.4",
-    "sqlmodel>=0.0.24",
-    "alembic>=1.16.5",
-    "uvicorn[standard]>=0.27.1",
+    "scrapy>=2.14.1",
+    "sqlmodel>=0.0.31",
+    "alembic>=1.18.1",
+    "uvicorn[standard]>=0.40.0",
 ]
 
 [dependency-groups]
@@ -35,6 +36,35 @@ migration = [
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["apps/server"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # Pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (security)
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "S101",   # assert usage (allowed in tests)
+    "B008",   # Do not perform function calls in argument defaults (needed for FastAPI Depends)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["server"]
+
+[tool.ruff.lint.per-file-ignores]
+"apps/server/tests/**/*.py" = ["S101"]  # Allow asserts in tests
 
 [tool.coverage.run]
 relative_files = true

@@ -4,6 +4,9 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from server.core.config import config
+from server.core.database import get_db
+from server.pipelines.dataset import DatasetPipeline
 from server.schemas.dataset import TargetLanguage
 from server.schemas.generate import (
     DatasetGenerationRequest,
@@ -11,9 +14,6 @@ from server.schemas.generate import (
     ErrorResponse,
     QAPair,
 )
-from server.core.database import get_db
-from server.pipelines.dataset import DatasetPipeline
-from server.core.config import config
 
 router = APIRouter(
     prefix="/dataset",
@@ -131,8 +131,8 @@ async def create_dataset_for_url(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Unexpected error in create_dataset_for_url: {str(e)}")
+        logging.error(f"Unexpected error in create_dataset_for_url: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
-        )
+        ) from e

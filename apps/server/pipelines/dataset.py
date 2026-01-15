@@ -1,12 +1,13 @@
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any
+
 from sqlalchemy.orm import Session
 
-from server.services.scraper import ScraperService
-from server.services.llm import LLMService
-from server.services.dataset import DatasetService
-from server.services.qa import QAService
 from server.schemas.dataset import TargetLanguage
+from server.services.dataset import DatasetService
+from server.services.llm import LLMService
+from server.services.qa import QAService
+from server.services.scraper import ScraperService
 
 
 class DatasetPipeline:
@@ -23,11 +24,11 @@ class DatasetPipeline:
         self,
         url: str,
         dataset_name: str,
-        model_cleaning: Union[str, Any],
-        target_language: Union[str, TargetLanguage],
-        model_qa: Union[str, Any],
-        similarity_threshold: Optional[Union[float, str]] = None,
-    ) -> Dict[str, Any]:
+        model_cleaning: str | Any,
+        target_language: str | TargetLanguage,
+        model_qa: str | Any,
+        similarity_threshold: float | str | None = None,
+    ) -> dict[str, Any]:
         """Executes the complete pipeline for a URL"""
         # Normalize similarity_threshold: accept float or numeric string
         if isinstance(similarity_threshold, str):
@@ -137,5 +138,5 @@ class DatasetPipeline:
             }
 
         except Exception as e:
-            logging.error(f"Error in dataset pipeline: {str(e)}")
+            logging.error(f"Error in dataset pipeline: {e!s}")
             raise e

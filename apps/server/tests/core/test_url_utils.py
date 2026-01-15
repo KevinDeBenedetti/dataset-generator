@@ -1,7 +1,8 @@
 """Tests for URL utilities"""
 
 import pytest
-from server.core.utils.url import clean_base_url, build_api_url
+
+from server.core.utils.url import build_api_url, clean_base_url
 
 
 class TestCleanBaseUrl:

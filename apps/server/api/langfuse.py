@@ -1,11 +1,10 @@
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from server.models.dataset import Dataset, QASource
 from server.core.database import get_db
+from server.models.dataset import Dataset, QASource
 from server.services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
@@ -58,14 +57,16 @@ async def preview_dataset_transformation(
         raise
     except Exception as e:
         logging.exception("Error during preview")
-        raise HTTPException(status_code=500, detail=f"Error during preview: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error during preview: {e!s}"
+        ) from e
 
 
 @router.post("/export")
 async def export_dataset(
     db: Session = Depends(get_db),
     dataset_name: str = Query(..., description="Dataset name in the database"),
-    langfuse_dataset_name: Optional[str] = Query(
+    langfuse_dataset_name: str | None = Query(
         None, description="Custom name for the dataset in Langfuse"
     ),
 ):
@@ -123,5 +124,5 @@ async def export_dataset(
     except Exception as e:
         logging.exception("Error exporting to Langfuse")
         raise HTTPException(
-            status_code=500, detail=f"Error exporting to Langfuse: {str(e)}"
-        )
+            status_code=500, detail=f"Error exporting to Langfuse: {e!s}"
+        ) from e

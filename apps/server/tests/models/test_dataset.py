@@ -2,8 +2,9 @@
 Tests for Dataset and QASource models.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 from sqlalchemy.orm import Session
 
 from server.models.dataset import Dataset, QASource

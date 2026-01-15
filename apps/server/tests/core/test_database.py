@@ -1,8 +1,11 @@
 """Tests for database utilities"""
 
-import pytest
+import contextlib
 from unittest.mock import patch
-from server.core.database import get_db, get_scoped_db, create_db_and_tables
+
+import pytest
+
+from server.core.database import create_db_and_tables, get_db, get_scoped_db
 
 
 class TestGetDb:
@@ -14,10 +17,8 @@ class TestGetDb:
         db = next(db_gen)
         assert db is not None
         # Clean up
-        try:
+        with contextlib.suppress(StopIteration):
             next(db_gen)
-        except StopIteration:
-            pass
 
     def test_get_db_closes_session(self):
         """Test that get_db closes session after use"""
@@ -25,10 +26,8 @@ class TestGetDb:
         session = next(db_gen)
         assert session is not None
         # Simulate exiting the context
-        try:
+        with contextlib.suppress(StopIteration):
             next(db_gen)
-        except StopIteration:
-            pass
         # Session should be closed (no error means success)
 
 

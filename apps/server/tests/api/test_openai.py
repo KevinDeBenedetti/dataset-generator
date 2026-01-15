@@ -2,8 +2,8 @@
 Tests for OpenAI API endpoints.
 """
 
-import pytest
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 
@@ -53,5 +53,5 @@ def test_list_openai_models_exception(client: TestClient):
     with patch("server.services.llm.LLMService.get_models") as mock_get_models:
         mock_get_models.side_effect = Exception("API connection failed")
 
-        with pytest.raises(Exception):
-            client.get("/openai/models")
+        response = client.get("/openai/models")
+        assert response.status_code == 500

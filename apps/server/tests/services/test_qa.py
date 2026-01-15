@@ -1,11 +1,12 @@
 """Tests for QA service"""
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 from sqlalchemy.orm import Session
 
+from server.models.dataset import Dataset, QASource
 from server.services.qa import QAService
-from server.models.dataset import QASource, Dataset
 
 
 @pytest.fixture
@@ -223,7 +224,7 @@ class TestQAService:
         qa_records = (
             db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
         )
-        redis_qa = [qa for qa in qa_records if qa.question == "What is Redis?"][0]
+        redis_qa = next(qa for qa in qa_records if qa.question == "What is Redis?")
         assert redis_qa.confidence == 1.0
 
     def test_process_qa_pairs_mixed_results(

@@ -5,6 +5,7 @@ on:
 
 jobs:
   versions:
+    permissions: {}
     runs-on: ubuntu-latest
     outputs:
       python-version: ${{ steps.set.outputs.python-version }}

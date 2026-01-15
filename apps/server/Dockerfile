@@ -38,10 +38,11 @@ FROM base AS dev
 ARG APP_PORT=8000
 ENV PYTHON_ENV=development
 
-# Install curl for healthcheck
+# Install curl for healthcheck and create non-root user
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 appuser
 
 # Copy dependencies from the previous stage
 COPY --from=dependencies /app/.venv /app/.venv
@@ -49,6 +50,10 @@ COPY pyproject.toml uv.lock ./
 
 # Copy source code
 COPY ./apps/server .
+
+# Change ownership and switch to non-root user
+RUN chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE ${APP_PORT}
 

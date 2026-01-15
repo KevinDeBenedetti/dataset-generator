@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-import logging
-from typing import Optional
-
-from server.models.dataset import Dataset, QASource
 from server.core.database import get_db
+from server.models.dataset import Dataset, QASource
 from server.schemas.q_a import QAListResponse, QAResponse
 
 router = APIRouter(
@@ -17,10 +16,8 @@ router = APIRouter(
 @router.get("/{dataset_id}", response_model=QAListResponse)
 async def get_qa_by_dataset(
     dataset_id: str,
-    limit: Optional[int] = Query(
-        10, ge=1, le=1000, description="Limit number of results"
-    ),
-    offset: Optional[int] = Query(0, ge=0, description="Pagination offset"),
+    limit: int | None = Query(10, ge=1, le=1000, description="Limit number of results"),
+    offset: int | None = Query(0, ge=0, description="Pagination offset"),
     db: Session = Depends(get_db),
 ) -> QAListResponse:
     """Retrieve all Q&A items for a specific dataset by its ID"""
@@ -80,8 +77,8 @@ async def get_qa_by_dataset(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching Q&A for dataset '{dataset_id}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error fetching Q&A for dataset '{dataset_id}': {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/id/{qa_id}", response_model=QAResponse)
@@ -117,5 +114,5 @@ async def get_qa_by_id(qa_id: str, db: Session = Depends(get_db)) -> QAResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching Q&A '{qa_id}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error fetching Q&A '{qa_id}': {e!s}")
+        raise HTTPException(status_code=500, detail=str(e)) from e

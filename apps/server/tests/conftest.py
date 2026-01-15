@@ -13,16 +13,16 @@ os.environ["AVAILABLE_LLMS"] = (
 os.environ["DEFAULT_CLEANING_MODEL"] = "gpt-4o-mini"
 os.environ["DEFAULT_QA_MODEL"] = "gpt-4o-mini"
 
+from collections.abc import Generator
+
 import pytest
-from typing import Generator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from server.core.database import Base, get_db
-
 
 # Use in-memory SQLite for tests
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -59,7 +59,8 @@ def test_db(test_engine) -> Generator[Session, None, None]:
 def client(test_db: Session) -> Generator[TestClient, None, None]:
     """Create a test client with overridden database dependency."""
     from fastapi.middleware.cors import CORSMiddleware
-    from server.api import dataset, generate, q_a, openai, owui, langfuse
+
+    from server.api import dataset, generate, langfuse, openai, owui, q_a
 
     # Create test app without lifespan to avoid migration issues
     test_app = FastAPI(

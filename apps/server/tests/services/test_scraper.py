@@ -1,14 +1,15 @@
 """Tests for scraper service"""
 
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
-import requests
 
-from server.services.scraper import ScraperService
-from server.models.scraper import PageSnapshot
+import pytest
+import requests
+from sqlalchemy.orm import Session
+
 from server.models.dataset import Dataset
+from server.models.scraper import PageSnapshot
+from server.services.scraper import ScraperService
 
 
 @pytest.fixture
@@ -159,7 +160,7 @@ class TestScraperService:
             url="https://example.com",
             user_agent="Test Agent",
             content="Test content",
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             url_hash=PageSnapshot.compute_hash_from_url("https://example.com"),
             dataset_id=sample_dataset.id,
         )
@@ -286,7 +287,7 @@ class TestScraperService:
             url="https://example.com",
             user_agent="Test Agent",
             content="Original content",
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             url_hash=PageSnapshot.compute_hash_from_url("https://example.com"),
             dataset_id=sample_dataset.id,
         )
@@ -318,7 +319,7 @@ class TestScraperService:
             url="https://example.com",
             user_agent="Test Agent",
             content="Original content",
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             url_hash=PageSnapshot.compute_hash_from_url("https://example.com"),
             dataset_id=sample_dataset.id,
         )
