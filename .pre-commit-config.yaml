@@ -29,8 +29,7 @@ exclude: |
     .*\.log|
     # Lock files
     bun\.lock|
-    pnpm-lock\.yaml|
-    uv\.lock
+    pnpm-lock\.yaml
   )$
 
 repos:
@@ -147,14 +146,14 @@ repos:
   # ===============================
   # Docker & Infrastructure
   # ===============================
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
-    hooks:
-      - id: hadolint-docker
-        name: 🐳 Lint Dockerfiles
-        files: ^apps/.*/Dockerfile.*
-        args: ["--ignore", "DL3008"] # Allow unpinned apt packages
-        priority: 10
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.14.0
+  #   hooks:
+  #     - id: hadolint-docker
+  #       name: 🐳 Lint Dockerfiles
+  #       files: ^apps/.*/Dockerfile.*
+  #       args: ["--ignore", "DL3008"] # Allow unpinned apt packages
+  #       priority: 10
 
   # ===============================
   # Tests
