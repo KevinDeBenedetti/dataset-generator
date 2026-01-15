@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.5](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.4...v0.7.5) (2026-01-15)
+
+
+### Bug Fixes
+
+* add permissions to CI workflows to enhance security ([8c724d2](https://github.com/KevinDeBenedetti/dataset-generator/commit/8c724d2ef265af24dd8736ccb0811c2c3e4cc3ef))
+* update dependencies to resolve security alerts ([193965a](https://github.com/KevinDeBenedetti/dataset-generator/commit/193965aa83429693b611b3cca213b1f7d5e751b6))
+
 ## [0.7.4](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.3...v0.7.4) (2026-01-14)
 
 
