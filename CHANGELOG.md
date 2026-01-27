@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.7](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.6...v0.7.7) (2026-01-27)
+
+
+### Chores
+
+* **deps-dev:** bump eslint-config-next in /apps/next ([4670feb](https://github.com/KevinDeBenedetti/dataset-generator/commit/4670feb3cba56aed07544cefed9064bf175078e3))
+
 ## [0.7.6](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.5...v0.7.6) (2026-01-27)
 
 
