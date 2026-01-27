@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.6](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.5...v0.7.6) (2026-01-27)
+
+
+### Bug Fixes
+
+* ci: add pull-requests permission to CI workflow ([1f52573](https://github.com/KevinDeBenedetti/dataset-generator/commit/1f5257347dedceab7961bba31127b21bcc60a218))
+* dependabot group ([a8e0c2a](https://github.com/KevinDeBenedetti/dataset-generator/commit/a8e0c2aec773c53521b2df3d3da31692bce21710))
+* update pull request permissions in CI workflow ([252347f](https://github.com/KevinDeBenedetti/dataset-generator/commit/252347f88a3f9ac56b204046fd420be689f54a7c))
+
+
+### Chores
+
+* **deps-dev:** bump @hey-api/openapi-ts in /apps/vue ([9fb2186](https://github.com/KevinDeBenedetti/dataset-generator/commit/9fb2186b8e6fecb92a7f412e33db489e002dcc98))
+* **deps-dev:** bump @types/node from 25.0.6 to 25.0.10 in /apps/vue ([4415d51](https://github.com/KevinDeBenedetti/dataset-generator/commit/4415d51cf388bd383e40cdb2fbef8f95d4016317))
+* **deps-dev:** bump eslint-config-next in /apps/next ([65abc8b](https://github.com/KevinDeBenedetti/dataset-generator/commit/65abc8b43be1e6ce244a0d013f87164d60142ff6))
+* **deps-dev:** bump prettier from 3.7.4 to 3.8.1 in /apps/vue ([2641a71](https://github.com/KevinDeBenedetti/dataset-generator/commit/2641a71b5df307070ca9067514930fc780f83d43))
+* **deps-dev:** bump vue-tsc from 3.2.2 to 3.2.3 in /apps/vue ([7b128ea](https://github.com/KevinDeBenedetti/dataset-generator/commit/7b128ea289fb39c883943cb107006518b74234f4))
+* **deps:** bump pyasn1 in the uv group across 1 directory ([02d8174](https://github.com/KevinDeBenedetti/dataset-generator/commit/02d8174bcc2f91a845315beea4e62f41a4e06574))
+* **deps:** bump the uv group across 1 directory with 4 updates ([55655a1](https://github.com/KevinDeBenedetti/dataset-generator/commit/55655a17bd9b1e22037f92ab8197e9b1dd2bbfba))
+* **deps:** update dependencies in next and vue apps ([79b7f8c](https://github.com/KevinDeBenedetti/dataset-generator/commit/79b7f8c72089dd2553a7f11e92749b922e424ec1))
+
 ## [0.7.5](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.4...v0.7.5) (2026-01-15)
 
 
