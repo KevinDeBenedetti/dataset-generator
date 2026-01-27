@@ -72,14 +72,14 @@ class QAService:
             if duplicate_check["type"] == "exact":
                 exact_duplicates += 1
                 dup_id = duplicate_check.get("duplicate_id")
-                dup_id_str = dup_id[:8] if dup_id else "unknown"
+                dup_id_str = str(dup_id)[:8] if dup_id else "unknown"
                 logging.info(f"Exact duplicate found (ID: {dup_id_str}...), skipping")
 
             elif duplicate_check["type"] == "similar":
                 similar_duplicates += 1
                 similarity_score = duplicate_check["similarity_score"]
                 dup_id = duplicate_check.get("duplicate_id")
-                dup_id_str = dup_id[:8] if dup_id else "unknown"
+                dup_id_str = str(dup_id)[:8] if dup_id else "unknown"
                 logging.info(
                     f"Similar question found (similarity: {similarity_score:.2f}, ID: {dup_id_str}...), skipping"
                 )

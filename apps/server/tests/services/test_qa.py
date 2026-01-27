@@ -1,6 +1,7 @@
 """Tests for QA service"""
 
 import pytest
+from typing import Any, cast
 from unittest.mock import Mock, patch
 from sqlalchemy.orm import Session
 
@@ -84,9 +85,11 @@ class TestQAService:
 
     def test_update_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
         """Test updating a QASource"""
+        input_data = cast(dict[str, Any], sample_qa_source.input)
+        output_data = cast(dict[str, Any], sample_qa_source.expected_output)
         updates = {
-            "input": {**sample_qa_source.input, "question": "What is Python used for?"},
-            "expected_output": {**sample_qa_source.expected_output, "confidence": 0.95},
+            "input": {**input_data, "question": "What is Python used for?"},
+            "expected_output": {**output_data, "confidence": 0.95},
         }
 
         result = qa_service.update_qa_source(str(sample_qa_source.id), updates)
