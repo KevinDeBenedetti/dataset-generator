@@ -36,7 +36,7 @@
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.90.10",
+    "@hey-api/openapi-ts": "0.91.1",
     "@tsconfig/node22": "^22.0.5",
     "@types/node": "^25.0.10",
     "@vitejs/plugin-vue": "^6.0.3",
