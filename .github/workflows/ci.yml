@@ -13,37 +13,44 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  versions:
-    uses: ./.github/workflows/version.yml
-
-  lint:
-    needs: versions
-    uses: ./.github/workflows/lint.yml
+  python:
+    name: Python (server)
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@main
     with:
-      python-version: ${{ needs.versions.outputs.python-version }}
-      node-version: ${{ needs.versions.outputs.node-version }}
+      python-version: "3.13"
+      working-directory: "."
+      run-lint: true
+      run-format: true
+      run-typecheck: true
+      run-test: true
+      run-coverage: true
+      coverage-fail-under: 70
 
-  test:
-    uses: ./.github/workflows/test.yml
-    needs: versions
+  node:
+    name: Node (next)
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@main
     with:
-      python-version: ${{ needs.versions.outputs.python-version }}
+      node-version: "22.20.0"
+      working-directory: apps/next
+      package-manager: bun
+      run-lint: true
+      run-typecheck: false
+      run-test: false
+      run-build: false
 
   all-jobs-passed:
     name: Check jobs status
     runs-on: ubuntu-24.04
     if: ${{ always() }}
     needs:
-      - versions
-      - lint
-      - test
+      - python
+      - node
     steps:
       - name: Check status of all required jobs
         run: |-
