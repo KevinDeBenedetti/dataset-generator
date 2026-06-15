@@ -85,7 +85,6 @@ check_dockerignore() {
 
 check_dockerignore "apps/next"
 check_dockerignore "apps/server"
-check_dockerignore "apps/vue"
 
 # Check disk space
 echo ""

@@ -136,14 +136,6 @@ repos:
         pass_filenames: false
         priority: 10
 
-      - id: eslint-vue
-        name: 🔍 ESLint (Vue)
-        entry: bash -c 'cd apps/vue && bun run lint:fix'
-        language: system
-        files: ^apps/vue/.*\.(ts|vue)$
-        pass_filenames: false
-        priority: 10
-
   # ===============================
   # Docker & Infrastructure
   # ===============================

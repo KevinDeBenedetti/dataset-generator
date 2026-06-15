@@ -1,154 +1,103 @@
-PYTHONPATH=$(PWD)
+PYTHONPATH := $(PWD)
 
-.PHONY: help for datasets generator
+.PHONY: help env setup dev dev-local down logs clean lint lint-server lint-client precommit test test-ci models
 .DEFAULT_GOAL := help
 
-# --------------------------------------
-# HELPER
-# --------------------------------------
-help: ## Show helper
-	@echo "Usage: make <command>"
+SERVER_DIR := apps/server
+NEXT_DIR   := apps/next
+
+## Show this help message.
+help:
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
+	@echo "  Usage: make <target>"
+	@echo ""
+	@awk '/^## /{if (!desc) desc=substr($$0,4); next} /^[a-zA-Z_-]+:/{split($$0,a,":"); if(desc) printf "  \033[36m%-14s\033[0m %s\n", a[1], desc; desc=""; next} {desc=""}' $(MAKEFILE_LIST)
+	@echo ""
 
+## Create .env from .env.example if it does not exist.
+env:
+	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 
-# --------------------------------------
-# CLEAN
-# --------------------------------------
-clean:  ## Clean cache, datasets, and scrapes
-	@echo "Cleaning up..."
+## Install all dependencies: Python server (uv) and the Next.js client (bun).
+setup:
+	uv venv --clear && uv sync
+	cd $(NEXT_DIR) && bun install
+
+## Start the full stack with Docker (FastAPI + Next.js), building images if needed.
+dev: env
+	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
+	n="$${NEXT_HOST_PORT:-8080}"; s="$${SERVER_HOST_PORT:-8000}"; \
+	printf '\n  \033[1;36mDataset Generator — dev services\033[0m\n'; \
+	printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
+	printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
+	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"
+	docker compose up -d --build
+
+## Run the FastAPI server locally with hot-reload (no Docker).
+dev-local: env
+	uv run uvicorn --host 0.0.0.0 $(SERVER_DIR).main:app --reload
+
+## Stop and remove all containers.
+down:
 	docker compose down
 
-	@echo "Removing all..."
-	@find . -type f -name "bun.lock" -prune -print -exec rm -rf {} +
-	@find . -type f -name "pnpm-lock.yaml" -prune -print -exec rm -rf {} +
+## Stream logs from all containers.
+logs:
+	docker compose logs -f
+
+## Remove containers, caches, lockfiles and virtualenvs.
+clean: down
 	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
 	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".venv" -prune -print -exec rm -rf {} +
-	@find . -type f -name "uv.lock" -prune -print -exec rm -rf {} +
-	@find . -type f -name "*.log" -prune -print -exec rm -rf {} +
 
-rmi:
-	@echo "Removing dangling images..."
-	docker rmi datasets-next datasets-server datasets-vue || true
-
-# --------------------------------------
-# BUILD OPTIMIZATION
-# --------------------------------------
-build-cache: ## Build with BuildKit cache for faster rebuilds
-	@echo "Building with cache optimization..."
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose build
-
-rebuild: clean rmi build-cache ## Clean rebuild with optimizations
-	@echo "Clean rebuild complete"
-
-start: ## Start services (skip build if images exist)
-	@echo "Starting services..."
-	docker compose up -d
-
-stop: ## Stop services
-	@echo "Stopping services..."
-	docker compose down
-
-check-docker: ## Check Docker optimization setup
-	@echo "Checking Docker setup..."
-	./scripts/check-docker-setup.sh
-
-benchmark: ## Benchmark Docker build performance
-	@echo "Running Docker build benchmark..."
-	cp .env.example scripts/.env
-	./scripts/benchmark-docker.sh
-	rm scripts/.env
-
-# --------------------------------------
-# LINT
-# --------------------------------------
-lint-server: ## Run server linting
-	@echo "Server linting..."
+## Lint and format the Python server (ruff + ty).
+lint-server:
 	uv run ruff check --fix
 	uv run ruff format
 	uv run ty check
 
-lint-client: ## Run client linting
-	@echo "Client linting..."
-	cd ./apps/vue && \
-		bun lint --fix
-	cd ./apps/next && \
-		bun lint --fix
+## Lint and fix the Next.js client (bun).
+lint-client:
+	cd $(NEXT_DIR) && bun lint --fix
 
-lint: lint-server lint-client  ## Run linting
+## Run all linters (server + client).
+lint: lint-server lint-client
 
-precommit:  ## Run pre-commit hooks on all files
-	@echo "Running pre-commit hooks..."
+## Run pre-commit hooks on all files.
+precommit:
 	uv run prek run --all-files
 
-precommit-update:  ## Update pre-commit hooks
-	@echo "Updating pre-commit hooks..."
-	uv run prek auto-update
-
-# --------------------------------------
-# SETUP
-# --------------------------------------
-setup: ## Initialize client
-	@echo "Initializing server..."
-	uv venv --clear && \
-	source .venv/bin/activate && \
-	uv sync
-
-	@echo "Initializing..."
-	cd ./apps/vue && bun install
-	cd ./apps/next && bun install
-
-
-update-client: setup ## Upgrade client dependencies
-	@echo "Upgrading client dependencies..."
-	cd apps/vue && \
-	bun update --latest
-	cd apps/next && \
-	bun update --latest
-
-dev: clean rmi setup ## Start the FastAPI server
-	@echo "Starting API server..."
-	docker compose up -d
-
-
-dev-local: clean setup ## Start the FastAPI server without Docker
-	@echo "Starting API server..."
-	uv run uvicorn --host 0.0.0.0 server.main:app --reload
-
-
-install:
-	@echo "Installing dependencies..."
-	uv sync --all-groups --dev
-
-
-up-backend-local: ## Start the FastAPI server without Docker
-	@echo "Starting API server..."
-	cp .env.example apps/server/.env
-	cd apps/server && \
-		uv run uvicorn --host 0.0.0.0 main:app --reload
-	rm server/.env
-
-
-# --------------------------------------
-# TEST
-# --------------------------------------
-test: install ## Run tests with coverage
-	@echo "Running tests..."
-	uv run pytest -s -v apps/server/tests/ \
-		--cov=apps/server \
+## Run the test suite with coverage (HTML report).
+test:
+	uv run pytest -s -v $(SERVER_DIR)/tests/ \
+		--cov=$(SERVER_DIR) \
 		--cov-config=.coveragerc \
 		--cov-report=term-missing \
 		--cov-report=html
 
-test-ci: install ## Run tests for CI with XML report
-	@echo "Running tests for CI..."
-	uv run pytest -s -v apps/server/tests/ \
-		--cov=apps/server \
+## Run tests for CI with XML coverage and a 70% threshold.
+test-ci:
+	uv run pytest -s -v $(SERVER_DIR)/tests/ \
+		--cov=$(SERVER_DIR) \
 		--cov-config=.coveragerc \
 		--cov-report=xml \
 		--cov-report=term-missing \
 		--cov-fail-under=70
+
+## List models from the configured OpenAI-compatible provider (reads .env).
+models:
+	@set -a; . ./.env 2>/dev/null; set +a; \
+	if [ -z "$$OPENAI_BASE_URL" ] || [ -z "$$OPENAI_API_KEY" ]; then \
+		echo "⚠ OPENAI_BASE_URL or OPENAI_API_KEY is unset in .env"; \
+		exit 1; \
+	fi; \
+	printf '\033[1;36m▶ Models from %s\033[0m\n' "$$OPENAI_BASE_URL"; \
+	url="$${OPENAI_BASE_URL%/}/models"; \
+	if resp="$$(curl -fsS "$$url" -H "Authorization: Bearer $$OPENAI_API_KEY")"; then \
+		echo "$$resp" | jq -r '.data[]?.id' 2>/dev/null | sed 's/^/  • /'; \
+	else \
+		echo "  ⚠ request failed ($$url)"; \
+	fi
