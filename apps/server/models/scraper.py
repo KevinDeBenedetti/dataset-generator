@@ -1,6 +1,8 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey
-from sqlalchemy.orm import relationship
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import String, DateTime, Text, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from server.core.database import Base
 
@@ -8,13 +10,15 @@ from server.core.database import Base
 class PageSnapshot(Base):
     __tablename__ = "page_snapshots"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    url = Column(String, nullable=False)
-    user_agent = Column(String, nullable=False)
-    retrieved_at = Column(DateTime, nullable=False)
-    content = Column(Text, nullable=False)
-    url_hash = Column(String, nullable=False, index=True)
-    dataset_id = Column(
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    user_agent: Mapped[str] = mapped_column(String, nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    url_hash: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    dataset_id: Mapped[Optional[str]] = mapped_column(
         String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True
     )
 
@@ -34,13 +38,15 @@ class PageSnapshot(Base):
 class CleanedText(Base):
     __tablename__ = "cleaned_text"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    page_snapshot_id = Column(
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    page_snapshot_id: Mapped[str] = mapped_column(
         String, ForeignKey("page_snapshots.id", ondelete="CASCADE"), nullable=False
     )
-    content = Column(Text, nullable=False)
-    language = Column(String, nullable=False)
-    model = Column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str] = mapped_column(String, nullable=False)
+    model: Mapped[str] = mapped_column(String, nullable=False)
 
     # Relations
     page_snapshot = relationship("PageSnapshot", back_populates="cleaned_texts")
