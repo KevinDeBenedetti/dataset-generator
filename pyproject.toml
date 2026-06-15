@@ -26,7 +26,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pytest-asyncio>=1.3.0",
     "ruff>=0.13.0",
-    "ty>=0.0.4",
+    "ty>=0.0.49",
     "prek>=0.2.23",
 ]
 migration = [
