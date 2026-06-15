@@ -52,5 +52,6 @@ COPY ./apps/server .
 
 EXPOSE ${APP_PORT}
 
-# Import from server.main
-CMD ["uv", "run", "--no-sync", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Import from server.main; --reload-dir limits the watcher to the source so it
+# does not watch /app/.venv (thousands of files, churned by bytecode writes).
+CMD ["uv", "run", "--no-sync", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/server"]
