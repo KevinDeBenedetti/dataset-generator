@@ -22,7 +22,6 @@ Thumbs.db
 
 # Apps non nécessaires pour le server
 apps/next
-apps/vue
 
 # Cache Python
 __pycache__

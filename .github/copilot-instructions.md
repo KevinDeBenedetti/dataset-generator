@@ -37,7 +37,6 @@ This is a monorepo for a dataset generation tool that scrapes web content and us
 - **Styling**: Tailwind CSS v4.
 - **State**: Zustand.
 - **API Client**: Generated via `@hey-api/openapi-ts`.
-- **Note**: `apps/vue` exists but is currently commented out in `docker-compose.yml`. Focus on `apps/next` unless instructed otherwise.
 
 ### Infrastructure
 
@@ -50,9 +49,12 @@ This is a monorepo for a dataset generation tool that scrapes web content and us
 
 ### Development
 
-- **Start Stack**: `make start` (Runs `docker-compose up`).
-- **Clean**: `make clean` (Removes containers, volumes, cache, lockfiles).
-- **Linting**: `make lint` (Runs `ruff` for Python, `eslint` for JS).
+- **Start Stack**: `make dev` (Creates `.env` if missing, runs `docker compose up -d --build`).
+- **Logs**: `make logs` (Streams logs from all containers).
+- **Stop**: `make down` (Stops and removes containers).
+- **Clean**: `make clean` (Removes containers, caches, lockfiles, venvs).
+- **Linting**: `make lint` (Runs `ruff`/`ty` for Python, `eslint` for JS).
+- **List models**: `make models` (Lists models from the configured OpenAI provider).
 
 ### Database Changes
 
