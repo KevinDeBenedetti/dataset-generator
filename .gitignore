@@ -206,6 +206,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# The Python `lib/` rule above is unanchored and also matches the Next.js app's
+# source dir (shadcn `cn` helper, text-utils). Keep that one tracked.
+!apps/next/lib/
+!apps/next/lib/**
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
