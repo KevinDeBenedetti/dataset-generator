@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.7...v0.8.0) (2026-06-15)
+
+
+### Features
+
+* review architecture ([6285f6a](https://github.com/KevinDeBenedetti/dataset-generator/commit/6285f6a0eff3673bde0a7ea44fdcf8ebd5b5da9c))
+
+
+### Bug Fixes
+
+* ci - cd ([9de384d](https://github.com/KevinDeBenedetti/dataset-generator/commit/9de384d10399917f39c20a63743863541be21ebb))
+* ci cd reusable ([1aaf336](https://github.com/KevinDeBenedetti/dataset-generator/commit/1aaf3365ec1cb5891eece3fa8b61381126402ab6))
+* errors next ([0250645](https://github.com/KevinDeBenedetti/dataset-generator/commit/0250645d002c5d4358fae6a62f4a4ad54270a001))
+* ports used ([030c7a6](https://github.com/KevinDeBenedetti/dataset-generator/commit/030c7a6d965f47cd1185ebcf798243eb90fc8774))
+* ty errors ([ff7418d](https://github.com/KevinDeBenedetti/dataset-generator/commit/ff7418df76d411991741fc1d67b684a39b9c7987))
+
 ## [0.7.7](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.6...v0.7.7) (2026-01-27)
 
 
