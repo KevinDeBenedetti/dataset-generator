@@ -3,12 +3,23 @@ name: CD
 on:
   push:
     branches:
-    - main
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    uses: ./.github/workflows/release.yml
-    permissions:
-      contents: write
-      pull-requests: write
+    name: Release
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@main
+    with:
+      config-file: release/release-please-config-release.json
+      manifest-file: release/.release-please-manifest.json
+    secrets: inherit
