@@ -6,7 +6,7 @@ from typing import Optional
 
 from server.models.dataset import Dataset, QASource
 from server.core.database import get_db
-from server.schemas.q_a import QAListResponse, QAResponse
+from server.schemas.q_a import QAItem, QAListResponse, QAResponse
 
 router = APIRouter(
     prefix="/q_a",
@@ -55,16 +55,16 @@ async def get_qa_by_dataset(
         qa_data = []
         for record in qa_records:
             qa_data.append(
-                {
-                    "id": record.id,
-                    "question": record.input.get("question", ""),
-                    "answer": record.expected_output.get("answer", ""),
-                    "context": record.input.get("context", ""),
-                    "source_url": record.input.get("source_url", ""),
-                    "confidence": record.expected_output.get("confidence", 0.0),
-                    "created_at": record.created_at,
-                    "metadata": record.qa_metadata,
-                }
+                QAItem(
+                    id=record.id,
+                    question=record.input.get("question", ""),
+                    answer=record.expected_output.get("answer", ""),
+                    context=record.input.get("context", ""),
+                    source_url=record.input.get("source_url", ""),
+                    confidence=record.expected_output.get("confidence", 0.0),
+                    created_at=record.created_at,
+                    metadata=record.qa_metadata,
+                )
             )
 
         return QAListResponse(

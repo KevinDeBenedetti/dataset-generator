@@ -11,7 +11,7 @@ class TargetLanguage(str, Enum):
     de = "de"
 
 
-def _build_model_enum() -> Enum:
+def _build_model_enum() -> type[Enum]:
     """Return a str-based Enum containing configured model names."""
     members = {model.replace("-", "_"): model for model in config.available_models}
     if not members:

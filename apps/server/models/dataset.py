@@ -2,8 +2,8 @@ import uuid
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, String, DateTime, JSON, ForeignKey, Boolean
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy import String, DateTime, JSON, ForeignKey, Boolean
+from sqlalchemy.orm import Session, Mapped, mapped_column, relationship
 from difflib import SequenceMatcher
 
 from server.core.database import Base
@@ -12,10 +12,14 @@ from server.core.database import Base
 class Dataset(Base):
     __tablename__ = "datasets"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String, nullable=False)
-    description = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     # Relations
     page_snapshots = relationship(
@@ -26,19 +30,27 @@ class Dataset(Base):
 class QASource(Base):
     __tablename__ = "qa_sources"
 
-    id = Column(String, primary_key=True)
-    dataset_name = Column(String, index=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), index=True)
-    source_trace_id = Column(String)
-    page_snapshot_id = Column(String, ForeignKey("page_snapshots.id"))
-    input = Column(JSON, nullable=False, default=dict)
-    expected_output = Column(JSON, nullable=False, default=dict)
-    qa_metadata = Column(JSON, nullable=False, default=dict)
-    status = Column(String, default="ACTIVE", index=True)
-    model = Column(String)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    human_reviewed = Column(Boolean, default=False)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    dataset_name: Mapped[Optional[str]] = mapped_column(String, index=True)
+    dataset_id: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("datasets.id"), index=True
+    )
+    source_trace_id: Mapped[Optional[str]] = mapped_column(String)
+    page_snapshot_id: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("page_snapshots.id")
+    )
+    input: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    expected_output: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    qa_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[Optional[str]] = mapped_column(String, default="ACTIVE", index=True)
+    model: Mapped[Optional[str]] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    human_reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     @staticmethod
     def compute_hash_from_content(
@@ -124,7 +136,9 @@ class QASource(Base):
         if similar_id:
             # Calculate similarity score for information
             similar_record = db.query(cls).filter(cls.id == similar_id).first()
-            existing_question = similar_record.input.get("question", "")
+            existing_question = (
+                similar_record.input.get("question", "") if similar_record else ""
+            )
             similarity_score = SequenceMatcher(
                 None, question, existing_question
             ).ratio()

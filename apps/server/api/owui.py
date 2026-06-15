@@ -162,9 +162,9 @@ async def get_knowledge_enrichment(
     file_contents: list[UnitQuestionAnswerResponse] = []
     for file_id in file_ids:
         try:
-            content: JSONResponse = await get_file_content(file_id)
+            response_content: JSONResponse = await get_file_content(file_id)
 
-            content = json.loads(content.body)
+            content = json.loads(bytes(response_content.body))
         except Exception as e:
             logger.error(f"Failed to fetch content for file ID {file_id}: {str(e)}")
             raise HTTPException(

@@ -68,7 +68,8 @@ class LLMService:
                 max_tokens=config.max_tokens_cleaning,
                 temperature=config.temperature,
             )
-            return response.choices[0].message.content.strip() or text.strip()
+            content = response.choices[0].message.content
+            return (content or "").strip() or text.strip()
         except Exception as e:
             logging.error(f"Text cleaning failed: {e}")
             return text
