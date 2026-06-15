@@ -1,0 +1,71 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  security:
+    name: Security
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      security-events: write
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    with:
+      run-node-audit: false
+      run-python-audit: false
+      run-secret-scan: true
+      run-codeql: false
+    # security.yml declares no caller secrets — nothing to pass.
+
+  ci-python:
+    name: CI Python (server)
+    needs: security
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    with:
+      python-version: "3.13"
+      working-directory: "."
+      run-lint: true
+      run-format: true
+      run-typecheck: true
+      run-test: true
+      run-coverage: true
+      coverage-fail-under: 70
+
+  ci-node:
+    name: CI Node (next)
+    needs: security
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    with:
+      node-version: "22.20.0"
+      working-directory: apps/next
+      package-manager: bun
+      run-lint: true
+      run-typecheck: false
+      run-test: false
+      # next build needs no backend at build time; enable as a pre-merge gate on PRs.
+      run-build: ${{ github.event_name == 'pull_request' }}
+
+  # Production pipeline: main → release-please
+  release:
+    name: Release
+    needs: [ci-python, ci-node]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    with:
+      config-file: release/release-please-config-release.json
+      manifest-file: release/.release-please-manifest.json
+    secrets: inherit

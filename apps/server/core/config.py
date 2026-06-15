@@ -66,9 +66,7 @@ class Config:
             self.model_cleaning,
             self.model_qa,
         ]
-        self.available_models = list(
-            dict.fromkeys(m for m in candidates if m)
-        )
+        self.available_models = list(dict.fromkeys(m for m in candidates if m))
 
 
 config = Config()
