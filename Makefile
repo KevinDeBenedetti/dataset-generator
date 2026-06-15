@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local down logs clean lint lint-server lint-client precommit test test-ci models
+.PHONY: help env setup dev dev-local check-docker check-ports down logs clean lint lint-server lint-client precommit test test-ci models
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -24,22 +24,60 @@ setup:
 	cd $(NEXT_DIR) && bun install
 
 ## Start the full stack with Docker (FastAPI + Next.js), building images if needed.
-dev: env
+## Runs in the foreground with `--watch`: container logs stream live with a
+## per-service prefix, and images rebuild automatically when dependencies change
+## (source is bind-mounted, so edits hot-reload without a rebuild).
+## Ctrl-C stops the stack (use `make down` if it was detached elsewhere).
+dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
-	n="$${NEXT_HOST_PORT:-8080}"; s="$${SERVER_HOST_PORT:-8000}"; \
+	n="$${NEXT_HOST_PORT:-3000}"; s="$${SERVER_HOST_PORT:-8000}"; \
 	printf '\n  \033[1;36mDataset Generator — dev services\033[0m\n'; \
 	printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
 	printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
-	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"
-	docker compose up -d --build
+	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
+	printf '  \033[1;36m▶ Streaming logs with watch — Ctrl-C stops the stack\033[0m\n\n'
+	docker compose up --build --watch
+
+## Ensure the Docker daemon is reachable, starting Docker Desktop if needed.
+check-docker:
+	@if docker info >/dev/null 2>&1; then exit 0; fi; \
+	printf '  \033[1;33m⚠ Docker daemon not running — starting Docker Desktop...\033[0m\n'; \
+	open -a Docker >/dev/null 2>&1 || true; \
+	i=0; while [ $$i -lt 60 ] && ! docker info >/dev/null 2>&1; do sleep 1; i=$$((i+1)); done; \
+	if ! docker info >/dev/null 2>&1; then \
+		printf '  \033[1;31m✗ Docker daemon is not reachable. Start Docker Desktop and retry.\033[0m\n'; \
+		exit 1; \
+	fi
+
+## Free dev ports (NEXT_HOST_PORT/SERVER_HOST_PORT) if a crashed run left them bound.
+## Releases this project's own containers via `compose down`; for anything else it
+## diagnoses and aborts (it never kills the Docker daemon to "free" a port).
+check-ports:
+	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
+	docker compose down --remove-orphans >/dev/null 2>&1 || true; \
+	for p in "$${NEXT_HOST_PORT:-3000}" "$${SERVER_HOST_PORT:-8000}"; do \
+		holder="$$(lsof -nP -iTCP:$$p -sTCP:LISTEN +c0 -F c 2>/dev/null | sed -n 's/^c//p' | head -n1)"; \
+		[ -z "$$holder" ] && continue; \
+		cname="$$(docker ps --filter "publish=$$p" --format '{{.Names}}' 2>/dev/null | head -n1)"; \
+		if [ -n "$$cname" ]; then \
+			printf '  \033[1;31m✗ port %s is published by container "%s".\033[0m\n' "$$p" "$$cname"; \
+			printf '     Stop it:  docker stop %s   then re-run make dev\n' "$$cname"; \
+		elif printf '%s' "$$holder" | grep -qiE 'docker|vpnkit'; then \
+			printf '  \033[1;31m✗ port %s is held by the Docker engine (%s) but no container maps it (stale binding).\033[0m\n' "$$p" "$$holder"; \
+			printf '     Restart Docker Desktop to clear it, then re-run make dev.\n'; \
+		else \
+			printf '  \033[1;31m✗ port %s is in use by "%s" — stop that process, then re-run make dev.\033[0m\n' "$$p" "$$holder"; \
+		fi; \
+		exit 1; \
+	done
 
 ## Run the FastAPI server locally with hot-reload (no Docker).
 dev-local: env
 	uv run uvicorn --host 0.0.0.0 $(SERVER_DIR).main:app --reload
 
-## Stop and remove all containers.
+## Stop and remove all containers (no-op if the Docker daemon is not running).
 down:
-	docker compose down
+	@docker info >/dev/null 2>&1 && docker compose down || true
 
 ## Stream logs from all containers.
 logs:

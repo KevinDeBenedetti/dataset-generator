@@ -13,10 +13,7 @@ export default defineConfig({
       enums: 'typescript'
     },
     {
-      name: '@hey-api/sdk',
-      methodNameBuilder: (operation) => {
-        return `${operation.method}${operation.path.replace(/[{}]/g, 'By').replace(/\//g, '')}`;
-      }
+      name: '@hey-api/sdk'
     },
     {
       name: '@hey-api/client-fetch',
