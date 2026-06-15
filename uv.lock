@@ -624,7 +624,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.1" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "fake-useragent", specifier = ">=2.2.0" },
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.128.0" },
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.137.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "instructor", specifier = ">=1.14.3" },
     { name = "langfuse", specifier = ">=3.12.0" },
@@ -632,9 +632,9 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "requests", specifier = ">=2.32.5" },
-    { name = "scrapy", specifier = ">=2.14.0,<2.15" },
+    { name = "scrapy", specifier = ">=2.16.0,<2.17" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2496,7 +2496,7 @@ wheels = [
 
 [[package]]
 name = "scrapy"
-version = "2.14.2"
+version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
@@ -2518,9 +2518,9 @@ dependencies = [
     { name = "w3lib" },
     { name = "zope-interface" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/54/000e2b35f68243ae6e625aab1477bebb973e6a3e57ef926ffb975a536220/scrapy-2.14.2.tar.gz", hash = "sha256:23bf5d37503ad16973bd09604b9c36249bd4bbc282c48ddedbf58105d4639337", size = 1255604, upload-time = "2026-03-12T14:47:44.624Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/a0/f710c21e87d64686f1b6d153eff7d1a2f7167bd94dd6c19aada07629fb38/scrapy-2.16.0.tar.gz", hash = "sha256:7287952a81fa302797ec0c3370a0096a8d81d4f9fe25a608a76df2a164511714", size = 1280834, upload-time = "2026-05-19T12:29:19.202Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/e8/a383322ce3f157385f1238d1a71396d48e84635748d2b19c8c7c904aa407/scrapy-2.14.2-py3-none-any.whl", hash = "sha256:dc6ddf6e1601fc6c50191d2e4d4a65497e37c4b848f542f21c9278a55f86af42", size = 332950, upload-time = "2026-03-12T14:47:43.318Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/c9/7cc7631ca85c08b7e1162e1e08ecb0c139f8f640cc403257ac500a8e50fe/scrapy-2.16.0-py3-none-any.whl", hash = "sha256:fcb83db5500743503b1fea4d55c81aac056b15481d0aad46b6f929d324d9bcf5", size = 344254, upload-time = "2026-05-19T12:29:17.206Z" },
 ]
 
 [[package]]
