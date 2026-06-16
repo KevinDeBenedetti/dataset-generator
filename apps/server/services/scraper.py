@@ -1,49 +1,55 @@
 import logging
-import requests
-import re
-import time
-from scrapy import Selector
-from fake_useragent import UserAgent
-from sqlalchemy.orm import Session
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from datetime import datetime, timezone
+
+import httpx
+from sqlalchemy.orm import Session
 
 from server.core.config import config
 from server.models.scraper import PageSnapshot, CleanedText
+
+
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 
 
 class ScraperService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _setup_session(self) -> requests.Session:
-        session = requests.Session()
-        retries = Retry(
-            total=config.max_retries,
-            backoff_factor=0.3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=frozenset(["GET", "POST"]),
-        )
-        session.mount("https://", HTTPAdapter(max_retries=retries))
-        session.mount("http://", HTTPAdapter(max_retries=retries))
-        return session
+    async def _fetch_markdown(self, url: str) -> str:
+        """Fetch a page as Markdown via the crawl4ai service (/md endpoint).
 
-    def _get_user_agent(self) -> str:
+        Uses the ``raw`` filter so the result mirrors crawl4ai's
+        ``raw_markdown`` (the cleaning step downstream refines it).
+        """
+        endpoint = f"{config.crawl4ai_base_url.rstrip('/')}/md"
+        headers = {}
+        if config.crawl4ai_api_token:
+            headers["Authorization"] = f"Bearer {config.crawl4ai_api_token}"
+
         try:
-            ua = UserAgent()
-            return ua.random
-        except Exception as e:
-            logging.warning(f"fake-useragent failed, using fallback: {e}")
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            async with httpx.AsyncClient(timeout=config.crawl4ai_timeout) as client:
+                response = await client.post(
+                    endpoint, json={"url": url, "f": "raw"}, headers=headers
+                )
+        except httpx.HTTPError as e:
+            logging.error(f"Error scraping {url}: {e}")
+            raise
 
-    def _extract_text(self, html: str) -> str:
-        cleaned_html = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", html)
-        cleaned_html = re.sub(r"<!--.*?-->", "", cleaned_html, flags=re.S)
+        if response.status_code != 200:
+            detail = response.text or f"HTTP {response.status_code}"
+            logging.error(f"Error scraping {url}: {detail}")
+            raise RuntimeError(f"Failed to scrape {url}: {detail}")
 
-        selector = Selector(text=cleaned_html)
-        text = " ".join(selector.xpath("//body//text()").getall())
-        return re.sub(r"\s+", " ", text).strip()
+        data = response.json()
+        if not data.get("success"):
+            error = data.get("error_message") or "unknown error"
+            logging.error(f"Error scraping {url}: {error}")
+            raise RuntimeError(f"Failed to scrape {url}: {error}")
+
+        return (data.get("markdown") or "").strip()
 
     def add_page_snapshot(self, page_snapshot: PageSnapshot) -> None:
         """Adds a new PageSnapshot record to the database"""
@@ -51,28 +57,16 @@ class ScraperService:
         self.db.commit()
         self.db.refresh(page_snapshot)
 
-    def scrape_url(self, url: str, dataset_id: str) -> PageSnapshot:
+    async def scrape_url(self, url: str, dataset_id: str) -> PageSnapshot:
         logging.info(f"Scraping URL: {url}")
 
-        session = self._setup_session()
-        user_agent = self._get_user_agent()
-        headers = {"User-Agent": user_agent}
-
-        try:
-            response = session.get(url, headers=headers, timeout=config.timeout)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            logging.error(f"Error scraping {url}: {e}")
-            raise
-
-        text = self._extract_text(response.text)
-        time.sleep(config.scrape_delay)
+        content = await self._fetch_markdown(url)
 
         url_hash = PageSnapshot.compute_hash_from_url(url)
         page_snapshot = PageSnapshot(
             url=url,
-            user_agent=user_agent,
-            content=text,
+            user_agent=DEFAULT_USER_AGENT,
+            content=content,
             retrieved_at=datetime.now(timezone.utc),
             url_hash=url_hash,
             dataset_id=dataset_id,

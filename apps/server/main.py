@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from server.core import logger as logger_module
-from server.api import dataset, generate, q_a, openai, owui
+from server.api import agent, dataset, generate, q_a, openai
 from server.services import langfuse
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL
@@ -52,7 +52,7 @@ app.include_router(generate.router)
 app.include_router(dataset.router)
 app.include_router(q_a.router)
 app.include_router(openai.router)
-app.include_router(owui.owui_router)
+app.include_router(agent.router)
 
 if langfuse.is_langfuse_available():
     try:

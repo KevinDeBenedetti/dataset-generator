@@ -9,6 +9,7 @@ from server.schemas.generate import (
     DatasetGenerationRequest,
     DatasetGenerationResponse,
     ErrorResponse,
+    PipelineStep,
     QAPair,
 )
 from server.core.database import get_db
@@ -116,6 +117,8 @@ async def create_dataset_for_url(
                 detail="Failed to retrieve dataset ID after generation",
             )
 
+        steps = [PipelineStep(**step) for step in result.get("steps", [])]
+
         return DatasetGenerationResponse(
             id=dataset_id,
             dataset_name=result.get("dataset_name", request.dataset_name),
@@ -126,6 +129,8 @@ async def create_dataset_for_url(
             similarity_threshold=request.similarity_threshold,
             total_questions=len(qa_pairs),
             processing_time=processing_time,
+            steps=steps,
+            scraped_content=result.get("scraped_content"),
         )
 
     except HTTPException:
