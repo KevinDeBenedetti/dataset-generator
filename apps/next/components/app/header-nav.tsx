@@ -34,6 +34,21 @@ export function HeaderNav() {
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
             <Link
+              href="/generate"
+              className={cn(
+                'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                pathname?.startsWith('/generate')
+                  ? 'bg-accent text-accent-foreground'
+                  : 'hover:bg-accent/50'
+              )}
+            >
+              Generate
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
               href="/datasets"
               className={cn(
                 'px-4 py-2 rounded-md text-sm font-medium transition-colors',
@@ -43,6 +58,21 @@ export function HeaderNav() {
               )}
             >
               Datasets
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
+              href="/agent-test"
+              className={cn(
+                'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                pathname?.startsWith('/agent-test')
+                  ? 'bg-accent text-accent-foreground'
+                  : 'hover:bg-accent/50'
+              )}
+            >
+              Verify QA
             </Link>
           </NavigationMenuLink>
         </NavigationMenuItem>

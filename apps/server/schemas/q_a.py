@@ -52,25 +52,3 @@ class QAResponse(BaseModel):
     dataset: Optional[Dict[str, Optional[str]]] = Field(
         None, description="Associated dataset information"
     )
-
-
-class UnitQuestionAnswer(BaseModel):
-    question: str = Field(..., description="The generated question")
-    answer: str = Field(..., description="The generated answer")
-    context: str = Field(
-        ..., description="The context from which the question was generated"
-    )
-    confidence: float = Field(
-        ...,
-        description="The confidence score of the generated answer 0-1",
-        ge=0.0,
-        le=1.0,
-    )
-
-
-class UnitQuestionAnswerResponse(UnitQuestionAnswer):
-    file_id: str
-    dataset_id: str
-    human_reviewed: bool = Field(
-        False, description="Indicates if the Q&A has been human reviewed"
-    )

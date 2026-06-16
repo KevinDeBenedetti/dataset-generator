@@ -28,6 +28,40 @@ export type DatasetGenerationRequest = {
   similarity_threshold?: number
 }
 
+export type AgentQaPair = {
+  question: string
+  answer: string
+  context: string
+  confidence?: number | null
+}
+
+export type QaAgentTestRequest = {
+  text: string
+  target_language?: string | null
+  model?: string | null
+}
+
+export type QaAgentTestResponse = {
+  ok: boolean
+  model: string
+  target_language: string
+  count: number
+  raw_length: number
+  raw_response: string
+  qa_pairs: Array<AgentQaPair>
+  error?: string | null
+}
+
+export type PipelineStepStatus = 'success' | 'warning' | 'error'
+
+export type PipelineStep = {
+  key: string
+  label: string
+  status: PipelineStepStatus
+  duration_ms: number
+  detail: string
+}
+
 export type DatasetGenerationResponse = {
   id: string
   qa_pairs: Array<QaPair>
@@ -38,6 +72,8 @@ export type DatasetGenerationResponse = {
   similarity_threshold: number
   total_questions: number
   processing_time: number
+  steps?: Array<PipelineStep>
+  scraped_content?: string | null
 }
 
 export type DatasetResponse = {

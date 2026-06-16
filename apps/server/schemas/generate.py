@@ -9,6 +9,18 @@ class QAPair(BaseModel):
     answer: str = Field(..., description="Corresponding answer")
 
 
+class PipelineStep(BaseModel):
+    """One step of the generation pipeline, for the frontend timeline."""
+
+    key: str = Field(..., description="Stable identifier of the step")
+    label: str = Field(..., description="Human-readable step name")
+    status: str = Field(
+        ..., description="Outcome of the step: success, warning or error"
+    )
+    duration_ms: int = Field(..., description="Step duration in milliseconds")
+    detail: str = Field("", description="Log line summarising what happened")
+
+
 class DatasetGenerationRequest(BaseModel):
     """Model for dataset generation request"""
 
@@ -56,6 +68,12 @@ class DatasetGenerationResponse(BaseModel):
     similarity_threshold: float = Field(..., description="Similarity threshold used")
     total_questions: int = Field(..., description="Total number of generated questions")
     processing_time: float = Field(..., description="Processing time in seconds")
+    steps: List[PipelineStep] = Field(
+        default_factory=list, description="Timeline of the pipeline steps"
+    )
+    scraped_content: Optional[str] = Field(
+        None, description="Raw markdown scraped from the source URL"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

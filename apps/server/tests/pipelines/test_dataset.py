@@ -1,7 +1,7 @@
 """Tests for dataset pipeline"""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from sqlalchemy.orm import Session
 
 from server.pipelines.dataset import DatasetPipeline
@@ -31,12 +31,14 @@ class TestDatasetPipeline:
     @pytest.mark.asyncio
     @patch("server.pipelines.dataset.ScraperService")
     @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
     @patch("server.pipelines.dataset.DatasetService")
     @patch("server.pipelines.dataset.QAService")
     async def test_process_url_success(
         self,
         mock_qa_service_class,
         mock_dataset_service_class,
+        mock_qa_agent_service_class,
         mock_llm_service_class,
         mock_scraper_service_class,
         db: Session,
@@ -53,18 +55,21 @@ class TestDatasetPipeline:
         mock_page_snapshot.content = "Original scraped content"
 
         mock_scraper_service = Mock()
-        mock_scraper_service.scrape_url.return_value = mock_page_snapshot
+        mock_scraper_service.scrape_url = AsyncMock(return_value=mock_page_snapshot)
         mock_scraper_service.save_cleaned_text.return_value = Mock()
         mock_scraper_service_class.return_value = mock_scraper_service
 
         mock_llm_service = Mock()
         mock_llm_service.clean_text.return_value = "Cleaned text content"
+        mock_llm_service_class.return_value = mock_llm_service
 
         mock_qa_item = Mock()
         mock_qa_item.question = "What is this?"
         mock_qa_item.answer = "This is a test"
-        mock_llm_service.generate_qa.return_value = [mock_qa_item]
-        mock_llm_service_class.return_value = mock_llm_service
+
+        mock_qa_agent_service = Mock()
+        mock_qa_agent_service.generate_qa = AsyncMock(return_value=[mock_qa_item])
+        mock_qa_agent_service_class.return_value = mock_qa_agent_service
 
         mock_qa_service = Mock()
         mock_qa_service.process_qa_pairs.return_value = {
@@ -137,7 +142,7 @@ class TestDatasetPipeline:
                     mock_clean.return_value = "cleaned text"
 
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
@@ -184,7 +189,7 @@ class TestDatasetPipeline:
                     mock_clean.return_value = "cleaned text"
 
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
@@ -239,7 +244,7 @@ class TestDatasetPipeline:
                     mock_clean.return_value = "cleaned"
 
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
@@ -339,7 +344,7 @@ class TestDatasetPipeline:
 
                     with patch.object(pipeline.scraper_service, "save_cleaned_text"):
                         with patch.object(
-                            pipeline.llm_service,
+                            pipeline.qa_agent_service,
                             "generate_qa",
                             side_effect=Exception("QA generation failed"),
                         ):
@@ -368,7 +373,7 @@ class TestDatasetPipeline:
 
                 with patch.object(pipeline.scraper_service, "save_cleaned_text"):
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
@@ -416,7 +421,7 @@ class TestDatasetPipeline:
                     pipeline.scraper_service, "save_cleaned_text"
                 ) as mock_save:
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_qa1 = Mock()
                         mock_qa1.question = "Q1?"
@@ -482,7 +487,7 @@ class TestDatasetPipeline:
                     mock_clean.return_value = "cleaned"
 
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 
@@ -529,7 +534,7 @@ class TestDatasetPipeline:
                     mock_clean.return_value = "cleaned"
 
                     with patch.object(
-                        pipeline.llm_service, "generate_qa"
+                        pipeline.qa_agent_service, "generate_qa"
                     ) as mock_gen_qa:
                         mock_gen_qa.return_value = []
 

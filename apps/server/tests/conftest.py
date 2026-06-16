@@ -57,7 +57,7 @@ def test_db(test_engine) -> Generator[Session, None, None]:
 def client(test_db: Session) -> Generator[TestClient, None, None]:
     """Create a test client with overridden database dependency."""
     from fastapi.middleware.cors import CORSMiddleware
-    from server.api import dataset, generate, q_a, openai, owui, langfuse
+    from server.api import dataset, generate, q_a, openai, langfuse
 
     # Create test app without lifespan to avoid migration issues
     test_app = FastAPI(
@@ -78,7 +78,6 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
     test_app.include_router(dataset.router)
     test_app.include_router(q_a.router)
     test_app.include_router(openai.router)
-    test_app.include_router(owui.owui_router)
     test_app.include_router(langfuse.router)
 
     @test_app.get("/")

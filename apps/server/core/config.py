@@ -15,6 +15,13 @@ class Config:
         default_factory=lambda: os.getenv("OPENAI_BASE_URL", "")
     )
 
+    # Reasoning models (e.g. gpt-oss) emit a chain-of-thought before the answer.
+    # "low" keeps that short so the agent reliably reaches the final JSON.
+    # Set OPENAI_REASONING_EFFORT="" to disable for models that reject the param.
+    openai_reasoning_effort: str = field(
+        default_factory=lambda: os.getenv("OPENAI_REASONING_EFFORT", "low")
+    )
+
     # Models (one per role, from the configured provider)
     openai_llm_model: str = field(
         default_factory=lambda: os.getenv("OPENAI_LLM_MODEL", "")
@@ -30,6 +37,22 @@ class Config:
     max_retries: int = 3
     timeout: int = 10
     scrape_delay: float = 0.2
+
+    # crawl4ai service (Docker). The scraper calls this REST API instead of
+    # running crawl4ai in-process, keeping the browser stack out of this image.
+    crawl4ai_base_url: str = field(
+        default_factory=lambda: os.getenv(
+            "CRAWL4AI_BASE_URL", "http://crawl4ai:11235"
+        )
+    )
+    crawl4ai_api_token: str = field(
+        default_factory=lambda: os.getenv("CRAWL4AI_API_TOKEN", "")
+    )
+    # Upper bound (seconds) for a single /md request: the service renders the
+    # page in a browser, so this must comfortably exceed the page timeout.
+    crawl4ai_timeout: int = field(
+        default_factory=lambda: int(os.getenv("CRAWL4AI_TIMEOUT", "120"))
+    )
 
     # LLM
     max_tokens_cleaning: int = 3000
