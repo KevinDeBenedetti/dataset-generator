@@ -33,9 +33,10 @@ This project is designed with a modular architecture that separates concerns int
 ## ✨ Key Features
 
 - **Multi-source Scraping**: Support for various web sources and content types
+- **Whole-site Crawling**: Breadth-first crawl of the seed URL's same-domain internal links (configurable depth/page limits) to maximise the dataset from a single starting point
 - **AI-Powered QA Generation**: Leverage state-of-the-art LLMs for intelligent question-answer pair creation
 - **Multi-language Support**: Generate datasets in French, English, Spanish, and German
-- **Langfuse Integration**: Direct export to Langfuse for dataset management and training workflows
+- **Langfuse Integration**: Datasets are created/updated in Langfuse at generation time, with DVC-like versioning — each run is recorded as an immutable, numbered dataset run (`v1`, `v2`, …) and items are idempotent by content hash
 - **Multiple Export Formats**: JSON, CSV, JSONL, and platform-specific formats
 - **Quality Control**: Automated validation and filtering of generated content
 - **Batch Processing**: Efficient handling of large-scale data generation
@@ -43,11 +44,11 @@ This project is designed with a modular architecture that separates concerns int
 
 ## 🔄 Workflow
 
-1. **Scraping**: Retrieving raw web data from multiple sources
-2. **Cleaning**: Processing and normalizing text to extract relevant content
+1. **Scraping / Crawling**: Retrieving raw web data — a single page, or a breadth-first crawl of the whole site (same-domain internal links, bounded by depth/page limits)
+2. **Cleaning**: Processing and normalizing text to extract relevant content (per page)
 3. **QA Generation**: Creating high-quality question-answer pairs via LLMs with configurable prompts
-4. **Quality Assurance**: Automated validation and filtering of generated datasets
-5. **Export**: Multi-format export including Langfuse integration for seamless training workflows
+4. **Quality Assurance**: Automated validation and cross-page deduplication of generated datasets
+5. **Versioning & Export**: Automatic Langfuse sync at generation time (versioned dataset runs), plus multi-format export
 6. **Storage**: Persistent storage with metadata tracking and version control
 
 ## 📊 Export Options
@@ -66,6 +67,19 @@ The tool supports extensive configuration options for:
 - Quality thresholds and validation rules
 - Batch processing settings
 - API rate limiting and retry policies
+
+### Crawling & Versioning
+
+The deep crawl and Langfuse versioning are controlled by these environment variables (with sensible defaults — add them to your `.env` to override):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CRAWL_MAX_DEPTH` | `2` | Max link-following depth from the seed URL when crawling |
+| `CRAWL_MAX_PAGES` | `50` | Max number of pages fetched per crawl (cost ceiling) |
+| `CRAWL_SAME_DOMAIN` | `true` | Only follow links on the seed URL's host |
+| `LANGFUSE_AUTO_SYNC` | `true` | Create/version the dataset in Langfuse at generation time (requires `LANGFUSE_*` keys) |
+
+These can also be overridden per request: the `POST /dataset/generate` body accepts `crawl`, `max_depth`, `max_pages` and `sync_langfuse`, and the **Generate** page exposes them as form controls. Langfuse sync additionally requires `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_HOST`.
 
 ## 🌍 Supported Languages
 

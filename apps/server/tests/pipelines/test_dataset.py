@@ -98,6 +98,80 @@ class TestDatasetPipeline:
         assert result["similarity_threshold"] == 0.9
 
     @pytest.mark.asyncio
+    @patch("server.pipelines.dataset.is_langfuse_configured", return_value=False)
+    @patch("server.pipelines.dataset.ScraperService")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    @patch("server.pipelines.dataset.DatasetService")
+    @patch("server.pipelines.dataset.QAService")
+    async def test_process_url_crawl_aggregates_pages(
+        self,
+        mock_qa_service_class,
+        mock_dataset_service_class,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_scraper_service_class,
+        _mock_lf_configured,
+        db: Session,
+        sample_dataset,
+    ):
+        """With crawl=True, every crawled page is cleaned, mined and aggregated."""
+        mock_dataset_service = Mock()
+        mock_dataset_service.get_or_create_dataset.return_value = sample_dataset
+        mock_dataset_service_class.return_value = mock_dataset_service
+
+        # Two crawled pages.
+        page1 = Mock(id="p1", url="https://example.com", content="content 1")
+        page2 = Mock(id="p2", url="https://example.com/a", content="content 2")
+
+        mock_scraper_service = Mock()
+        mock_scraper_service.crawl_site = AsyncMock(return_value=[page1, page2])
+        mock_scraper_service.save_cleaned_text.return_value = Mock()
+        mock_scraper_service_class.return_value = mock_scraper_service
+
+        mock_llm_service = Mock()
+        mock_llm_service.clean_text.return_value = "cleaned"
+        mock_llm_service_class.return_value = mock_llm_service
+
+        mock_qa_item = Mock()
+        mock_qa_item.question = "What is this?"
+        mock_qa_item.answer = "An answer."
+        mock_qa_agent_service = Mock()
+        mock_qa_agent_service.generate_qa = AsyncMock(return_value=[mock_qa_item])
+        mock_qa_agent_service_class.return_value = mock_qa_agent_service
+
+        mock_qa_service = Mock()
+        mock_qa_service.process_qa_pairs.return_value = {
+            "total": 1,
+            "exact_duplicates": 0,
+            "similar_duplicates": 0,
+        }
+        mock_qa_service_class.return_value = mock_qa_service
+
+        pipeline = DatasetPipeline(db)
+        result = await pipeline.process_url(
+            url="https://example.com",
+            dataset_name="test_dataset",
+            model_cleaning="gpt-4o-mini",
+            target_language="fr",
+            model_qa="gpt-4o-mini",
+            similarity_threshold=0.9,
+            crawl=True,
+        )
+
+        # One clean / generate / save per crawled page.
+        assert mock_llm_service.clean_text.call_count == 2
+        assert mock_qa_agent_service.generate_qa.call_count == 2
+        assert mock_qa_service.process_qa_pairs.call_count == 2
+        mock_scraper_service.crawl_site.assert_awaited_once()
+
+        # Aggregated across both pages.
+        assert result["pages_crawled"] == 2
+        assert result["total"] == 2
+        assert len(result["qa_pairs"]) == 2
+        assert result["langfuse"] is None  # Langfuse not configured → skipped
+
+    @pytest.mark.asyncio
     @patch("server.pipelines.dataset.DatasetService")
     async def test_process_url_default_similarity_threshold(
         self, mock_dataset_service_class, db: Session, sample_dataset

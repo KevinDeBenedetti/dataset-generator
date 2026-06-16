@@ -16,7 +16,103 @@ from server.services.langfuse import (
     normalize_dataset_name,
     is_langfuse_configured,
     is_langfuse_available,
+    get_next_dataset_version,
+    sync_qa_to_langfuse,
 )
+
+
+class TestDatasetVersioning:
+    """Tests for the DVC-like Langfuse versioning helpers."""
+
+    def test_next_version_counts_existing_runs(self):
+        """The next version is the run count + 1."""
+        client = MagicMock()
+        runs = MagicMock()
+        runs.data = [MagicMock(), MagicMock()]
+        client.get_dataset_runs.return_value = runs
+
+        assert get_next_dataset_version("ds", client) == 3
+        client.get_dataset_runs.assert_called_once_with(dataset_name="ds")
+
+    def test_next_version_defaults_to_one(self):
+        """A brand-new dataset (no runs / error) starts at version 1."""
+        client = MagicMock()
+        client.get_dataset_runs.side_effect = Exception("not found")
+
+        assert get_next_dataset_version("ds", client) == 1
+
+    def test_sync_creates_dataset_items_and_run(self):
+        """Sync upserts the dataset, each item, and records a versioned run."""
+        client = MagicMock()
+        client.get_dataset_runs.return_value = MagicMock(data=[])
+        dataset = MagicMock()
+        client.get_dataset.return_value = dataset
+
+        items = [
+            {
+                "id": "hash1",
+                "input": {"question": "q1"},
+                "expected_output": {"answer": "a1"},
+                "metadata": {"context_length": 10},
+            },
+            {
+                "id": "hash2",
+                "input": {"question": "q2"},
+                "expected_output": {"answer": "a2"},
+                "metadata": {},
+            },
+        ]
+
+        result = sync_qa_to_langfuse(
+            "my-dataset",
+            items,
+            source_url="https://example.com",
+            stats={"total": 2},
+            langfuse_client=client,
+        )
+
+        # Dataset created with version metadata.
+        create_kwargs = client.create_dataset.call_args.kwargs
+        assert create_kwargs["name"] == "my-dataset"
+        assert create_kwargs["metadata"]["version"] == 1
+        assert create_kwargs["metadata"]["source_url"] == "https://example.com"
+
+        # Both items synced, each stamped with the version.
+        assert client.create_dataset_item.call_count == 2
+        item_kwargs = client.create_dataset_item.call_args_list[0].kwargs
+        assert item_kwargs["id"] == "hash1"
+        assert item_kwargs["metadata"]["version"] == 1
+
+        # A versioned dataset run was recorded.
+        run_kwargs = dataset.run_experiment.call_args.kwargs
+        assert run_kwargs["run_name"] == "v1"
+        client.flush.assert_called_once()
+
+        assert result["version"] == 1
+        assert result["run_name"] == "v1"
+        assert result["created_count"] == 2
+        assert result["failed_count"] == 0
+
+    def test_sync_continues_when_an_item_fails(self):
+        """A single bad item is recorded as failed without aborting the sync."""
+        client = MagicMock()
+        client.get_dataset_runs.return_value = MagicMock(data=[MagicMock()])  # → v2
+        client.get_dataset.return_value = MagicMock()
+        client.create_dataset_item.side_effect = [Exception("bad"), None]
+
+        items = [
+            {"id": "a", "input": {}, "expected_output": {}, "metadata": {}},
+            {"id": "b", "input": {}, "expected_output": {}, "metadata": {}},
+        ]
+
+        result = sync_qa_to_langfuse(
+            "ds", items, source_url="https://x", langfuse_client=client
+        )
+
+        assert result["version"] == 2
+        assert result["run_name"] == "v2"
+        assert result["created_count"] == 1
+        assert result["failed_count"] == 1
 
 
 class TestPrepareLangfuseDataset:
@@ -254,14 +350,28 @@ class TestIsLangfuseConfigured:
 class TestIsLangfuseAvailable:
     """Tests for is_langfuse_available function."""
 
-    def test_available_when_configured_and_client_works(self):
-        """Test availability when configured and client initializes."""
+    def test_available_when_configured_and_credentials_valid(self):
+        """Test availability when configured and auth_check passes."""
         with patch(
             "server.services.langfuse.is_langfuse_configured", return_value=True
         ):
             with patch("server.services.langfuse.get_client") as mock_get:
-                mock_get.return_value = MagicMock()
+                client = MagicMock()
+                client.auth_check.return_value = True
+                mock_get.return_value = client
                 assert is_langfuse_available() is True
+                client.auth_check.assert_called_once()
+
+    def test_not_available_when_credentials_rejected(self):
+        """Test not available when auth_check rejects the (invalid) keys."""
+        with patch(
+            "server.services.langfuse.is_langfuse_configured", return_value=True
+        ):
+            with patch("server.services.langfuse.get_client") as mock_get:
+                client = MagicMock()
+                client.auth_check.return_value = False
+                mock_get.return_value = client
+                assert is_langfuse_available() is False
 
     def test_not_available_when_not_configured(self):
         """Test not available when not configured."""

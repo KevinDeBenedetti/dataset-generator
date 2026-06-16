@@ -87,6 +87,10 @@ async def create_dataset_for_url(
             target_language=target_language_enum,
             model_qa=model_qa,
             similarity_threshold=request.similarity_threshold,
+            crawl=request.crawl,
+            max_depth=request.max_depth,
+            max_pages=request.max_pages,
+            sync_langfuse=request.sync_langfuse,
         )
 
         processing_time = time.time() - start_time
@@ -128,9 +132,11 @@ async def create_dataset_for_url(
             model_qa=model_qa,
             similarity_threshold=request.similarity_threshold,
             total_questions=len(qa_pairs),
+            pages_crawled=result.get("pages_crawled", 1),
             processing_time=processing_time,
             steps=steps,
             scraped_content=result.get("scraped_content"),
+            langfuse=result.get("langfuse"),
         )
 
     except HTTPException:
