@@ -39,6 +39,25 @@ class DatasetGenerationRequest(BaseModel):
         le=1.0,
         description="Similarity threshold to detect duplicates (0.0-1.0)",
     )
+    crawl: bool = Field(
+        default=True,
+        description="Explore the whole site (follow same-domain internal links) "
+        "instead of scraping only the seed URL",
+    )
+    max_depth: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Max link-following depth when crawling (defaults to config)",
+    )
+    max_pages: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Max number of pages to crawl (defaults to config)",
+    )
+    sync_langfuse: bool = Field(
+        default=True,
+        description="Create/version the dataset in Langfuse at generation time",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -67,12 +86,20 @@ class DatasetGenerationResponse(BaseModel):
     model_qa: str = Field(..., description="Model used for QA generation")
     similarity_threshold: float = Field(..., description="Similarity threshold used")
     total_questions: int = Field(..., description="Total number of generated questions")
+    pages_crawled: int = Field(
+        default=1, description="Number of pages fetched and processed"
+    )
     processing_time: float = Field(..., description="Processing time in seconds")
     steps: List[PipelineStep] = Field(
         default_factory=list, description="Timeline of the pipeline steps"
     )
     scraped_content: Optional[str] = Field(
-        None, description="Raw markdown scraped from the source URL"
+        None, description="Raw markdown scraped from the source URL(s)"
+    )
+    langfuse: Optional[dict] = Field(
+        None,
+        description="Langfuse versioning summary (dataset name, version, run) "
+        "when synced at generation time",
     )
 
     model_config = ConfigDict(

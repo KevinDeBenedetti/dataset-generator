@@ -35,12 +35,20 @@ export function useGenerateDataset() {
       name: string
       targetLanguage: string | null
       similarityThreshold: number
+      crawl?: boolean
+      maxDepth?: number | null
+      maxPages?: number | null
+      syncLangfuse?: boolean
     }) => {
       const body: DatasetGenerationRequest = {
         url: params.url,
         dataset_name: params.name,
         target_language: params.targetLanguage,
         similarity_threshold: params.similarityThreshold,
+        crawl: params.crawl,
+        max_depth: params.maxDepth,
+        max_pages: params.maxPages,
+        sync_langfuse: params.syncLangfuse,
       }
       return generateDataset(body)
     },

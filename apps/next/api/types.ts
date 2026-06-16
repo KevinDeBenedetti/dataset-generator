@@ -26,6 +26,23 @@ export type DatasetGenerationRequest = {
   target_language?: string | null
   model_qa?: string | null
   similarity_threshold?: number
+  /** Explore the whole site (follow same-domain internal links) instead of the seed URL only */
+  crawl?: boolean
+  /** Max link-following depth when crawling (defaults to backend config) */
+  max_depth?: number | null
+  /** Max number of pages to crawl (defaults to backend config) */
+  max_pages?: number | null
+  /** Create/version the dataset in Langfuse at generation time */
+  sync_langfuse?: boolean
+}
+
+export type LangfuseSyncSummary = {
+  dataset_name: string
+  version: number
+  run_name: string
+  total_items: number
+  created_count: number
+  failed_count: number
 }
 
 export type AgentQaPair = {
@@ -71,9 +88,11 @@ export type DatasetGenerationResponse = {
   model_qa: string
   similarity_threshold: number
   total_questions: number
+  pages_crawled?: number
   processing_time: number
   steps?: Array<PipelineStep>
   scraped_content?: string | null
+  langfuse?: LangfuseSyncSummary | null
 }
 
 export type DatasetResponse = {

@@ -41,6 +41,17 @@ export function Result({ result }: ResultProps) {
             <Badge variant="secondary">Model: {result.model_qa}</Badge>
             <Badge variant="secondary">Threshold: {result.similarity_threshold}</Badge>
             <Badge variant="secondary">Language: {result.target_language}</Badge>
+            {result.pages_crawled != null && (
+              <Badge variant="secondary">
+                Pages crawled: {result.pages_crawled}
+              </Badge>
+            )}
+            {result.langfuse && (
+              <Badge variant="secondary">
+                Langfuse: {result.langfuse.run_name} (
+                {result.langfuse.total_items} items)
+              </Badge>
+            )}
           </div>
         </CardDescription>
       </CardHeader>

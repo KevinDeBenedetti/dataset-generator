@@ -120,6 +120,126 @@ def create_langfuse_dataset_with_items(
     }
 
 
+def get_next_dataset_version(
+    dataset_name: str, langfuse_client: Optional[Langfuse] = None
+) -> int:
+    """Return the next version number for a dataset (DVC-like, 1-based).
+
+    Each generation records a dataset *run* in Langfuse, so the count of
+    existing runs is the version history. The next version is therefore
+    ``len(existing_runs) + 1``. Falls back to ``1`` when the dataset/runs can't
+    be read (e.g. the dataset doesn't exist yet).
+    """
+    if langfuse_client is None:
+        langfuse_client = get_client()
+    try:
+        runs = langfuse_client.get_dataset_runs(dataset_name=dataset_name)
+        data = getattr(runs, "data", None) or []
+        return len(data) + 1
+    except Exception as e:  # noqa: BLE001 — first version of a new dataset
+        logging.info(f"No existing runs for '{dataset_name}' ({e}); starting at v1")
+        return 1
+
+
+def sync_qa_to_langfuse(
+    dataset_name: str,
+    items: List[Dict[str, Any]],
+    *,
+    source_url: str,
+    stats: Optional[Dict[str, Any]] = None,
+    version: Optional[int] = None,
+    langfuse_client: Optional[Langfuse] = None,
+) -> Dict[str, Any]:
+    """Create/update a Langfuse dataset and record a versioned run.
+
+    This is the DVC-like step run at generation time:
+
+    1. Upserts the dataset, stamping ``metadata.version`` and source info.
+    2. Upserts each QA item. Item ids are content hashes, so re-runs are
+       idempotent — unchanged pairs don't duplicate, new pairs are added.
+    3. Records a dataset *run* named ``v{version}`` (the immutable "commit"),
+       linking the current items to that version with run metadata.
+
+    Returns a summary describing the synced version.
+    """
+    if langfuse_client is None:
+        langfuse_client = get_client()
+
+    stats = stats or {}
+    if version is None:
+        version = get_next_dataset_version(dataset_name, langfuse_client)
+
+    run_name = f"v{version}"
+    dataset_metadata = {
+        "source": "dataset-generator",
+        "source_url": source_url,
+        "version": version,
+        "latest_run": run_name,
+        "total_items": len(items),
+        **stats,
+    }
+
+    logging.info(f"Syncing dataset '{dataset_name}' as version {version} to Langfuse")
+    langfuse_client.create_dataset(
+        name=dataset_name,
+        description=f"Auto-generated QA dataset from {source_url}",
+        metadata=dataset_metadata,
+    )
+
+    created, failed = [], []
+    for item in items:
+        try:
+            item_metadata = {**(item.get("metadata") or {}), "version": version}
+            langfuse_client.create_dataset_item(
+                dataset_name=dataset_name,
+                input=item["input"],
+                expected_output=item.get("expected_output"),
+                metadata=item_metadata,
+                id=item.get("id"),
+            )
+            created.append(item.get("id"))
+        except Exception as e:  # noqa: BLE001 — keep going on a single bad item
+            logging.error(f"Error syncing item {item.get('id')}: {e}")
+            failed.append({"id": item.get("id"), "error": str(e)})
+
+    # Record the version as a dataset run (the immutable snapshot/"commit").
+    run_metadata = {
+        "version": version,
+        "source_url": source_url,
+        "item_count": len(items),
+        **stats,
+    }
+    try:
+        dataset = langfuse_client.get_dataset(dataset_name)
+
+        def _snapshot_task(*, item, **_):
+            # Identity task: we only want the run recorded against each item,
+            # not an evaluation. The expected output is the snapshotted value.
+            return item.expected_output
+
+        dataset.run_experiment(
+            name=run_name,
+            run_name=run_name,
+            description=f"Generation {run_name} from {source_url}",
+            task=_snapshot_task,
+            metadata=run_metadata,
+        )
+    except Exception as e:  # noqa: BLE001 — items are synced even if the run fails
+        logging.warning(f"Could not record dataset run {run_name}: {e}")
+
+    langfuse_client.flush()
+
+    return {
+        "dataset_name": dataset_name,
+        "version": version,
+        "run_name": run_name,
+        "total_items": len(items),
+        "created_count": len(created),
+        "failed_count": len(failed),
+        "failed_items": failed,
+    }
+
+
 def normalize_dataset_name(filename: str) -> str:
     """
     Normalizes a filename to create a valid dataset name
@@ -141,13 +261,21 @@ def is_langfuse_configured() -> bool:
 
 def is_langfuse_available() -> bool:
     """
-    Attempts to initialize the Langfuse client to verify connectivity.
-    Returns True if the client initializes correctly, False otherwise.
+    Initializes the Langfuse client and validates the credentials against the
+    server. Returns True only if the keys authenticate, False otherwise.
+
+    ``get_client()`` is lazy in the v4 SDK — it never raises on invalid or
+    unreachable credentials — so we call ``auth_check()`` to make a real
+    request. This is what distinguishes "env vars are set" (``is_langfuse_configured``)
+    from "the secrets actually work".
     """
     if not is_langfuse_configured():
         return False
     try:
-        _ = get_client()
+        client = get_client()
+        if not client.auth_check():
+            logging.warning("Langfuse credentials rejected (auth_check failed)")
+            return False
         logging.info("Langfuse client reachable")
         return True
     except Exception as e:

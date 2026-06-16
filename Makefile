@@ -31,11 +31,20 @@ setup:
 dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
 	n="$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}"; s="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \
-	printf '\n  \033[1;36mDataset Generator — dev services\033[0m\n'; \
-	printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
-	printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
-	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
-	printf '  \033[1;36m▶ Streaming logs with watch — Ctrl-C stops the stack\033[0m\n\n'
+	printf '\n  \033[1;36m▶ Building & starting the stack — Ctrl-C stops it\033[0m\n'; \
+	printf '    (service URLs are shown below once every service is healthy)\n\n'; \
+	( \
+	  health() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$$1" 2>/dev/null; }; \
+	  until [ "$$(health server-fastapi)" = "healthy" ] && [ "$$(health next)" = "healthy" ]; do \
+	    sleep 2; \
+	  done; \
+	  printf '\n  \033[1;32m✓ Dataset Generator — dev services ready\033[0m\n'; \
+	  printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
+	  printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
+	  printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
+	) & \
+	waiter=$$!; \
+	trap 'kill $$waiter 2>/dev/null || true' EXIT; \
 	COMPOSE_MENU=false docker compose up --build --watch
 
 ## Ensure the Docker daemon is reachable, starting Docker Desktop if needed.
