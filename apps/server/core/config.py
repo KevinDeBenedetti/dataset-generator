@@ -38,12 +38,34 @@ class Config:
     timeout: int = 10
     scrape_delay: float = 0.2
 
+    # Deep crawl: when enabled, the scraper follows internal links from the seed
+    # URL (breadth-first) to cover the whole site and maximise the dataset.
+    # Each discovered page triggers a clean + QA generation, so the limits below
+    # bound the cost. Same-domain only by default.
+    crawl_max_depth: int = field(
+        default_factory=lambda: int(os.getenv("CRAWL_MAX_DEPTH", "2"))
+    )
+    crawl_max_pages: int = field(
+        default_factory=lambda: int(os.getenv("CRAWL_MAX_PAGES", "50"))
+    )
+    crawl_same_domain: bool = field(
+        default_factory=lambda: (
+            os.getenv("CRAWL_SAME_DOMAIN", "true").lower() not in ("0", "false", "no")
+        )
+    )
+
+    # When true (and Langfuse is configured), every generation also creates/updates
+    # the dataset in Langfuse and records a versioned dataset run (DVC-like commit).
+    langfuse_auto_sync: bool = field(
+        default_factory=lambda: (
+            os.getenv("LANGFUSE_AUTO_SYNC", "true").lower() not in ("0", "false", "no")
+        )
+    )
+
     # crawl4ai service (Docker). The scraper calls this REST API instead of
     # running crawl4ai in-process, keeping the browser stack out of this image.
     crawl4ai_base_url: str = field(
-        default_factory=lambda: os.getenv(
-            "CRAWL4AI_BASE_URL", "http://crawl4ai:11235"
-        )
+        default_factory=lambda: os.getenv("CRAWL4AI_BASE_URL", "http://crawl4ai:11235")
     )
     crawl4ai_api_token: str = field(
         default_factory=lambda: os.getenv("CRAWL4AI_API_TOKEN", "")

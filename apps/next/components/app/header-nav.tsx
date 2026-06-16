@@ -14,7 +14,7 @@ export function HeaderNav() {
   const pathname = usePathname()
 
   return (
-    <NavigationMenu className="max-w-none w-full p-2 border-b">
+    <NavigationMenu className="sticky top-0 z-50 max-w-none w-full p-2 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <NavigationMenuList>
         <NavigationMenuItem>
           <NavigationMenuLink asChild>

@@ -28,7 +28,11 @@ def sample_dataset(db: Session):
 
 
 def _make_httpx_mock(
-    markdown="", success=True, status_code=200, error_message=None, post_side_effect=None
+    markdown="",
+    success=True,
+    status_code=200,
+    error_message=None,
+    post_side_effect=None,
 ):
     """Build a mock for httpx.AsyncClient used as an async context manager.
 
@@ -124,9 +128,7 @@ class TestScraperService:
         self, scraper_service: ScraperService, sample_dataset
     ):
         """Test that an unsuccessful crawl raises an error"""
-        client_class, _ = _make_httpx_mock(
-            success=False, error_message="403 Forbidden"
-        )
+        client_class, _ = _make_httpx_mock(success=False, error_message="403 Forbidden")
 
         with patch("server.services.scraper.httpx.AsyncClient", client_class):
             with pytest.raises(RuntimeError, match="403 Forbidden"):
@@ -214,6 +216,95 @@ class TestScraperService:
         assert cleaned.content == "Cleaned content here"
         assert cleaned.language == "french"
         assert cleaned.model == "gpt-4o-mini"
+
+    async def test_crawl_site_bfs_same_domain(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """Crawl follows same-domain links breadth-first within max_depth."""
+        pages = {
+            "https://example.com": (
+                "# Home",
+                [
+                    "https://example.com/a",
+                    "https://other.com/x",  # external — must be skipped
+                    "https://example.com/b",
+                ],
+            ),
+            "https://example.com/a": ("# A", ["https://example.com/c"]),
+            "https://example.com/b": ("# B", []),
+            "https://example.com/c": ("# C", []),
+        }
+
+        async def fake_fetch(url):
+            return pages.get(url, ("", []))
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            snapshots = await scraper_service.crawl_site(
+                "https://example.com", sample_dataset.id, max_depth=1, max_pages=10
+            )
+
+        urls = {s.url for s in snapshots}
+        assert urls == {
+            "https://example.com",
+            "https://example.com/a",
+            "https://example.com/b",
+        }
+        # /c is depth 2 (beyond max_depth=1); other.com is a different host.
+        assert "https://example.com/c" not in urls
+        assert "https://other.com/x" not in urls
+
+    async def test_crawl_site_respects_max_pages(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """Crawl stops once max_pages snapshots are collected."""
+        pages = {
+            f"https://example.com/{i}": (
+                f"# Page {i}",
+                [f"https://example.com/{i + 1}"],
+            )
+            for i in range(10)
+        }
+
+        async def fake_fetch(url):
+            return pages.get(url, ("", []))
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            snapshots = await scraper_service.crawl_site(
+                "https://example.com/0",
+                sample_dataset.id,
+                max_depth=10,
+                max_pages=3,
+            )
+
+        assert len(snapshots) == 3
+
+    async def test_crawl_site_skips_failed_pages(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """A page that fails to fetch is skipped, not fatal to the crawl."""
+
+        async def fake_fetch(url):
+            if url == "https://example.com":
+                return ("# Home", ["https://example.com/broken"])
+            raise RuntimeError("boom")
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            snapshots = await scraper_service.crawl_site(
+                "https://example.com", sample_dataset.id, max_depth=2, max_pages=10
+            )
+
+        assert [s.url for s in snapshots] == ["https://example.com"]
+
+    async def test_fetch_page_raises_on_unsuccessful_response(
+        self, scraper_service: ScraperService
+    ):
+        """A 200 response with success=false is a soft failure and must raise,
+        not be silently ingested as an empty/partial page."""
+        client_class, _ = _make_httpx_mock(success=False, error_message="403 Forbidden")
+
+        with patch("server.services.scraper.httpx.AsyncClient", client_class):
+            with pytest.raises(RuntimeError, match="403 Forbidden"):
+                await scraper_service._fetch_page("https://example.com/403")
 
     def test_save_cleaned_text_with_empty_content(
         self, scraper_service: ScraperService, db: Session, sample_dataset

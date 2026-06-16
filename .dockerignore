@@ -16,6 +16,22 @@ Thumbs.db
 # Logs
 *.log
 
+# Local SQLite databases — must NOT be baked into the image, otherwise the
+# container starts from a pre-existing DB and Alembic's create-tables migration
+# hangs/fails instead of building a clean schema.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+*.sqlite
+*.sqlite3
+**/*.sqlite
+**/*.sqlite3
+
 # Env
 .env.local
 .env.*.local

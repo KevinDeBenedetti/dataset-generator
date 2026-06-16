@@ -39,6 +39,10 @@ export function DatasetGenerate() {
   );
   const [targetLanguage, setTargetLanguage] = useState<string>("fr");
   const [similarityThreshold, setSimilarityThreshold] = useState([0.9]);
+  const [crawl, setCrawl] = useState(true);
+  const [maxDepth, setMaxDepth] = useState("2");
+  const [maxPages, setMaxPages] = useState("50");
+  const [syncLangfuse, setSyncLangfuse] = useState(true);
 
   const { data: datasets = [] } = useDatasets();
   const generateMutation = useGenerateDataset();
@@ -85,6 +89,10 @@ export function DatasetGenerate() {
         name: datasetName,
         targetLanguage,
         similarityThreshold: similarityThreshold[0] ?? 0.9,
+        crawl,
+        maxDepth: crawl ? Number(maxDepth) || null : null,
+        maxPages: crawl ? Number(maxPages) || null : null,
+        syncLangfuse,
       });
 
       // Only call analyze/clean with a definite string id
@@ -180,6 +188,65 @@ export function DatasetGenerate() {
                 max={1}
                 step={0.05}
               />
+            </div>
+
+            {/* Crawl the whole site */}
+            <div className="flex flex-col gap-2 border-t pt-3">
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={crawl}
+                  onChange={(e) => setCrawl(e.target.checked)}
+                  disabled={isAnyProcessing}
+                />
+                <span className="font-medium">Crawl entire site</span>
+                <span className="text-gray-400">
+                  (follow same-domain links)
+                </span>
+              </label>
+
+              {crawl && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-500">Max depth</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={maxDepth}
+                      onChange={(e) => setMaxDepth(e.target.value)}
+                      disabled={isAnyProcessing}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-500">Max pages</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={maxPages}
+                      onChange={(e) => setMaxPages(e.target.value)}
+                      disabled={isAnyProcessing}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Langfuse versioning */}
+            <div className="flex flex-col gap-1 border-t pt-3">
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={syncLangfuse}
+                  onChange={(e) => setSyncLangfuse(e.target.checked)}
+                  disabled={isAnyProcessing}
+                />
+                <span className="font-medium">Version to Langfuse</span>
+                <span className="text-gray-400">
+                  (create & version dataset)
+                </span>
+              </label>
             </div>
           </div>
         </div>
