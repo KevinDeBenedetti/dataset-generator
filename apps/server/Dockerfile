@@ -18,7 +18,8 @@ WORKDIR /app
 
 # =============================================================================
 # Stage: dependencies
-# Install dependencies with cache
+# Python packages only. The browser stack lives in the separate crawl4ai
+# service, so no Chromium/Playwright is installed here.
 # =============================================================================
 FROM base AS dependencies
 
@@ -38,12 +39,17 @@ FROM base AS dev
 ARG APP_PORT=8000
 ENV PYTHON_ENV=development
 
-# Install curl for healthcheck
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# curl for the healthcheck. This layer only depends on `base`, so it stays
+# cached across Python dependency and source changes. The apt cache mounts keep
+# downloaded packages warm across rebuilds (docker-clean is removed so the cache
+# is actually retained).
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl
 
-# Copy dependencies from the previous stage
+# Resolved virtualenv.
 COPY --from=dependencies /app/.venv /app/.venv
 COPY pyproject.toml uv.lock ./
 

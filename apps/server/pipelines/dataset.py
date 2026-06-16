@@ -1,9 +1,11 @@
 import logging
-from typing import Any, Dict, Optional, Union
+import time
+from typing import Any, Dict, List, Optional, Union
 from sqlalchemy.orm import Session
 
 from server.services.scraper import ScraperService
 from server.services.llm import LLMService
+from server.services.agent import QAAgentService
 from server.services.dataset import DatasetService
 from server.services.qa import QAService
 from server.schemas.dataset import TargetLanguage
@@ -16,6 +18,7 @@ class DatasetPipeline:
         self.db = db
         self.scraper_service = ScraperService(db)
         self.llm_service = LLMService()
+        self.qa_agent_service = QAAgentService()
         self.dataset_service = DatasetService(db)
         self.qa_service = QAService(db)
 
@@ -81,20 +84,51 @@ class DatasetPipeline:
                 f"Processing URL with similarity_threshold: {similarity_threshold}"
             )
 
+            # Timeline of steps, surfaced to the frontend so the user can follow
+            # the pipeline and read a short log line per stage.
+            steps: List[Dict[str, Any]] = []
+
+            def record(
+                key: str, label: str, status: str, started: float, detail: str = ""
+            ) -> None:
+                steps.append(
+                    {
+                        "key": key,
+                        "label": label,
+                        "status": status,
+                        "duration_ms": int((time.perf_counter() - started) * 1000),
+                        "detail": detail,
+                    }
+                )
+
             # 1. Get or create the dataset
+            t = time.perf_counter()
             dataset = self.dataset_service.get_or_create_dataset(
                 name=dataset_name,
                 description=f"Dataset automatically created for {url}",
+            )
+            record(
+                "dataset", "Prepare dataset", "success", t, f"Dataset '{dataset_name}' ready"
             )
 
             # 2. Scrape the URL
             assert dataset.id is not None
             assert isinstance(dataset.id, str)
-            page_snapshot = self.scraper_service.scrape_url(url, dataset.id)
+            t = time.perf_counter()
+            page_snapshot = await self.scraper_service.scrape_url(url, dataset.id)
+            scraped_len = len(page_snapshot.content or "")
+            record(
+                "scrape",
+                "Scrape URL",
+                "success",
+                t,
+                f"Fetched {scraped_len:,} characters from {url}",
+            )
 
             # 3. Clean the text with LLM
             assert page_snapshot.content is not None
             assert isinstance(page_snapshot.content, str)
+            t = time.perf_counter()
             cleaned_text = self.llm_service.clean_text(
                 page_snapshot.content, model_cleaning_str
             )
@@ -108,15 +142,33 @@ class DatasetPipeline:
                 language=target_language_str,
                 model=model_cleaning_str,
             )
+            record(
+                "clean",
+                "Clean text",
+                "success",
+                t,
+                f"Cleaned with {model_cleaning_str} → {len(cleaned_text):,} characters",
+            )
 
-            # 5. Generate QA pairs
-            qa_list = self.llm_service.generate_qa(
+            # 5. Generate QA pairs (Google ADK agent over the configured model)
+            t = time.perf_counter()
+            qa_list = await self.qa_agent_service.generate_qa(
                 cleaned_text, target_language_str, model_qa_str
+            )
+            record(
+                "qa",
+                "Generate Q&A",
+                "success" if qa_list else "warning",
+                t,
+                f"Generated {len(qa_list)} Q&A pairs with {model_qa_str}"
+                if qa_list
+                else f"No Q&A pairs generated with {model_qa_str} (check agent/model logs)",
             )
 
             # 6. Process and save QA pairs
             assert dataset.id is not None
             assert isinstance(dataset.id, str)
+            t = time.perf_counter()
             qa_stats = self.qa_service.process_qa_pairs(
                 qa_list=qa_list,
                 cleaned_text=cleaned_text,
@@ -127,6 +179,16 @@ class DatasetPipeline:
                 dataset_id=dataset.id,
                 similarity_threshold=similarity_threshold,
             )
+            record(
+                "save",
+                "Deduplicate & save",
+                "success",
+                t,
+                f"Saved {qa_stats['total']} pairs · skipped "
+                f"{qa_stats['exact_duplicates']} exact and "
+                f"{qa_stats['similar_duplicates']} similar duplicates "
+                f"(threshold {similarity_threshold})",
+            )
 
             # 7. Return results
             return {
@@ -134,6 +196,8 @@ class DatasetPipeline:
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
                 "dataset_id": dataset.id,  # Explicitly add the dataset ID to the result
+                "steps": steps,
+                "scraped_content": page_snapshot.content,
             }
 
         except Exception as e:

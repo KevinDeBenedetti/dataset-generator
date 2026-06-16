@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local check-docker check-ports down logs clean lint lint-server lint-client precommit test test-ci models
+.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -30,13 +30,13 @@ setup:
 ## Ctrl-C stops the stack (use `make down` if it was detached elsewhere).
 dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
-	n="$${NEXT_HOST_PORT:-3000}"; s="$${SERVER_HOST_PORT:-8000}"; \
+	n="$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}"; s="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \
 	printf '\n  \033[1;36mDataset Generator — dev services\033[0m\n'; \
 	printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
 	printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
 	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
 	printf '  \033[1;36m▶ Streaming logs with watch — Ctrl-C stops the stack\033[0m\n\n'
-	docker compose up --build --watch
+	COMPOSE_MENU=false docker compose up --build --watch
 
 ## Ensure the Docker daemon is reachable, starting Docker Desktop if needed.
 check-docker:
@@ -49,13 +49,13 @@ check-docker:
 		exit 1; \
 	fi
 
-## Free dev ports (NEXT_HOST_PORT/SERVER_HOST_PORT) if a crashed run left them bound.
+## Free dev ports (NEXT_HOST_PORT/NEXT_PORT, SERVER_HOST_PORT/SERVER_PORT) if a crashed run left them bound.
 ## Releases this project's own containers via `compose down`; for anything else it
 ## diagnoses and aborts (it never kills the Docker daemon to "free" a port).
 check-ports:
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
 	docker compose down --remove-orphans >/dev/null 2>&1 || true; \
-	for p in "$${NEXT_HOST_PORT:-3000}" "$${SERVER_HOST_PORT:-8000}"; do \
+	for p in "$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}" "$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; do \
 		holder="$$(lsof -nP -iTCP:$$p -sTCP:LISTEN +c0 -F c 2>/dev/null | sed -n 's/^c//p' | head -n1)"; \
 		[ -z "$$holder" ] && continue; \
 		cname="$$(docker ps --filter "publish=$$p" --format '{{.Names}}' 2>/dev/null | head -n1)"; \
@@ -78,6 +78,14 @@ dev-local: env
 ## Stop and remove all containers (no-op if the Docker daemon is not running).
 down:
 	@docker info >/dev/null 2>&1 && docker compose down || true
+
+## Purge persistent volumes (server venv + node_modules) and rebuild.
+## Use after a dependency change: `make dev` keeps the volumes, so a stale
+## venv would otherwise mask the new lockfile (e.g. an old litellm lingering).
+reset: check-docker
+	docker compose down -v --remove-orphans
+	docker compose build
+	@printf '  \033[1;32m✓ Volumes purged and images rebuilt — run `make dev`.\033[0m\n'
 
 ## Stream logs from all containers.
 logs:

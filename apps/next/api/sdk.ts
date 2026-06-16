@@ -7,14 +7,41 @@ import type {
   CleanSimilarityResponse,
   DeleteDatasetResponse,
   QaListResponse,
-  ErrorResponse,
+  QaAgentTestRequest,
+  QaAgentTestResponse,
+  ValidationError,
 } from './types'
 
-// Helper to extract error message from response
+// Helper to extract a readable error message from an API error body.
+// FastAPI returns either { detail: string } (our ErrorResponse) or, on a 422,
+// { detail: ValidationError[] }. The array case must be flattened to a string,
+// otherwise it surfaces as "[object Object]" in the UI.
 function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'detail' in error) {
-    return (error as ErrorResponse).detail || fallback
+  if (!error || typeof error !== 'object' || !('detail' in error)) {
+    return fallback
   }
+
+  const detail = (error as { detail?: unknown }).detail
+
+  if (typeof detail === 'string') {
+    return detail || fallback
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = (detail as ValidationError[])
+      .map((item) => {
+        const loc = Array.isArray(item?.loc)
+          ? item.loc.filter((part) => part !== 'body').join('.')
+          : ''
+        const msg = item?.msg ?? ''
+        return loc ? `${loc}: ${msg}` : String(msg)
+      })
+      .filter(Boolean)
+    if (messages.length) {
+      return messages.join('; ')
+    }
+  }
+
   return fallback
 }
 
@@ -89,6 +116,24 @@ export async function cleanSimilarities(
     throw new Error(getErrorMessage(response.error, 'Failed to clean similarities'))
   }
   return response.data as unknown as CleanSimilarityResponse
+}
+
+// Agent (ADK) diagnostics
+
+export async function testQaAgent(
+  body: QaAgentTestRequest
+): Promise<QaAgentTestResponse> {
+  const response = await client.post<QaAgentTestResponse>({
+    url: '/agent/qa-test',
+    body,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to run the QA agent'))
+  }
+  return response.data as unknown as QaAgentTestResponse
 }
 
 // Q&A endpoints
