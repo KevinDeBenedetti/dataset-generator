@@ -28,6 +28,8 @@ setup:
 ## per-service prefix, and images rebuild automatically when dependencies change
 ## (source is bind-mounted, so edits hot-reload without a rebuild).
 ## Ctrl-C stops the stack (use `make down` if it was detached elsewhere).
+## Run `DEBUG_LOGS=1 make dev` to enable the in-browser dev log console
+## (FastAPI + Next.js logs streamed over SSE; toggle it with Ctrl-` in the UI).
 dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
 	n="$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}"; s="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \

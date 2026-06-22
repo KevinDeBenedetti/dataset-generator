@@ -23,6 +23,12 @@ services:
     # so a single variable drives the host mapping, container port, healthcheck and Next.
     environment:
       PORT: ${NEXT_PORT:-3000}
+      # Dev log console (DEBUG_LOGS=1 make dev). DEBUG_LOGS drives both the
+      # server-side capture + SSE proxy and the client-side terminal widget.
+      DEBUG_LOGS: ${DEBUG_LOGS:-}
+      NEXT_PUBLIC_DEBUG_LOGS: ${DEBUG_LOGS:-}
+      # Server-to-server URL for the FastAPI SSE proxy (browser uses localhost).
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://server:8000}
     ports:
       - ${NEXT_HOST_PORT:-${NEXT_PORT:-3000}}:${NEXT_PORT:-3000}
     volumes:
@@ -58,6 +64,8 @@ services:
     # compose service; override CRAWL4AI_BASE_URL in .env to use a remote one.
     environment:
       CRAWL4AI_BASE_URL: ${CRAWL4AI_BASE_URL:-http://crawl4ai:11235}
+      # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
+      DEBUG_LOGS: ${DEBUG_LOGS:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s

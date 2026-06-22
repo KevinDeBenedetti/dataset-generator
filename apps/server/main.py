@@ -13,6 +13,8 @@ from server.api import agent, dataset, generate, q_a, openai
 from server.services import langfuse
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL
+from server.core.config import config
+from server.core.log_stream import broadcaster
 
 logger_module.setup_logging()
 logger = logging.getLogger(__name__)
@@ -21,6 +23,10 @@ logger.setLevel(logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Bind the running loop so log records emitted from worker threads can be
+    # delivered to live /debug/logs subscribers.
+    broadcaster.bind_loop(asyncio.get_running_loop())
+
     db_url = SQLALCHEMY_DATABASE_URL
     try:
         logger.info("Starting migrations...")
@@ -53,6 +59,12 @@ app.include_router(dataset.router)
 app.include_router(q_a.router)
 app.include_router(openai.router)
 app.include_router(agent.router)
+
+if config.debug_logs:
+    from server.api import debug as debug_api
+
+    app.include_router(debug_api.router)
+    logger.info("DEBUG_LOGS enabled — streaming server logs at /debug/logs")
 
 if langfuse.is_langfuse_available():
     try:
