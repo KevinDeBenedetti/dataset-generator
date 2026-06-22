@@ -54,6 +54,15 @@ class Config:
         )
     )
 
+    # Dev log console: when true, the server exposes /debug/logs (SSE) so the
+    # Next.js dev UI can stream server logs into an in-browser terminal. Toggle
+    # with `DEBUG_LOGS=1 make dev`. Off by default (never enable in production).
+    debug_logs: bool = field(
+        default_factory=lambda: (
+            os.getenv("DEBUG_LOGS", "false").lower() not in ("0", "false", "no", "")
+        )
+    )
+
     # When true (and Langfuse is configured), every generation also creates/updates
     # the dataset in Langfuse and records a versioned dataset run (DVC-like commit).
     langfuse_auto_sync: bool = field(

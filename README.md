@@ -81,6 +81,20 @@ The deep crawl and Langfuse versioning are controlled by these environment varia
 
 These can also be overridden per request: the `POST /dataset/generate` body accepts `crawl`, `max_depth`, `max_pages` and `sync_langfuse`, and the **Generate** page exposes them as form controls. Langfuse sync additionally requires `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_HOST`.
 
+### Dev log console
+
+For local debugging you can stream both servers' logs into an in-browser terminal:
+
+```bash
+DEBUG_LOGS=1 make dev
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DEBUG_LOGS` | _(off)_ | When set (e.g. `1`), exposes the dev log console: FastAPI logs over SSE (`/debug/logs`), Next.js server logs captured in-process, both merged through the Next.js SSE proxy (`/api/debug/logs`) |
+
+Once the stack is up, toggle the console with **Ctrl+`** (or the floating terminal button, bottom-right). Lines are tagged `[api]` / `[web]` by origin and colourised by level. The endpoints return `404` and the widget never renders unless `DEBUG_LOGS` is set, so it stays out of production builds.
+
 ## 🌍 Supported Languages
 
 - **French (fr)**: French language dataset generation

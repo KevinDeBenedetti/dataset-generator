@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/providers'
 import { HeaderNav } from '@/components/app/header-nav'
+import { DevLogConsole } from '@/components/app/dev-log-console'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,6 +31,7 @@ export default function RootLayout({
         <Providers>
           <HeaderNav />
           <main className="min-h-screen">{children}</main>
+          <DevLogConsole />
         </Providers>
       </body>
     </html>
