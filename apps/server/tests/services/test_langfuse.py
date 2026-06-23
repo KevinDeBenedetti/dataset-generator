@@ -18,6 +18,8 @@ from server.services.langfuse import (
     is_langfuse_available,
     get_next_dataset_version,
     sync_qa_to_langfuse,
+    list_dataset_runs,
+    reset_langfuse_availability_cache,
 )
 
 
@@ -45,8 +47,6 @@ class TestDatasetVersioning:
         """Sync upserts the dataset, each item, and records a versioned run."""
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[])
-        dataset = MagicMock()
-        client.get_dataset.return_value = dataset
 
         items = [
             {
@@ -83,9 +83,15 @@ class TestDatasetVersioning:
         assert item_kwargs["id"] == "hash1"
         assert item_kwargs["metadata"]["version"] == 1
 
-        # A versioned dataset run was recorded.
-        run_kwargs = dataset.run_experiment.call_args.kwargs
-        assert run_kwargs["run_name"] == "v1"
+        # A versioned dataset run was recorded by linking each item to the run
+        # directly (no run_experiment / get_dataset / per-item task execution).
+        client.get_dataset.assert_not_called()
+        link = client.api.dataset_run_items.create
+        assert link.call_count == 2
+        link_kwargs = link.call_args_list[0].kwargs
+        assert link_kwargs["run_name"] == "v1"
+        assert link_kwargs["dataset_item_id"] == "hash1"
+        assert link_kwargs["metadata"]["version"] == 1
         client.flush.assert_called_once()
 
         assert result["version"] == 1
@@ -93,11 +99,40 @@ class TestDatasetVersioning:
         assert result["created_count"] == 2
         assert result["failed_count"] == 0
 
+    def test_list_dataset_runs_newest_first(self):
+        """Runs are summarised and returned newest (highest version) first."""
+        client = MagicMock()
+        run1 = MagicMock(
+            name="v1",
+            description="gen v1",
+            metadata={"version": 1, "item_count": 5, "source_url": "https://a"},
+            created_at=None,
+        )
+        run1.name = "v1"
+        run2 = MagicMock()
+        run2.name = "v2"
+        run2.description = "gen v2"
+        run2.metadata = {"version": 2, "item_count": 8, "source_url": "https://a"}
+        run2.created_at = None
+        client.get_dataset_runs.return_value = MagicMock(data=[run1, run2])
+
+        versions = list_dataset_runs("ds", client)
+
+        client.get_dataset_runs.assert_called_once_with(dataset_name="ds")
+        assert [v["version"] for v in versions] == [2, 1]
+        assert versions[0]["run_name"] == "v2"
+        assert versions[0]["item_count"] == 8
+
+    def test_list_dataset_runs_empty(self):
+        """No runs → empty list (not an error)."""
+        client = MagicMock()
+        client.get_dataset_runs.return_value = MagicMock(data=[])
+        assert list_dataset_runs("ds", client) == []
+
     def test_sync_continues_when_an_item_fails(self):
         """A single bad item is recorded as failed without aborting the sync."""
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[MagicMock()])  # → v2
-        client.get_dataset.return_value = MagicMock()
         client.create_dataset_item.side_effect = [Exception("bad"), None]
 
         items = [
@@ -350,6 +385,14 @@ class TestIsLangfuseConfigured:
 class TestIsLangfuseAvailable:
     """Tests for is_langfuse_available function."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self):
+        # The availability result is memoised process-wide; reset around each
+        # test so they don't see each other's cached value.
+        reset_langfuse_availability_cache()
+        yield
+        reset_langfuse_availability_cache()
+
     def test_available_when_configured_and_credentials_valid(self):
         """Test availability when configured and auth_check passes."""
         with patch(
@@ -388,3 +431,35 @@ class TestIsLangfuseAvailable:
             with patch("server.services.langfuse.get_client") as mock_get:
                 mock_get.side_effect = Exception("Connection failed")
                 assert is_langfuse_available() is False
+
+    def test_result_is_memoised(self):
+        """auth_check runs once; later calls return the cached result."""
+        with patch(
+            "server.services.langfuse.is_langfuse_configured", return_value=True
+        ):
+            with patch("server.services.langfuse.get_client") as mock_get:
+                client = MagicMock()
+                client.auth_check.return_value = True
+                mock_get.return_value = client
+
+                assert is_langfuse_available() is True
+                assert is_langfuse_available() is True  # cached
+                client.auth_check.assert_called_once()
+
+    def test_use_cache_false_forces_recheck(self):
+        """use_cache=False bypasses the memoised value."""
+        with patch(
+            "server.services.langfuse.is_langfuse_configured", return_value=True
+        ):
+            with patch("server.services.langfuse.get_client") as mock_get:
+                client = MagicMock()
+                client.auth_check.return_value = True
+                mock_get.return_value = client
+                assert is_langfuse_available() is True
+
+            # Credentials now rejected — a forced re-check sees the new result.
+            with patch("server.services.langfuse.get_client") as mock_get:
+                client = MagicMock()
+                client.auth_check.return_value = False
+                mock_get.return_value = client
+                assert is_langfuse_available(use_cache=False) is False

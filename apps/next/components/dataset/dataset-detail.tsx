@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { QAList } from "./qa-list";
 import { PaginationWrapper } from "./pagination-wrapper";
 import { useQAByDataset } from "@/hooks/use-qa";
+import { useLangfuseVersions } from "@/hooks/use-langfuse";
 import type { DatasetResponse } from "@/api/types";
 
 interface DatasetDetailProps {
@@ -20,6 +21,11 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
     offset: (page - 1) * limit,
     enabled: !!dataset?.id,
   });
+
+  // Langfuse version history (DVC-like runs). Silently absent when Langfuse
+  // isn't configured (the endpoint returns 503) or the dataset has no runs.
+  const { data: versionsData } = useLangfuseVersions(dataset?.name);
+  const versions = versionsData?.versions ?? [];
 
   const currentPage = useMemo(() => {
     return Math.floor((qaResponse?.offset || 0) / (qaResponse?.limit || 1)) + 1;
@@ -70,6 +76,34 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
             </div>
           </div>
         </div>
+
+        {versions.length > 0 && (
+          <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium mb-2">
+              Langfuse versions ({versions.length})
+            </h3>
+            <ul className="divide-y text-sm">
+              {versions.map((v) => (
+                <li
+                  key={v.run_name ?? v.version}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <span className="font-mono font-medium">
+                    {v.run_name ?? `v${v.version}`}
+                  </span>
+                  <span className="text-gray-600">
+                    {v.item_count ?? "-"} items
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {v.created_at
+                      ? new Date(v.created_at).toLocaleString()
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {isLoading ? (

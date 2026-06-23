@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Any, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from difflib import SequenceMatcher
 from server.models.dataset import Dataset, QASource
@@ -10,19 +11,28 @@ class DatasetService:
         self.db = db
 
     def get_or_create_dataset(
-        self, name: str, description: Optional[str] = None
+        self,
+        name: str,
+        description: Optional[str] = None,
+        target_language: Optional[str] = None,
     ) -> Dataset:
         """Retrieves an existing dataset or creates a new one"""
         existing_dataset = self.db.query(Dataset).filter(Dataset.name == name).first()
 
         if existing_dataset:
             logging.info(f"Using existing dataset: {name}")
+            # Backfill the language label if it was missing (e.g. older datasets).
+            if target_language and not existing_dataset.target_language:
+                existing_dataset.target_language = target_language
+                self.db.commit()
+                self.db.refresh(existing_dataset)
             return existing_dataset
 
         # Create the dataset automatically
         dataset = Dataset(
             name=name,
             description=description or f"Dataset automatically created for {name}",
+            target_language=target_language,
         )
         self.db.add(dataset)
         self.db.commit()
@@ -51,8 +61,24 @@ class DatasetService:
 def get_datasets(db: Session) -> List[Dict[str, Any]]:
     try:
         datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+        # Reliable Q/A counts per dataset in a single grouped query (no N+1).
+        count_rows = (
+            db.query(QASource.dataset_id, func.count(QASource.id))
+            .group_by(QASource.dataset_id)
+            .all()
+        )
+        counts = {dataset_id: count for dataset_id, count in count_rows}
         return [
-            {"id": dataset.id, "name": dataset.name, "description": dataset.description}
+            {
+                "id": dataset.id,
+                "name": dataset.name,
+                "description": dataset.description,
+                "target_language": dataset.target_language,
+                "created_at": dataset.created_at.isoformat()
+                if dataset.created_at
+                else None,
+                "qa_sources_count": counts.get(dataset.id, 0),
+            }
             for dataset in datasets
         ]
     except Exception as e:

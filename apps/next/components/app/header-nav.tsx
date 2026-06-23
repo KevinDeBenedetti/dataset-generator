@@ -34,6 +34,21 @@ export function HeaderNav() {
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
             <Link
+              href="/dashboard"
+              className={cn(
+                'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                pathname?.startsWith('/dashboard')
+                  ? 'bg-accent text-accent-foreground'
+                  : 'hover:bg-accent/50'
+              )}
+            >
+              Dashboard
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
               href="/generate"
               className={cn(
                 'px-4 py-2 rounded-md text-sm font-medium transition-colors',

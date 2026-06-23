@@ -98,7 +98,7 @@ class TestDatasetPipeline:
         assert result["similarity_threshold"] == 0.9
 
     @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.is_langfuse_configured", return_value=False)
+    @patch("server.pipelines.dataset.is_langfuse_available", return_value=False)
     @patch("server.pipelines.dataset.ScraperService")
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
@@ -111,7 +111,7 @@ class TestDatasetPipeline:
         mock_qa_agent_service_class,
         mock_llm_service_class,
         mock_scraper_service_class,
-        _mock_lf_configured,
+        _mock_lf_available,
         db: Session,
         sample_dataset,
     ):

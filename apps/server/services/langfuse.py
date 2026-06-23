@@ -141,6 +141,51 @@ def get_next_dataset_version(
         return 1
 
 
+def _summarize_run(run: Any) -> Dict[str, Any]:
+    """Map a Langfuse dataset run to a compact, UI-friendly summary."""
+    metadata = getattr(run, "metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    created_at = getattr(run, "created_at", None)
+    return {
+        "run_name": getattr(run, "name", None),
+        "version": metadata.get("version"),
+        "description": getattr(run, "description", None),
+        "item_count": metadata.get("item_count"),
+        "source_url": metadata.get("source_url"),
+        "created_at": (
+            created_at.isoformat() if hasattr(created_at, "isoformat") else created_at
+        ),
+        "metadata": metadata,
+    }
+
+
+def list_dataset_runs(
+    dataset_name: str, langfuse_client: Optional[Langfuse] = None
+) -> List[Dict[str, Any]]:
+    """Return the version/run history of a dataset from Langfuse, newest first.
+
+    Each generation records a dataset run named ``v{n}`` (see
+    :func:`sync_qa_to_langfuse`); reading them back gives the DVC-like history
+    for the UI. Returns an empty list when the dataset has no runs.
+    """
+    if langfuse_client is None:
+        langfuse_client = get_client()
+
+    runs = langfuse_client.get_dataset_runs(dataset_name=dataset_name)
+    data = getattr(runs, "data", None) or []
+
+    summaries = [_summarize_run(run) for run in data]
+    # Newest first: prefer the explicit version, fall back to created_at.
+    summaries.sort(
+        key=lambda r: (
+            r["version"] if r["version"] is not None else -1,
+            r["created_at"] or "",
+        ),
+        reverse=True,
+    )
+    return summaries
+
+
 def sync_qa_to_langfuse(
     dataset_name: str,
     items: List[Dict[str, Any]],
@@ -209,21 +254,21 @@ def sync_qa_to_langfuse(
         "item_count": len(items),
         **stats,
     }
+    # Link each item to the run directly via the dataset-run-items API. This
+    # avoids run_experiment, which would create a trace and execute a task for
+    # *every* item on each sync (costly on large datasets) — we only need the
+    # run recorded against the existing items, not an evaluation.
     try:
-        dataset = langfuse_client.get_dataset(dataset_name)
-
-        def _snapshot_task(*, item, **_):
-            # Identity task: we only want the run recorded against each item,
-            # not an evaluation. The expected output is the snapshotted value.
-            return item.expected_output
-
-        dataset.run_experiment(
-            name=run_name,
-            run_name=run_name,
-            description=f"Generation {run_name} from {source_url}",
-            task=_snapshot_task,
-            metadata=run_metadata,
-        )
+        for item in items:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            langfuse_client.api.dataset_run_items.create(
+                run_name=run_name,
+                run_description=f"Generation {run_name} from {source_url}",
+                metadata=run_metadata,
+                dataset_item_id=item_id,
+            )
     except Exception as e:  # noqa: BLE001 — items are synced even if the run fails
         logging.warning(f"Could not record dataset run {run_name}: {e}")
 
@@ -259,16 +304,18 @@ def is_langfuse_configured() -> bool:
     return True
 
 
-def is_langfuse_available() -> bool:
-    """
-    Initializes the Langfuse client and validates the credentials against the
-    server. Returns True only if the keys authenticate, False otherwise.
+# Memoised result of the (network) auth_check, so we hit Langfuse once per
+# process instead of on every generation.
+_availability_cache: Optional[bool] = None
 
-    ``get_client()`` is lazy in the v4 SDK — it never raises on invalid or
-    unreachable credentials — so we call ``auth_check()`` to make a real
-    request. This is what distinguishes "env vars are set" (``is_langfuse_configured``)
-    from "the secrets actually work".
-    """
+
+def reset_langfuse_availability_cache() -> None:
+    """Clear the cached availability (for tests, or after a config change)."""
+    global _availability_cache
+    _availability_cache = None
+
+
+def _compute_langfuse_available() -> bool:
     if not is_langfuse_configured():
         return False
     try:
@@ -281,3 +328,28 @@ def is_langfuse_available() -> bool:
     except Exception as e:
         logging.warning(f"Langfuse client initialization failed: {e}")
         return False
+
+
+def is_langfuse_available(use_cache: bool = True) -> bool:
+    """
+    Initializes the Langfuse client and validates the credentials against the
+    server. Returns True only if the keys authenticate, False otherwise.
+
+    ``get_client()`` is lazy in the v4 SDK — it never raises on invalid or
+    unreachable credentials — so we call ``auth_check()`` to make a real
+    request. This is what distinguishes "env vars are set" (``is_langfuse_configured``)
+    from "the secrets actually work".
+
+    The result is **memoised**: the auth_check runs once per process, so an
+    invalid key is detected once at startup instead of logging a warning on
+    every generation. Trade-off: if Langfuse is unreachable on the first check,
+    sync stays disabled until the process restarts. Pass ``use_cache=False`` to
+    force a fresh check (e.g. after credentials change).
+    """
+    global _availability_cache
+    if use_cache and _availability_cache is not None:
+        return _availability_cache
+
+    result = _compute_langfuse_available()
+    _availability_cache = result
+    return result

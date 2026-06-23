@@ -9,6 +9,8 @@ from server.core.database import get_db
 from server.services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
+    list_dataset_runs,
+    is_langfuse_configured,
 )
 
 router = APIRouter(
@@ -59,6 +61,25 @@ async def preview_dataset_transformation(
     except Exception as e:
         logging.exception("Error during preview")
         raise HTTPException(status_code=500, detail=f"Error during preview: {str(e)}")
+
+
+@router.get("/versions/{dataset}")
+async def list_dataset_versions(dataset: str):
+    """List the version/run history (newest first) of a dataset in Langfuse.
+
+    Each generation records a versioned run (``v1``, ``v2``, …). This exposes
+    that DVC-like history so the UI can show how a dataset evolved.
+    """
+    if not is_langfuse_configured():
+        raise HTTPException(status_code=503, detail="Langfuse is not configured")
+    try:
+        versions = list_dataset_runs(dataset)
+    except Exception as e:
+        logging.exception("Error listing Langfuse dataset versions")
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch versions from Langfuse: {e}"
+        )
+    return {"dataset_name": dataset, "total": len(versions), "versions": versions}
 
 
 @router.post("/export")

@@ -17,6 +17,7 @@ export default function GeneratePage() {
 
   const dataset = useGenerateStore((state) => state.dataset)
   const generationStatus = useGenerateStore((state) => state.generationStatus)
+  const liveSteps = useGenerateStore((state) => state.liveSteps)
   const analyzeStatus = useDatasetStore((state) => state.analyzeStatus)
   const analyzingResult = useDatasetStore((state) => state.analyzingResult)
   const cleanStatus = useDatasetStore((state) => state.cleanStatus)
@@ -33,6 +34,10 @@ export default function GeneratePage() {
       </h1>
 
       <DatasetGenerate />
+
+      {generationStatus === 'pending' && liveSteps.length > 0 && (
+        <GenerationTimeline steps={liveSteps} />
+      )}
 
       {generationStatus === 'success' && dataset && 'steps' in dataset && (
         <GenerationTimeline

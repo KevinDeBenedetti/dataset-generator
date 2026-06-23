@@ -4,6 +4,11 @@ Mounted by ``main.py`` only when ``DEBUG_LOGS`` is enabled. Streams the server's
 own log records to the browser dev console as Server-Sent Events. Each event
 payload is a JSON object ``{"source": "fastapi", "line": "..."}`` so the client
 can label and colourise lines by origin.
+
+SECURITY: this streams *raw* log lines verbatim, so any secret a log statement
+emits (tokens, API keys, request bodies, …) is exposed to whoever can reach the
+dev server. It is gated behind ``DEBUG_LOGS`` and intended for local dev only —
+keep ``DEBUG_LOGS`` unset outside local dev, and never log sensitive values.
 """
 
 import asyncio
