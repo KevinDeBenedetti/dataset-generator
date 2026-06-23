@@ -188,3 +188,45 @@ def test_export_dataset_langfuse_error(client: TestClient, test_db: Session):
         response = client.post("/langfuse/export?dataset_name=error-test")
         assert response.status_code == 500
         assert "Error exporting to Langfuse" in response.json()["detail"]
+
+
+def test_list_dataset_versions_success(client: TestClient):
+    """Versions endpoint returns the run history from Langfuse."""
+    versions = [
+        {"run_name": "v2", "version": 2, "item_count": 8},
+        {"run_name": "v1", "version": 1, "item_count": 5},
+    ]
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch(
+            "server.api.langfuse.list_dataset_runs", return_value=versions
+        ) as mock_list,
+    ):
+        response = client.get("/langfuse/versions/my-dataset")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dataset_name"] == "my-dataset"
+    assert data["total"] == 2
+    assert data["versions"][0]["run_name"] == "v2"
+    mock_list.assert_called_once_with("my-dataset")
+
+
+def test_list_dataset_versions_not_configured(client: TestClient):
+    """Versions endpoint returns 503 when Langfuse is not configured."""
+    with patch("server.api.langfuse.is_langfuse_configured", return_value=False):
+        response = client.get("/langfuse/versions/my-dataset")
+    assert response.status_code == 503
+
+
+def test_list_dataset_versions_upstream_error(client: TestClient):
+    """A Langfuse failure surfaces as a 502."""
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch(
+            "server.api.langfuse.list_dataset_runs",
+            side_effect=Exception("boom"),
+        ),
+    ):
+        response = client.get("/langfuse/versions/my-dataset")
+    assert response.status_code == 502

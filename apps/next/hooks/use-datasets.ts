@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDatasets,
-  generateDataset,
+  generateDatasetStream,
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
@@ -27,7 +27,8 @@ export function useDatasets() {
 
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
-  const { setDataset, setGenerationStatus, setError } = useGenerateStore()
+  const { setDataset, setGenerationStatus, setError, setLiveSteps, appendLiveStep } =
+    useGenerateStore()
 
   return useMutation({
     mutationFn: async (params: {
@@ -50,11 +51,15 @@ export function useGenerateDataset() {
         max_pages: params.maxPages,
         sync_langfuse: params.syncLangfuse,
       }
-      return generateDataset(body)
+      // Stream pipeline progress so the timeline fills in live.
+      return generateDatasetStream(body, {
+        onStep: (step) => appendLiveStep(step),
+      })
     },
     onMutate: () => {
       setGenerationStatus('pending')
       setError(null)
+      setLiveSteps([])
     },
     onSuccess: (data) => {
       setDataset(data)

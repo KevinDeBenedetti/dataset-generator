@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 from sqlalchemy.orm import Session
 
 from server.core.config import config
@@ -10,7 +10,7 @@ from server.services.llm import LLMService
 from server.services.agent import QAAgentService
 from server.services.dataset import DatasetService
 from server.services.qa import QAService
-from server.services.langfuse import is_langfuse_configured, sync_qa_to_langfuse
+from server.services.langfuse import is_langfuse_available, sync_qa_to_langfuse
 from server.schemas.dataset import TargetLanguage
 
 
@@ -37,6 +37,7 @@ class DatasetPipeline:
         max_depth: Optional[int] = None,
         max_pages: Optional[int] = None,
         sync_langfuse: bool = True,
+        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
         """Executes the complete pipeline for a URL.
 
@@ -125,12 +126,16 @@ class DatasetPipeline:
                         "detail": detail,
                     }
                 )
+                # Stream the step live (no-op when not streaming).
+                if on_progress is not None:
+                    on_progress({"type": "step", "step": steps[-1]})
 
             # 1. Get or create the dataset
             t = time.perf_counter()
             dataset = self.dataset_service.get_or_create_dataset(
                 name=dataset_name,
                 description=f"Dataset automatically created for {url}",
+                target_language=target_language_str,
             )
             record(
                 "dataset",
@@ -145,8 +150,19 @@ class DatasetPipeline:
             assert isinstance(dataset.id, str)
             t = time.perf_counter()
             if crawl:
+                on_page: Optional[Callable[[Dict[str, Any]], None]] = None
+                if on_progress is not None:
+                    progress = on_progress
+
+                    def on_page(info: Dict[str, Any]) -> None:
+                        progress({"type": "page", **info})
+
                 snapshots = await self.scraper_service.crawl_site(
-                    url, dataset.id, max_depth=max_depth, max_pages=max_pages
+                    url,
+                    dataset.id,
+                    max_depth=max_depth,
+                    max_pages=max_pages,
+                    on_page=on_page,
                 )
                 record(
                     "scrape",
@@ -252,9 +268,12 @@ class DatasetPipeline:
                 duration_ms=int(save_s * 1000),
             )
 
-            # 7. Version & sync to Langfuse (DVC-like commit) when configured.
+            # 7. Version & sync to Langfuse (DVC-like commit) when available.
+            # Gating on availability (memoised auth_check) — not just configured
+            # — means an invalid/unreachable key is detected once, not retried
+            # noisily on every generation.
             langfuse_result: Optional[Dict[str, Any]] = None
-            if sync_langfuse and config.langfuse_auto_sync and is_langfuse_configured():
+            if sync_langfuse and config.langfuse_auto_sync and is_langfuse_available():
                 t = time.perf_counter()
                 try:
                     langfuse_result = self._sync_to_langfuse(

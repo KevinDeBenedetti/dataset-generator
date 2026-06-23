@@ -95,6 +95,8 @@ DEBUG_LOGS=1 make dev
 
 Once the stack is up, toggle the console with **Ctrl+`** (or the floating terminal button, bottom-right). Lines are tagged `[api]` / `[web]` by origin and colourised by level. The endpoints return `404` and the widget never renders unless `DEBUG_LOGS` is set, so it stays out of production builds.
 
+> ⚠️ **Security — the console streams raw server logs.** Anything the code logs (request bodies, tokens, API keys, connection strings, etc.) is exposed verbatim to anyone who can reach the dev server while `DEBUG_LOGS` is on. It is a **local-dev-only** tool: keep `DEBUG_LOGS` unset in any shared, staging or production environment, and never log secret values (mask or omit them) — don't rely on the console being "dev-only" to protect sensitive data.
+
 ## 🌍 Supported Languages
 
 - **French (fr)**: French language dataset generation

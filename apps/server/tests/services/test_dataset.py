@@ -95,6 +95,50 @@ def test_get_datasets(test_db: Session):
     assert all("id" in item for item in result)
     assert all("name" in item for item in result)
     assert all("description" in item for item in result)
+    # Enriched fields are always present.
+    assert all("qa_sources_count" in item for item in result)
+    assert all("target_language" in item for item in result)
+    assert all("created_at" in item for item in result)
+
+
+def test_get_datasets_includes_qa_count_and_language(test_db: Session):
+    """get_datasets returns a reliable Q/A count and the dataset language."""
+    dataset = Dataset(name="lang-ds", description="d", target_language="fr")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    for i in range(3):
+        test_db.add(
+            QASource.from_qa_generation(
+                question=f"q{i}?",
+                answer=f"a{i}",
+                context=f"ctx{i}",
+                source_url=f"https://example.com/{i}",
+                dataset_id=str(dataset.id),
+            )
+        )
+    test_db.commit()
+
+    result = get_datasets(test_db)
+    row = next(r for r in result if r["id"] == dataset.id)
+    assert row["qa_sources_count"] == 3
+    assert row["target_language"] == "fr"
+
+
+def test_get_or_create_dataset_persists_and_backfills_language(test_db: Session):
+    """target_language is stored on create and backfilled when missing."""
+    service = DatasetService(test_db)
+
+    created = service.get_or_create_dataset("lang-new", "d", target_language="en")
+    assert created.target_language == "en"
+
+    # Existing dataset without a language gets backfilled.
+    legacy = Dataset(name="legacy", description="d")
+    test_db.add(legacy)
+    test_db.commit()
+    backfilled = service.get_or_create_dataset("legacy", target_language="de")
+    assert backfilled.target_language == "de"
 
 
 def test_get_dataset_by_id_success(test_db: Session):

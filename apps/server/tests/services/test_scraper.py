@@ -278,6 +278,34 @@ class TestScraperService:
 
         assert len(snapshots) == 3
 
+    async def test_crawl_site_calls_on_page_per_page(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """on_page is invoked once per crawled page with progress info."""
+        pages = {
+            "https://example.com": ("# Home", ["https://example.com/a"]),
+            "https://example.com/a": ("# A", []),
+        }
+
+        async def fake_fetch(url):
+            return pages.get(url, ("", []))
+
+        events: list[dict] = []
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            snapshots = await scraper_service.crawl_site(
+                "https://example.com",
+                sample_dataset.id,
+                max_depth=1,
+                max_pages=10,
+                on_page=events.append,
+            )
+
+        assert len(events) == len(snapshots) == 2
+        assert events[0]["crawled"] == 1
+        assert events[1]["crawled"] == 2
+        assert all(e["max_pages"] == 10 and "url" in e for e in events)
+
     async def test_crawl_site_skips_failed_pages(
         self, scraper_service: ScraperService, sample_dataset
     ):
