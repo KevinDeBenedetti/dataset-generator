@@ -70,6 +70,7 @@ class DatasetResponse(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    target_language: Optional[str] = None
     qa_sources_count: Optional[int] = None
     created_at: Optional[str] = None
     message: Optional[str] = None

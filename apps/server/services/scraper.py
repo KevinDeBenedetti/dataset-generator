@@ -1,7 +1,7 @@
 import logging
 from collections import deque
 from datetime import datetime, timezone
-from typing import List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
@@ -141,6 +141,7 @@ class ScraperService:
         max_depth: int | None = None,
         max_pages: int | None = None,
         same_domain: bool | None = None,
+        on_page: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> List[PageSnapshot]:
         """Breadth-first crawl from ``seed_url``, saving one snapshot per page.
 
@@ -148,6 +149,9 @@ class ScraperService:
         With ``same_domain`` (default), only links on the seed's host are
         followed. Pages that fail to fetch are skipped (logged) rather than
         aborting the whole crawl, so one broken link can't sink the dataset.
+
+        ``on_page`` (optional) is called after each page is successfully fetched
+        with a small progress dict, so callers can stream live crawl progress.
         """
         max_depth = config.crawl_max_depth if max_depth is None else max_depth
         max_pages = config.crawl_max_pages if max_pages is None else max_pages
@@ -179,6 +183,15 @@ class ScraperService:
                     f"Crawled {current} (depth {depth}) — "
                     f"{len(snapshots)}/{max_pages} pages"
                 )
+                if on_page is not None:
+                    on_page(
+                        {
+                            "url": current,
+                            "depth": depth,
+                            "crawled": len(snapshots),
+                            "max_pages": max_pages,
+                        }
+                    )
 
             if depth >= max_depth:
                 continue

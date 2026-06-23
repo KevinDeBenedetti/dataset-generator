@@ -1,5 +1,6 @@
 """Tests for generate API endpoints"""
 
+import json
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from fastapi.testclient import TestClient
@@ -35,6 +36,81 @@ def valid_request_data():
 
 class TestGenerateDataset:
     """Tests for the generate dataset endpoint"""
+
+    def _parse_sse(self, body: str):
+        return [
+            json.loads(line[len("data: ") :])
+            for line in body.strip().splitlines()
+            if line.startswith("data: ")
+        ]
+
+    def test_stream_emits_progress_then_result(
+        self, mock_pipeline, valid_request_data
+    ):
+        """The streaming endpoint emits step/page events then a result event."""
+
+        async def fake_process(*args, on_progress=None, **kwargs):
+            assert on_progress is not None
+            on_progress(
+                {
+                    "type": "step",
+                    "step": {
+                        "key": "dataset",
+                        "label": "Prepare dataset",
+                        "status": "success",
+                        "duration_ms": 1,
+                        "detail": "",
+                    },
+                }
+            )
+            on_progress(
+                {
+                    "type": "page",
+                    "url": "https://example.com/a",
+                    "depth": 1,
+                    "crawled": 1,
+                    "max_pages": 50,
+                }
+            )
+            return {
+                "qa_pairs": [],
+                "dataset_id": "stream-id",
+                "dataset_name": "test_dataset",
+                "pages_crawled": 1,
+                "steps": [],
+            }
+
+        mock_pipeline.process_url = AsyncMock(side_effect=fake_process)
+
+        response = client.post("/dataset/generate/stream", json=valid_request_data)
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+
+        events = self._parse_sse(response.text)
+        types = [e["type"] for e in events]
+        assert "step" in types
+        assert "page" in types
+        assert types[-1] == "result"
+        assert events[-1]["data"]["id"] == "stream-id"
+
+    def test_stream_invalid_model_returns_400(self, valid_request_data):
+        """Bad input is rejected up front (not streamed)."""
+        bad = {**valid_request_data, "model_cleaning": "does-not-exist"}
+        response = client.post("/dataset/generate/stream", json=bad)
+        assert response.status_code == 400
+
+    def test_stream_emits_error_event_on_failure(
+        self, mock_pipeline, valid_request_data
+    ):
+        """A pipeline failure surfaces as a streamed error event."""
+        mock_pipeline.process_url = AsyncMock(side_effect=Exception("boom"))
+
+        response = client.post("/dataset/generate/stream", json=valid_request_data)
+
+        assert response.status_code == 200
+        events = self._parse_sse(response.text)
+        assert events[-1]["type"] == "error"
 
     def test_create_dataset_success(
         self, mock_pipeline, valid_request_data, db: Session

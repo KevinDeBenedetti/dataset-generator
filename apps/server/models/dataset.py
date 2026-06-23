@@ -17,6 +17,9 @@ class Dataset(Base):
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Target language of the dataset's generations (ISO code, e.g. "en", "fr").
+    # Set on the first generation; a best-effort dataset-level label.
+    target_language: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
