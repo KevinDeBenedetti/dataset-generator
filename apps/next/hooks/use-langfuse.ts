@@ -1,8 +1,23 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { exportToLangfuse, getLangfuseVersions } from '@/api'
+import {
+  exportToLangfuse,
+  getLangfuseVersions,
+  getLangfuseDatasets,
+} from '@/api/sdk'
 import { useLangfuseStore } from '@/stores/langfuse'
 
 export const LANGFUSE_VERSIONS_QUERY_KEY = 'langfuse-versions'
+export const LANGFUSE_DATASETS_QUERY_KEY = 'langfuse-datasets'
+
+// All datasets present in Langfuse. Returns null-ish on 503 (not configured).
+export function useLangfuseDatasets() {
+  return useQuery({
+    queryKey: [LANGFUSE_DATASETS_QUERY_KEY],
+    queryFn: getLangfuseDatasets,
+    // Langfuse may not be configured (503) — don't retry or spam errors.
+    retry: false,
+  })
+}
 
 export function useLangfuseVersions(dataset: string | null | undefined) {
   return useQuery({

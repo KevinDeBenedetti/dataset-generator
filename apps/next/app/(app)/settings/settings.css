@@ -1,0 +1,11 @@
+.settings-page .set-grid { display: grid; grid-template-columns: 200px 1fr; gap: 30px; align-items: start; }
+.settings-page .set-nav { position: sticky; top: 78px; display: flex; flex-direction: column; gap: 2px; }
+.settings-page .set-nav a { padding: 8px 11px; border-radius: 8px; font-size: 13.5px; color: var(--muted-foreground); cursor: pointer; }
+.settings-page .set-nav a.active { background: var(--accent); color: var(--foreground); font-weight: 500; }
+.settings-page .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.settings-page .row:last-child { border-bottom: none; }
+.settings-page .theme-opt { border:1px solid var(--border); border-radius:10px; padding:4px; cursor:pointer; width:96px; }
+.settings-page .theme-opt.sel { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+.settings-page .theme-prev { height:54px; border-radius:7px; overflow:hidden; display:flex; }
+.settings-page .theme-opt .tl { font-size:12px; text-align:center; padding:6px 0 3px; font-weight:500; }
+@media (max-width:760px){ .settings-page .set-grid{ grid-template-columns:1fr; } .settings-page .set-nav{ position:static; flex-direction:row; overflow:auto; } }

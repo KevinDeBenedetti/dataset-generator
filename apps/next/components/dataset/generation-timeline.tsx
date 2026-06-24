@@ -12,7 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import type { PipelineStep, PipelineStepStatus } from '@/api/types'
+import type { PipelineStep } from '@/api/types'
+
+// The generated `PipelineStep.status` is a plain string; these are the values
+// the backend actually emits.
+type PipelineStepStatus = 'success' | 'warning' | 'error'
 
 const STATUS_CONFIG: Record<
   PipelineStepStatus,
@@ -52,7 +56,8 @@ export function GenerationTimeline({
       <CardContent>
         <ol className="relative">
           {steps.map((step, index) => {
-            const config = STATUS_CONFIG[step.status] ?? STATUS_CONFIG.success
+            const config =
+              STATUS_CONFIG[step.status as PipelineStepStatus] ?? STATUS_CONFIG.success
             const Icon = config.icon
             const isLast = index === steps.length - 1
 
