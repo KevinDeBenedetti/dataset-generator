@@ -79,9 +79,18 @@ def test_preview_dataset_multiple_items(client: TestClient, test_db: Session):
     assert data["total_items"] == 5
 
 
+def test_export_dataset_not_configured(client: TestClient):
+    """Export endpoint returns 503 when Langfuse is not configured."""
+    with patch("server.api.langfuse.is_langfuse_configured", return_value=False):
+        response = client.post("/langfuse/export?dataset_name=anything")
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"].lower()
+
+
 def test_export_dataset_not_found(client: TestClient, test_db: Session):
     """Test export endpoint when dataset doesn't exist."""
-    response = client.post("/langfuse/export?dataset_name=nonexistent")
+    with patch("server.api.langfuse.is_langfuse_configured", return_value=True):
+        response = client.post("/langfuse/export?dataset_name=nonexistent")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -92,7 +101,8 @@ def test_export_dataset_no_qa_data(client: TestClient, test_db: Session):
     test_db.add(dataset)
     test_db.commit()
 
-    response = client.post("/langfuse/export?dataset_name=empty-export")
+    with patch("server.api.langfuse.is_langfuse_configured", return_value=True):
+        response = client.post("/langfuse/export?dataset_name=empty-export")
     assert response.status_code == 404
     assert "No QA data found" in response.json()["detail"]
 
@@ -113,7 +123,10 @@ def test_export_dataset_success(client: TestClient, test_db: Session):
     test_db.add(qa)
     test_db.commit()
 
-    with patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create:
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create,
+    ):
         mock_create.return_value = {
             "dataset_id": "test-id",
             "dataset_name": "export-test",
@@ -147,7 +160,10 @@ def test_export_dataset_with_custom_name(client: TestClient, test_db: Session):
     test_db.add(qa)
     test_db.commit()
 
-    with patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create:
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create,
+    ):
         mock_create.return_value = {
             "dataset_id": "custom-id",
             "dataset_name": "custom-langfuse-name",
@@ -182,7 +198,10 @@ def test_export_dataset_langfuse_error(client: TestClient, test_db: Session):
     test_db.add(qa)
     test_db.commit()
 
-    with patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create:
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch("server.api.langfuse.create_langfuse_dataset_with_items") as mock_create,
+    ):
         mock_create.side_effect = Exception("Langfuse API error")
 
         response = client.post("/langfuse/export?dataset_name=error-test")
@@ -229,4 +248,40 @@ def test_list_dataset_versions_upstream_error(client: TestClient):
         ),
     ):
         response = client.get("/langfuse/versions/my-dataset")
+    assert response.status_code == 502
+
+
+def test_list_langfuse_datasets_success(client: TestClient):
+    """Datasets endpoint returns the dataset list from Langfuse."""
+    datasets = [
+        {"id": "d2", "name": "beta", "item_count": 8, "version": 2},
+        {"id": "d1", "name": "alpha", "item_count": 5, "version": 1},
+    ]
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch("server.api.langfuse.list_datasets", return_value=datasets) as mock_list,
+    ):
+        response = client.get("/langfuse/datasets")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert data["datasets"][0]["name"] == "beta"
+    mock_list.assert_called_once_with()
+
+
+def test_list_langfuse_datasets_not_configured(client: TestClient):
+    """Datasets endpoint returns 503 when Langfuse is not configured."""
+    with patch("server.api.langfuse.is_langfuse_configured", return_value=False):
+        response = client.get("/langfuse/datasets")
+    assert response.status_code == 503
+
+
+def test_list_langfuse_datasets_upstream_error(client: TestClient):
+    """A Langfuse failure surfaces as a 502."""
+    with (
+        patch("server.api.langfuse.is_langfuse_configured", return_value=True),
+        patch("server.api.langfuse.list_datasets", side_effect=Exception("boom")),
+    ):
+        response = client.get("/langfuse/datasets")
     assert response.status_code == 502

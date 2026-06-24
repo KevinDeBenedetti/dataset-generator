@@ -10,6 +10,7 @@ from server.services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
     list_dataset_runs,
+    list_datasets,
     is_langfuse_configured,
 )
 
@@ -63,6 +64,25 @@ async def preview_dataset_transformation(
         raise HTTPException(status_code=500, detail=f"Error during preview: {str(e)}")
 
 
+@router.get("/datasets")
+async def list_langfuse_datasets():
+    """List every dataset present in Langfuse (newest first).
+
+    Powers the /datasets page so it reflects what actually lives in Langfuse,
+    rather than only the local database.
+    """
+    if not is_langfuse_configured():
+        raise HTTPException(status_code=503, detail="Langfuse is not configured")
+    try:
+        datasets = list_datasets()
+    except Exception as e:
+        logging.exception("Error listing Langfuse datasets")
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch datasets from Langfuse: {e}"
+        )
+    return {"total": len(datasets), "datasets": datasets}
+
+
 @router.get("/versions/{dataset}")
 async def list_dataset_versions(dataset: str):
     """List the version/run history (newest first) of a dataset in Langfuse.
@@ -91,6 +111,13 @@ async def export_dataset(
     ),
 ):
     """Export a dataset from the database to Langfuse"""
+    if not is_langfuse_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Langfuse is not configured. Set LANGFUSE_SECRET_KEY, "
+            "LANGFUSE_PUBLIC_KEY and LANGFUSE_HOST (or LANGFUSE_BASE_URL) "
+            "in your .env.",
+        )
     try:
         # Verify that the dataset exists
         dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()

@@ -44,9 +44,7 @@ class TestGenerateDataset:
             if line.startswith("data: ")
         ]
 
-    def test_stream_emits_progress_then_result(
-        self, mock_pipeline, valid_request_data
-    ):
+    def test_stream_emits_progress_then_result(self, mock_pipeline, valid_request_data):
         """The streaming endpoint emits step/page events then a result event."""
 
         async def fake_process(*args, on_progress=None, **kwargs):
