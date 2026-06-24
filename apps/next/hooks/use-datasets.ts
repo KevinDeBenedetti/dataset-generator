@@ -5,7 +5,7 @@ import {
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
-} from '@/api'
+} from '@/api/sdk'
 import type { DatasetGenerationRequest } from '@/api/types'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'

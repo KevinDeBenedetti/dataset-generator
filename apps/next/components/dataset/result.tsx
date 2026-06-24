@@ -48,8 +48,8 @@ export function Result({ result }: ResultProps) {
             )}
             {result.langfuse && (
               <Badge variant="secondary">
-                Langfuse: {result.langfuse.run_name} (
-                {result.langfuse.total_items} items)
+                Langfuse: {String(result.langfuse.run_name ?? '')} (
+                {String(result.langfuse.total_items ?? 0)} items)
               </Badge>
             )}
           </div>

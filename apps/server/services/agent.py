@@ -9,10 +9,11 @@ params (e.g. ``reasoning_effort`` for gpt-oss models) are forwarded verbatim.
 import json
 import logging
 import re
+from collections import Counter
 from typing import List, Optional
 
 import openai
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from server.core.config import config
 from server.schemas.dataset import QA
@@ -51,15 +52,43 @@ def _coerce_items(raw_items: list) -> List[QA]:
 
     Keeps the good pairs when the model emits one that violates the schema
     (e.g. a context shorter than the 50-char minimum) instead of discarding the
-    whole batch.
+    whole batch. Boilerplate-heavy pages (nav menus, section headings) make the
+    model emit many short fragments, so skips are summarised in a single INFO
+    line (count + per-field/reason breakdown) rather than one warning per item.
     """
     items: List[QA] = []
+    reasons: Counter = Counter()
+    skipped = 0
     for item in raw_items:
         try:
             items.append(QA.model_validate(item))
-        except Exception as exc:
-            logging.warning("Skipping invalid QA item: %s", exc)
+        except ValidationError as exc:
+            skipped += 1
+            for err in exc.errors():
+                field = ".".join(str(p) for p in err.get("loc", ())) or "?"
+                reasons[f"{field}: {err.get('type', 'invalid')}"] += 1
+        except Exception:
+            skipped += 1
+            reasons["unparseable"] += 1
+
+    if skipped:
+        breakdown = ", ".join(f"{reason} ×{n}" for reason, n in reasons.most_common())
+        logging.info(
+            "Skipped %d/%d QA item(s) failing validation (%s)",
+            skipped,
+            len(raw_items),
+            breakdown,
+        )
     return items
+
+
+def _truncate_for_log(text: str, head: int = 220, tail: int = 220) -> str:
+    """Single-line, length-capped view of a model response for diagnostics."""
+    flat = " ".join(text.split())
+    if len(flat) <= head + tail:
+        return flat
+    omitted = len(flat) - head - tail
+    return f"{flat[:head]} … [{omitted} chars omitted] … {flat[-tail:]}"
 
 
 def _parse_qa_list(text: str) -> List[QA]:
@@ -82,32 +111,51 @@ def _parse_qa_list(text: str) -> List[QA]:
     except Exception:
         pass
 
-    # Otherwise locate the first JSON array or object, even if wrapped in prose,
-    # and validate items individually (keeping the valid ones).
+    # Otherwise locate the first JSON array or object, even if wrapped in prose.
+    raw_items: list = []
     for open_ch, close_ch in (("[", "]"), ("{", "}")):
         start = cleaned.find(open_ch)
         end = cleaned.rfind(close_ch)
         if start == -1 or end == -1 or end <= start:
             continue
-        snippet = cleaned[start : end + 1]
         try:
-            data = json.loads(snippet)
+            data = json.loads(cleaned[start : end + 1])
         except Exception:
             continue
-
         if isinstance(data, list):
             raw_items = data
         elif isinstance(data, dict):
             raw_items = data["items"] if isinstance(data.get("items"), list) else [data]
-        else:
-            continue
+        if raw_items:
+            break
 
-        items = _coerce_items(raw_items)
-        if items:
-            return items
+    # Salvage path: reasoning models or a hit token budget (max_tokens_qa) can
+    # cut the response off mid-array, leaving the outer JSON unparseable. Recover
+    # every complete flat object so a truncated response still yields its pairs.
+    if not raw_items:
+        for obj in re.findall(r"\{[^{}]*\}", cleaned):
+            try:
+                raw_items.append(json.loads(obj))
+            except Exception:
+                continue
 
-    logging.warning("QA model response could not be parsed as QA pairs")
-    return []
+    if not raw_items:
+        logging.warning(
+            "QA model response could not be parsed as QA pairs — no JSON found. "
+            "Raw response: %s",
+            _truncate_for_log(cleaned),
+        )
+        return []
+
+    items = _coerce_items(raw_items)
+    if not items:
+        logging.warning(
+            "QA model returned %d candidate item(s) but none passed validation "
+            "(see skip summary). Raw response: %s",
+            len(raw_items),
+            _truncate_for_log(cleaned),
+        )
+    return items
 
 
 class QAAgentService:

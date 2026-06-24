@@ -11,8 +11,15 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { testQaAgent } from '@/api'
+import { testQaAgent } from '@/api/sdk'
 import type { QaAgentTestResponse } from '@/api/types'
+
+// The generated `qa_pairs` is `unknown[]`; this is the shape the agent returns.
+interface AgentQaPair {
+  question?: string
+  answer?: string
+  context?: string
+}
 
 const SAMPLE_TEXT = `Build simple, secure, scalable systems with Go.
 An open-source programming language supported by Google.
@@ -126,13 +133,13 @@ export default function AgentTestPage() {
               </ScrollArea>
             </div>
 
-            {result.qa_pairs.length > 0 && (
+            {result.qa_pairs && result.qa_pairs.length > 0 && (
               <div>
                 <p className="text-sm font-medium mb-1">
                   Parsed Q&amp;A pairs ({result.count})
                 </p>
                 <div className="space-y-2">
-                  {result.qa_pairs.map((pair, index) => (
+                  {(result.qa_pairs as AgentQaPair[]).map((pair, index) => (
                     <div
                       key={index}
                       className="p-3 border border-gray-200 rounded-md bg-white"

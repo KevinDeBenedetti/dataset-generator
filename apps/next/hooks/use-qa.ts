@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getQAByDataset } from '@/api'
+import { getQAByDataset } from '@/api/sdk'
 import { useQAStore } from '@/stores/qa'
 
 export function useQAByDataset(

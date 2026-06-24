@@ -63,6 +63,61 @@ class Config:
         )
     )
 
+    # Authentication. The JWT is signed with HS256 using auth_secret_key and
+    # delivered to the browser as an httpOnly cookie. Set AUTH_SECRET_KEY to a
+    # long random value in any shared environment — the dev default is insecure
+    # and only meant for local use (a warning is logged when it's in effect).
+    auth_secret_key: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTH_SECRET_KEY", "dev-insecure-secret-change-me"
+        )
+    )
+    auth_token_ttl_seconds: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTH_TOKEN_TTL_SECONDS", str(60 * 60 * 24))
+        )
+    )
+    auth_cookie_name: str = field(
+        default_factory=lambda: os.getenv("AUTH_COOKIE_NAME", "access_token")
+    )
+    # Send the cookie only over HTTPS. Default off for local http dev; set
+    # AUTH_COOKIE_SECURE=true behind TLS.
+    auth_cookie_secure: bool = field(
+        default_factory=lambda: (
+            os.getenv("AUTH_COOKIE_SECURE", "false").lower()
+            not in ("0", "false", "no", "")
+        )
+    )
+    # When true, the two local dev accounts (see services/users.py) are seeded
+    # on startup. Local-dev convenience only — keep off in shared environments.
+    seed_dev_users: bool = field(
+        default_factory=lambda: (
+            os.getenv("SEED_DEV_USERS", "false").lower() not in ("0", "false", "no", "")
+        )
+    )
+
+    # OIDC (Infomaniak). Login via OpenID Connect is enabled only when the
+    # client id/secret and the issuer are all set. The issuer must expose
+    # <issuer>/.well-known/openid-configuration for discovery.
+    oidc_issuer: str = field(default_factory=lambda: os.getenv("OIDC_ISSUER", ""))
+    oidc_client_id: str = field(default_factory=lambda: os.getenv("OIDC_CLIENT_ID", ""))
+    oidc_client_secret: str = field(
+        default_factory=lambda: os.getenv("OIDC_CLIENT_SECRET", "")
+    )
+    # Absolute URL of our callback route, registered with the provider.
+    oidc_redirect_uri: str = field(
+        default_factory=lambda: os.getenv(
+            "OIDC_REDIRECT_URI", "http://localhost:8000/auth/oidc/callback"
+        )
+    )
+    oidc_scopes: str = field(
+        default_factory=lambda: os.getenv("OIDC_SCOPES", "openid email profile")
+    )
+    # Where to send the browser after a successful OIDC login.
+    frontend_url: str = field(
+        default_factory=lambda: os.getenv("FRONTEND_URL", "http://localhost:3000")
+    )
+
     # When true (and Langfuse is configured), every generation also creates/updates
     # the dataset in Langfuse and records a versioned dataset run (DVC-like commit).
     langfuse_auto_sync: bool = field(

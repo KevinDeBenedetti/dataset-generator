@@ -58,6 +58,10 @@ COPY ./apps/server .
 
 EXPOSE ${APP_PORT}
 
-# Import from server.main; --reload-dir limits the watcher to the source so it
-# does not watch /app/.venv (thousands of files, churned by bytecode writes).
-CMD ["uv", "run", "--no-sync", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/server"]
+# `uv sync` first so the persisted `.venv` volume (mounted over the image's
+# venv in docker-compose) picks up dependency changes — otherwise newly added
+# packages stay missing until the volume is manually recreated. It runs against
+# the read-only pyproject.toml/uv.lock mounts and is a no-op when already synced.
+# Then --reload-dir limits the watcher to the source so it does not watch
+# /app/.venv (thousands of files, churned by bytecode writes).
+CMD ["sh", "-c", "uv sync --frozen --no-dev && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]

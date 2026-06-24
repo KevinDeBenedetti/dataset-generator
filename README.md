@@ -79,7 +79,61 @@ The deep crawl and Langfuse versioning are controlled by these environment varia
 | `CRAWL_SAME_DOMAIN` | `true` | Only follow links on the seed URL's host |
 | `LANGFUSE_AUTO_SYNC` | `true` | Create/version the dataset in Langfuse at generation time (requires `LANGFUSE_*` keys) |
 
-These can also be overridden per request: the `POST /dataset/generate` body accepts `crawl`, `max_depth`, `max_pages` and `sync_langfuse`, and the **Generate** page exposes them as form controls. Langfuse sync additionally requires `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_HOST`.
+These can also be overridden per request: the `POST /dataset/generate` body accepts `crawl`, `max_depth`, `max_pages` and `sync_langfuse`, and the **Generate** page exposes them as form controls. Langfuse sync additionally requires `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_HOST` (the spelling `LANGFUSE_BASE_URL` is also accepted as an alias for the host).
+
+> 📖 For a full walkthrough of how crawling works (BFS traversal, env vars, the crawl4ai service, per-request overrides and tuning), see [docs/crawling.md](docs/crawling.md).
+
+### Authentication & dev users
+
+The API supports two roles — `user` and `admin` — backed by a `users` table
+(created by an Alembic migration that runs automatically on startup).
+
+Two local development accounts are available:
+
+| Email | Password | Role |
+| --- | --- | --- |
+| `admin@example.com` | `admin1234` | `admin` |
+| `user@example.com` | `user1234` | `user` |
+
+Seed them in either of these ways:
+
+```bash
+# A) automatically on server startup — set in your .env
+SEED_DEV_USERS=true
+
+# B) on demand, from the repo root
+uv run python -m server.scripts.seed_dev_users
+```
+
+The seeding is idempotent (existing accounts are skipped). Override the
+passwords with the `DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD` env vars.
+
+> ⚠️ These are **development-only** credentials with weak passwords — never seed
+> them in a shared, staging or production environment.
+
+Auth is configured via these env vars:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AUTH_SECRET_KEY` | _(insecure dev default)_ | HS256 signing key for the session JWT — **set a strong random value** outside local dev |
+| `AUTH_TOKEN_TTL_SECONDS` | `86400` | Access-token lifetime |
+| `AUTH_COOKIE_NAME` | `access_token` | Name of the httpOnly auth cookie |
+| `AUTH_COOKIE_SECURE` | `false` | Send the cookie only over HTTPS (enable behind TLS) |
+
+Login via **Infomaniak OIDC** is enabled only when the following are all set
+(routes return `503` otherwise). Register a client with Infomaniak and add:
+
+| Variable | Description |
+| --- | --- |
+| `OIDC_ISSUER` | Issuer URL (must expose `<issuer>/.well-known/openid-configuration`) |
+| `OIDC_CLIENT_ID` | OIDC client id |
+| `OIDC_CLIENT_SECRET` | OIDC client secret |
+| `OIDC_REDIRECT_URI` | Callback URL, default `http://localhost:8000/auth/oidc/callback` |
+| `OIDC_SCOPES` | Requested scopes, default `openid email profile` |
+| `FRONTEND_URL` | Where to redirect after a successful login, default `http://localhost:3000` |
+
+Auth endpoints: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, and the
+OIDC flow `GET /auth/oidc/login` → `GET /auth/oidc/callback`.
 
 ### Dev log console
 

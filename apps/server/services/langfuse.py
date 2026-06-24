@@ -7,6 +7,21 @@ from typing import List, Dict, Any, Optional, Tuple
 from langfuse import get_client, Langfuse
 
 
+def _normalize_langfuse_host() -> None:
+    """Accept ``LANGFUSE_BASE_URL`` as an alias for ``LANGFUSE_HOST``.
+
+    The Langfuse SDK (and ``is_langfuse_configured``) reads ``LANGFUSE_HOST``,
+    but ``LANGFUSE_BASE_URL`` is a common spelling. If only the alias is set,
+    mirror it into ``LANGFUSE_HOST`` so both the SDK and our config checks work.
+    """
+    if not os.getenv("LANGFUSE_HOST") and os.getenv("LANGFUSE_BASE_URL"):
+        os.environ["LANGFUSE_HOST"] = os.environ["LANGFUSE_BASE_URL"]
+
+
+# Run at import so the SDK's lazy ``get_client()`` picks up the host from either var.
+_normalize_langfuse_host()
+
+
 def prepare_langfuse_dataset(
     data: List[Dict], dataset_name: str
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -186,6 +201,57 @@ def list_dataset_runs(
     return summaries
 
 
+def _summarize_dataset(dataset: Any) -> Dict[str, Any]:
+    """Map a Langfuse dataset to a compact, UI-friendly summary."""
+    metadata = getattr(dataset, "metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    created_at = getattr(dataset, "created_at", None)
+    updated_at = getattr(dataset, "updated_at", None)
+    return {
+        "id": getattr(dataset, "id", None),
+        "name": getattr(dataset, "name", None),
+        "description": getattr(dataset, "description", None),
+        # Best-effort: filled by sync_qa_to_langfuse's dataset metadata.
+        "item_count": metadata.get("total_items"),
+        "version": metadata.get("version"),
+        "source_url": metadata.get("source_url"),
+        "created_at": (
+            created_at.isoformat() if hasattr(created_at, "isoformat") else created_at
+        ),
+        "updated_at": (
+            updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at
+        ),
+        "metadata": metadata,
+    }
+
+
+def list_datasets(langfuse_client: Optional[Langfuse] = None) -> List[Dict[str, Any]]:
+    """Return every dataset present in Langfuse, newest first.
+
+    Walks the paginated ``/datasets`` API so all datasets are returned, not just
+    the first page. Returns an empty list when the project has no datasets.
+    """
+    if langfuse_client is None:
+        langfuse_client = get_client()
+
+    summaries: List[Dict[str, Any]] = []
+    page = 1
+    while True:
+        resp = langfuse_client.api.datasets.list(page=page, limit=100)
+        data = getattr(resp, "data", None) or []
+        summaries.extend(_summarize_dataset(d) for d in data)
+
+        meta = getattr(resp, "meta", None)
+        total_pages = getattr(meta, "total_pages", None) if meta else None
+        if not data or not total_pages or page >= total_pages:
+            break
+        page += 1
+
+    # Newest first by creation date (falls back to name for stability).
+    summaries.sort(key=lambda d: (d["created_at"] or "", d["name"] or ""), reverse=True)
+    return summaries
+
+
 def sync_qa_to_langfuse(
     dataset_name: str,
     items: List[Dict[str, Any]],
@@ -254,11 +320,22 @@ def sync_qa_to_langfuse(
         "item_count": len(items),
         **stats,
     }
-    # Link each item to the run directly via the dataset-run-items API. This
-    # avoids run_experiment, which would create a trace and execute a task for
-    # *every* item on each sync (costly on large datasets) — we only need the
-    # run recorded against the existing items, not an evaluation.
+    # Link each item to the run via the dataset-run-items API. That API requires
+    # a trace (or observation) to link to — otherwise it rejects the call with
+    # "observationId or traceId must be provided". We create a single lightweight
+    # trace for the whole run and attach every item to it: one trace per sync,
+    # not one per item. This still avoids run_experiment, which would create a
+    # trace AND execute a task for *every* item (costly on large datasets) — we
+    # only need the run recorded against the existing items, not an evaluation.
     try:
+        run_span = langfuse_client.start_observation(
+            name=f"dataset-sync-{run_name}",
+            input={"source_url": source_url, "version": version},
+            metadata=run_metadata,
+        )
+        run_trace_id = run_span.trace_id
+        run_span.end()
+
         for item in items:
             item_id = item.get("id")
             if not item_id:
@@ -268,6 +345,7 @@ def sync_qa_to_langfuse(
                 run_description=f"Generation {run_name} from {source_url}",
                 metadata=run_metadata,
                 dataset_item_id=item_id,
+                trace_id=run_trace_id,
             )
     except Exception as e:  # noqa: BLE001 — items are synced even if the run fails
         logging.warning(f"Could not record dataset run {run_name}: {e}")
@@ -296,6 +374,7 @@ def is_langfuse_configured() -> bool:
     """
     Checks for the presence of the environment variables required for Langfuse.
     """
+    _normalize_langfuse_host()
     required = ["LANGFUSE_SECRET_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_HOST"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:

@@ -4,6 +4,7 @@ Tests for Langfuse service functions.
 
 import pytest
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -19,6 +20,7 @@ from server.services.langfuse import (
     get_next_dataset_version,
     sync_qa_to_langfuse,
     list_dataset_runs,
+    list_datasets,
     reset_langfuse_availability_cache,
 )
 
@@ -47,6 +49,7 @@ class TestDatasetVersioning:
         """Sync upserts the dataset, each item, and records a versioned run."""
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[])
+        client.start_observation.return_value = MagicMock(trace_id="trace-xyz")
 
         items = [
             {
@@ -92,6 +95,9 @@ class TestDatasetVersioning:
         assert link_kwargs["run_name"] == "v1"
         assert link_kwargs["dataset_item_id"] == "hash1"
         assert link_kwargs["metadata"]["version"] == 1
+        # Each item is linked to the single run trace (the API requires a trace).
+        assert link_kwargs["trace_id"] == "trace-xyz"
+        client.start_observation.assert_called_once()
         client.flush.assert_called_once()
 
         assert result["version"] == 1
@@ -128,6 +134,56 @@ class TestDatasetVersioning:
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[])
         assert list_dataset_runs("ds", client) == []
+
+
+class TestListDatasets:
+    def _dataset(self, name, created_at, *, total_items=None, version=None):
+        d = MagicMock()
+        d.id = name
+        d.name = name
+        d.description = f"desc {name}"
+        d.metadata = {"total_items": total_items, "version": version}
+        d.created_at = created_at
+        d.updated_at = created_at
+        return d
+
+    def test_summarizes_and_sorts_newest_first(self):
+        client = MagicMock()
+        d_old = self._dataset("alpha", "2026-01-01T00:00:00", total_items=5, version=1)
+        d_new = self._dataset("beta", "2026-02-01T00:00:00", total_items=8, version=2)
+        page = MagicMock(data=[d_old, d_new], meta=MagicMock(total_pages=1))
+        client.api.datasets.list.return_value = page
+
+        result = list_datasets(client)
+
+        assert [d["name"] for d in result] == ["beta", "alpha"]  # newest first
+        assert result[0]["item_count"] == 8
+        assert result[0]["version"] == 2
+        assert result[0]["description"] == "desc beta"
+
+    def test_walks_all_pages(self):
+        client = MagicMock()
+        page1 = MagicMock(
+            data=[self._dataset("a", "2026-01-01T00:00:00")],
+            meta=MagicMock(total_pages=2),
+        )
+        page2 = MagicMock(
+            data=[self._dataset("b", "2026-01-02T00:00:00")],
+            meta=MagicMock(total_pages=2),
+        )
+        client.api.datasets.list.side_effect = [page1, page2]
+
+        result = list_datasets(client)
+
+        assert {d["name"] for d in result} == {"a", "b"}
+        assert client.api.datasets.list.call_count == 2
+
+    def test_empty_project(self):
+        client = MagicMock()
+        client.api.datasets.list.return_value = MagicMock(
+            data=[], meta=MagicMock(total_pages=1)
+        )
+        assert list_datasets(client) == []
 
     def test_sync_continues_when_an_item_fails(self):
         """A single bad item is recorded as failed without aborting the sync."""
@@ -380,6 +436,21 @@ class TestIsLangfuseConfigured:
         """Test when some required env vars are missing."""
         with patch.dict("os.environ", {"LANGFUSE_SECRET_KEY": "secret"}, clear=True):
             assert is_langfuse_configured() is False
+
+    def test_base_url_alias(self):
+        """LANGFUSE_BASE_URL is accepted as an alias for LANGFUSE_HOST."""
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_SECRET_KEY": "secret",
+                "LANGFUSE_PUBLIC_KEY": "public",
+                "LANGFUSE_BASE_URL": "https://langfuse.example.com",
+            },
+            clear=True,
+        ):
+            assert is_langfuse_configured() is True
+            # The alias is mirrored into LANGFUSE_HOST for the SDK.
+            assert os.environ["LANGFUSE_HOST"] == "https://langfuse.example.com"
 
 
 class TestIsLangfuseAvailable:
