@@ -133,7 +133,7 @@ export default function PromptsPage() {
               </div>
               <div className="card-body" style={{ paddingTop: 0 }}>
                 <div style={{ background: 'var(--muted)', border: '1px solid var(--border)', borderRadius: '9px', padding: '12px 14px', fontSize: '12.5px' }}>
-                  <div style={{ fontFamily: "'Geist Mono', monospace", color: 'var(--muted-foreground)', fontSize: '11.5px', marginBottom: '8px' }}>// test output</div>
+                  <div style={{ fontFamily: "'Geist Mono', monospace", color: 'var(--muted-foreground)', fontSize: '11.5px', marginBottom: '8px' }}>{'// test output'}</div>
                   <div style={{ fontWeight: 500 }}>Q: How do I launch the application?</div>
                   <div className="muted" style={{ marginTop: '5px', lineHeight: 1.5 }}>A: Run <code>make start</code> after configuring the .env file.</div>
                   <div style={{ marginTop: '10px' }}>
