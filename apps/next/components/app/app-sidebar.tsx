@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Icon } from '@/components/app/icon'
+import { useLangfuseDatasets } from '@/hooks'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -17,16 +18,17 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: 'Platform',
     items: [
       { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
-      { icon: 'database', label: 'Datasets', href: '/datasets', count: '24' },
+      { icon: 'database', label: 'Datasets', href: '/datasets' },
+      { icon: 'boxes', label: 'Collections', href: '/collections' },
       { icon: 'sparkles', label: 'Generation', href: '/generate' },
-      { icon: 'globe', label: 'Sources', href: '/sources', count: '11' },
+      { icon: 'globe', label: 'Sources', href: '/sources' },
     ],
   },
   {
     label: 'Quality & processing',
     items: [
       { icon: 'shield', label: 'Quality control', href: '/quality' },
-      { icon: 'activity', label: 'Jobs & batch', href: '/jobs', count: '3' },
+      { icon: 'activity', label: 'Jobs & batch', href: '/jobs' },
       { icon: 'copyCheck', label: 'Verify QA', href: '/agent-test' },
       { icon: 'terminal', label: 'LLM Prompts', href: '/prompts' },
     ],
@@ -45,6 +47,15 @@ export function AppSidebar() {
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/')
 
+  // Real dataset count for the Datasets nav badge. Uses the same source as the
+  // /datasets page (Langfuse) so the badge matches what's listed there; the
+  // shared react-query cache means no extra request.
+  const { data: langfuse } = useLangfuseDatasets()
+  const datasetCount = langfuse?.total ?? langfuse?.datasets.length
+  const counts: Record<string, string | undefined> = {
+    '/datasets': datasetCount != null ? String(datasetCount) : undefined,
+  }
+
   return (
     <aside className="sidebar">
       <div className="sb-brand">
@@ -62,17 +73,20 @@ export function AppSidebar() {
         {NAV.map((group) => (
           <div className="sb-group" key={group.label}>
             <div className="sb-label">{group.label}</div>
-            {group.items.map((it) => (
-              <Link
-                key={it.href}
-                href={it.href}
-                className={cn('sb-link', isActive(it.href) && 'active')}
-              >
-                <Icon name={it.icon} />
-                <span>{it.label}</span>
-                {it.count && <span className="count">{it.count}</span>}
-              </Link>
-            ))}
+            {group.items.map((it) => {
+              const count = it.href in counts ? counts[it.href] : it.count
+              return (
+                <Link
+                  key={it.href}
+                  href={it.href}
+                  className={cn('sb-link', isActive(it.href) && 'active')}
+                >
+                  <Icon name={it.icon} />
+                  <span>{it.label}</span>
+                  {count && <span className="count">{count}</span>}
+                </Link>
+              )
+            })}
           </div>
         ))}
         <div className="sb-group">

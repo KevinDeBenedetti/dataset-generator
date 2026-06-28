@@ -4,7 +4,12 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
+import httpx
 from langfuse import get_client, Langfuse
+
+
+class LangfuseUnavailableError(RuntimeError):
+    """Raised when a dataset read is attempted but Langfuse isn't reachable."""
 
 
 def _normalize_langfuse_host() -> None:
@@ -250,6 +255,84 @@ def list_datasets(langfuse_client: Optional[Langfuse] = None) -> List[Dict[str, 
     # Newest first by creation date (falls back to name for stability).
     summaries.sort(key=lambda d: (d["created_at"] or "", d["name"] or ""), reverse=True)
     return summaries
+
+
+def _langfuse_credentials() -> Tuple[str, str, str]:
+    """Return ``(host, public_key, secret_key)`` or raise if not configured."""
+    _normalize_langfuse_host()
+    host = os.getenv("LANGFUSE_HOST")
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    if not (host and public_key and secret_key):
+        raise RuntimeError("Langfuse is not configured (LANGFUSE_* env vars missing)")
+    return host.rstrip("/"), public_key, secret_key
+
+
+def _summarize_rest_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a raw REST dataset item (camelCase) to our compact snake_case dict."""
+    metadata = item.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    return {
+        "id": item.get("id"),
+        "status": item.get("status"),
+        "input": item.get("input"),
+        "expected_output": item.get("expectedOutput"),
+        "metadata": metadata,
+        "source_trace_id": item.get("sourceTraceId"),
+        "dataset_id": item.get("datasetId"),
+        "dataset_name": item.get("datasetName"),
+        "created_at": item.get("createdAt"),
+    }
+
+
+def get_dataset_items(dataset_name: str) -> List[Dict[str, Any]]:
+    """Return every item of a Langfuse dataset (the Q/A pairs).
+
+    Reads the paginated public REST API directly (``GET /api/public/dataset-items``)
+    rather than the typed SDK client: the SDK's ``DatasetItem`` model requires a
+    ``media_references`` field that older Langfuse servers don't return, which
+    makes the SDK call fail validation. Filtered by ``datasetName`` (the API's
+    ``datasetId`` filter is silently ignored). Each item keeps its ``status`` so
+    callers can drop archived items. Empty list when the dataset has no items.
+    """
+    host, public_key, secret_key = _langfuse_credentials()
+
+    items: List[Dict[str, Any]] = []
+    page = 1
+    while True:
+        resp = httpx.get(
+            f"{host}/api/public/dataset-items",
+            params={"datasetName": dataset_name, "page": page, "limit": 100},
+            auth=(public_key, secret_key),
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        data = body.get("data") or []
+        items.extend(_summarize_rest_item(d) for d in data)
+
+        meta = body.get("meta") or {}
+        total_pages = meta.get("totalPages")
+        if not data or not total_pages or page >= total_pages:
+            break
+        page += 1
+
+    return items
+
+
+def delete_dataset_item(item_id: str) -> None:
+    """Delete a single dataset item (and its run items) from Langfuse.
+
+    Irreversible (``DELETE /api/public/dataset-items/{id}``). Uses the REST API
+    directly for the same reason as :func:`get_dataset_items`.
+    """
+    host, public_key, secret_key = _langfuse_credentials()
+    resp = httpx.delete(
+        f"{host}/api/public/dataset-items/{item_id}",
+        auth=(public_key, secret_key),
+        timeout=30.0,
+    )
+    resp.raise_for_status()
 
 
 def sync_qa_to_langfuse(

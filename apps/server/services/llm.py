@@ -102,6 +102,27 @@ class LLMService:
             logging.error(f"QA generation failed: {e}")
             return []
 
+    def embed_texts(
+        self, texts: List[str], model: Optional[str] = None
+    ) -> List[List[float]]:
+        """Embed a batch of texts via the configured embedding model.
+
+        Returns one vector per input text, in order. Raises if the embedding
+        model is not configured or the API call fails — callers (e.g. the Qdrant
+        sync) need the failure to surface rather than silently produce no points.
+        """
+        model = model or config.openai_embedding_model
+        if not model:
+            raise ValueError(
+                "No embedding model configured (set OPENAI_EMBEDDING_MODEL)"
+            )
+        if not texts:
+            return []
+        response = self.client.embeddings.create(model=model, input=texts)
+        # The API preserves input order; sort defensively by index regardless.
+        ordered = sorted(response.data, key=lambda d: d.index)
+        return [list(item.embedding) for item in ordered]
+
     def get_models(self) -> List[Dict]:
         """Returns the list of available models from the OpenAI API."""
         try:

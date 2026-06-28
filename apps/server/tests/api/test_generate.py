@@ -7,8 +7,21 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from server.main import app
+from server.models.user import User, UserRole
+from server.services.auth import get_current_user
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def authenticated():
+    """The feature routers are auth-protected on the real app; these tests cover
+    generation behaviour, not auth, so resolve a fake user for every request."""
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="test-user", email="tester@example.com", role=UserRole.USER
+    )
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
