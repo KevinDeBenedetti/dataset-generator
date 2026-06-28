@@ -7,7 +7,16 @@ import { client } from './client.gen'
 
 // The auth cookie is httpOnly and set by the API (cross-origin in dev), so every
 // request must send/accept credentials for the session to work.
-client.setConfig({ credentials: 'include' })
+//
+// The browser-facing API origin defaults to localhost:8000 but is overridable via
+// NEXT_PUBLIC_API_BASE_URL, so the host port can change (e.g. to avoid collisions
+// when running several dev stacks) without editing the generated client.
+client.setConfig({
+  credentials: 'include',
+  baseUrl:
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
+    'http://localhost:8000',
+})
 import type {
   DatasetResponse,
   DatasetGenerationRequest,
@@ -107,6 +116,9 @@ export async function generateDatasetStream(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    // The endpoint is auth-protected; send the httpOnly auth cookie like the
+    // generated client does (the hand-rolled fetch doesn't inherit its config).
+    credentials: 'include',
   })
 
   if (!response.ok || !response.body) {
@@ -175,9 +187,12 @@ export async function generateDatasetStream(
   return result
 }
 
-export async function deleteDataset(datasetId: string): Promise<DeleteDatasetResponse> {
+// Datasets are keyed by their Langfuse name (the source of truth).
+export async function deleteDataset(
+  datasetName: string
+): Promise<DeleteDatasetResponse> {
   const response = await client.delete<DeleteDatasetResponse>({
-    url: `/dataset/${datasetId}`,
+    url: `/dataset/${encodeURIComponent(datasetName)}`,
   })
   if (response.error) {
     throw new Error(getErrorMessage(response.error, 'Failed to delete dataset'))
@@ -189,9 +204,10 @@ export async function analyzeSimilarities(
   datasetId: string,
   threshold?: number
 ): Promise<SimilarityAnalysisResponse> {
+  const seg = encodeURIComponent(datasetId)
   const url = threshold
-    ? `/dataset/${datasetId}/analyze-similarities?threshold=${threshold}`
-    : `/dataset/${datasetId}/analyze-similarities`
+    ? `/dataset/${seg}/analyze-similarities?threshold=${threshold}`
+    : `/dataset/${seg}/analyze-similarities`
 
   const response = await client.get<SimilarityAnalysisResponse>({
     url,
@@ -206,9 +222,10 @@ export async function cleanSimilarities(
   datasetId: string,
   threshold?: number
 ): Promise<CleanSimilarityResponse> {
+  const seg = encodeURIComponent(datasetId)
   const url = threshold
-    ? `/dataset/${datasetId}/clean-similarities?threshold=${threshold}`
-    : `/dataset/${datasetId}/clean-similarities`
+    ? `/dataset/${seg}/clean-similarities?threshold=${threshold}`
+    : `/dataset/${seg}/clean-similarities`
 
   const response = await client.post<CleanSimilarityResponse>({
     url,
@@ -247,8 +264,9 @@ export async function getQAByDataset(
   if (options?.limit) params.set('limit', String(options.limit))
   if (options?.offset) params.set('offset', String(options.offset))
 
+  const seg = encodeURIComponent(datasetId)
   const queryString = params.toString()
-  const url = queryString ? `/q_a/${datasetId}?${queryString}` : `/q_a/${datasetId}`
+  const url = queryString ? `/q_a/${seg}?${queryString}` : `/q_a/${seg}`
 
   const response = await client.get<QaListResponse>({
     url,
@@ -330,6 +348,55 @@ export async function exportToLangfuse(
   return response.data
 }
 
+// Collections (datasets projected into a Qdrant vector store)
+
+export interface Collection {
+  id: string
+  name: string
+  description?: string | null
+  target_language?: string | null
+  qa_sources_count?: number | null
+  created_at?: string | null
+  collection_name: string
+  // null when Qdrant is unconfigured/unreachable (status unknown).
+  in_qdrant?: boolean | null
+  points_count?: number | null
+}
+
+export interface CollectionsResponse {
+  qdrant_configured: boolean
+  total: number
+  collections: Collection[]
+}
+
+export async function getCollections(): Promise<CollectionsResponse> {
+  const response = await client.get<CollectionsResponse>({ url: '/collections' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch collections'))
+  }
+  return response.data as unknown as CollectionsResponse
+}
+
+export interface QdrantSyncResponse {
+  dataset_name: string
+  collection_name: string
+  points_upserted: number
+  vector_size: number
+}
+
+// Datasets are keyed by their Langfuse name (the source of truth).
+export async function syncCollectionToQdrant(
+  datasetName: string
+): Promise<QdrantSyncResponse> {
+  const response = await client.post<QdrantSyncResponse>({
+    url: `/collections/${encodeURIComponent(datasetName)}/qdrant`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to add collection to Qdrant'))
+  }
+  return response.data as unknown as QdrantSyncResponse
+}
+
 // Auth endpoints
 
 export interface AuthUser {
@@ -359,10 +426,19 @@ export async function logout(): Promise<void> {
 }
 
 // Returns the current user, or null when not authenticated (401).
+//
+// Only a 401 means "not logged in". Any other failure (5xx, network outage)
+// is thrown so callers (react-query) can retry instead of mistaking a transient
+// error for a logout and tearing down the session.
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const response = await client.get<AuthUser>({ url: '/auth/me' })
   if (response.error) {
-    return null
+    if (response.response?.status === 401) {
+      return null
+    }
+    throw new Error(
+      getErrorMessage(response.error, 'Failed to fetch the current user')
+    )
   }
   return response.data as unknown as AuthUser
 }

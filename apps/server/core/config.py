@@ -88,6 +88,17 @@ class Config:
             not in ("0", "false", "no", "")
         )
     )
+    # Anti-brute-force on POST /auth/login: after auth_login_max_attempts failed
+    # attempts from one client IP within auth_login_window_seconds, further
+    # attempts get a 429 until the window slides. In-process only (see
+    # services/rate_limit.py) — a first layer, not a distributed quota.
+    auth_login_max_attempts: int = field(
+        default_factory=lambda: int(os.getenv("AUTH_LOGIN_MAX_ATTEMPTS", "10"))
+    )
+    auth_login_window_seconds: int = field(
+        default_factory=lambda: int(os.getenv("AUTH_LOGIN_WINDOW_SECONDS", "300"))
+    )
+
     # When true, the two local dev accounts (see services/users.py) are seeded
     # on startup. Local-dev convenience only — keep off in shared environments.
     seed_dev_users: bool = field(
@@ -124,6 +135,17 @@ class Config:
         default_factory=lambda: (
             os.getenv("LANGFUSE_AUTO_SYNC", "true").lower() not in ("0", "false", "no")
         )
+    )
+
+    # Qdrant vector store. Pushing a dataset's Q/A pairs as embeddings into a
+    # Qdrant collection is enabled only when qdrant_url is set; every endpoint
+    # guards itself with a clear 503 otherwise (mirrors the Langfuse handling).
+    # qdrant_api_key is optional (Qdrant Cloud / secured instances).
+    qdrant_url: str = field(default_factory=lambda: os.getenv("QDRANT_URL", ""))
+    qdrant_api_key: str = field(default_factory=lambda: os.getenv("QDRANT_API_KEY", ""))
+    # Collection names are derived as f"{prefix}{sanitized_dataset_name}".
+    qdrant_collection_prefix: str = field(
+        default_factory=lambda: os.getenv("QDRANT_COLLECTION_PREFIX", "dataset_")
     )
 
     # crawl4ai service (Docker). The scraper calls this REST API instead of

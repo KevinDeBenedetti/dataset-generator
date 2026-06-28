@@ -1,17 +1,17 @@
 import logging
 from typing import List, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 
-from server.core.database import get_db
-from server.core import Dataset, QASource
-from server.services.dataset import (
-    get_datasets,
-    get_dataset_by_id,
-    analyze_dataset_similarities,
-    clean_dataset_similarities,
+from server.services.dataset_reads import (
+    list_datasets_view,
+    get_dataset_view,
+    create_dataset as create_dataset_view,
+    delete_dataset as delete_dataset_view,
+    analyze_similarities_view,
+    clean_similarities_view,
 )
+from server.services.langfuse import LangfuseUnavailableError
 from server.schemas.dataset import (
     DatasetResponse,
     SimilarityAnalysisResponse,
@@ -28,30 +28,14 @@ router = APIRouter(
 async def create_dataset(
     name: str = Query(..., description="Name of the new dataset"),
     description: str = Query(None, description="Optional dataset description"),
-    db: Session = Depends(get_db),
 ):
-    """Creates a new dataset"""
+    """Create a new (empty) dataset in Langfuse."""
     try:
-        existing = db.query(Dataset).filter(Dataset.name == name).first()
-        if existing:
-            raise HTTPException(
-                status_code=400, detail=f"Dataset with name '{name}' already exists"
-            )
-
-        dataset = Dataset(name=name, description=description)
-        db.add(dataset)
-        db.commit()
-        db.refresh(dataset)
-
-        return {
-            "id": dataset.id,
-            "name": dataset.name,
-            "description": dataset.description,
-            "message": "Dataset created successfully",
-        }
-
-    except HTTPException:
-        raise
+        return create_dataset_view(name, description)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"Error creating new dataset: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -60,41 +44,42 @@ async def create_dataset(
 @router.get("/dataset", response_model=Union[DatasetResponse, List[DatasetResponse]])
 async def get_all_datasets(
     dataset_id: str = Query(
-        None, description="Optional dataset ID to get specific dataset details"
+        None,
+        description="Optional dataset name to get a specific dataset's details",
     ),
-    db: Session = Depends(get_db),
 ):
-    """Retrieves all datasets or a specific dataset if ID is provided"""
+    """Retrieve all datasets from Langfuse, or a specific one (by name)."""
     try:
         if dataset_id:
-            dataset = get_dataset_by_id(db, dataset_id)
+            dataset = get_dataset_view(dataset_id)
             if not dataset:
                 raise HTTPException(
-                    status_code=404, detail=f"Dataset with ID '{dataset_id}' not found"
+                    status_code=404, detail=f"Dataset '{dataset_id}' not found"
                 )
             return dataset
-        else:
-            # Retrieve all datasets
-            return get_datasets(db)
+        return list_datasets_view()
     except HTTPException:
         raise
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.error(f"Error fetching datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
-    "/dataset/{dataset_id}/analyze-similarities",
+    "/dataset/{dataset_name}/analyze-similarities",
     response_model=SimilarityAnalysisResponse,
 )
 async def analyze_similarities(
-    dataset_id: str,
+    dataset_name: str,
     threshold: float = Query(0.8, description="Similarity threshold"),
-    db: Session = Depends(get_db),
 ):
-    """Analyzes similar questions in a dataset"""
+    """Analyze near-duplicate questions in a dataset (read-only)."""
     try:
-        return analyze_dataset_similarities(db, dataset_id, threshold)
+        return analyze_similarities_view(dataset_name, threshold)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -103,18 +88,20 @@ async def analyze_similarities(
 
 
 @router.post(
-    "/dataset/{dataset_id}/clean-similarities", response_model=CleanSimilarityResponse
+    "/dataset/{dataset_name}/clean-similarities",
+    response_model=CleanSimilarityResponse,
 )
 async def clean_similarities(
-    dataset_id: str,
+    dataset_name: str,
     threshold: float = Query(
         0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"
     ),
-    db: Session = Depends(get_db),
 ):
-    """Cleans similar questions in a dataset by removing duplicates"""
+    """Remove near-duplicate questions from a dataset (deletes Langfuse items)."""
     try:
-        return clean_dataset_similarities(db, dataset_id, threshold)
+        return clean_similarities_view(dataset_name, threshold)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -122,32 +109,18 @@ async def clean_similarities(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/dataset/{dataset_id}", response_model=DeleteDatasetResponse)
-async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    """Deletes a dataset and all its associated records"""
+@router.delete("/dataset/{dataset_name}", response_model=DeleteDatasetResponse)
+async def delete_dataset(dataset_name: str):
+    """Delete a dataset's Q/A items from Langfuse and drop its Qdrant collection.
+
+    Langfuse has no delete-dataset API, so the empty dataset shell remains.
+    """
     try:
-        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-        if not dataset:
-            raise HTTPException(
-                status_code=404, detail=f"Dataset with ID '{dataset_id}' not found"
-            )
-
-        records_deleted = (
-            db.query(QASource).filter(QASource.dataset_id == dataset_id).delete()
-        )
-
-        db.delete(dataset)
-        db.commit()
-
-        return DeleteDatasetResponse(
-            message=f"Dataset '{dataset.name}' deleted successfully",
-            dataset_id=dataset_id,
-            records_deleted=records_deleted,
-        )
-
-    except HTTPException:
-        raise
+        return delete_dataset_view(dataset_name)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logging.error(f"Error deleting dataset {dataset_id}: {str(e)}")
-        db.rollback()
+        logging.error(f"Error deleting dataset {dataset_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

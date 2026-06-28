@@ -95,12 +95,13 @@ export function DatasetGenerate() {
         syncLangfuse,
       });
 
-      // Only call analyze/clean with a definite string id
-      const id = selectedDatasetId ?? result?.id;
-      if (id) {
-        await analyzeMutation.mutateAsync(id);
+      // Analyze/clean are keyed by the Langfuse dataset name (the source of
+      // truth). datasetName is already the selected/entered name.
+      const name = datasetName || result?.dataset_name;
+      if (name) {
+        await analyzeMutation.mutateAsync(name);
         toast.success("Dataset analyzed successfully!");
-        await cleanMutation.mutateAsync(id);
+        await cleanMutation.mutateAsync(name);
         toast.success("Dataset cleaned successfully!");
       }
     } catch (err) {
