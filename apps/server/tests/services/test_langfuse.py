@@ -21,6 +21,8 @@ from server.services.langfuse import (
     sync_qa_to_langfuse,
     list_dataset_runs,
     list_datasets,
+    get_dataset_items,
+    delete_dataset_item,
     reset_langfuse_availability_cache,
 )
 
@@ -534,3 +536,102 @@ class TestIsLangfuseAvailable:
                 client.auth_check.return_value = False
                 mock_get.return_value = client
                 assert is_langfuse_available(use_cache=False) is False
+
+
+class TestGetDatasetItems:
+    """Reading dataset items via the public REST API (Phase 1 of the migration).
+
+    The SDK's typed item model rejects servers without ``media_references``, so
+    the service hits the REST endpoint directly; here ``httpx.get`` is mocked.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _creds(self, monkeypatch):
+        monkeypatch.setenv("LANGFUSE_HOST", "https://lf.example.com")
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
+
+    def _rest_item(self, item_id, question, answer, *, status="ACTIVE"):
+        # REST payload is camelCase.
+        return {
+            "id": item_id,
+            "status": status,
+            "input": {"question": question, "context": "ctx"},
+            "expectedOutput": {"answer": answer},
+            "metadata": {"version": 1},
+            "sourceTraceId": None,
+            "datasetId": "ds-id",
+            "datasetName": "ds",
+            "createdAt": "2026-01-01T00:00:00Z",
+        }
+
+    def _response(self, items, total_pages):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"data": items, "meta": {"totalPages": total_pages}}
+        return resp
+
+    def test_summarizes_items(self):
+        items_page = [
+            self._rest_item("h1", "q1", "a1"),
+            self._rest_item("h2", "q2", "a2"),
+        ]
+        with patch(
+            "server.services.langfuse.httpx.get",
+            return_value=self._response(items_page, 1),
+        ) as mock_get:
+            items = get_dataset_items("ds")
+
+        assert [i["id"] for i in items] == ["h1", "h2"]
+        assert items[0]["input"]["question"] == "q1"
+        # camelCase expectedOutput is mapped to snake_case.
+        assert items[0]["expected_output"]["answer"] == "a1"
+        assert items[0]["status"] == "ACTIVE"
+        # Filtered by datasetName, with auth + pagination.
+        _, kwargs = mock_get.call_args
+        assert kwargs["params"]["datasetName"] == "ds"
+        assert kwargs["auth"] == ("pk", "sk")
+
+    def test_walks_all_pages(self):
+        pages = [
+            self._response([self._rest_item("a", "q", "a")], 2),
+            self._response([self._rest_item("b", "q", "a")], 2),
+        ]
+        with patch("server.services.langfuse.httpx.get", side_effect=pages) as mock_get:
+            items = get_dataset_items("ds")
+
+        assert {i["id"] for i in items} == {"a", "b"}
+        assert mock_get.call_count == 2
+
+    def test_empty_dataset(self):
+        with patch(
+            "server.services.langfuse.httpx.get",
+            return_value=self._response([], 1),
+        ):
+            assert get_dataset_items("ds") == []
+
+    def test_raises_when_unconfigured(self, monkeypatch):
+        monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+        monkeypatch.delenv("LANGFUSE_BASE_URL", raising=False)
+        with pytest.raises(RuntimeError):
+            get_dataset_items("ds")
+
+
+class TestDeleteDatasetItem:
+    @pytest.fixture(autouse=True)
+    def _creds(self, monkeypatch):
+        monkeypatch.setenv("LANGFUSE_HOST", "https://lf.example.com")
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
+
+    def test_calls_rest_delete(self):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        with patch(
+            "server.services.langfuse.httpx.delete", return_value=resp
+        ) as mock_delete:
+            delete_dataset_item("item-123")
+
+        args, kwargs = mock_delete.call_args
+        assert args[0].endswith("/api/public/dataset-items/item-123")
+        assert kwargs["auth"] == ("pk", "sk")

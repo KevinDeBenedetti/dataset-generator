@@ -7,13 +7,14 @@ import { useDatasets } from "@/hooks";
 
 export default function DatasetDetailPage() {
   const params = useParams();
-  const datasetId = params.id as string;
+  // Datasets are keyed by their Langfuse name (URL-encoded in the route).
+  const datasetName = decodeURIComponent(params.id as string);
 
   const { data: datasets, isLoading } = useDatasets();
 
   const dataset = useMemo(() => {
-    return datasets?.find((d) => d.id === datasetId) || null;
-  }, [datasets, datasetId]);
+    return datasets?.find((d) => d.name === datasetName) || null;
+  }, [datasets, datasetName]);
 
   const pageTitle = dataset?.name || "Dataset";
 

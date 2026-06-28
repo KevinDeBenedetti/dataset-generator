@@ -16,10 +16,11 @@ export function DatasetDetail({ dataset }: DatasetDetailProps) {
   const [page, setPage] = useState(1);
   const limit = 10;
 
-  const { data: qaResponse, isLoading } = useQAByDataset(dataset?.id || "", {
+  // Q&A is keyed by the Langfuse dataset name (the source of truth).
+  const { data: qaResponse, isLoading } = useQAByDataset(dataset?.name || "", {
     limit,
     offset: (page - 1) * limit,
-    enabled: !!dataset?.id,
+    enabled: !!dataset?.name,
   });
 
   // Langfuse version history (DVC-like runs). Silently absent when Langfuse

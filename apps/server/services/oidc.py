@@ -59,13 +59,23 @@ def reset_oauth_cache() -> None:
     _oauth = None
 
 
-def upsert_oidc_user(db: Session, *, sub: str, email: str) -> User:
+def upsert_oidc_user(
+    db: Session, *, sub: str, email: str, email_verified: bool = False
+) -> User:
     """Find or create the local account for an OIDC identity.
 
     Resolution order:
     1. Match on the OIDC subject (already-linked account).
-    2. Match on email (link an existing local account to this OIDC identity).
+    2. Match on a **verified** email (link an existing local account to this
+       OIDC identity).
     3. Otherwise create a new OIDC account with the ``user`` role.
+
+    The email is only trusted when the provider asserts ``email_verified``.
+    Without that check, an attacker could register an unverified email matching
+    an existing local account (e.g. an admin) at the IdP and take it over by
+    logging in via OIDC. An unverified email is therefore ignored for both
+    linking and identity: the account is created under a ``{sub}@oidc.local``
+    placeholder instead.
     """
     if not sub:
         raise ValueError("OIDC userinfo is missing the 'sub' claim")
@@ -75,19 +85,25 @@ def upsert_oidc_user(db: Session, *, sub: str, email: str) -> User:
         return user
 
     email = (email or "").lower()
-    if email:
-        existing = get_user_by_email(db, email)
+    trusted_email = email if (email and email_verified) else ""
+
+    if trusted_email:
+        existing = get_user_by_email(db, trusted_email)
         if existing:
             existing.oidc_sub = sub
             if existing.provider == AuthProvider.LOCAL and not existing.hashed_password:
                 existing.provider = AuthProvider.OIDC
             db.commit()
             db.refresh(existing)
-            logging.info("Linked existing account %s to OIDC sub", email)
+            logging.info("Linked existing account %s to OIDC sub", trusted_email)
             return existing
+    elif email:
+        logging.warning(
+            "OIDC sub=%s presented an unverified email; not linking by email", sub
+        )
 
     user = User(
-        email=email or f"{sub}@oidc.local",
+        email=trusted_email or f"{sub}@oidc.local",
         hashed_password=None,
         role=UserRole.USER,
         provider=AuthProvider.OIDC,

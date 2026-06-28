@@ -22,8 +22,21 @@ from server.services.oidc import (
     is_oidc_configured,
     upsert_oidc_user,
 )
+from server.services.rate_limit import login_rate_limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str:
+    """Best-effort client IP for rate-limiting.
+
+    Honours the first ``X-Forwarded-For`` hop when present (the app typically
+    runs behind a reverse proxy), else falls back to the socket peer.
+    """
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 class LoginRequest(BaseModel):
@@ -56,15 +69,33 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 
 @router.post("/login", response_model=UserResponse)
 def login(
-    body: LoginRequest, response: Response, db: Session = Depends(get_db)
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> UserResponse:
-    """Validate credentials, set the httpOnly auth cookie, return the user."""
+    """Validate credentials, set the httpOnly auth cookie, return the user.
+
+    Throttled per client IP: too many failed attempts within the window yield a
+    429 (anti-brute-force). A successful login clears the counter.
+    """
+    ip = _client_ip(request)
+    retry_after = login_rate_limiter.retry_after(ip)
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+
     user = authenticate_user(db, body.email, body.password)
     if not user:
+        login_rate_limiter.register_failure(ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    login_rate_limiter.reset(ip)
     token = create_access_token(user)
     _set_auth_cookie(response, token)
     return UserResponse.from_user(user)
@@ -88,6 +119,17 @@ def logout(response: Response) -> Response:
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Return the currently authenticated user."""
     return UserResponse.from_user(current_user)
+
+
+def _claim_is_true(value: object) -> bool:
+    """Coerce an OIDC claim to a bool.
+
+    The spec says ``email_verified`` is a JSON boolean, but some providers send
+    the string ``"true"``. Accept both; anything else is treated as not verified.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1")
 
 
 def _require_oidc() -> None:
@@ -130,7 +172,12 @@ async def oidc_callback(request: Request, db: Session = Depends(get_db)):
             detail="OIDC response did not include a subject identifier",
         )
 
-    user = upsert_oidc_user(db, sub=sub, email=userinfo.get("email", ""))
+    user = upsert_oidc_user(
+        db,
+        sub=sub,
+        email=userinfo.get("email", ""),
+        email_verified=_claim_is_true(userinfo.get("email_verified")),
+    )
     access_token = create_access_token(user)
     redirect = RedirectResponse(url=config.frontend_url, status_code=302)
     _set_auth_cookie(redirect, access_token)

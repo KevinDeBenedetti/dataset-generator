@@ -10,7 +10,10 @@ export function useCurrentUser() {
     queryKey: CURRENT_USER_QUERY_KEY,
     queryFn: getCurrentUser,
     staleTime: 60_000,
-    retry: false,
+    // A 401 resolves to null (not an error), so any thrown error is a transient
+    // failure (5xx / network) — retry a couple of times instead of dropping the
+    // user to a logged-out state on a blip.
+    retry: 2,
   })
 }
 

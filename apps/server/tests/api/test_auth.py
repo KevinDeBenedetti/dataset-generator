@@ -1,6 +1,9 @@
 """API tests for the auth routes (login / logout / me)."""
 
+import pytest
+
 from server.services.users import create_user
+from server.services.rate_limit import login_rate_limiter
 from server.models.user import UserRole
 
 
@@ -71,3 +74,46 @@ class TestMeAndLogout:
         assert client.post("/auth/logout").status_code == 204
         # Cookie cleared → no longer authenticated.
         assert client.get("/auth/me").status_code == 401
+
+
+class TestLoginRateLimit:
+    @pytest.fixture
+    def small_limit(self):
+        """Shrink the limiter to 3 attempts for a fast test, then restore."""
+        original = login_rate_limiter.max_attempts
+        login_rate_limiter.max_attempts = 3
+        login_rate_limiter.clear()
+        yield
+        login_rate_limiter.max_attempts = original
+        login_rate_limiter.clear()
+
+    def test_too_many_failures_returns_429(self, client, test_db, small_limit):
+        _seed_user(test_db, email="alice@example.com", password="secret")
+        bad = {"email": "alice@example.com", "password": "wrong"}
+
+        # First 3 failures are plain 401s.
+        for _ in range(3):
+            assert client.post("/auth/login", json=bad).status_code == 401
+
+        # The 4th is throttled with a Retry-After header.
+        blocked = client.post("/auth/login", json=bad)
+        assert blocked.status_code == 429
+        assert "retry-after" in {k.lower() for k in blocked.headers}
+
+        # Even the correct password is blocked while throttled.
+        good = {"email": "alice@example.com", "password": "secret"}
+        assert client.post("/auth/login", json=good).status_code == 429
+
+    def test_successful_login_resets_counter(self, client, test_db, small_limit):
+        _seed_user(test_db, email="alice@example.com", password="secret")
+        bad = {"email": "alice@example.com", "password": "wrong"}
+        good = {"email": "alice@example.com", "password": "secret"}
+
+        # Two failures (under the cap), then a success clears the counter...
+        assert client.post("/auth/login", json=bad).status_code == 401
+        assert client.post("/auth/login", json=bad).status_code == 401
+        assert client.post("/auth/login", json=good).status_code == 200
+
+        # ...so the budget is full again: three more failures stay 401, not 429.
+        for _ in range(3):
+            assert client.post("/auth/login", json=bad).status_code == 401

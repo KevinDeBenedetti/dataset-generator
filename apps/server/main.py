@@ -4,14 +4,15 @@ import logging
 import asyncio
 from importlib import import_module
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from server.core import logger as logger_module
-from server.api import agent, auth, dataset, generate, q_a, openai
+from server.api import agent, auth, collections, dataset, generate, q_a, openai
 from server.services import langfuse
+from server.services.auth import get_current_user
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal
 from server.core.config import config
@@ -83,12 +84,19 @@ app.add_middleware(
     same_site="lax",
 )
 
+# Every feature router requires an authenticated user. Applied at the
+# include level (not on the router objects) so the test app — which mounts the
+# same routers without this dependency — and any future unauthenticated reuse
+# stay unaffected. Public routes: /auth/*, /health, / and (dev-only) /debug/*.
+auth_required = [Depends(get_current_user)]
+
 app.include_router(auth.router)
-app.include_router(generate.router)
-app.include_router(dataset.router)
-app.include_router(q_a.router)
-app.include_router(openai.router)
-app.include_router(agent.router)
+app.include_router(generate.router, dependencies=auth_required)
+app.include_router(dataset.router, dependencies=auth_required)
+app.include_router(q_a.router, dependencies=auth_required)
+app.include_router(openai.router, dependencies=auth_required)
+app.include_router(agent.router, dependencies=auth_required)
+app.include_router(collections.router, dependencies=auth_required)
 
 if config.debug_logs:
     from server.api import debug as debug_api
@@ -102,7 +110,7 @@ if config.debug_logs:
 # and required a server restart once the config was fixed.
 try:
     langfuse_mod = import_module("server.api.langfuse")
-    app.include_router(langfuse_mod.router)
+    app.include_router(langfuse_mod.router, dependencies=auth_required)
     if langfuse.is_langfuse_available():
         logging.info("Langfuse routes enabled (Langfuse reachable)")
     else:
