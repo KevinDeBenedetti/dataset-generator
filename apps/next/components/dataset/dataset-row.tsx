@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { useDeleteDataset, useExportToLangfuse } from '@/hooks'
+import { useIsAdmin } from '@/hooks/use-auth'
 import { truncateText } from '@/lib/text-utils'
 
 interface Dataset {
@@ -20,6 +21,7 @@ interface DatasetRowProps {
 export function DatasetRow({ dataset }: DatasetRowProps) {
   const deleteMutation = useDeleteDataset()
   const exportMutation = useExportToLangfuse()
+  const isAdmin = useIsAdmin()
 
   const handleDeleteDataset = async () => {
     if (confirm(`Are you sure you want to delete the dataset "${dataset.name}"?`)) {
@@ -59,15 +61,18 @@ export function DatasetRow({ dataset }: DatasetRowProps) {
               Open
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-600 hover:text-red-700"
-            onClick={handleDeleteDataset}
-            disabled={deleteMutation.isPending}
-          >
-            Delete
-          </Button>
+          {/* Deleting a dataset is admin-only (DELETE /dataset is require_admin). */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700"
+              onClick={handleDeleteDataset}
+              disabled={deleteMutation.isPending}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       </TableCell>
       <TableCell className="font-medium">

@@ -205,9 +205,12 @@ export async function analyzeSimilarities(
   threshold?: number
 ): Promise<SimilarityAnalysisResponse> {
   const seg = encodeURIComponent(datasetId)
-  const url = threshold
-    ? `/dataset/${seg}/analyze-similarities?threshold=${threshold}`
-    : `/dataset/${seg}/analyze-similarities`
+  // Check for undefined explicitly: a valid threshold of 0 is falsy and must
+  // still be forwarded rather than falling back to the server default.
+  const url =
+    threshold !== undefined
+      ? `/dataset/${seg}/analyze-similarities?threshold=${threshold}`
+      : `/dataset/${seg}/analyze-similarities`
 
   const response = await client.get<SimilarityAnalysisResponse>({
     url,
@@ -223,9 +226,12 @@ export async function cleanSimilarities(
   threshold?: number
 ): Promise<CleanSimilarityResponse> {
   const seg = encodeURIComponent(datasetId)
-  const url = threshold
-    ? `/dataset/${seg}/clean-similarities?threshold=${threshold}`
-    : `/dataset/${seg}/clean-similarities`
+  // Check for undefined explicitly: a valid threshold of 0 is falsy and must
+  // still be forwarded rather than falling back to the server default.
+  const url =
+    threshold !== undefined
+      ? `/dataset/${seg}/clean-similarities?threshold=${threshold}`
+      : `/dataset/${seg}/clean-similarities`
 
   const response = await client.post<CleanSimilarityResponse>({
     url,
@@ -395,6 +401,48 @@ export async function syncCollectionToQdrant(
     throw new Error(getErrorMessage(response.error, 'Failed to add collection to Qdrant'))
   }
   return response.data as unknown as QdrantSyncResponse
+}
+
+export interface CollectionSearchResult {
+  qa_id?: string | null
+  question: string
+  answer: string
+  context: string
+  source_url?: string | null
+  confidence?: number | null
+  score?: number | null
+}
+
+export interface CollectionSearchResponse {
+  dataset_name: string
+  collection_name: string
+  query: string
+  count: number
+  results: CollectionSearchResult[]
+}
+
+// Semantic search over a dataset's Qdrant collection. Datasets are keyed by
+// their Langfuse name (the source of truth).
+export async function searchCollection(
+  datasetName: string,
+  query: string,
+  options?: { limit?: number; scoreThreshold?: number }
+): Promise<CollectionSearchResponse> {
+  const response = await client.post<CollectionSearchResponse>({
+    url: `/collections/${encodeURIComponent(datasetName)}/search`,
+    body: {
+      query,
+      ...(options?.limit !== undefined ? { limit: options.limit } : {}),
+      ...(options?.scoreThreshold !== undefined
+        ? { score_threshold: options.scoreThreshold }
+        : {}),
+    },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to search collection'))
+  }
+  return response.data as unknown as CollectionSearchResponse
 }
 
 // Auth endpoints

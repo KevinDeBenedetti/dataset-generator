@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCollections, syncCollectionToQdrant } from '@/api/sdk'
+import {
+  getCollections,
+  searchCollection,
+  syncCollectionToQdrant,
+} from '@/api/sdk'
 
 export const COLLECTIONS_QUERY_KEY = ['collections']
 
@@ -19,5 +23,12 @@ export function useSyncCollectionToQdrant() {
       // Refresh point counts / in-qdrant status after a sync.
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_QUERY_KEY })
     },
+  })
+}
+
+export function useSearchCollection() {
+  return useMutation({
+    mutationFn: ({ datasetName, query }: { datasetName: string; query: string }) =>
+      searchCollection(datasetName, query),
   })
 }

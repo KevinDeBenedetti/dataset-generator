@@ -54,6 +54,18 @@ class DatasetGenerationRequest(BaseModel):
         ge=1,
         description="Max number of pages to crawl (defaults to config)",
     )
+    crawl_delay_seconds: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Throttle: seconds to pause between page fetches while "
+        "crawling (0 = no throttle; defaults to config)",
+    )
+    max_pages_per_domain: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Per-domain page budget while crawling (0 = unlimited; "
+        "defaults to config)",
+    )
     sync_langfuse: bool = Field(
         default=True,
         description="Create/version the dataset in Langfuse at generation time",

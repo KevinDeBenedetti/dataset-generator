@@ -36,6 +36,8 @@ class DatasetPipeline:
         crawl: bool = False,
         max_depth: Optional[int] = None,
         max_pages: Optional[int] = None,
+        crawl_delay_seconds: Optional[float] = None,
+        max_pages_per_domain: Optional[int] = None,
         sync_langfuse: bool = True,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
@@ -162,6 +164,8 @@ class DatasetPipeline:
                     dataset.id,
                     max_depth=max_depth,
                     max_pages=max_pages,
+                    delay_seconds=crawl_delay_seconds,
+                    max_pages_per_domain=max_pages_per_domain,
                     on_page=on_page,
                 )
                 record(
