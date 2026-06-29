@@ -115,6 +115,4 @@ def test_admin_routes_allow_admin(test_db):
             "removed_items": [],
         },
     ):
-        assert (
-            client.post("/dataset/my_dataset/clean-similarities").status_code == 200
-        )
+        assert client.post("/dataset/my_dataset/clean-similarities").status_code == 200

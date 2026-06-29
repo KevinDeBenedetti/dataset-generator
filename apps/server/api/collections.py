@@ -54,9 +54,7 @@ async def push_collection_to_qdrant(dataset_name: str):
 
 
 @router.post("/{dataset_name}/search", response_model=CollectionSearchResponse)
-async def search_collection_endpoint(
-    dataset_name: str, body: CollectionSearchRequest
-):
+async def search_collection_endpoint(dataset_name: str, body: CollectionSearchRequest):
     """Embed the query and return the most similar Q/A pairs from the collection."""
     try:
         return search_collection(
