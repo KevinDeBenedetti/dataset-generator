@@ -22,6 +22,9 @@ from typing import Any, Deque, Dict, Optional, Protocol
 class RateLimiter(Protocol):
     """The interface the login route depends on (both backends satisfy it)."""
 
+    # Tunable cap both backends expose (read in their methods, adjustable in tests).
+    max_attempts: int
+
     def retry_after(self, key: str) -> float: ...
 
     def register_failure(self, key: str) -> None: ...
