@@ -6,6 +6,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from server.core.config import config
 from server.core.security import hash_password
 from server.models.user import User, UserRole, AuthProvider
 
@@ -44,8 +45,11 @@ def create_user(
 
 
 # Dev accounts created by ``seed_dev_users`` — documented in the README.
-# Override the passwords via env (DEV_ADMIN_PASSWORD / DEV_USER_PASSWORD) so the
-# defaults below never need to be the real ones in any shared environment.
+# Each password comes from its env var (DEV_ADMIN_PASSWORD / DEV_USER_PASSWORD).
+# The weak ``password_default`` is only ever used as a last resort in an
+# explicitly-declared development environment (see ``seed_dev_users``); outside
+# dev it is refused so a leaked SEED_DEV_USERS can never create known-credential
+# admin/user accounts.
 DEV_USERS = [
     {
         "email": "admin@example.com",
@@ -62,16 +66,43 @@ DEV_USERS = [
 ]
 
 
-def seed_dev_users(db: Session) -> int:
+def seed_dev_users(
+    db: Session, *, allow_insecure_defaults: Optional[bool] = None
+) -> int:
     """Create the two dev accounts if they don't already exist (idempotent).
+
+    The password for each account is taken from its env var (DEV_ADMIN_PASSWORD /
+    DEV_USER_PASSWORD). When an env var is unset, the weak built-in default is
+    only used if ``allow_insecure_defaults`` is true — which defaults to
+    :attr:`config.is_development`. Outside an explicitly-declared development
+    environment this raises ``RuntimeError`` instead of silently seeding
+    known-credential admin/user accounts.
 
     Returns the number of accounts created. Intended for local development only.
     """
+    if allow_insecure_defaults is None:
+        allow_insecure_defaults = config.is_development
+
     created = 0
     for spec in DEV_USERS:
         if get_user_by_email(db, spec["email"]):
             continue
-        password = os.getenv(spec["password_env"], spec["password_default"])
+        password = os.getenv(spec["password_env"])
+        if not password:
+            if not allow_insecure_defaults:
+                raise RuntimeError(
+                    f"Refusing to seed dev user {spec['email']} with the weak "
+                    f"built-in default password outside a development environment. "
+                    f"Set {spec['password_env']} to an explicit password, or set "
+                    f"ENVIRONMENT=development for local dev."
+                )
+            password = spec["password_default"]
+            logging.warning(
+                "Seeding %s with the INSECURE built-in default password "
+                "(development only; set %s to override)",
+                spec["email"],
+                spec["password_env"],
+            )
         create_user(
             db,
             email=spec["email"],

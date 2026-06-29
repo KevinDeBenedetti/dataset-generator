@@ -93,6 +93,86 @@ export async function generateDataset(
   return response.data as unknown as DatasetGenerationResponse
 }
 
+// Generate a dataset from an uploaded file (PDF or image). Multipart upload, so
+// this uses a hand-rolled fetch (FormData) rather than the JSON client. The
+// `/dataset/generate/file` endpoint isn't in the generated client yet (regenerate
+// the SDK once the server is running to pick it up).
+export interface GenerateFromFileParams {
+  file: File
+  datasetName: string
+  targetLanguage?: string | null
+  modelQa?: string | null
+  modelVlm?: string | null
+  similarityThreshold?: number
+  syncLangfuse?: boolean
+}
+
+export async function generateDatasetFromFile(
+  params: GenerateFromFileParams
+): Promise<DatasetGenerationResponse> {
+  const baseUrl = client.getConfig().baseUrl ?? ''
+  const form = new FormData()
+  form.append('file', params.file)
+  form.append('dataset_name', params.datasetName)
+  if (params.targetLanguage) form.append('target_language', params.targetLanguage)
+  if (params.modelQa) form.append('model_qa', params.modelQa)
+  if (params.modelVlm) form.append('model_vlm', params.modelVlm)
+  if (params.similarityThreshold != null) {
+    form.append('similarity_threshold', String(params.similarityThreshold))
+  }
+  if (params.syncLangfuse != null) {
+    form.append('sync_langfuse', String(params.syncLangfuse))
+  }
+
+  // No Content-Type header: the browser sets the multipart boundary itself.
+  const response = await fetch(`${baseUrl}/dataset/generate/file`, {
+    method: 'POST',
+    body: form,
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    let message = 'Failed to generate dataset from file'
+    try {
+      message = getErrorMessage(await response.json(), message)
+    } catch {
+      // Non-JSON error body — keep the fallback message.
+    }
+    throw new Error(message)
+  }
+  return (await response.json()) as DatasetGenerationResponse
+}
+
+// Generate a dataset from a GitHub account's public docs. JSON body; the
+// `/dataset/generate/github` endpoint isn't in the generated client yet.
+export interface GenerateFromGitHubParams {
+  github_username: string
+  github_token?: string | null
+  dataset_name: string
+  target_language?: string | null
+  model_cleaning?: string | null
+  model_qa?: string | null
+  similarity_threshold?: number
+  max_repos?: number | null
+  sync_langfuse?: boolean
+}
+
+export async function generateDatasetFromGitHub(
+  body: GenerateFromGitHubParams
+): Promise<DatasetGenerationResponse> {
+  const response = await client.post<DatasetGenerationResponse>({
+    url: '/dataset/generate/github',
+    body,
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(
+      getErrorMessage(response.error, 'Failed to generate dataset from GitHub')
+    )
+  }
+  return response.data as unknown as DatasetGenerationResponse
+}
+
 // SSE event shapes emitted by POST /dataset/generate/stream.
 type StreamEvent =
   | { type: 'step'; step: PipelineStep }

@@ -320,6 +320,27 @@ def get_dataset_items(dataset_name: str) -> List[Dict[str, Any]]:
     return items
 
 
+def count_dataset_items(dataset_name: str) -> int:
+    """Total number of items in a dataset, via the REST pagination meta.
+
+    A single ``limit=1`` request (cheap) reads ``meta.totalItems`` rather than
+    fetching every item just to count them — used by the dataset-list overview
+    where the per-dataset count would otherwise be missing/stale. Counts every
+    item Langfuse reports (the rare archived ones included).
+    """
+    host, public_key, secret_key = _langfuse_credentials()
+    resp = httpx.get(
+        f"{host}/api/public/dataset-items",
+        params={"datasetName": dataset_name, "page": 1, "limit": 1},
+        auth=(public_key, secret_key),
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    meta = resp.json().get("meta") or {}
+    total = meta.get("totalItems")
+    return total if isinstance(total, int) else 0
+
+
 def delete_dataset_item(item_id: str) -> None:
     """Delete a single dataset item (and its run items) from Langfuse.
 
@@ -341,6 +362,7 @@ def sync_qa_to_langfuse(
     *,
     source_url: str,
     stats: Optional[Dict[str, Any]] = None,
+    target_language: Optional[str] = None,
     version: Optional[int] = None,
     langfuse_client: Optional[Langfuse] = None,
 ) -> Dict[str, Any]:
@@ -372,6 +394,11 @@ def sync_qa_to_langfuse(
         "total_items": len(items),
         **stats,
     }
+    # Surface the dataset's language so the list/dashboard view can show it
+    # (read back via metadata.target_language). Only set when known, to avoid
+    # clobbering an existing value with None on a re-sync.
+    if target_language:
+        dataset_metadata["target_language"] = target_language
 
     logging.info(f"Syncing dataset '{dataset_name}' as version {version} to Langfuse")
     langfuse_client.create_dataset(

@@ -1,3 +1,4 @@
+import base64
 import logging
 import openai
 import instructor
@@ -25,6 +26,17 @@ class PromptManager:
     - Logical structure in clear paragraphs
 
     Respond only with the cleaned text, no comments.
+    """
+
+    EXTRACTION_PROMPT = """
+    You are an expert document transcriber. Transcribe ALL readable text from
+    this image into clean Markdown.
+
+    Rules:
+    - Output only the transcribed content — no preamble, no commentary.
+    - Preserve headings, lists and tables; keep the reading order.
+    - Drop page furniture: running headers/footers, page numbers, watermarks.
+    - If the image contains no readable text, respond with an empty string.
     """
 
     @classmethod
@@ -73,6 +85,52 @@ class LLMService:
         except Exception as e:
             logging.error(f"Text cleaning failed: {e}")
             return text
+
+    def extract_text_from_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        model: Optional[str] = None,
+    ) -> str:
+        """Transcribe an image (or rendered PDF page) to text via the VLM.
+
+        Uses the configured vision model (``OPENAI_VLM_MODEL``). Returns the
+        transcribed text, or an empty string if the call fails or the page has
+        no readable text. Raises ``ValueError`` if no vision model is configured.
+        """
+        model = model or config.openai_vlm_model
+        if not model:
+            raise ValueError("No vision model configured (set OPENAI_VLM_MODEL)")
+
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": self.prompt_manager.EXTRACTION_PROMPT,
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{b64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=config.max_tokens_cleaning,
+                temperature=config.temperature,
+            )
+            content = response.choices[0].message.content
+            return (content or "").strip()
+        except Exception as e:
+            logging.error(f"VLM text extraction failed: {e}")
+            return ""
 
     def generate_qa(
         self,
