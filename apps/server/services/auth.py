@@ -27,6 +27,7 @@ from server.services.users import get_user_by_email
 _ALGORITHM = "HS256"
 _DEV_SECRET = "dev-insecure-secret-change-me"
 
+
 # The signing key and claims registry are derived from a secret that doesn't
 # change within the process, so build them once instead of on every request.
 # Keyed by the secret so a config change (e.g. in tests) still rebuilds the key.

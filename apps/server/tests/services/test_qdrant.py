@@ -56,9 +56,7 @@ class FakeQdrantClient:
         # QueryResponse; each scored 0.9. Honours limit and score_threshold.
         points = []
         for point in self.collections[collection_name]["points"].values():
-            scored = type(
-                "Scored", (), {"payload": point.payload, "score": 0.9}
-            )()
+            scored = type("Scored", (), {"payload": point.payload, "score": 0.9})()
             points.append(scored)
         if score_threshold is not None:
             points = [p for p in points if p.score >= score_threshold]
