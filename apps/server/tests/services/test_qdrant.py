@@ -18,6 +18,7 @@ from server.services.qdrant import (
     collection_name_for,
     is_qdrant_configured,
     list_collections,
+    search_collection,
     sync_dataset_to_qdrant,
 )
 
@@ -42,6 +43,27 @@ class FakeQdrantClient:
     def get_collection(self, collection_name: str):
         count = len(self.collections[collection_name]["points"])
         return type("Info", (), {"points_count": count})()
+
+    def query_points(
+        self,
+        collection_name: str,
+        query,
+        limit: int = 10,
+        score_threshold=None,
+        with_payload: bool = True,
+    ):
+        # Return stored points (newest-first irrelevant here) wrapped like a
+        # QueryResponse; each scored 0.9. Honours limit and score_threshold.
+        points = []
+        for point in self.collections[collection_name]["points"].values():
+            scored = type(
+                "Scored", (), {"payload": point.payload, "score": 0.9}
+            )()
+            points.append(scored)
+        if score_threshold is not None:
+            points = [p for p in points if p.score >= score_threshold]
+        points = points[:limit]
+        return type("QueryResponse", (), {"points": points})()
 
 
 class FakeLLM:
@@ -161,6 +183,59 @@ def test_sync_empty_dataset_raises_value_error():
         sync_dataset_to_qdrant(
             "Empty", llm_service=FakeLLM(), client=FakeQdrantClient(), items=[]
         )
+
+
+# --- search ------------------------------------------------------------------
+
+
+def test_search_returns_scored_hits_from_payload():
+    items = [_item("h0", 0), _item("h1", 1)]
+    fake_client = FakeQdrantClient()
+    fake_llm = FakeLLM()
+    sync_dataset_to_qdrant(
+        "My Dataset", llm_service=fake_llm, client=fake_client, items=items
+    )
+
+    result = search_collection(
+        "My Dataset", "question 0", llm_service=fake_llm, client=fake_client
+    )
+
+    assert result["dataset_name"] == "My Dataset"
+    assert result["count"] == 2
+    hit = result["results"][0]
+    assert hit["question"]
+    assert hit["answer"]
+    assert hit["score"] == 0.9
+    # The query was embedded (sync=1 call earlier, +1 for the search).
+    assert fake_llm.calls == 2
+
+
+def test_search_empty_query_raises_value_error():
+    with pytest.raises(ValueError, match="must not be empty"):
+        search_collection(
+            "My Dataset", "   ", llm_service=FakeLLM(), client=FakeQdrantClient()
+        )
+
+
+def test_search_missing_collection_raises_value_error():
+    with pytest.raises(ValueError, match="does not exist yet"):
+        search_collection(
+            "Never Synced", "hello", llm_service=FakeLLM(), client=FakeQdrantClient()
+        )
+
+
+def test_search_honours_limit():
+    items = [_item(f"h{i}", i) for i in range(5)]
+    fake_client = FakeQdrantClient()
+    fake_llm = FakeLLM()
+    sync_dataset_to_qdrant(
+        "My Dataset", llm_service=fake_llm, client=fake_client, items=items
+    )
+
+    result = search_collection(
+        "My Dataset", "anything", limit=2, llm_service=fake_llm, client=fake_client
+    )
+    assert result["count"] == 2
 
 
 # --- listing -----------------------------------------------------------------

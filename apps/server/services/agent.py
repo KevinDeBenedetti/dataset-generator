@@ -91,6 +91,42 @@ def _truncate_for_log(text: str, head: int = 220, tail: int = 220) -> str:
     return f"{flat[:head]} … [{omitted} chars omitted] … {flat[-tail:]}"
 
 
+def _salvage_objects(text: str) -> list:
+    """Recover every complete JSON object from a possibly-truncated response.
+
+    Reasoning models or a hit token budget (``max_tokens_qa``) can cut the
+    response off mid-array, leaving the outer JSON unparseable. This scans for
+    balanced ``{...}`` spans at any nesting depth, honouring string literals and
+    escapes so a brace inside an ``answer``/``context`` value (or a nested JSON
+    object) doesn't terminate the span early. Each closed object is parsed; the
+    complete ones survive even when the surrounding structure is truncated.
+    """
+    objects: list = []
+    stack: List[int] = []
+    in_string = False
+    escaped = False
+    for i, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            stack.append(i)
+        elif ch == "}" and stack:
+            start = stack.pop()
+            try:
+                objects.append(json.loads(text[start : i + 1]))
+            except Exception:
+                continue
+    return objects
+
+
 def _parse_qa_list(text: str) -> List[QA]:
     """Parse the model's response into a list of QA pairs.
 
@@ -111,8 +147,12 @@ def _parse_qa_list(text: str) -> List[QA]:
     except Exception:
         pass
 
-    # Otherwise locate the first JSON array or object, even if wrapped in prose.
-    raw_items: list = []
+    # Build candidate item-lists from every JSON form we can find: the outermost
+    # array, the outermost object, then a brace-salvage of complete objects. We
+    # try them in order and return the first that yields a valid pair — so a
+    # valid object elsewhere isn't lost when an earlier array exists but every
+    # one of its items fails validation.
+    candidates: List[list] = []
     for open_ch, close_ch in (("[", "]"), ("{", "}")):
         start = cleaned.find(open_ch)
         end = cleaned.rfind(close_ch)
@@ -123,23 +163,26 @@ def _parse_qa_list(text: str) -> List[QA]:
         except Exception:
             continue
         if isinstance(data, list):
-            raw_items = data
+            candidates.append(data)
         elif isinstance(data, dict):
-            raw_items = data["items"] if isinstance(data.get("items"), list) else [data]
-        if raw_items:
-            break
+            candidates.append(
+                data["items"] if isinstance(data.get("items"), list) else [data]
+            )
 
-    # Salvage path: reasoning models or a hit token budget (max_tokens_qa) can
-    # cut the response off mid-array, leaving the outer JSON unparseable. Recover
-    # every complete flat object so a truncated response still yields its pairs.
-    if not raw_items:
-        for obj in re.findall(r"\{[^{}]*\}", cleaned):
-            try:
-                raw_items.append(json.loads(obj))
-            except Exception:
-                continue
+    salvaged = _salvage_objects(cleaned)
+    if salvaged:
+        candidates.append(salvaged)
 
-    if not raw_items:
+    last_raw: list = []
+    for raw_items in candidates:
+        if not raw_items:
+            continue
+        last_raw = raw_items
+        items = _coerce_items(raw_items)
+        if items:
+            return items
+
+    if not last_raw:
         logging.warning(
             "QA model response could not be parsed as QA pairs — no JSON found. "
             "Raw response: %s",
@@ -147,15 +190,13 @@ def _parse_qa_list(text: str) -> List[QA]:
         )
         return []
 
-    items = _coerce_items(raw_items)
-    if not items:
-        logging.warning(
-            "QA model returned %d candidate item(s) but none passed validation "
-            "(see skip summary). Raw response: %s",
-            len(raw_items),
-            _truncate_for_log(cleaned),
-        )
-    return items
+    logging.warning(
+        "QA model returned %d candidate item(s) but none passed validation "
+        "(see skip summary). Raw response: %s",
+        len(last_raw),
+        _truncate_for_log(cleaned),
+    )
+    return []
 
 
 class QAAgentService:

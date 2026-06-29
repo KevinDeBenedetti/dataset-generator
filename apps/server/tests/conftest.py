@@ -100,6 +100,18 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
 
     test_app.dependency_overrides[get_db] = override_get_db
 
+    # The feature routers are mounted here without the app-level auth gate, so
+    # these tests exercise handlers directly. The destructive routes still carry
+    # a route-level ``Depends(require_admin)``, so satisfy it with a test admin
+    # (overriding require_admin also short-circuits its get_current_user
+    # sub-dependency — get_current_user itself stays real for the auth tests).
+    from server.models.user import User, UserRole
+    from server.services.auth import require_admin
+
+    test_app.dependency_overrides[require_admin] = lambda: User(
+        id="test-admin", email="admin@test.local", role=UserRole.ADMIN
+    )
+
     with TestClient(test_app) as test_client:
         yield test_client
 

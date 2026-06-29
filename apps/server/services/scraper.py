@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from collections import deque
+from collections import Counter, deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urldefrag, urljoin, urlparse
@@ -141,6 +142,8 @@ class ScraperService:
         max_depth: int | None = None,
         max_pages: int | None = None,
         same_domain: bool | None = None,
+        delay_seconds: float | None = None,
+        max_pages_per_domain: int | None = None,
         on_page: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> List[PageSnapshot]:
         """Breadth-first crawl from ``seed_url``, saving one snapshot per page.
@@ -150,12 +153,25 @@ class ScraperService:
         followed. Pages that fail to fetch are skipped (logged) rather than
         aborting the whole crawl, so one broken link can't sink the dataset.
 
+        Cost controls: ``delay_seconds`` throttles the crawler by pausing between
+        page fetches (0 = no throttle), and ``max_pages_per_domain`` caps how many
+        pages are taken from any single host (0 = unlimited). Both default to the
+        ``CRAWL_*`` config values.
+
         ``on_page`` (optional) is called after each page is successfully fetched
         with a small progress dict, so callers can stream live crawl progress.
         """
         max_depth = config.crawl_max_depth if max_depth is None else max_depth
         max_pages = config.crawl_max_pages if max_pages is None else max_pages
         same_domain = config.crawl_same_domain if same_domain is None else same_domain
+        delay_seconds = (
+            config.crawl_delay_seconds if delay_seconds is None else delay_seconds
+        )
+        max_pages_per_domain = (
+            config.crawl_max_pages_per_domain
+            if max_pages_per_domain is None
+            else max_pages_per_domain
+        )
 
         seed = urldefrag(seed_url)[0]
         seed_host = urlparse(seed).netloc
@@ -163,6 +179,9 @@ class ScraperService:
         visited: set[str] = set()
         queue: deque[Tuple[str, int]] = deque([(seed, 0)])
         snapshots: List[PageSnapshot] = []
+        # Pages saved per host, to enforce the optional per-domain budget.
+        per_domain: Counter[str] = Counter()
+        fetches = 0
 
         while queue and len(snapshots) < max_pages:
             current, depth = queue.popleft()
@@ -170,6 +189,21 @@ class ScraperService:
             if current in visited:
                 continue
             visited.add(current)
+
+            # Per-domain budget: skip fetching once a host hits its cap, so the
+            # crawl can't spend its whole page budget on a single domain.
+            domain = urlparse(current).netloc
+            if max_pages_per_domain and per_domain[domain] >= max_pages_per_domain:
+                logging.info(
+                    f"Skipping {current}: per-domain budget reached for {domain} "
+                    f"({max_pages_per_domain})"
+                )
+                continue
+
+            # Throttle between network fetches (not before the first one).
+            if delay_seconds and fetches:
+                await asyncio.sleep(delay_seconds)
+            fetches += 1
 
             try:
                 content, hrefs = await self._fetch_page(current)
@@ -179,6 +213,7 @@ class ScraperService:
 
             if content:
                 snapshots.append(self._save_snapshot(current, content, dataset_id))
+                per_domain[domain] += 1
                 logging.info(
                     f"Crawled {current} (depth {depth}) — "
                     f"{len(snapshots)}/{max_pages} pages"

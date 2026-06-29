@@ -243,6 +243,74 @@ def sync_dataset_to_qdrant(
     }
 
 
+def search_collection(
+    dataset_name: str,
+    query: str,
+    limit: int = 10,
+    score_threshold: Optional[float] = None,
+    llm_service: Optional[Embedder] = None,
+    client: Any = None,
+) -> Dict[str, Any]:
+    """Embed ``query`` and return the most similar Q/A points from the dataset's
+    Qdrant collection.
+
+    The counterpart to :func:`sync_dataset_to_qdrant`: that ingests, this reads.
+    ``llm_service``/``client`` are injectable for testing. Raises
+    QdrantNotConfiguredError when Qdrant isn't wired up and ValueError when the
+    query is empty or the collection hasn't been synced yet.
+    """
+    query = (query or "").strip()
+    if not query:
+        raise ValueError("Search query must not be empty")
+
+    llm_service = llm_service or LLMService()
+    client = client or get_qdrant_client()
+    collection_name = collection_name_for(dataset_name)
+
+    if not client.collection_exists(collection_name):
+        raise ValueError(
+            f"Collection for dataset '{dataset_name}' does not exist yet — "
+            "sync it to Qdrant first"
+        )
+
+    query_vector = llm_service.embed_texts([query])[0]
+    response = client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        limit=limit,
+        score_threshold=score_threshold,
+        with_payload=True,
+    )
+    # query_points returns a QueryResponse with .points; tolerate a bare list too.
+    points = getattr(response, "points", response)
+
+    results: List[Dict[str, Any]] = []
+    for point in points:
+        payload = getattr(point, "payload", None) or {}
+        results.append(
+            {
+                "qa_id": payload.get("qa_id"),
+                "question": payload.get("question", ""),
+                "answer": payload.get("answer", ""),
+                "context": payload.get("context", ""),
+                "source_url": payload.get("source_url", ""),
+                "confidence": payload.get("confidence"),
+                "score": getattr(point, "score", None),
+            }
+        )
+
+    logger.info(
+        "Searched Qdrant collection %s (%d hit(s))", collection_name, len(results)
+    )
+    return {
+        "dataset_name": dataset_name,
+        "collection_name": collection_name,
+        "query": query,
+        "count": len(results),
+        "results": results,
+    }
+
+
 def list_collections() -> Dict[str, Any]:
     """List Langfuse datasets as collections, annotated with their Qdrant status.
 

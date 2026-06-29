@@ -8,6 +8,7 @@ header for non-browser clients) and resolve the current user.
 
 import logging
 import time
+from functools import lru_cache
 from typing import Optional
 
 from joserfc import jwt
@@ -26,9 +27,19 @@ from server.services.users import get_user_by_email
 _ALGORITHM = "HS256"
 _DEV_SECRET = "dev-insecure-secret-change-me"
 
+# The signing key and claims registry are derived from a secret that doesn't
+# change within the process, so build them once instead of on every request.
+# Keyed by the secret so a config change (e.g. in tests) still rebuilds the key.
+@lru_cache(maxsize=None)
+def _signing_key_for(secret: str) -> OctKey:
+    return OctKey.import_key(secret)
+
+
+_CLAIMS_REGISTRY = JWTClaimsRegistry()
+
 
 def _signing_key() -> OctKey:
-    return OctKey.import_key(config.auth_secret_key)
+    return _signing_key_for(config.auth_secret_key)
 
 
 def _warn_if_dev_secret() -> None:
@@ -58,7 +69,7 @@ def decode_access_token(token: str) -> Optional[dict]:
     try:
         decoded = jwt.decode(token, _signing_key(), algorithms=[_ALGORITHM])
         # Enforce expiry (and any other registered claims).
-        JWTClaimsRegistry().validate(decoded.claims)
+        _CLAIMS_REGISTRY.validate(decoded.claims)
         return dict(decoded.claims)
     except (JoseError, ValueError) as exc:
         logging.debug("Rejected access token: %s", exc)

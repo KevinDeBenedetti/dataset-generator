@@ -147,6 +147,8 @@ async def create_dataset_for_url(
             crawl=request.crawl,
             max_depth=request.max_depth,
             max_pages=request.max_pages,
+            crawl_delay_seconds=request.crawl_delay_seconds,
+            max_pages_per_domain=request.max_pages_per_domain,
             sync_langfuse=request.sync_langfuse,
         )
 
@@ -210,6 +212,8 @@ async def stream_dataset_for_url(
                 crawl=request.crawl,
                 max_depth=request.max_depth,
                 max_pages=request.max_pages,
+                crawl_delay_seconds=request.crawl_delay_seconds,
+                max_pages_per_domain=request.max_pages_per_domain,
                 sync_langfuse=request.sync_langfuse,
                 on_progress=on_progress,
             )
