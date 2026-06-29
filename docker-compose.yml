@@ -59,6 +59,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      redis:
+        condition: service_healthy
     env_file:
       - .env
     # The scraper talks to the crawl4ai service over HTTP instead of running
@@ -66,6 +68,9 @@ services:
     # compose service; override CRAWL4AI_BASE_URL in .env to use a remote one.
     environment:
       CRAWL4AI_BASE_URL: ${CRAWL4AI_BASE_URL:-http://crawl4ai:11235}
+      # Shared login rate-limiter store; in-network address. Override REDIS_URL
+      # in .env to point at a managed Redis.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
       DEBUG_LOGS: ${DEBUG_LOGS:-}
     healthcheck:
@@ -139,7 +144,30 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
+  # Redis: shared store for the login rate limiter (so the quota holds across
+  # uvicorn workers/replicas). The server reaches it in-network at
+  # redis://redis:6379. Published to the host on the project's slot-2 Redis port
+  # (6399) for inspection. Persistence is on (appendonly) via the volume.
+  redis:
+    container_name: redis
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    expose:
+      - "6379"
+    ports:
+      - "${REDIS_HOST_PORT:-6399}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - redis_data:/data
+
 volumes:
   next_node_modules:
   server_venv:
   qdrant_storage:
+  redis_data:

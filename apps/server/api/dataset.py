@@ -1,8 +1,9 @@
 import logging
 from typing import List, Union
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from server.services.auth import require_admin
 from server.services.dataset_reads import (
     list_datasets_view,
     get_dataset_view,
@@ -90,6 +91,8 @@ async def analyze_similarities(
 @router.post(
     "/dataset/{dataset_name}/clean-similarities",
     response_model=CleanSimilarityResponse,
+    # Destructive (deletes Langfuse items) — admin only.
+    dependencies=[Depends(require_admin)],
 )
 async def clean_similarities(
     dataset_name: str,
@@ -109,7 +112,12 @@ async def clean_similarities(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/dataset/{dataset_name}", response_model=DeleteDatasetResponse)
+@router.delete(
+    "/dataset/{dataset_name}",
+    response_model=DeleteDatasetResponse,
+    # Destructive (drops the dataset's items + Qdrant collection) — admin only.
+    dependencies=[Depends(require_admin)],
+)
 async def delete_dataset(dataset_name: str):
     """Delete a dataset's Q/A items from Langfuse and drop its Qdrant collection.
 

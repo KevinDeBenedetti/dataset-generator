@@ -42,6 +42,33 @@ class TestParseQaList:
         items = _parse_qa_list(wrapped)
         assert len(items) == 1
 
+    def test_valid_object_recovered_after_invalid_array(self):
+        # An array appears first but all its items fail validation (too short);
+        # a valid QA object follows. The parser must not short-circuit on the
+        # invalid array and lose the valid object.
+        payload = (
+            '[{"question": "hi?", "answer": "no", "context": "short"}] '
+            "then: " + VALID_PAYLOAD
+        )
+        items = _parse_qa_list(payload)
+        assert len(items) == 1
+        assert items[0].question == "What is the capital of France?"
+
+    def test_salvage_truncated_response_with_braces_in_values(self):
+        # Outer JSON is cut off mid-array (unparseable) and an answer contains
+        # literal braces — the salvage must still recover the complete item.
+        truncated = (
+            '{"items": [{'
+            '"question": "What does the snippet print?", '
+            '"answer": "It prints {\\"ok\\": true} as a JSON object to stdout.", '
+            '"context": "The example calls print(json.dumps({\\"ok\\": True})) on a line."'
+            '}, {"question": "What is in'
+        )
+        items = _parse_qa_list(truncated)
+        assert len(items) == 1
+        assert items[0].question == "What does the snippet print?"
+        assert "{" in items[0].answer
+
 
 def _service_with_run(return_value=None, side_effect=None):
     """A QAAgentService whose model call (_run) is mocked, no network."""

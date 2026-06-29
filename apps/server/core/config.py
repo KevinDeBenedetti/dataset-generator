@@ -53,6 +53,16 @@ class Config:
             os.getenv("CRAWL_SAME_DOMAIN", "true").lower() not in ("0", "false", "no")
         )
     )
+    # Cost controls. crawl_delay_seconds throttles the crawler by pausing between
+    # page fetches (0 = no throttle). crawl_max_pages_per_domain caps pages taken
+    # from any single host (0 = unlimited) — a budget that matters most when
+    # crawl_same_domain is off and the crawl can span several domains.
+    crawl_delay_seconds: float = field(
+        default_factory=lambda: float(os.getenv("CRAWL_DELAY_SECONDS", "0"))
+    )
+    crawl_max_pages_per_domain: int = field(
+        default_factory=lambda: int(os.getenv("CRAWL_MAX_PAGES_PER_DOMAIN", "0"))
+    )
 
     # Dev log console: when true, the server exposes /debug/logs (SSE) so the
     # Next.js dev UI can stream server logs into an in-browser terminal. Toggle
@@ -90,7 +100,8 @@ class Config:
     )
     # Anti-brute-force on POST /auth/login: after auth_login_max_attempts failed
     # attempts from one client IP within auth_login_window_seconds, further
-    # attempts get a 429 until the window slides. In-process only (see
+    # attempts get a 429 until the window slides. Backed by Redis when redis_url
+    # is set (shared across workers/replicas), else in-process (see
     # services/rate_limit.py) — a first layer, not a distributed quota.
     auth_login_max_attempts: int = field(
         default_factory=lambda: int(os.getenv("AUTH_LOGIN_MAX_ATTEMPTS", "10"))
@@ -98,6 +109,9 @@ class Config:
     auth_login_window_seconds: int = field(
         default_factory=lambda: int(os.getenv("AUTH_LOGIN_WINDOW_SECONDS", "300"))
     )
+    # Optional Redis backing store for the login rate limiter (and any future
+    # shared state). When unset, the limiter falls back to in-process state.
+    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
 
     # When true, the two local dev accounts (see services/users.py) are seeded
     # on startup. Local-dev convenience only — keep off in shared environments.

@@ -62,3 +62,59 @@ def test_protected_routes_allow_authenticated(test_db):
         response = client.get("/dataset")
     assert response.status_code == 200
     assert response.json() == []
+
+
+# Destructive/costly routes are additionally gated behind require_admin.
+_ADMIN_ONLY_ROUTES = [
+    ("delete", "/dataset/my_dataset"),
+    ("post", "/dataset/my_dataset/clean-similarities"),
+    ("post", "/collections/my_dataset/qdrant"),
+]
+
+
+def test_admin_routes_reject_non_admin(test_db):
+    app = _build_protected_app(test_db)
+
+    # An authenticated but non-admin user resolves through get_current_user.
+    regular_user = User(id="u1", email="user@example.com", role=UserRole.USER)
+    app.dependency_overrides[get_current_user] = lambda: regular_user
+
+    client = TestClient(app)
+    for method, path in _ADMIN_ONLY_ROUTES:
+        response = getattr(client, method)(path)
+        assert response.status_code == 403, f"{method} {path} should be admin-only"
+
+
+def test_admin_routes_allow_admin(test_db):
+    app = _build_protected_app(test_db)
+
+    admin_user = User(id="a1", email="admin@example.com", role=UserRole.ADMIN)
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+
+    client = TestClient(app)
+    # Past the admin gate the handlers run; mock their service layer so we assert
+    # the gate (200), not the Langfuse/Qdrant side effects.
+    with patch(
+        "server.api.dataset.delete_dataset_view",
+        return_value={
+            "message": "deleted",
+            "dataset_id": "my_dataset",
+            "records_deleted": 0,
+        },
+    ):
+        assert client.delete("/dataset/my_dataset").status_code == 200
+    with patch(
+        "server.api.dataset.clean_similarities_view",
+        return_value={
+            "dataset_id": "my_dataset",
+            "dataset_name": "my_dataset",
+            "threshold": 0.8,
+            "total_records": 0,
+            "removed_records": 0,
+            "details": [],
+            "removed_items": [],
+        },
+    ):
+        assert (
+            client.post("/dataset/my_dataset/clean-similarities").status_code == 200
+        )

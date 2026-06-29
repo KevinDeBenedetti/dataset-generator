@@ -278,6 +278,66 @@ class TestScraperService:
 
         assert len(snapshots) == 3
 
+    async def test_crawl_site_per_domain_budget(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """max_pages_per_domain caps how many pages are taken from each host."""
+        pages = {
+            "https://a.com": ("# A0", ["https://a.com/1", "https://b.com"]),
+            "https://a.com/1": ("# A1", []),
+            "https://b.com": ("# B0", ["https://b.com/1"]),
+            "https://b.com/1": ("# B1", []),
+        }
+
+        async def fake_fetch(url):
+            return pages.get(url, ("", []))
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            snapshots = await scraper_service.crawl_site(
+                "https://a.com",
+                sample_dataset.id,
+                max_depth=5,
+                max_pages=10,
+                same_domain=False,  # allow crossing to b.com
+                max_pages_per_domain=1,
+            )
+
+        from urllib.parse import urlparse
+
+        hosts = [urlparse(s.url).netloc for s in snapshots]
+        # One page per host despite more being reachable.
+        assert hosts.count("a.com") == 1
+        assert hosts.count("b.com") == 1
+        assert len(snapshots) == 2
+
+    async def test_crawl_site_throttles_between_fetches(
+        self, scraper_service: ScraperService, sample_dataset
+    ):
+        """delay_seconds pauses between fetches (once for two pages, not before
+        the first)."""
+        pages = {
+            "https://example.com": ("# Home", ["https://example.com/a"]),
+            "https://example.com/a": ("# A", []),
+        }
+
+        async def fake_fetch(url):
+            return pages.get(url, ("", []))
+
+        with patch.object(scraper_service, "_fetch_page", side_effect=fake_fetch):
+            with patch(
+                "server.services.scraper.asyncio.sleep", new=AsyncMock()
+            ) as sleep_mock:
+                snapshots = await scraper_service.crawl_site(
+                    "https://example.com",
+                    sample_dataset.id,
+                    max_depth=1,
+                    max_pages=10,
+                    delay_seconds=0.5,
+                )
+
+        assert len(snapshots) == 2
+        sleep_mock.assert_awaited_once_with(0.5)
+
     async def test_crawl_site_calls_on_page_per_page(
         self, scraper_service: ScraperService, sample_dataset
     ):
