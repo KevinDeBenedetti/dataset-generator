@@ -90,26 +90,31 @@ The API supports two roles — `user` and `admin` — backed by a `users` table
 
 Two local development accounts are available:
 
-| Email | Password | Role |
+| Email | Password (dev only) | Role |
 | --- | --- | --- |
-| `admin@example.com` | `admin1234` | `admin` |
-| `user@example.com` | `user1234` | `user` |
+| `admin@example.com` | `DEV_ADMIN_PASSWORD` (falls back to `admin1234` in dev) | `admin` |
+| `user@example.com` | `DEV_USER_PASSWORD` (falls back to `user1234` in dev) | `user` |
 
 Seed them in either of these ways:
 
 ```bash
 # A) automatically on server startup — set in your .env
+ENVIRONMENT=development
 SEED_DEV_USERS=true
 
 # B) on demand, from the repo root
 uv run python -m server.scripts.seed_dev_users
 ```
 
-The seeding is idempotent (existing accounts are skipped). Override the
-passwords with the `DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD` env vars.
+The seeding is idempotent (existing accounts are skipped). Each password comes
+from its env var (`DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD`).
 
-> ⚠️ These are **development-only** credentials with weak passwords — never seed
-> them in a shared, staging or production environment.
+> ⚠️ The weak built-in defaults (`admin1234` / `user1234`) are only used when
+> `ENVIRONMENT=development`. Outside an explicitly declared development
+> environment, seeding **requires** `DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD`
+> to be set and otherwise refuses to run (it will never create known-credential
+> accounts). `ENVIRONMENT` defaults to `production`, so a leaked
+> `SEED_DEV_USERS=true` cannot seed weak accounts on its own.
 
 Auth is configured via these env vars:
 

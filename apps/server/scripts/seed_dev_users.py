@@ -4,8 +4,11 @@ Usage (from the repo root):
 
     uv run python -m server.scripts.seed_dev_users
 
-Idempotent: existing accounts are left untouched. Passwords can be overridden
-with the DEV_ADMIN_PASSWORD / DEV_USER_PASSWORD env vars.
+Idempotent: existing accounts are left untouched. Each password is taken from
+its env var (DEV_ADMIN_PASSWORD / DEV_USER_PASSWORD). Outside an explicitly
+declared development environment (ENVIRONMENT=development) those env vars are
+required: seeding refuses the weak built-in defaults rather than create
+known-credential accounts.
 """
 
 import logging

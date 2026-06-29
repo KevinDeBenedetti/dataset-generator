@@ -70,7 +70,7 @@ class TestUserService:
 
 class TestSeedDevUsers:
     def test_seeds_two_users(self, test_db):
-        created = seed_dev_users(test_db)
+        created = seed_dev_users(test_db, allow_insecure_defaults=True)
         assert created == 2
         users = test_db.query(User).all()
         roles = {u.email: u.role for u in users}
@@ -80,16 +80,38 @@ class TestSeedDevUsers:
         }
 
     def test_is_idempotent(self, test_db):
-        assert seed_dev_users(test_db) == 2
+        assert seed_dev_users(test_db, allow_insecure_defaults=True) == 2
         # Running again creates nothing and doesn't duplicate.
-        assert seed_dev_users(test_db) == 0
+        assert seed_dev_users(test_db, allow_insecure_defaults=True) == 0
         assert test_db.query(User).count() == 2
 
     def test_seeded_passwords_match_defaults(self, test_db):
-        seed_dev_users(test_db)
+        seed_dev_users(test_db, allow_insecure_defaults=True)
         admin = get_user_by_email(test_db, "admin@example.com")
         user = get_user_by_email(test_db, "user@example.com")
         assert admin is not None and admin.hashed_password is not None
         assert user is not None and user.hashed_password is not None
         assert verify_password("admin1234", admin.hashed_password) is True
         assert verify_password("user1234", user.hashed_password) is True
+
+    def test_refuses_weak_defaults_outside_dev(self, test_db, monkeypatch):
+        # No explicit passwords + not a dev environment → fail closed, seed nothing.
+        import pytest
+
+        monkeypatch.delenv("DEV_ADMIN_PASSWORD", raising=False)
+        monkeypatch.delenv("DEV_USER_PASSWORD", raising=False)
+        with pytest.raises(RuntimeError, match="Refusing to seed"):
+            seed_dev_users(test_db, allow_insecure_defaults=False)
+        assert test_db.query(User).count() == 0
+
+    def test_uses_explicit_env_passwords(self, test_db, monkeypatch):
+        # Explicit env passwords are used even when insecure defaults are refused.
+        monkeypatch.setenv("DEV_ADMIN_PASSWORD", "Str0ng-Admin-Pw!")
+        monkeypatch.setenv("DEV_USER_PASSWORD", "Str0ng-User-Pw!")
+        created = seed_dev_users(test_db, allow_insecure_defaults=False)
+        assert created == 2
+        admin = get_user_by_email(test_db, "admin@example.com")
+        assert admin is not None and admin.hashed_password is not None
+        assert verify_password("Str0ng-Admin-Pw!", admin.hashed_password) is True
+        # The weak built-in default must NOT be valid.
+        assert verify_password("admin1234", admin.hashed_password) is False
