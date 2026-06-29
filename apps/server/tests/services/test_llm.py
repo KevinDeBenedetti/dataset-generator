@@ -2,8 +2,10 @@
 Tests for LLM service.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 from server.services.llm import LLMService, PromptManager
+from server.core.config import config
 
 
 def test_prompt_manager_cleaning_prompt():
@@ -156,3 +158,53 @@ def test_get_models_failure_returns_empty(mock_openai_class):
         result = service.get_models()
 
     assert result == []
+
+
+def test_extraction_prompt_defined():
+    assert PromptManager.EXTRACTION_PROMPT is not None
+    assert "transcrib" in PromptManager.EXTRACTION_PROMPT.lower()
+
+
+@patch("server.services.llm.openai.OpenAI")
+def test_extract_text_from_image_success(mock_openai_class):
+    """A vision message with an image_url is sent and the text is returned."""
+    mock_client = MagicMock()
+    mock_openai_class.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "  Transcribed text  "
+    mock_client.chat.completions.create.return_value = mock_response
+
+    with patch("server.services.llm.instructor.from_openai"):
+        service = LLMService()
+        result = service.extract_text_from_image(
+            b"image-bytes", mime_type="image/png", model="vlm-x"
+        )
+
+    assert result == "Transcribed text"  # stripped
+    kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert kwargs["model"] == "vlm-x"
+    content = kwargs["messages"][0]["content"]
+    assert any(part.get("type") == "image_url" for part in content)
+    image_part = next(p for p in content if p.get("type") == "image_url")
+    assert image_part["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@patch("server.services.llm.openai.OpenAI")
+def test_extract_text_from_image_failure_returns_empty(mock_openai_class):
+    mock_client = MagicMock()
+    mock_openai_class.return_value = mock_client
+    mock_client.chat.completions.create.side_effect = Exception("API Error")
+
+    with patch("server.services.llm.instructor.from_openai"):
+        service = LLMService()
+        assert service.extract_text_from_image(b"x", model="vlm-x") == ""
+
+
+@patch("server.services.llm.openai.OpenAI")
+def test_extract_text_from_image_requires_vlm_model(mock_openai_class, monkeypatch):
+    monkeypatch.setattr(config, "openai_vlm_model", "")
+    with patch("server.services.llm.instructor.from_openai"):
+        service = LLMService()
+        with pytest.raises(ValueError, match="vision model"):
+            service.extract_text_from_image(b"x")

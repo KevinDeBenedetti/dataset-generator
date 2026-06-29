@@ -632,3 +632,189 @@ class TestDatasetPipeline:
                             )
                             # Should use default 0.9
                             assert result["similarity_threshold"] == 0.9
+
+    @pytest.mark.asyncio
+    @patch("server.pipelines.dataset.file_to_page_images")
+    @patch("server.pipelines.dataset.ScraperService")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    @patch("server.pipelines.dataset.DatasetService")
+    @patch("server.pipelines.dataset.QAService")
+    async def test_process_file_success(
+        self,
+        mock_qa_service_class,
+        mock_dataset_service_class,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_scraper_service_class,
+        mock_file_to_images,
+        db: Session,
+        sample_dataset,
+    ):
+        """process_file transcribes each page, generates QA and aggregates stats."""
+        mock_file_to_images.return_value = [
+            ("doc.pdf p.1", b"img1", "image/png"),
+            ("doc.pdf p.2", b"img2", "image/png"),
+        ]
+        mock_dataset_service_class.return_value.get_or_create_dataset.return_value = (
+            sample_dataset
+        )
+        mock_llm_service_class.return_value.extract_text_from_image.side_effect = [
+            "text from page one",
+            "text from page two",
+        ]
+        mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
+            side_effect=[["qa1"], ["qa2", "qa3"]]
+        )
+        mock_qa_service_class.return_value.process_qa_pairs.side_effect = [
+            {"total": 1, "exact_duplicates": 0, "similar_duplicates": 0},
+            {"total": 2, "exact_duplicates": 0, "similar_duplicates": 0},
+        ]
+
+        pipeline = DatasetPipeline(db)
+        result = await pipeline.process_file(
+            content=b"pdf-bytes",
+            filename="doc.pdf",
+            content_type="application/pdf",
+            dataset_name="test_dataset",
+            target_language="en",
+            model_qa="gpt-4o-mini",
+            model_vlm="vlm-x",
+            similarity_threshold=0.9,
+            sync_langfuse=False,
+        )
+
+        assert result["pages_crawled"] == 2
+        assert result["total"] == 3
+        assert result["qa_pairs"] == ["qa1", "qa2", "qa3"]
+        assert result["dataset_id"] == sample_dataset.id
+
+        llm_inst = mock_llm_service_class.return_value
+        assert llm_inst.extract_text_from_image.call_count == 2
+        # The chosen VLM model is threaded through to the extraction call.
+        assert llm_inst.extract_text_from_image.call_args.kwargs["model"] == "vlm-x"
+
+        qa_inst = mock_qa_service_class.return_value
+        assert qa_inst.process_qa_pairs.call_count == 2
+        # Saved QASource rows use a file:// source and carry no page snapshot.
+        save_kwargs = qa_inst.process_qa_pairs.call_args.kwargs
+        assert save_kwargs["url"] == "file://doc.pdf"
+        assert save_kwargs["page_snapshot_id"] is None
+
+    @pytest.mark.asyncio
+    @patch("server.pipelines.dataset.file_to_page_images")
+    @patch("server.pipelines.dataset.ScraperService")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    @patch("server.pipelines.dataset.DatasetService")
+    @patch("server.pipelines.dataset.QAService")
+    async def test_process_file_skips_pages_without_text(
+        self,
+        mock_qa_service_class,
+        mock_dataset_service_class,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_scraper_service_class,
+        mock_file_to_images,
+        db: Session,
+        sample_dataset,
+    ):
+        """A page the VLM can't transcribe is skipped (no QA generation/saving)."""
+        mock_file_to_images.return_value = [
+            ("doc.pdf p.1", b"img1", "image/png"),
+            ("doc.pdf p.2", b"img2", "image/png"),
+        ]
+        mock_dataset_service_class.return_value.get_or_create_dataset.return_value = (
+            sample_dataset
+        )
+        mock_llm_service_class.return_value.extract_text_from_image.side_effect = [
+            "",  # page 1: no readable text
+            "real text",  # page 2
+        ]
+        mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
+            return_value=["qa1"]
+        )
+        mock_qa_service_class.return_value.process_qa_pairs.return_value = {
+            "total": 1,
+            "exact_duplicates": 0,
+            "similar_duplicates": 0,
+        }
+
+        pipeline = DatasetPipeline(db)
+        result = await pipeline.process_file(
+            content=b"pdf",
+            filename="doc.pdf",
+            content_type="application/pdf",
+            dataset_name="test_dataset",
+            target_language="en",
+            model_qa="gpt-4o-mini",
+            model_vlm="vlm-x",
+            sync_langfuse=False,
+        )
+
+        # Only the readable page produced QA; the empty page was skipped.
+        assert mock_qa_agent_service_class.return_value.generate_qa.call_count == 1
+        assert result["pages_crawled"] == 2  # still reflects all pages read
+        assert result["total"] == 1
+
+    @pytest.mark.asyncio
+    @patch("server.pipelines.dataset.fetch_account_docs")
+    @patch("server.pipelines.dataset.ScraperService")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    @patch("server.pipelines.dataset.DatasetService")
+    @patch("server.pipelines.dataset.QAService")
+    async def test_process_github_success(
+        self,
+        mock_qa_service_class,
+        mock_dataset_service_class,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_scraper_service_class,
+        mock_fetch_docs,
+        db: Session,
+        sample_dataset,
+    ):
+        """process_github cleans each doc, generates QA and aggregates stats."""
+        mock_fetch_docs.return_value = [
+            ("octocat/repo1:README", "# raw readme one"),
+            ("octocat/repo2:README", "# raw readme two"),
+        ]
+        mock_dataset_service_class.return_value.get_or_create_dataset.return_value = (
+            sample_dataset
+        )
+        mock_llm_service_class.return_value.clean_text.side_effect = [
+            "clean one",
+            "clean two",
+        ]
+        mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
+            side_effect=[["qa1"], ["qa2", "qa3"]]
+        )
+        mock_qa_service_class.return_value.process_qa_pairs.side_effect = [
+            {"total": 1, "exact_duplicates": 0, "similar_duplicates": 0},
+            {"total": 2, "exact_duplicates": 0, "similar_duplicates": 0},
+        ]
+
+        pipeline = DatasetPipeline(db)
+        result = await pipeline.process_github(
+            username="octocat",
+            token="tok",
+            dataset_name="test_dataset",
+            model_cleaning="gpt-4o-mini",
+            target_language="en",
+            model_qa="gpt-4o-mini",
+            sync_langfuse=False,
+        )
+
+        assert result["pages_crawled"] == 2
+        assert result["total"] == 3
+        assert result["qa_pairs"] == ["qa1", "qa2", "qa3"]
+        assert result["dataset_id"] == sample_dataset.id
+        # The token + username are forwarded to the GitHub fetch.
+        mock_fetch_docs.assert_called_once_with("octocat", token="tok", max_repos=None)
+        assert mock_llm_service_class.return_value.clean_text.call_count == 2
+
+        qa_inst = mock_qa_service_class.return_value
+        save_kwargs = qa_inst.process_qa_pairs.call_args.kwargs
+        assert save_kwargs["url"] == "github://octocat"
+        assert save_kwargs["page_snapshot_id"] is None

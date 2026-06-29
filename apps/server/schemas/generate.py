@@ -85,6 +85,42 @@ class DatasetGenerationRequest(BaseModel):
     )
 
 
+class GitHubGenerationRequest(BaseModel):
+    """Model for generating a dataset from a GitHub account's public docs."""
+
+    github_username: str = Field(
+        ..., description="GitHub account whose public repos will be mined"
+    )
+    github_token: Optional[str] = Field(
+        None,
+        description="Optional token — only used to raise the API rate limit; "
+        "only public information is read",
+    )
+    dataset_name: str = Field(..., description="Name of the dataset to create")
+    model_cleaning: Optional[str] = Field(
+        None, description="Model to use for text cleaning"
+    )
+    target_language: Optional[str] = Field(
+        None, description="Target language for QA generation"
+    )
+    model_qa: Optional[str] = Field(None, description="Model to use for QA generation")
+    similarity_threshold: float = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        description="Similarity threshold to detect duplicates (0.0-1.0)",
+    )
+    max_repos: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Cap on the number of public repos to mine (default: all)",
+    )
+    sync_langfuse: bool = Field(
+        default=True,
+        description="Create/version the dataset in Langfuse at generation time",
+    )
+
+
 class DatasetGenerationResponse(BaseModel):
     """Model for dataset generation response"""
 

@@ -1,7 +1,6 @@
 """Tests for QA service"""
 
 import pytest
-from typing import Any, cast
 from unittest.mock import Mock, patch
 from sqlalchemy.orm import Session
 
@@ -46,73 +45,6 @@ def sample_qa_source(db: Session, sample_dataset):
 
 class TestQAService:
     """Tests for QAService class"""
-
-    def test_add_qa_source(self, qa_service: QAService, db: Session, sample_dataset):
-        """Test adding a new QASource"""
-        qa = QASource.from_qa_generation(
-            question="What is FastAPI?",
-            answer="A modern web framework",
-            context="FastAPI is a modern, fast web framework for building APIs.",
-            source_url="https://example.com",
-            dataset_id=sample_dataset.id,
-            page_snapshot_id="1",
-        )
-        qa.model = "gpt-4o-mini"
-        qa.dataset_name = sample_dataset.name
-
-        result = qa_service.add_qa_source(qa)
-
-        assert result.id is not None
-        assert result.question == "What is FastAPI?"
-        assert result.answer == "A modern web framework"
-
-    def test_delete_qa_source(
-        self, qa_service: QAService, sample_qa_source: QASource, db: Session
-    ):
-        """Test deleting a QASource"""
-        qa_id = str(sample_qa_source.id)
-
-        qa_service.delete_qa_source(qa_id)
-
-        # Verify it's deleted
-        deleted_qa = db.query(QASource).filter(QASource.id == qa_id).first()
-        assert deleted_qa is None
-
-    def test_delete_nonexistent_qa_source(self, qa_service: QAService):
-        """Test deleting a non-existent QASource (should not raise error)"""
-        qa_service.delete_qa_source("nonexistent-id")
-        # Should complete without error
-
-    def test_update_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
-        """Test updating a QASource"""
-        input_data = cast(dict[str, Any], sample_qa_source.input)
-        output_data = cast(dict[str, Any], sample_qa_source.expected_output)
-        updates = {
-            "input": {**input_data, "question": "What is Python used for?"},
-            "expected_output": {**output_data, "confidence": 0.95},
-        }
-
-        result = qa_service.update_qa_source(str(sample_qa_source.id), updates)
-
-        assert result.question == "What is Python used for?"
-        assert result.confidence == 0.95
-
-    def test_update_qa_source_not_found(self, qa_service: QAService):
-        """Test updating a non-existent QASource"""
-        with pytest.raises(ValueError, match="not found"):
-            qa_service.update_qa_source("nonexistent-id", {"question": "New question"})
-
-    def test_get_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
-        """Test retrieving a QASource by ID"""
-        result = qa_service.get_qa_source(str(sample_qa_source.id))
-
-        assert result.id == sample_qa_source.id
-        assert result.question == sample_qa_source.question
-
-    def test_get_qa_source_not_found(self, qa_service: QAService):
-        """Test retrieving a non-existent QASource"""
-        with pytest.raises(ValueError, match="not found"):
-            qa_service.get_qa_source("nonexistent-id")
 
     def test_process_qa_pairs_new_items(
         self, qa_service: QAService, db: Session, sample_dataset

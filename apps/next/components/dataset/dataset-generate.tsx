@@ -31,8 +31,21 @@ const availableLanguages = [
   { value: "de", label: "German" },
 ];
 
+type SourceKind = "url" | "file" | "github";
+
+const sourceOptions: { value: SourceKind; label: string }[] = [
+  { value: "url", label: "URL" },
+  { value: "file", label: "File" },
+  { value: "github", label: "GitHub" },
+];
+
 export function DatasetGenerate() {
+  const [source, setSource] = useState<SourceKind>("url");
   const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [githubUsername, setGithubUsername] = useState("");
+  const [githubToken, setGithubToken] = useState("");
+  const [maxRepos, setMaxRepos] = useState("");
   const [manualDatasetName, setManualDatasetName] = useState("");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(
     null
@@ -78,22 +91,54 @@ export function DatasetGenerate() {
     analyzeStatus === "pending" ||
     cleanStatus === "pending";
 
+  // Whether the current source has the input it needs to run.
+  const hasSource = useMemo(() => {
+    if (source === "url") return !!url;
+    if (source === "file") return !!file;
+    return !!githubUsername;
+  }, [source, url, file, githubUsername]);
+
   const handleGenerate = async () => {
-    if (!url || !datasetName) {
+    if (!hasSource || !datasetName) {
       return;
     }
 
+    const threshold = similarityThreshold[0] ?? 0.9;
+
     try {
-      const result = await generateMutation.mutateAsync({
-        url,
-        name: datasetName,
-        targetLanguage,
-        similarityThreshold: similarityThreshold[0] ?? 0.9,
-        crawl,
-        maxDepth: crawl ? Number(maxDepth) || null : null,
-        maxPages: crawl ? Number(maxPages) || null : null,
-        syncLangfuse,
-      });
+      const result = await generateMutation.mutateAsync(
+        source === "file"
+          ? {
+              source: "file",
+              file: file as File,
+              name: datasetName,
+              targetLanguage,
+              similarityThreshold: threshold,
+              syncLangfuse,
+            }
+          : source === "github"
+            ? {
+                source: "github",
+                githubUsername,
+                githubToken: githubToken || null,
+                name: datasetName,
+                targetLanguage,
+                similarityThreshold: threshold,
+                maxRepos: Number(maxRepos) || null,
+                syncLangfuse,
+              }
+            : {
+                source: "url",
+                url,
+                name: datasetName,
+                targetLanguage,
+                similarityThreshold: threshold,
+                crawl,
+                maxDepth: crawl ? Number(maxDepth) || null : null,
+                maxPages: crawl ? Number(maxPages) || null : null,
+                syncLangfuse,
+              }
+      );
 
       // Analyze/clean are keyed by the Langfuse dataset name (the source of
       // truth). datasetName is already the selected/entered name.
@@ -147,12 +192,69 @@ export function DatasetGenerate() {
           disabled={isAnyProcessing}
         />
 
-        <Input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="URL"
-          disabled={isAnyProcessing}
-        />
+        {/* Source picker: URL / File / GitHub */}
+        <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1">
+          {sourceOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setSource(opt.value)}
+              disabled={isAnyProcessing}
+              className={`rounded-md py-1.5 text-sm font-medium transition-colors ${
+                source === opt.value
+                  ? "bg-white shadow-sm text-gray-900"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {source === "url" && (
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="URL"
+            disabled={isAnyProcessing}
+          />
+        )}
+
+        {source === "file" && (
+          <div className="flex flex-col gap-1">
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              disabled={isAnyProcessing}
+              className="text-sm file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground"
+            />
+            <span className="text-xs text-gray-400">
+              PDF or image — each page is transcribed with the vision model.
+            </span>
+          </div>
+        )}
+
+        {source === "github" && (
+          <div className="flex flex-col gap-2">
+            <Input
+              value={githubUsername}
+              onChange={(e) => setGithubUsername(e.target.value)}
+              placeholder="GitHub username"
+              disabled={isAnyProcessing}
+            />
+            <Input
+              type="password"
+              value={githubToken}
+              onChange={(e) => setGithubToken(e.target.value)}
+              placeholder="GitHub token (optional — raises the API rate limit)"
+              disabled={isAnyProcessing}
+            />
+            <span className="text-xs text-gray-400">
+              Public repos only. README + top-level docs are mined.
+            </span>
+          </div>
+        )}
 
         {/* Advanced options */}
         <div className="bg-gray-50 p-3 rounded-lg mt-2">
@@ -191,47 +293,66 @@ export function DatasetGenerate() {
               />
             </div>
 
-            {/* Crawl the whole site */}
-            <div className="flex flex-col gap-2 border-t pt-3">
-              <label className="flex items-center gap-2 text-xs text-gray-700">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-primary"
-                  checked={crawl}
-                  onChange={(e) => setCrawl(e.target.checked)}
+            {/* Crawl the whole site (URL source only) */}
+            {source === "url" && (
+              <div className="flex flex-col gap-2 border-t pt-3">
+                <label className="flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={crawl}
+                    onChange={(e) => setCrawl(e.target.checked)}
+                    disabled={isAnyProcessing}
+                  />
+                  <span className="font-medium">Crawl entire site</span>
+                  <span className="text-gray-400">
+                    (follow same-domain links)
+                  </span>
+                </label>
+
+                {crawl && (
+                  <div className="grid grid-cols-2 gap-2 pl-6">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-500">Max depth</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={maxDepth}
+                        onChange={(e) => setMaxDepth(e.target.value)}
+                        disabled={isAnyProcessing}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-500">Max pages</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={maxPages}
+                        onChange={(e) => setMaxPages(e.target.value)}
+                        disabled={isAnyProcessing}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Max repos (GitHub source only) */}
+            {source === "github" && (
+              <div className="flex flex-col gap-1 border-t pt-3">
+                <label className="text-xs text-gray-500">
+                  Max repos (optional)
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={maxRepos}
+                  onChange={(e) => setMaxRepos(e.target.value)}
+                  placeholder="all public repos"
                   disabled={isAnyProcessing}
                 />
-                <span className="font-medium">Crawl entire site</span>
-                <span className="text-gray-400">
-                  (follow same-domain links)
-                </span>
-              </label>
-
-              {crawl && (
-                <div className="grid grid-cols-2 gap-2 pl-6">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-500">Max depth</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={maxDepth}
-                      onChange={(e) => setMaxDepth(e.target.value)}
-                      disabled={isAnyProcessing}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-500">Max pages</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={maxPages}
-                      onChange={(e) => setMaxPages(e.target.value)}
-                      disabled={isAnyProcessing}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Langfuse versioning */}
             <div className="flex flex-col gap-1 border-t pt-3">
@@ -254,7 +375,7 @@ export function DatasetGenerate() {
 
         <div className="flex gap-2 mt-2">
           <Button
-            disabled={!url || !datasetName || isAnyProcessing}
+            disabled={!hasSource || !datasetName || isAnyProcessing}
             className="flex-1"
             onClick={handleGenerate}
           >

@@ -16,6 +16,7 @@ from langfuse import get_client
 
 from server.services.langfuse import (
     LangfuseUnavailableError,
+    count_dataset_items,
     delete_dataset_item,
     get_dataset_items,
     is_langfuse_available,
@@ -95,9 +96,24 @@ def _to_dataset_view(dataset: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def list_datasets_view() -> List[Dict[str, Any]]:
-    """All Langfuse datasets in the DatasetResponse shape."""
+    """All Langfuse datasets in the DatasetResponse shape.
+
+    The Q/A count comes from the live item count (one cheap request per dataset),
+    not the dataset's best-effort ``total_items`` metadata — that metadata is
+    stale or absent for datasets created/exported outside the sync path, which
+    made the dashboard under-report (or blank) the number of pairs.
+    """
     _require_langfuse()
-    return [_to_dataset_view(d) for d in list_datasets()]
+    views = [_to_dataset_view(d) for d in list_datasets()]
+    for view in views:
+        name = view.get("name")
+        if not name:
+            continue
+        try:
+            view["qa_sources_count"] = count_dataset_items(name)
+        except Exception as exc:  # noqa: BLE001 — keep the metadata fallback
+            logger.warning("Could not count items for dataset '%s': %s", name, exc)
+    return views
 
 
 def get_dataset_view(dataset_name: str) -> Optional[Dict[str, Any]]:

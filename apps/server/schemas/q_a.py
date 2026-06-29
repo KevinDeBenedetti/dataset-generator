@@ -35,20 +35,3 @@ class QAListResponse(BaseModel):
     offset: int = Field(0, description="Applied offset")
     limit: Optional[int] = Field(None, description="Applied limit")
     qa_data: List[QAItem] = Field(..., description="List of question-answers")
-
-
-class QAResponse(BaseModel):
-    """Response model for an individual Q&A"""
-
-    id: str = Field(..., description="Unique ID of the question-answer")
-    question: str = Field(..., description="Question")
-    answer: str = Field(..., description="Answer")
-    context: str = Field(..., description="Source context")
-    source_url: Optional[str] = Field(None, description="Source URL")
-    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
-    created_at: datetime = Field(..., description="Creation date")
-    updated_at: Optional[datetime] = Field(None, description="Last modification date")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
-    dataset: Optional[Dict[str, Optional[str]]] = Field(
-        None, description="Associated dataset information"
-    )

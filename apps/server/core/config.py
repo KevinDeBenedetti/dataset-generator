@@ -113,6 +113,15 @@ class Config:
     # shared state). When unset, the limiter falls back to in-process state.
     redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
 
+    # Deployment environment. Gates fail-safe behaviours that must never be active
+    # in a shared/production deployment — notably whether the dev-user seeding may
+    # fall back to the weak built-in passwords (see ``seed_dev_users``). Defaults
+    # to "production" so anything left unset is treated as untrusted (fail closed);
+    # set ENVIRONMENT=development for local dev.
+    environment: str = field(
+        default_factory=lambda: os.getenv("ENVIRONMENT", "production").strip().lower()
+    )
+
     # When true, the two local dev accounts (see services/users.py) are seeded
     # on startup. Local-dev convenience only — keep off in shared environments.
     seed_dev_users: bool = field(
@@ -197,6 +206,11 @@ class Config:
 
     # Available models, derived from the configured provider models
     available_models: List[str] = field(default_factory=list)
+
+    @property
+    def is_development(self) -> bool:
+        """True only for an explicitly-declared local/dev environment."""
+        return self.environment in ("development", "dev", "local")
 
     # Validation
     def __post_init__(self):

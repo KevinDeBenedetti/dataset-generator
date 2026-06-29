@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDatasets,
   generateDatasetStream,
+  generateDatasetFromFile,
+  generateDatasetFromGitHub,
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
@@ -9,6 +11,38 @@ import {
 import type { DatasetGenerationRequest } from '@/api/types'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
+
+// The /generate form can mine three kinds of source; the mutation branches on it.
+export type GenerateParams =
+  | {
+      source: 'url'
+      url: string
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      crawl?: boolean
+      maxDepth?: number | null
+      maxPages?: number | null
+      syncLangfuse?: boolean
+    }
+  | {
+      source: 'file'
+      file: File
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      syncLangfuse?: boolean
+    }
+  | {
+      source: 'github'
+      githubUsername: string
+      githubToken?: string | null
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      maxRepos?: number | null
+      syncLangfuse?: boolean
+    }
 
 export const DATASETS_QUERY_KEY = ['datasets']
 
@@ -31,16 +65,30 @@ export function useGenerateDataset() {
     useGenerateStore()
 
   return useMutation({
-    mutationFn: async (params: {
-      url: string
-      name: string
-      targetLanguage: string | null
-      similarityThreshold: number
-      crawl?: boolean
-      maxDepth?: number | null
-      maxPages?: number | null
-      syncLangfuse?: boolean
-    }) => {
+    mutationFn: async (params: GenerateParams) => {
+      if (params.source === 'file') {
+        // No streaming variant for file uploads; the final result carries steps.
+        return generateDatasetFromFile({
+          file: params.file,
+          datasetName: params.name,
+          targetLanguage: params.targetLanguage,
+          similarityThreshold: params.similarityThreshold,
+          syncLangfuse: params.syncLangfuse,
+        })
+      }
+
+      if (params.source === 'github') {
+        return generateDatasetFromGitHub({
+          github_username: params.githubUsername,
+          github_token: params.githubToken,
+          dataset_name: params.name,
+          target_language: params.targetLanguage,
+          similarity_threshold: params.similarityThreshold,
+          max_repos: params.maxRepos,
+          sync_langfuse: params.syncLangfuse,
+        })
+      }
+
       const body: DatasetGenerationRequest = {
         url: params.url,
         dataset_name: params.name,

@@ -1,14 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 
 import logging
 from typing import Optional
 
-from server.models.dataset import Dataset, QASource
-from server.core.database import get_db
 from server.services.dataset_reads import get_qa_view
 from server.services.langfuse import LangfuseUnavailableError
-from server.schemas.q_a import QAListResponse, QAResponse
+from server.schemas.q_a import QAListResponse
 
 router = APIRouter(
     prefix="/q_a",
@@ -35,41 +32,4 @@ async def get_qa_by_dataset(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logging.error(f"Error fetching Q&A for dataset '{dataset_name}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/id/{qa_id}", response_model=QAResponse)
-async def get_qa_by_id(qa_id: str, db: Session = Depends(get_db)) -> QAResponse:
-    """Retrieve a specific Q&A item by its ID"""
-    try:
-        qa_record = db.query(QASource).filter(QASource.id == qa_id).first()
-
-        if not qa_record:
-            raise HTTPException(
-                status_code=404, detail=f"Q&A with ID '{qa_id}' not found"
-            )
-
-        # Retrieve the associated dataset information
-        dataset = db.query(Dataset).filter(Dataset.id == qa_record.dataset_id).first()
-
-        return QAResponse(
-            id=qa_record.id,
-            question=qa_record.input.get("question", ""),
-            answer=qa_record.expected_output.get("answer", ""),
-            context=qa_record.input.get("context", ""),
-            source_url=qa_record.input.get("source_url", ""),
-            confidence=qa_record.expected_output.get("confidence", 0.0),
-            created_at=qa_record.created_at,
-            updated_at=qa_record.updated_at,
-            metadata=qa_record.qa_metadata,
-            dataset={
-                "id": dataset.id if dataset else None,
-                "name": dataset.name if dataset else None,
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error fetching Q&A '{qa_id}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
