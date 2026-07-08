@@ -10,10 +10,13 @@ from server.services.auth import (
     create_access_token,
     decode_access_token,
     get_current_user,
+    issue_refresh_token,
     require_admin,
+    revoke_refresh_token,
+    rotate_refresh_token,
 )
 from server.services.users import create_user
-from server.models.user import UserRole, AuthProvider
+from server.models.user import RefreshToken, UserRole, AuthProvider
 
 
 def _request_with(cookies: dict | None = None, headers: dict | None = None) -> Request:
@@ -100,3 +103,61 @@ class TestDependencies:
         with pytest.raises(HTTPException) as exc:
             require_admin(user)
         assert exc.value.status_code == 403
+
+
+class TestRefreshTokens:
+    def test_rotate_returns_user_and_new_token(self, test_db):
+        user = create_user(test_db, email="r@example.com", password="pw")
+        raw = issue_refresh_token(test_db, user)
+
+        rotated = rotate_refresh_token(test_db, raw)
+        assert rotated is not None
+        rotated_user, new_raw = rotated
+        assert rotated_user.id == user.id
+        assert new_raw != raw
+
+    def test_rotation_stays_in_the_same_family(self, test_db):
+        user = create_user(test_db, email="fam@example.com", password="pw")
+        raw = issue_refresh_token(test_db, user)
+        assert rotate_refresh_token(test_db, raw) is not None
+
+        rows = test_db.query(RefreshToken).all()
+        assert len(rows) == 2
+        assert len({t.family_id for t in rows}) == 1
+        # The consumed token is revoked, its successor is live.
+        assert sorted(t.revoked_at is None for t in rows) == [False, True]
+
+    def test_unknown_token_is_rejected(self, test_db):
+        assert rotate_refresh_token(test_db, "no-such-token") is None
+
+    def test_reuse_revokes_the_whole_family(self, test_db):
+        user = create_user(test_db, email="steal@example.com", password="pw")
+        raw = issue_refresh_token(test_db, user)
+        _, successor = rotate_refresh_token(test_db, raw)
+
+        # Replaying the consumed token is rejected...
+        assert rotate_refresh_token(test_db, raw) is None
+        # ...and takes the legitimate successor down with it.
+        assert rotate_refresh_token(test_db, successor) is None
+
+    def test_expired_token_is_rejected(self, test_db, monkeypatch):
+        user = create_user(test_db, email="old@example.com", password="pw")
+        monkeypatch.setattr(config, "auth_refresh_token_ttl_seconds", -10)
+        raw = issue_refresh_token(test_db, user)
+        assert rotate_refresh_token(test_db, raw) is None
+
+    def test_inactive_user_is_rejected(self, test_db):
+        user = create_user(test_db, email="gone@example.com", password="pw")
+        raw = issue_refresh_token(test_db, user)
+        user.is_active = False
+        test_db.commit()
+        assert rotate_refresh_token(test_db, raw) is None
+
+    def test_revoke_kills_the_family(self, test_db):
+        user = create_user(test_db, email="bye@example.com", password="pw")
+        raw = issue_refresh_token(test_db, user)
+        revoke_refresh_token(test_db, raw)
+        assert rotate_refresh_token(test_db, raw) is None
+
+    def test_revoke_unknown_token_is_noop(self, test_db):
+        revoke_refresh_token(test_db, "never-issued")

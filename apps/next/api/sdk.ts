@@ -17,6 +17,61 @@ client.setConfig({
     process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
     'http://localhost:8000',
 })
+
+// ── Silent session refresh ───────────────────────────────────────────────────
+// The access token is a short-lived httpOnly cookie; a long-lived refresh
+// cookie (rotated server-side on every use) can renew it. When any API call
+// comes back 401, try POST /auth/refresh once and replay the request, so an
+// expired access token never surfaces as a logout mid-session.
+
+// A 401 from these endpoints is a definitive answer — refreshing would either
+// loop (/auth/refresh) or mask a real credential failure.
+const NO_REFRESH_PATHS = ['/auth/login', '/auth/logout', '/auth/refresh']
+
+let refreshInFlight: Promise<boolean> | null = null
+
+// Concurrent 401s (e.g. several queries firing on a page load) share a single
+// refresh attempt — rotation makes the refresh cookie single-use, so parallel
+// calls would revoke each other's tokens.
+function tryRefreshSession(baseUrl: string): Promise<boolean> {
+  refreshInFlight ??= fetch(`${baseUrl}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((r) => r.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null
+    })
+  return refreshInFlight
+}
+
+client.interceptors.response.use(async (response, request, options) => {
+  if (response.status !== 401) return response
+  const path = new URL(request.url).pathname
+  if (NO_REFRESH_PATHS.some((p) => path.endsWith(p))) return response
+
+  const baseUrl = new URL(request.url).origin
+  if (!(await tryRefreshSession(baseUrl))) return response
+
+  // Replay the original request with the renewed access cookie. The first
+  // attempt consumed the Request body, so rebuild it from the client options.
+  const { serializedBody, body, method } = options as {
+    serializedBody?: BodyInit
+    body?: unknown
+    method?: string
+  }
+  const retryBody = serializedBody ?? (body as BodyInit | undefined)
+  const retryMethod = method ?? request.method
+  return fetch(request.url, {
+    method: retryMethod,
+    headers: request.headers,
+    credentials: 'include',
+    ...(retryBody !== undefined && !['GET', 'HEAD'].includes(retryMethod)
+      ? { body: retryBody }
+      : {}),
+  })
+})
 import type {
   DatasetResponse,
   DatasetGenerationRequest,

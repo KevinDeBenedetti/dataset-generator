@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Name of the httpOnly auth cookie set by the API (see AUTH_COOKIE_NAME).
+// Names of the httpOnly auth cookies set by the API (see AUTH_COOKIE_NAME and
+// AUTH_REFRESH_COOKIE_NAME).
 const AUTH_COOKIE = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ?? 'access_token'
+const REFRESH_COOKIE =
+  process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_token'
 
 // Routes reachable without authentication. Everything else (the whole `(app)`
 // shell: /dashboard, /datasets, /generate, /jobs, /quality, /sources, …) is
@@ -18,7 +21,13 @@ const PUBLIC_PATHS = ['/', '/login']
 // same-origin proxy or a server-readable token.
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const isAuthenticated = Boolean(request.cookies.get(AUTH_COOKIE)?.value)
+  // The access cookie expires quickly (short max_age); the refresh cookie is
+  // what marks a still-renewable session — the API client refreshes the access
+  // token transparently on the first 401. Either one counts as signed in.
+  const isAuthenticated = Boolean(
+    request.cookies.get(AUTH_COOKIE)?.value ||
+      request.cookies.get(REFRESH_COOKIE)?.value
+  )
   const isPublic = PUBLIC_PATHS.includes(pathname)
 
   // Already signed in but heading to /login → send to the app.

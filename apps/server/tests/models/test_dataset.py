@@ -123,14 +123,13 @@ def test_qa_source_hash_different_for_different_content():
     assert hash1 != hash2
 
 
-def test_qa_source_check_for_duplicates_exact(test_db: Session):
-    """Test duplicate detection by exact hash."""
+def test_qa_source_to_entry(test_db: Session):
+    """_to_entry adapts a persisted row into the pure dedup QAEntry shape."""
     dataset = Dataset(name="test_dataset")
     test_db.add(dataset)
     test_db.commit()
 
-    # Create first QA
-    qa1 = QASource.from_qa_generation(
+    qa = QASource.from_qa_generation(
         question="What is Python?",
         answer="A programming language",
         context="Python context",
@@ -138,85 +137,16 @@ def test_qa_source_check_for_duplicates_exact(test_db: Session):
         source_url="https://example.com",
         dataset_id=str(dataset.id),
     )
-    test_db.add(qa1)
+    test_db.add(qa)
     test_db.commit()
+    test_db.refresh(qa)
 
-    # Check for duplicate with same content
-    duplicate_check = QASource.check_for_duplicates(
-        test_db,
-        question="What is Python?",
-        answer="A programming language",
-        context="Python context",
-        source_url="https://example.com",
-    )
+    entry = QASource._to_entry(qa)
 
-    assert duplicate_check["type"] == "exact"
-    assert duplicate_check["duplicate_id"] == qa1.id
-    assert duplicate_check["similarity_score"] == 1.0
-
-
-def test_qa_source_check_for_duplicates_new(test_db: Session):
-    """Test that new content is not detected as duplicate."""
-    dataset = Dataset(name="test_dataset")
-    test_db.add(dataset)
-    test_db.commit()
-
-    # Create first QA
-    qa1 = QASource.from_qa_generation(
-        question="What is Python?",
-        answer="A programming language",
-        context="Python context",
-        confidence=0.9,
-        source_url="https://example.com",
-        dataset_id=str(dataset.id),
-    )
-    test_db.add(qa1)
-    test_db.commit()
-
-    # Check with completely different content
-    duplicate_check = QASource.check_for_duplicates(
-        test_db,
-        question="What is Java?",
-        answer="Another programming language",
-        context="Java context",
-        source_url="https://example.com/java",
-    )
-
-    assert duplicate_check["type"] == "new"
-    assert duplicate_check["duplicate_id"] is None
-    assert duplicate_check["similarity_score"] == 0.0
-
-
-def test_qa_source_check_for_duplicates_similar(test_db: Session):
-    """Test duplicate detection by similarity."""
-    dataset = Dataset(name="test_dataset")
-    test_db.add(dataset)
-    test_db.commit()
-
-    # Create first QA
-    qa1 = QASource.from_qa_generation(
-        question="What is Python programming?",
-        answer="A programming language",
-        context="Python is great for web development.",
-        confidence=0.9,
-        source_url="https://example.com",
-        dataset_id=str(dataset.id),
-    )
-    test_db.add(qa1)
-    test_db.commit()
-
-    # Check with very similar question (but not exact)
-    duplicate_check = QASource.check_for_duplicates(
-        test_db,
-        question="What is Python programming?",  # Very similar
-        answer="Different answer",
-        context="Python is great for web development.",  # Same context
-        source_url="https://example.com",  # Same URL
-        similarity_threshold=0.9,
-    )
-
-    # This should detect as similar if similarity is high enough
-    assert duplicate_check["type"] in ["similar", "exact"]
+    assert entry.hash == qa.id
+    assert entry.question == "What is Python?"
+    assert entry.context == "Python context"
+    assert entry.source_url == "https://example.com"
 
 
 def test_qa_source_to_langfuse_dataset_item(test_db: Session):
