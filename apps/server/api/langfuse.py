@@ -1,14 +1,13 @@
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 
-from server.models.dataset import Dataset
-from server.core.database import get_db
-from server.services.dataset import get_qa_records_for_dataset
+from server.services.dataset_reads import get_dataset_view
 from server.services.langfuse import (
+    LangfuseUnavailableError,
     create_langfuse_dataset_with_items,
+    get_dataset_items,
     normalize_dataset_name,
     list_dataset_runs,
     list_datasets,
@@ -21,35 +20,43 @@ router = APIRouter(
 )
 
 
-def _get_dataset_or_404(db: Session, dataset_name: str) -> Dataset:
-    """Look up a dataset by name, or raise a 404 listing what's available."""
-    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
-    if not dataset:
-        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+def _get_dataset_or_404(dataset_name: str) -> None:
+    """Ensure a dataset exists in Langfuse, or raise a 404 listing what's available."""
+    if get_dataset_view(dataset_name) is None:
+        available_datasets = [d.get("name") for d in list_datasets()]
         raise HTTPException(
             status_code=404,
             detail=f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}",
         )
-    return dataset
+
+
+def _active_dataset_items(dataset_name: str) -> list[Dict[str, Any]]:
+    """Active (non-archived) items of a Langfuse dataset, in export/preview shape."""
+    return [
+        {
+            "input": item.get("input") or {},
+            "id": item["id"],
+            **({"expected_output": item["expected_output"]} if item.get("expected_output") else {}),
+            **({"metadata": item["metadata"]} if item.get("metadata") else {}),
+        }
+        for item in get_dataset_items(dataset_name)
+        if (item.get("status") or "ACTIVE") == "ACTIVE"
+    ]
 
 
 @router.get("/preview")
 async def preview_dataset_transformation(
-    db: Session = Depends(get_db),
-    dataset_name: str = Query(..., description="Dataset name in the database"),
+    dataset_name: str = Query(..., description="Dataset name in Langfuse"),
 ):
     """Preview the dataset transformation for Langfuse without sending it"""
     try:
-        dataset = _get_dataset_or_404(db, dataset_name)
-        qa_records = get_qa_records_for_dataset(db, dataset.id)
+        _get_dataset_or_404(dataset_name)
+        data_list = _active_dataset_items(dataset_name)
 
-        if not qa_records:
+        if not data_list:
             raise HTTPException(
                 status_code=404, detail=f"No QA data found for dataset '{dataset_name}'"
             )
-
-        # Convert directly to Langfuse format
-        data_list = [qa.to_langfuse_dataset_item() for qa in qa_records]
 
         # Return a preview of the first items
         preview_items = data_list[:3]
@@ -62,6 +69,8 @@ async def preview_dataset_transformation(
 
     except HTTPException:
         raise
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.exception("Error during preview")
         raise HTTPException(status_code=500, detail=f"Error during preview: {str(e)}")
@@ -107,13 +116,12 @@ async def list_dataset_versions(dataset: str):
 
 @router.post("/export")
 async def export_dataset(
-    db: Session = Depends(get_db),
-    dataset_name: str = Query(..., description="Dataset name in the database"),
+    dataset_name: str = Query(..., description="Dataset name in Langfuse"),
     langfuse_dataset_name: Optional[str] = Query(
         None, description="Custom name for the dataset in Langfuse"
     ),
 ):
-    """Export a dataset from the database to Langfuse"""
+    """Duplicate a Langfuse dataset's items into a new (or renamed) Langfuse dataset."""
     if not is_langfuse_configured():
         raise HTTPException(
             status_code=503,
@@ -123,12 +131,12 @@ async def export_dataset(
         )
     try:
         # Verify that the dataset exists
-        dataset = _get_dataset_or_404(db, dataset_name)
+        _get_dataset_or_404(dataset_name)
 
-        # Retrieve QA pairs associated with the dataset
-        qa_records = get_qa_records_for_dataset(db, dataset.id)
+        # Retrieve its QA pairs from Langfuse
+        data_list = _active_dataset_items(dataset_name)
 
-        if not qa_records:
+        if not data_list:
             raise HTTPException(
                 status_code=404, detail=f"No QA data found for dataset '{dataset_name}'"
             )
@@ -139,9 +147,6 @@ async def export_dataset(
             if langfuse_dataset_name
             else normalize_dataset_name(dataset_name)
         )
-
-        # Convert directly to Langfuse format - no additional transformations needed
-        data_list = [qa.to_langfuse_dataset_item() for qa in qa_records]
 
         # Create the dataset in Langfuse with the data
         dataset_config = {
@@ -163,6 +168,8 @@ async def export_dataset(
 
     except HTTPException:
         raise
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.exception("Error exporting to Langfuse")
         raise HTTPException(
