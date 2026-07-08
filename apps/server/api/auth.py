@@ -15,6 +15,9 @@ from server.services.auth import (
     authenticate_user,
     create_access_token,
     get_current_user,
+    issue_refresh_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
 )
 from server.services.oidc import (
     PROVIDER_NAME,
@@ -67,6 +70,28 @@ def _set_auth_cookie(response: Response, token: str) -> None:
     )
 
 
+# The refresh cookie is scoped to "/" (not just /auth/refresh) on purpose: the
+# Next.js middleware gates routes on cookie *presence*, and the access cookie
+# vanishes when its short max_age lapses — the refresh cookie is what tells the
+# middleware the session is still renewable.
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=config.auth_refresh_cookie_name,
+        value=token,
+        httponly=True,
+        secure=config.auth_cookie_secure,
+        samesite="lax",
+        max_age=config.auth_refresh_token_ttl_seconds,
+        path="/",
+    )
+
+
+def _set_session_cookies(response: Response, db: Session, user: User) -> None:
+    """Issue the access JWT + a fresh refresh-token family for ``user``."""
+    _set_auth_cookie(response, create_access_token(user))
+    _set_refresh_cookie(response, issue_refresh_token(db, user))
+
+
 @router.post("/login", response_model=UserResponse)
 def login(
     body: LoginRequest,
@@ -96,21 +121,53 @@ def login(
             detail="Incorrect email or password",
         )
     login_rate_limiter.reset(ip)
-    token = create_access_token(user)
-    _set_auth_cookie(response, token)
+    _set_session_cookies(response, db, user)
+    return UserResponse.from_user(user)
+
+
+@router.post("/refresh", response_model=UserResponse)
+def refresh(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """Exchange the refresh cookie for a new access token + refresh token.
+
+    Rotation: the presented refresh token is revoked and replaced. A missing,
+    expired, or replayed token yields a 401 (replay additionally revokes the
+    whole token family — see ``rotate_refresh_token``).
+    """
+    raw = request.cookies.get(config.auth_refresh_cookie_name)
+    rotated = rotate_refresh_token(db, raw) if raw else None
+    if not rotated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+    user, new_refresh = rotated
+    _set_auth_cookie(response, create_access_token(user))
+    _set_refresh_cookie(response, new_refresh)
     return UserResponse.from_user(user)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> Response:
-    """Clear the auth cookie."""
-    response.delete_cookie(
-        key=config.auth_cookie_name,
-        path="/",
-        httponly=True,
-        secure=config.auth_cookie_secure,
-        samesite="lax",
-    )
+def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> Response:
+    """Revoke the refresh-token family and clear both auth cookies."""
+    raw = request.cookies.get(config.auth_refresh_cookie_name)
+    if raw:
+        revoke_refresh_token(db, raw)
+    for cookie_name in (config.auth_cookie_name, config.auth_refresh_cookie_name):
+        response.delete_cookie(
+            key=cookie_name,
+            path="/",
+            httponly=True,
+            secure=config.auth_cookie_secure,
+            samesite="lax",
+        )
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
 
@@ -178,7 +235,6 @@ async def oidc_callback(request: Request, db: Session = Depends(get_db)):
         email=userinfo.get("email", ""),
         email_verified=_claim_is_true(userinfo.get("email_verified")),
     )
-    access_token = create_access_token(user)
     redirect = RedirectResponse(url=config.frontend_url, status_code=302)
-    _set_auth_cookie(redirect, access_token)
+    _set_session_cookies(redirect, db, user)
     return redirect

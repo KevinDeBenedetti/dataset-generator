@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from sqlalchemy.orm import Session
 
 from server.services.qa import QAService
+from server.services.dedup import DuplicateVerdict
 from server.models.dataset import QASource, Dataset
 
 
@@ -104,17 +105,15 @@ class TestQAService:
         assert result["exact_duplicates"] == 1
         assert result["total"] == 0
 
-    @patch("server.models.dataset.QASource.check_for_duplicates")
+    @patch("server.services.qa.classify_duplicate")
     def test_process_qa_pairs_similar_duplicate(
-        self, mock_check_duplicates, qa_service: QAService, db: Session, sample_dataset
+        self, mock_classify, qa_service: QAService, db: Session, sample_dataset
     ):
         """Test processing QA pairs with similar duplicate"""
-        # Mock duplicate check to return similar
-        mock_check_duplicates.return_value = {
-            "type": "similar",
-            "duplicate_id": "similar-id",
-            "similarity_score": 0.92,
-        }
+        # Mock the dedup classification to return similar
+        mock_classify.return_value = DuplicateVerdict(
+            type="similar", duplicate_hash="similar-id", similarity_score=0.92
+        )
 
         mock_qa = Mock()
         mock_qa.question = "What exactly is Python?"
@@ -237,3 +236,88 @@ class TestQAService:
         )
 
         assert result["total"] == 1
+
+    def test_process_qa_pairs_dedups_across_calls_without_requery(
+        self, qa_service: QAService, db: Session, sample_dataset
+    ):
+        """A duplicate introduced across two process_qa_pairs calls (e.g. two
+        pages in the same pipeline run) is still caught by the in-memory pool,
+        with no explicit re-query between calls."""
+        mock_qa1 = Mock()
+        mock_qa1.question = "What is Terraform?"
+        mock_qa1.answer = "An infrastructure-as-code tool"
+        mock_qa1.confidence = 0.9
+
+        first = qa_service.process_qa_pairs(
+            qa_list=[mock_qa1],
+            cleaned_text="Terraform manages infrastructure.",
+            url="https://example.com/page1",
+            page_snapshot_id="1",
+            dataset_name=sample_dataset.name,
+            model="gpt-4o-mini",
+            dataset_id=sample_dataset.id,
+            similarity_threshold=0.9,
+        )
+        assert first["total"] == 1
+
+        # Same question/context/url on a second call ("second page") — the
+        # pool built on the first call must already contain it.
+        mock_qa2 = Mock()
+        mock_qa2.question = "What is Terraform?"
+        mock_qa2.answer = "An infrastructure-as-code tool"
+
+        second = qa_service.process_qa_pairs(
+            qa_list=[mock_qa2],
+            cleaned_text="Terraform manages infrastructure.",
+            url="https://example.com/page1",
+            page_snapshot_id="2",
+            dataset_name=sample_dataset.name,
+            model="gpt-4o-mini",
+            dataset_id=sample_dataset.id,
+            similarity_threshold=0.9,
+        )
+        assert second["exact_duplicates"] == 1
+        assert second["total"] == 0
+
+    def test_process_qa_pairs_reuses_the_same_in_memory_pool(
+        self, qa_service: QAService, db: Session, sample_dataset
+    ):
+        """The existing-entries pool is loaded once (lazily) and reused across
+        calls — not reloaded from the DB every time."""
+        assert qa_service._existing_entries is None
+
+        mock_qa1 = Mock()
+        mock_qa1.question = "Q1?"
+        mock_qa1.answer = "A1"
+        mock_qa1.confidence = 0.9
+        qa_service.process_qa_pairs(
+            qa_list=[mock_qa1],
+            cleaned_text="ctx",
+            url="https://example.com",
+            page_snapshot_id="1",
+            dataset_name=sample_dataset.name,
+            model="gpt-4o-mini",
+            dataset_id=sample_dataset.id,
+            similarity_threshold=0.9,
+        )
+        pool_after_first_call = qa_service._existing_entries
+        assert pool_after_first_call is not None
+        assert len(pool_after_first_call) == 1
+
+        mock_qa2 = Mock()
+        mock_qa2.question = "Q2?"
+        mock_qa2.answer = "A2"
+        mock_qa2.confidence = 0.9
+        qa_service.process_qa_pairs(
+            qa_list=[mock_qa2],
+            cleaned_text="ctx2",
+            url="https://example.com",
+            page_snapshot_id="2",
+            dataset_name=sample_dataset.name,
+            model="gpt-4o-mini",
+            dataset_id=sample_dataset.id,
+            similarity_threshold=0.9,
+        )
+        # Same list object reused (not reloaded from the DB) and grown in place.
+        assert qa_service._existing_entries is pool_after_first_call
+        assert len(qa_service._existing_entries) == 2

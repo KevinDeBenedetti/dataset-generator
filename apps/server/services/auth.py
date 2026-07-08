@@ -1,13 +1,23 @@
-"""JWT issuing/verification and FastAPI auth dependencies.
+"""JWT issuing/verification, refresh tokens and FastAPI auth dependencies.
 
 The access token is a short-lived JWT (HS256) carrying the user id, email and
 role. It is delivered to the browser as an httpOnly cookie; the dependencies
 below read it from that cookie (falling back to an ``Authorization: Bearer``
 header for non-browser clients) and resolve the current user.
+
+Sessions outlive the access token thanks to a long-lived refresh token: an
+opaque random value, stored hashed in the ``refresh_tokens`` table and rotated
+on every use (see ``rotate_refresh_token``). Reusing an already-rotated token
+revokes its whole family — a replayed stolen token logs the thief *and* the
+victim out instead of silently minting fresh sessions.
 """
 
+import hashlib
 import logging
+import secrets
 import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Optional
 
@@ -21,7 +31,7 @@ from sqlalchemy.orm import Session
 from server.core.config import config
 from server.core.database import get_db
 from server.core.security import verify_password
-from server.models.user import User, UserRole
+from server.models.user import RefreshToken, User, UserRole
 from server.services.users import get_user_by_email
 
 _ALGORITHM = "HS256"
@@ -75,6 +85,100 @@ def decode_access_token(token: str) -> Optional[dict]:
     except (JoseError, ValueError) as exc:
         logging.debug("Rejected access token: %s", exc)
         return None
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Normalize a stored datetime for comparison (SQLite returns them naive)."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def _hash_refresh_token(raw: str) -> str:
+    """Refresh tokens are stored hashed so a DB leak doesn't leak live sessions."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _revoke_family(db: Session, family_id: str) -> None:
+    now = _utcnow()
+    db.query(RefreshToken).filter(
+        RefreshToken.family_id == family_id,
+        RefreshToken.revoked_at.is_(None),
+    ).update({RefreshToken.revoked_at: now}, synchronize_session=False)
+
+
+def issue_refresh_token(
+    db: Session, user: User, family_id: Optional[str] = None
+) -> str:
+    """Create a refresh token for ``user`` and return its raw (unhashed) value.
+
+    ``family_id`` is only passed by ``rotate_refresh_token`` to keep the
+    successor in the same family; a fresh login starts a new family.
+    """
+    raw = secrets.token_urlsafe(48)
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=_hash_refresh_token(raw),
+            family_id=family_id or str(uuid.uuid4()),
+            expires_at=_utcnow()
+            + timedelta(seconds=config.auth_refresh_token_ttl_seconds),
+        )
+    )
+    db.commit()
+    return raw
+
+
+def rotate_refresh_token(db: Session, raw: str) -> Optional[tuple[User, str]]:
+    """Consume ``raw`` and return ``(user, new_raw_token)``, or None if invalid.
+
+    The presented token is revoked whatever happens. A token that was *already*
+    revoked signals replay: the whole family is revoked before rejecting.
+    """
+    row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token_hash == _hash_refresh_token(raw))
+        .first()
+    )
+    if not row:
+        return None
+
+    now = _utcnow()
+    if row.revoked_at is not None:
+        logging.warning(
+            "Refresh token reuse detected for user %s — revoking family", row.user_id
+        )
+        _revoke_family(db, row.family_id)
+        db.commit()
+        return None
+    if _as_utc(row.expires_at) <= now:
+        row.revoked_at = now
+        db.commit()
+        return None
+
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if not user or not user.is_active:
+        _revoke_family(db, row.family_id)
+        db.commit()
+        return None
+
+    row.revoked_at = now
+    new_raw = issue_refresh_token(db, user, family_id=row.family_id)
+    return user, new_raw
+
+
+def revoke_refresh_token(db: Session, raw: str) -> None:
+    """Revoke the family of ``raw`` (logout). Unknown tokens are a no-op."""
+    row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token_hash == _hash_refresh_token(raw))
+        .first()
+    )
+    if row:
+        _revoke_family(db, row.family_id)
+        db.commit()
 
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:

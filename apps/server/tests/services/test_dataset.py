@@ -10,6 +10,7 @@ from server.services.dataset import (
     DatasetService,
     get_datasets,
     get_dataset_by_id,
+    get_qa_records_for_dataset,
     analyze_dataset_similarities,
     clean_dataset_similarities,
 )
@@ -69,6 +70,50 @@ def test_dataset_service_update_description(test_db: Session):
 
     assert updated.description == "New description"
     assert updated.id == dataset.id
+
+
+def test_get_qa_records_for_dataset(test_db: Session):
+    """Returns only the QASource rows belonging to the given dataset."""
+    dataset = Dataset(name="ds-a")
+    other_dataset = Dataset(name="ds-b")
+    test_db.add_all([dataset, other_dataset])
+    test_db.commit()
+    test_db.refresh(dataset)
+    test_db.refresh(other_dataset)
+
+    matching = [
+        QASource.from_qa_generation(
+            question=f"q{i}?",
+            answer=f"a{i}",
+            context=f"ctx{i}",
+            source_url=f"https://example.com/{i}",
+            dataset_id=str(dataset.id),
+        )
+        for i in range(2)
+    ]
+    unrelated = QASource.from_qa_generation(
+        question="other?",
+        answer="other answer",
+        context="other ctx",
+        source_url="https://example.com/other",
+        dataset_id=str(other_dataset.id),
+    )
+    test_db.add_all([*matching, unrelated])
+    test_db.commit()
+
+    records = get_qa_records_for_dataset(test_db, dataset.id)
+
+    assert {r.id for r in records} == {r.id for r in matching}
+
+
+def test_get_qa_records_for_dataset_empty(test_db: Session):
+    """Returns an empty list for a dataset with no QA pairs."""
+    dataset = Dataset(name="empty-ds")
+    test_db.add(dataset)
+    test_db.commit()
+    test_db.refresh(dataset)
+
+    assert get_qa_records_for_dataset(test_db, dataset.id) == []
 
 
 def test_get_datasets_empty(test_db: Session):

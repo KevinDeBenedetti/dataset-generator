@@ -121,9 +121,27 @@ Auth is configured via these env vars:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `AUTH_SECRET_KEY` | _(insecure dev default)_ | HS256 signing key for the session JWT — **set a strong random value** outside local dev |
-| `AUTH_TOKEN_TTL_SECONDS` | `86400` | Access-token lifetime |
-| `AUTH_COOKIE_NAME` | `access_token` | Name of the httpOnly auth cookie |
-| `AUTH_COOKIE_SECURE` | `false` | Send the cookie only over HTTPS (enable behind TLS) |
+| `AUTH_TOKEN_TTL_SECONDS` | `900` | Access-token (JWT) lifetime — kept short; the session is renewed by the refresh token below |
+| `AUTH_REFRESH_TOKEN_TTL_SECONDS` | `1209600` | Refresh-token lifetime (max idle time before a fresh login is required) |
+| `AUTH_COOKIE_NAME` | `access_token` | Name of the httpOnly access-token cookie |
+| `AUTH_REFRESH_COOKIE_NAME` | `refresh_token` | Name of the httpOnly refresh-token cookie |
+| `AUTH_COOKIE_SECURE` | `false` | Send the cookies only over HTTPS (enable behind TLS) |
+
+#### Access & refresh tokens
+
+Login issues two httpOnly cookies: a short-lived access JWT and a long-lived
+**refresh token**. The refresh token is opaque, stored **hashed** in the
+`refresh_tokens` table, and **single-use** — `POST /auth/refresh` revokes the
+presented token and issues a successor in the same *family*. When the access
+token expires, the frontend transparently calls `/auth/refresh` on the first
+`401` and replays the request, so users aren't logged out at the TTL boundary.
+
+Replaying an already-rotated refresh token is treated as theft: the **entire
+family is revoked**, forcing a fresh login on every device that held a token
+from it. `POST /auth/logout` revokes the family server-side and clears both
+cookies. If `AUTH_REFRESH_COOKIE_NAME` is customised, mirror it to the frontend
+via `NEXT_PUBLIC_REFRESH_COOKIE_NAME` (as with `NEXT_PUBLIC_AUTH_COOKIE_NAME`)
+so the Next.js middleware recognises a renewable session.
 
 Login via **Infomaniak OIDC** is enabled only when the following are all set
 (routes return `503` otherwise). Register a client with Infomaniak and add:
@@ -137,8 +155,9 @@ Login via **Infomaniak OIDC** is enabled only when the following are all set
 | `OIDC_SCOPES` | Requested scopes, default `openid email profile` |
 | `FRONTEND_URL` | Where to redirect after a successful login, default `http://localhost:3000` |
 
-Auth endpoints: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, and the
-OIDC flow `GET /auth/oidc/login` → `GET /auth/oidc/callback`.
+Auth endpoints: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`,
+`GET /auth/me`, and the OIDC flow `GET /auth/oidc/login` →
+`GET /auth/oidc/callback`.
 
 ### Dev log console
 

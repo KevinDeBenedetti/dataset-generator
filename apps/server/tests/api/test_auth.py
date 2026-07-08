@@ -1,7 +1,8 @@
-"""API tests for the auth routes (login / logout / me)."""
+"""API tests for the auth routes (login / refresh / logout / me)."""
 
 import pytest
 
+from server.core.config import config
 from server.services.users import create_user
 from server.services.rate_limit import login_rate_limiter
 from server.models.user import UserRole
@@ -74,6 +75,69 @@ class TestMeAndLogout:
         assert client.post("/auth/logout").status_code == 204
         # Cookie cleared → no longer authenticated.
         assert client.get("/auth/me").status_code == 401
+
+
+class TestRefresh:
+    def _login(self, client, test_db, email="carol@example.com", password="secret"):
+        _seed_user(test_db, email=email, password=password)
+        resp = client.post("/auth/login", json={"email": email, "password": password})
+        assert resp.status_code == 200
+        return resp
+
+    def test_login_sets_refresh_cookie(self, client, test_db):
+        self._login(client, test_db)
+        assert client.cookies.get(config.auth_refresh_cookie_name)
+        assert client.cookies.get(config.auth_cookie_name)
+
+    def test_refresh_rotates_and_returns_user(self, client, test_db):
+        self._login(client, test_db)
+        before = client.cookies.get(config.auth_refresh_cookie_name)
+
+        resp = client.post("/auth/refresh")
+        assert resp.status_code == 200
+        assert resp.json()["email"] == "carol@example.com"
+        after = client.cookies.get(config.auth_refresh_cookie_name)
+        assert after and after != before
+        # The new access token authenticates.
+        assert client.get("/auth/me").status_code == 200
+
+    def test_consumed_refresh_token_is_rejected(self, client, test_db):
+        self._login(client, test_db)
+        old = client.cookies.get(config.auth_refresh_cookie_name)
+        assert client.post("/auth/refresh").status_code == 200
+
+        # Replay the pre-rotation token.
+        client.cookies.set(config.auth_refresh_cookie_name, old)
+        assert client.post("/auth/refresh").status_code == 401
+
+    def test_replay_revokes_the_successor_too(self, client, test_db):
+        self._login(client, test_db)
+        old = client.cookies.get(config.auth_refresh_cookie_name)
+        assert client.post("/auth/refresh").status_code == 200
+        successor = client.cookies.get(config.auth_refresh_cookie_name)
+
+        client.cookies.set(config.auth_refresh_cookie_name, old)
+        assert client.post("/auth/refresh").status_code == 401
+
+        # The whole family is dead: the legitimate successor no longer works.
+        client.cookies.set(config.auth_refresh_cookie_name, successor)
+        assert client.post("/auth/refresh").status_code == 401
+
+    def test_refresh_without_cookie_is_401(self, client):
+        assert client.post("/auth/refresh").status_code == 401
+
+    def test_refresh_with_garbage_cookie_is_401(self, client):
+        client.cookies.set(config.auth_refresh_cookie_name, "not-a-real-token")
+        assert client.post("/auth/refresh").status_code == 401
+
+    def test_logout_revokes_the_refresh_token(self, client, test_db):
+        self._login(client, test_db)
+        token = client.cookies.get(config.auth_refresh_cookie_name)
+        assert client.post("/auth/logout").status_code == 204
+
+        # Even if the cookie value was captured, it can't renew the session.
+        client.cookies.set(config.auth_refresh_cookie_name, token)
+        assert client.post("/auth/refresh").status_code == 401
 
 
 class TestLoginRateLimit:

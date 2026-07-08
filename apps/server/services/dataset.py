@@ -58,6 +58,17 @@ class DatasetService:
         return dataset
 
 
+def get_qa_records_for_dataset(db: Session, dataset_id: str) -> List[QASource]:
+    """All ``QASource`` rows belonging to a dataset.
+
+    Single point of access for the (pipeline sync + Langfuse preview/export)
+    call sites that all need "every QA pair currently stored for a dataset" —
+    centralizing it means a future move away from querying ``QASource``
+    directly is a one-function change instead of three.
+    """
+    return db.query(QASource).filter(QASource.dataset_id == dataset_id).all()
+
+
 def get_datasets(db: Session) -> List[Dict[str, Any]]:
     try:
         datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()

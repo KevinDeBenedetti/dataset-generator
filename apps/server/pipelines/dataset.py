@@ -4,13 +4,12 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from sqlalchemy.orm import Session
 
 from server.core.config import config
-from server.models.dataset import QASource
 from server.services.files import file_to_page_images
 from server.services.github import fetch_account_docs
 from server.services.scraper import ScraperService
 from server.services.llm import LLMService
 from server.services.agent import QAAgentService
-from server.services.dataset import DatasetService
+from server.services.dataset import DatasetService, get_qa_records_for_dataset
 from server.services.qa import QAService
 from server.services.langfuse import is_langfuse_available, sync_qa_to_langfuse
 from server.schemas.dataset import TargetLanguage
@@ -21,7 +20,7 @@ class DatasetPipeline:
 
     def __init__(self, db: Session):
         self.db = db
-        self.scraper_service = ScraperService(db)
+        self.scraper_service = ScraperService()
         self.llm_service = LLMService()
         self.qa_agent_service = QAAgentService()
         self.dataset_service = DatasetService(db)
@@ -150,6 +149,8 @@ class DatasetPipeline:
             )
 
             # 2. Scrape: a single page, or a breadth-first crawl of the site.
+            # The scraper is stateless — it returns page content in memory,
+            # nothing written to the DB; the dataset is only the Langfuse container.
             assert dataset.id is not None
             assert isinstance(dataset.id, str)
             t = time.perf_counter()
@@ -161,9 +162,8 @@ class DatasetPipeline:
                     def on_page(info: Dict[str, Any]) -> None:
                         progress({"type": "page", **info})
 
-                snapshots = await self.scraper_service.crawl_site(
+                pages = await self.scraper_service.crawl_site(
                     url,
-                    dataset.id,
                     max_depth=max_depth,
                     max_pages=max_pages,
                     delay_seconds=crawl_delay_seconds,
@@ -173,15 +173,15 @@ class DatasetPipeline:
                 record(
                     "scrape",
                     "Crawl site",
-                    "success" if snapshots else "warning",
+                    "success" if pages else "warning",
                     t,
-                    f"Crawled {len(snapshots)} page(s) from {url}"
-                    if snapshots
+                    f"Crawled {len(pages)} page(s) from {url}"
+                    if pages
                     else f"No pages crawled from {url}",
                 )
             else:
-                snapshots = [await self.scraper_service.scrape_url(url, dataset.id)]
-                scraped_len = len(snapshots[0].content or "")
+                pages = [await self.scraper_service.scrape_url(url)]
+                scraped_len = len(pages[0].content or "")
                 record(
                     "scrape",
                     "Scrape URL",
@@ -201,22 +201,15 @@ class DatasetPipeline:
             # not a single span (which would make every stage show the full loop).
             clean_s = qa_s = save_s = 0.0
             clean_chars = 0
-            for page_snapshot in snapshots:
-                assert page_snapshot.id is not None
-                page_url = page_snapshot.url
-                content = page_snapshot.content or ""
+            for page in pages:
+                page_url = page.url
+                content = page.content or ""
                 scraped_chunks.append(f"<!-- {page_url} -->\n{content}")
 
-                # Clean the text with the LLM, then persist it.
+                # Clean the text with the LLM (held in memory, not persisted).
                 t_stage = time.perf_counter()
                 cleaned_text = self.llm_service.clean_text(content, model_cleaning_str)
                 clean_chars += len(cleaned_text)
-                self.scraper_service.save_cleaned_text(
-                    page_snapshot_id=page_snapshot.id,
-                    content=cleaned_text,
-                    language=target_language_str,
-                    model=model_cleaning_str,
-                )
                 clean_s += time.perf_counter() - t_stage
 
                 # Generate QA pairs for this page.
@@ -233,7 +226,7 @@ class DatasetPipeline:
                     qa_list=page_qa,
                     cleaned_text=cleaned_text,
                     url=page_url,
-                    page_snapshot_id=page_snapshot.id,
+                    page_snapshot_id=None,
                     dataset_name=dataset_name,
                     model=model_qa_str,
                     dataset_id=dataset.id,
@@ -248,7 +241,7 @@ class DatasetPipeline:
                 "Clean text",
                 "success",
                 0,
-                f"Cleaned {len(snapshots)} page(s) with {model_cleaning_str} "
+                f"Cleaned {len(pages)} page(s) with {model_cleaning_str} "
                 f"→ {clean_chars:,} characters",
                 duration_ms=int(clean_s * 1000),
             )
@@ -286,7 +279,7 @@ class DatasetPipeline:
                         dataset_id=dataset.id,
                         dataset_name=dataset_name,
                         source_url=url,
-                        stats={**qa_stats, "pages_crawled": len(snapshots)},
+                        stats={**qa_stats, "pages_crawled": len(pages)},
                         target_language=target_language_str,
                     )
                     record(
@@ -314,7 +307,7 @@ class DatasetPipeline:
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
                 "dataset_id": dataset.id,  # Explicitly add the dataset ID to the result
-                "pages_crawled": len(snapshots),
+                "pages_crawled": len(pages),
                 "steps": steps,
                 "scraped_content": "\n\n".join(scraped_chunks),
                 "langfuse": langfuse_result,
@@ -637,9 +630,7 @@ class DatasetPipeline:
 
             for label, raw_text in docs:
                 t_stage = time.perf_counter()
-                cleaned_text = self.llm_service.clean_text(
-                    raw_text, model_cleaning_str
-                )
+                cleaned_text = self.llm_service.clean_text(raw_text, model_cleaning_str)
                 clean_chars += len(cleaned_text)
                 fetched_chunks.append(f"<!-- {label} -->\n{cleaned_text}")
                 clean_s += time.perf_counter() - t_stage
@@ -770,9 +761,7 @@ class DatasetPipeline:
         target_language: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Push all current QA items for the dataset to Langfuse as a new version."""
-        records = (
-            self.db.query(QASource).filter(QASource.dataset_id == dataset_id).all()
-        )
+        records = get_qa_records_for_dataset(self.db, dataset_id)
         items = [record.to_langfuse_dataset_item() for record in records]
         return sync_qa_to_langfuse(
             dataset_name=dataset_name,
