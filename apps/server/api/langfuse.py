@@ -4,8 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 
-from server.models.dataset import Dataset, QASource
+from server.models.dataset import Dataset
 from server.core.database import get_db
+from server.services.dataset import get_qa_records_for_dataset
 from server.services.langfuse import (
     create_langfuse_dataset_with_items,
     normalize_dataset_name,
@@ -20,6 +21,18 @@ router = APIRouter(
 )
 
 
+def _get_dataset_or_404(db: Session, dataset_name: str) -> Dataset:
+    """Look up a dataset by name, or raise a 404 listing what's available."""
+    dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
+    if not dataset:
+        available_datasets = [d.name for d in db.query(Dataset.name).distinct().all()]
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}",
+        )
+    return dataset
+
+
 @router.get("/preview")
 async def preview_dataset_transformation(
     db: Session = Depends(get_db),
@@ -27,18 +40,8 @@ async def preview_dataset_transformation(
 ):
     """Preview the dataset transformation for Langfuse without sending it"""
     try:
-        dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
-
-        if not dataset:
-            available_datasets = [
-                d.name for d in db.query(Dataset.name).distinct().all()
-            ]
-            raise HTTPException(
-                status_code=404,
-                detail=f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}",
-            )
-
-        qa_records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
+        dataset = _get_dataset_or_404(db, dataset_name)
+        qa_records = get_qa_records_for_dataset(db, dataset.id)
 
         if not qa_records:
             raise HTTPException(
@@ -120,18 +123,10 @@ async def export_dataset(
         )
     try:
         # Verify that the dataset exists
-        dataset = db.query(Dataset).filter(Dataset.name == dataset_name).first()
-        if not dataset:
-            available_datasets = [
-                d.name for d in db.query(Dataset.name).distinct().all()
-            ]
-            raise HTTPException(
-                status_code=404,
-                detail=f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}",
-            )
+        dataset = _get_dataset_or_404(db, dataset_name)
 
         # Retrieve QA pairs associated with the dataset
-        qa_records = db.query(QASource).filter(QASource.dataset_id == dataset.id).all()
+        qa_records = get_qa_records_for_dataset(db, dataset.id)
 
         if not qa_records:
             raise HTTPException(

@@ -30,10 +30,10 @@ limites).
 ```
 
 Code de référence :
-- Parcours du site : [apps/server/services/scraper.py](../apps/server/services/scraper.py) (`crawl_site`)
-- Branchement dans le pipeline : [apps/server/pipelines/dataset.py](../apps/server/pipelines/dataset.py)
-- Schéma de requête : [apps/server/schemas/generate.py](../apps/server/schemas/generate.py) (`DatasetGenerationRequest`)
-- Valeurs par défaut / config : [apps/server/core/config.py](../apps/server/core/config.py)
+- Parcours du site : [apps/server/services/scraper.py](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/apps/server/services/scraper.py) (`crawl_site`)
+- Branchement dans le pipeline : [apps/server/pipelines/dataset.py](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/apps/server/pipelines/dataset.py)
+- Schéma de requête : [apps/server/schemas/generate.py](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/apps/server/schemas/generate.py) (`DatasetGenerationRequest`)
+- Valeurs par défaut / config : [apps/server/core/config.py](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/apps/server/core/config.py)
 
 ## 2. Les deux niveaux de réglage
 
@@ -141,7 +141,7 @@ Pour suivre la progression page par page, utiliser `/dataset/generate/stream`
 
 ## 5. Réglage depuis l'UI (Next.js)
 
-Dans le formulaire de génération ([dataset-generate.tsx](../apps/next/components/dataset/dataset-generate.tsx)) :
+Dans le formulaire de génération ([dataset-generate.tsx](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/apps/next/components/dataset/dataset-generate.tsx)) :
 
 - Case **« Crawl entire site (follow same-domain links) »** → champ `crawl`
   (activée par défaut).
@@ -217,5 +217,5 @@ Garde-fous :
 | Seul le seed est scrapé | `crawl` est `false`, ou `max_depth = 0`, ou la page n'expose aucun lien interne same-domain. |
 
 Le service crawl4ai est lancé par Docker Compose (voir
-[docker-compose.yml](../docker-compose.yml), service `crawl4ai`). Il n'est pas
+[docker-compose.yml](https://github.com/KevinDeBenedetti/dataset-generator/blob/main/docker-compose.yml), service `crawl4ai`). Il n'est pas
 publié sur l'hôte par défaut ; mappez un port pour accéder à son `/playground`.

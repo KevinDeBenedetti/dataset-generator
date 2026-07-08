@@ -82,13 +82,25 @@ class Config:
             "AUTH_SECRET_KEY", "dev-insecure-secret-change-me"
         )
     )
+    # Access tokens are short-lived; sessions are kept alive by the refresh
+    # token below (rotated on every use), so expiry here only bounds how long a
+    # stolen access token stays valid — not how often users must log back in.
     auth_token_ttl_seconds: int = field(
+        default_factory=lambda: int(os.getenv("AUTH_TOKEN_TTL_SECONDS", str(60 * 15)))
+    )
+    # Refresh tokens are opaque, stored hashed server-side and single-use
+    # (each POST /auth/refresh revokes the presented token and issues a new
+    # one). This TTL is the maximum idle time before a user must log in again.
+    auth_refresh_token_ttl_seconds: int = field(
         default_factory=lambda: int(
-            os.getenv("AUTH_TOKEN_TTL_SECONDS", str(60 * 60 * 24))
+            os.getenv("AUTH_REFRESH_TOKEN_TTL_SECONDS", str(60 * 60 * 24 * 14))
         )
     )
     auth_cookie_name: str = field(
         default_factory=lambda: os.getenv("AUTH_COOKIE_NAME", "access_token")
+    )
+    auth_refresh_cookie_name: str = field(
+        default_factory=lambda: os.getenv("AUTH_REFRESH_COOKIE_NAME", "refresh_token")
     )
     # Send the cookie only over HTTPS. Default off for local http dev; set
     # AUTH_COOKIE_SECURE=true behind TLS.

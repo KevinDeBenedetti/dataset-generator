@@ -3,10 +3,10 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy import String, DateTime, JSON, ForeignKey, Boolean
-from sqlalchemy.orm import Session, Mapped, mapped_column, relationship
-from difflib import SequenceMatcher
+from sqlalchemy.orm import Mapped, mapped_column
 
 from server.core.database import Base
+from server.services.dedup import QAEntry
 
 
 class Dataset(Base):
@@ -24,11 +24,6 @@ class Dataset(Base):
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
 
-    # Relations
-    page_snapshots = relationship(
-        "PageSnapshot", back_populates="dataset", cascade="all, delete-orphan"
-    )
-
 
 class QASource(Base):
     __tablename__ = "qa_sources"
@@ -39,9 +34,11 @@ class QASource(Base):
         String, ForeignKey("datasets.id"), index=True
     )
     source_trace_id: Mapped[Optional[str]] = mapped_column(String)
-    page_snapshot_id: Mapped[Optional[str]] = mapped_column(
-        String, ForeignKey("page_snapshots.id")
-    )
+    # No longer FK-constrained: page_snapshots was dropped once the scraper
+    # went stateless (see migration d1e2f3a4b5c6). Always null now — kept as
+    # plain data rather than threading its removal through every call site
+    # that still passes page_snapshot_id=None.
+    page_snapshot_id: Mapped[Optional[str]] = mapped_column(String)
     input: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     expected_output: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     qa_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -66,93 +63,20 @@ class QASource(Base):
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     @classmethod
-    def is_duplicate_by_similarity(
-        cls,
-        db: Session,
-        question: str,
-        context: str,
-        source_url: str,
-        threshold: float = 0.9,
-    ) -> Optional[str]:
-        # Retrieve all records and filter in Python
-        # This avoids issues with the .astext operator in some SQLAlchemy versions
-        all_records = db.query(cls).all()
+    def _to_entry(cls, record: "QASource") -> QAEntry:
+        """Adapt a persisted row to the pure :class:`QAEntry` used for dedup.
 
-        # Manually filter records with the same source URL
-        similar_records = []
-        for record in all_records:
-            record_source_url = record.input.get("source_url", "")
-            if record_source_url == source_url:
-                similar_records.append(record)
-
-        # Check question similarity
-        for record in similar_records:
-            existing_question = record.input.get("question", "")
-            existing_context = record.input.get("context", "")
-
-            # Calculate question similarity
-            question_similarity = SequenceMatcher(
-                None, question, existing_question
-            ).ratio()
-
-            # Optional: also check context similarity
-            context_similarity = SequenceMatcher(
-                None, context, existing_context
-            ).ratio()
-
-            # If the question is very similar AND the context is identical or very similar
-            if question_similarity >= threshold and context_similarity >= 0.95:
-                return record.id
-
-        return None
-
-    @classmethod
-    def check_for_duplicates(
-        cls,
-        db: Session,
-        question: str,
-        answer: str,
-        context: str,
-        source_url: str,
-        similarity_threshold: float = 0.9,
-    ) -> Dict[str, Optional[str] | float]:
-        """Checks for duplicates by exact hash AND similarity"""
-
-        # 1. Check by exact hash
-        exact_hash = cls.compute_hash_from_content(
-            question, answer, context, source_url
+        Used by :class:`server.services.qa.QAService` to build its in-memory
+        dedup pool once per pipeline run (see that module for why the DB-query
+        classmethods that used to live here were removed).
+        """
+        source = record.input or {}
+        return QAEntry(
+            hash=record.id,
+            question=source.get("question", ""),
+            context=source.get("context", ""),
+            source_url=source.get("source_url", ""),
         )
-        exact_duplicate = db.query(cls).filter(cls.id == exact_hash).first()
-
-        if exact_duplicate:
-            return {
-                "type": "exact",
-                "duplicate_id": exact_duplicate.id,
-                "similarity_score": 1.0,
-            }
-
-        # 2. Check by similarity
-        similar_id = cls.is_duplicate_by_similarity(
-            db, question, context, source_url, similarity_threshold
-        )
-
-        if similar_id:
-            # Calculate similarity score for information
-            similar_record = db.query(cls).filter(cls.id == similar_id).first()
-            existing_question = (
-                similar_record.input.get("question", "") if similar_record else ""
-            )
-            similarity_score = SequenceMatcher(
-                None, question, existing_question
-            ).ratio()
-
-            return {
-                "type": "similar",
-                "duplicate_id": similar_id,
-                "similarity_score": similarity_score,
-            }
-
-        return {"type": "new", "duplicate_id": None, "similarity_score": 0.0}
 
     @classmethod
     def from_qa_generation(

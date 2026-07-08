@@ -1,15 +1,13 @@
 import asyncio
 import logging
 from collections import Counter, deque
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
-from sqlalchemy.orm import Session
 
 from server.core.config import config
-from server.models.scraper import PageSnapshot, CleanedText
 
 
 DEFAULT_USER_AGENT = (
@@ -18,9 +16,26 @@ DEFAULT_USER_AGENT = (
 )
 
 
+@dataclass
+class ScrapedPage:
+    """A page fetched by the scraper, held in memory only.
+
+    The scraper is stateless: it fetches page content and hands it back for the
+    pipeline to clean and mine for QA pairs — nothing is written to the
+    database. Carries just the URL and its Markdown content.
+    """
+
+    url: str
+    content: str
+
+
 class ScraperService:
-    def __init__(self, db: Session):
-        self.db = db
+    """Stateless page fetcher.
+
+    Retrieves Markdown from the crawl4ai service and walks a site
+    breadth-first. It holds no database session and persists nothing; callers
+    receive :class:`ScrapedPage` values to process in memory.
+    """
 
     async def _fetch_markdown(self, url: str) -> str:
         """Fetch a page as Markdown via the crawl4ai service (/md endpoint).
@@ -109,44 +124,22 @@ class ScraperService:
 
         return markdown.strip(), hrefs
 
-    def add_page_snapshot(self, page_snapshot: PageSnapshot) -> None:
-        """Adds a new PageSnapshot record to the database"""
-        self.db.add(page_snapshot)
-        self.db.commit()
-        self.db.refresh(page_snapshot)
-
-    def _save_snapshot(self, url: str, content: str, dataset_id: str) -> PageSnapshot:
-        """Persist a fetched page as a PageSnapshot."""
-        page_snapshot = PageSnapshot(
-            url=url,
-            user_agent=DEFAULT_USER_AGENT,
-            content=content,
-            retrieved_at=datetime.now(timezone.utc),
-            url_hash=PageSnapshot.compute_hash_from_url(url),
-            dataset_id=dataset_id,
-        )
-        self.db.add(page_snapshot)
-        self.db.commit()
-        self.db.refresh(page_snapshot)
-        return page_snapshot
-
-    async def scrape_url(self, url: str, dataset_id: str) -> PageSnapshot:
+    async def scrape_url(self, url: str) -> ScrapedPage:
         logging.info(f"Scraping URL: {url}")
         content = await self._fetch_markdown(url)
-        return self._save_snapshot(url, content, dataset_id)
+        return ScrapedPage(url=url, content=content)
 
     async def crawl_site(
         self,
         seed_url: str,
-        dataset_id: str,
         max_depth: int | None = None,
         max_pages: int | None = None,
         same_domain: bool | None = None,
         delay_seconds: float | None = None,
         max_pages_per_domain: int | None = None,
         on_page: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> List[PageSnapshot]:
-        """Breadth-first crawl from ``seed_url``, saving one snapshot per page.
+    ) -> List[ScrapedPage]:
+        """Breadth-first crawl from ``seed_url``, returning one page per URL.
 
         Follows internal links up to ``max_depth`` hops and ``max_pages`` pages.
         With ``same_domain`` (default), only links on the seed's host are
@@ -178,12 +171,12 @@ class ScraperService:
 
         visited: set[str] = set()
         queue: deque[Tuple[str, int]] = deque([(seed, 0)])
-        snapshots: List[PageSnapshot] = []
-        # Pages saved per host, to enforce the optional per-domain budget.
+        pages: List[ScrapedPage] = []
+        # Pages kept per host, to enforce the optional per-domain budget.
         per_domain: Counter[str] = Counter()
         fetches = 0
 
-        while queue and len(snapshots) < max_pages:
+        while queue and len(pages) < max_pages:
             current, depth = queue.popleft()
             current = urldefrag(current)[0]
             if current in visited:
@@ -212,18 +205,18 @@ class ScraperService:
                 continue
 
             if content:
-                snapshots.append(self._save_snapshot(current, content, dataset_id))
+                pages.append(ScrapedPage(url=current, content=content))
                 per_domain[domain] += 1
                 logging.info(
                     f"Crawled {current} (depth {depth}) — "
-                    f"{len(snapshots)}/{max_pages} pages"
+                    f"{len(pages)}/{max_pages} pages"
                 )
                 if on_page is not None:
                     on_page(
                         {
                             "url": current,
                             "depth": depth,
-                            "crawled": len(snapshots),
+                            "crawled": len(pages),
                             "max_pages": max_pages,
                         }
                     )
@@ -241,22 +234,5 @@ class ScraperService:
                     continue
                 queue.append((target, depth + 1))
 
-        logging.info(f"Crawl finished: {len(snapshots)} pages from {seed}")
-        return snapshots
-
-    def save_cleaned_text(
-        self, page_snapshot_id: str, content: str, language: str, model: str
-    ) -> CleanedText:
-        """Saves cleaned text to the database"""
-        cleaned_text_record = CleanedText(
-            page_snapshot_id=page_snapshot_id,
-            content=content,
-            language=language,
-            model=model,
-        )
-
-        self.db.add(cleaned_text_record)
-        self.db.commit()
-        self.db.refresh(cleaned_text_record)
-
-        return cleaned_text_record
+        logging.info(f"Crawl finished: {len(pages)} pages from {seed}")
+        return pages
