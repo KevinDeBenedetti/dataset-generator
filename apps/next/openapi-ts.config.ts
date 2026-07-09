@@ -5,7 +5,11 @@ export default defineConfig({
   output: {
     path: './api',
     format: 'prettier',
-    lint: 'eslint'
+    lint: 'eslint',
+    // Hand-written files (sdk.ts, types.ts) live alongside the generated
+    // *.gen.ts ones in this same directory — the default `clean: true`
+    // wipes the whole output dir first and deletes them.
+    clean: false
   },
   plugins: [
     {

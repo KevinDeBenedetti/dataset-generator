@@ -36,7 +36,11 @@ def _active_dataset_items(dataset_name: str) -> list[Dict[str, Any]]:
         {
             "input": item.get("input") or {},
             "id": item["id"],
-            **({"expected_output": item["expected_output"]} if item.get("expected_output") else {}),
+            **(
+                {"expected_output": item["expected_output"]}
+                if item.get("expected_output")
+                else {}
+            ),
             **({"metadata": item["metadata"]} if item.get("metadata") else {}),
         }
         for item in get_dataset_items(dataset_name)

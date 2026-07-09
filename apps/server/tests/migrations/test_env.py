@@ -43,7 +43,7 @@ def test_upgrade_uses_passed_url_over_env(tmp_path, monkeypatch):
 
     # The passed-in database got the schema...
     assert target.exists()
-    assert "datasets" in _table_names(f"sqlite:///{target}")
+    assert "users" in _table_names(f"sqlite:///{target}")
     # ...and the env-pointed decoy was never touched.
     assert not decoy.exists()
 
@@ -67,4 +67,4 @@ def test_upgrade_honours_env_when_no_explicit_url(tmp_path, monkeypatch):
     command.upgrade(cfg, "head")
 
     assert env_db.exists()
-    assert "datasets" in _table_names(f"sqlite:///{env_db}")
+    assert "users" in _table_names(f"sqlite:///{env_db}")

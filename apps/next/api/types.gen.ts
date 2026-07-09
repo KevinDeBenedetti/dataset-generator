@@ -5,6 +5,42 @@ export type ClientOptions = {
 };
 
 /**
+ * Body_create_dataset_for_file_dataset_generate_file_post
+ */
+export type BodyCreateDatasetForFileDatasetGenerateFilePost = {
+    /**
+     * File
+     *
+     * PDF or image file to mine for Q&A
+     */
+    file: string;
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Target Language
+     */
+    target_language?: string | null;
+    /**
+     * Model Qa
+     */
+    model_qa?: string | null;
+    /**
+     * Model Vlm
+     */
+    model_vlm?: string | null;
+    /**
+     * Similarity Threshold
+     */
+    similarity_threshold?: number;
+    /**
+     * Sync Langfuse
+     */
+    sync_langfuse?: boolean;
+};
+
+/**
  * CleanSimilarityPair
  */
 export type CleanSimilarityPair = {
@@ -62,6 +98,157 @@ export type CleanSimilarityResponse = {
      * Removed Items
      */
     removed_items: Array<RemovedRecord>;
+};
+
+/**
+ * Collection
+ *
+ * A dataset projected as a vector collection.
+ *
+ * Carries the dataset fields plus its Qdrant status. ``in_qdrant`` /
+ * ``points_count`` are null when Qdrant is unconfigured or unreachable.
+ */
+export type Collection = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Target Language
+     */
+    target_language?: string | null;
+    /**
+     * Qa Sources Count
+     */
+    qa_sources_count?: number | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Collection Name
+     */
+    collection_name: string;
+    /**
+     * In Qdrant
+     */
+    in_qdrant?: boolean | null;
+    /**
+     * Points Count
+     */
+    points_count?: number | null;
+};
+
+/**
+ * CollectionSearchRequest
+ *
+ * Semantic search over a dataset's Qdrant collection.
+ */
+export type CollectionSearchRequest = {
+    /**
+     * Query
+     *
+     * Natural-language query
+     */
+    query: string;
+    /**
+     * Limit
+     *
+     * Max number of hits
+     */
+    limit?: number;
+    /**
+     * Score Threshold
+     *
+     * Minimum similarity score (0–1) to include a hit
+     */
+    score_threshold?: number | null;
+};
+
+/**
+ * CollectionSearchResponse
+ */
+export type CollectionSearchResponse = {
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Collection Name
+     */
+    collection_name: string;
+    /**
+     * Query
+     */
+    query: string;
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Results
+     */
+    results: Array<CollectionSearchResult>;
+};
+
+/**
+ * CollectionSearchResult
+ */
+export type CollectionSearchResult = {
+    /**
+     * Qa Id
+     */
+    qa_id?: string | null;
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Answer
+     */
+    answer: string;
+    /**
+     * Context
+     */
+    context: string;
+    /**
+     * Source Url
+     */
+    source_url?: string | null;
+    /**
+     * Confidence
+     */
+    confidence?: number | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+};
+
+/**
+ * CollectionsResponse
+ */
+export type CollectionsResponse = {
+    /**
+     * Qdrant Configured
+     */
+    qdrant_configured: boolean;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Collections
+     */
+    collections: Array<Collection>;
 };
 
 /**
@@ -124,6 +311,18 @@ export type DatasetGenerationRequest = {
      * Max number of pages to crawl (defaults to config)
      */
     max_pages?: number | null;
+    /**
+     * Crawl Delay Seconds
+     *
+     * Throttle: seconds to pause between page fetches while crawling (0 = no throttle; defaults to config)
+     */
+    crawl_delay_seconds?: number | null;
+    /**
+     * Max Pages Per Domain
+     *
+     * Per-domain page budget while crawling (0 = unlimited; defaults to config)
+     */
+    max_pages_per_domain?: number | null;
     /**
      * Sync Langfuse
      *
@@ -293,6 +492,68 @@ export type ErrorResponse = {
 };
 
 /**
+ * GitHubGenerationRequest
+ *
+ * Model for generating a dataset from a GitHub account's public docs.
+ */
+export type GitHubGenerationRequest = {
+    /**
+     * Github Username
+     *
+     * GitHub account whose public repos will be mined
+     */
+    github_username: string;
+    /**
+     * Github Token
+     *
+     * Optional token — only used to raise the API rate limit; only public information is read
+     */
+    github_token?: string | null;
+    /**
+     * Dataset Name
+     *
+     * Name of the dataset to create
+     */
+    dataset_name: string;
+    /**
+     * Model Cleaning
+     *
+     * Model to use for text cleaning
+     */
+    model_cleaning?: string | null;
+    /**
+     * Target Language
+     *
+     * Target language for QA generation
+     */
+    target_language?: string | null;
+    /**
+     * Model Qa
+     *
+     * Model to use for QA generation
+     */
+    model_qa?: string | null;
+    /**
+     * Similarity Threshold
+     *
+     * Similarity threshold to detect duplicates (0.0-1.0)
+     */
+    similarity_threshold?: number;
+    /**
+     * Max Repos
+     *
+     * Cap on the number of public repos to mine (default: all)
+     */
+    max_repos?: number | null;
+    /**
+     * Sync Langfuse
+     *
+     * Create/version the dataset in Langfuse at generation time
+     */
+    sync_langfuse?: boolean;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -300,6 +561,24 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * LoginRequest
+ */
+export type LoginRequest = {
+    /**
+     * Email
+     *
+     * Account email
+     */
+    email: string;
+    /**
+     * Password
+     *
+     * Account password
+     */
+    password: string;
 };
 
 /**
@@ -535,75 +814,25 @@ export type QaPair = {
 };
 
 /**
- * QAResponse
- *
- * Response model for an individual Q&A
+ * QdrantSyncResponse
  */
-export type QaResponse = {
+export type QdrantSyncResponse = {
     /**
-     * Id
-     *
-     * Unique ID of the question-answer
+     * Dataset Name
      */
-    id: string;
+    dataset_name: string;
     /**
-     * Question
-     *
-     * Question
+     * Collection Name
      */
-    question: string;
+    collection_name: string;
     /**
-     * Answer
-     *
-     * Answer
+     * Points Upserted
      */
-    answer: string;
+    points_upserted: number;
     /**
-     * Context
-     *
-     * Source context
+     * Vector Size
      */
-    context: string;
-    /**
-     * Source Url
-     *
-     * Source URL
-     */
-    source_url?: string | null;
-    /**
-     * Confidence
-     *
-     * Confidence level
-     */
-    confidence?: number;
-    /**
-     * Created At
-     *
-     * Creation date
-     */
-    created_at: string;
-    /**
-     * Updated At
-     *
-     * Last modification date
-     */
-    updated_at?: string | null;
-    /**
-     * Metadata
-     *
-     * Additional metadata
-     */
-    metadata?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Dataset
-     *
-     * Associated dataset information
-     */
-    dataset?: {
-        [key: string]: string | null;
-    } | null;
+    vector_size: number;
 };
 
 /**
@@ -685,6 +914,28 @@ export type SimilarityPair = {
 };
 
 /**
+ * UserResponse
+ */
+export type UserResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Role
+     */
+    role: string;
+    /**
+     * Provider
+     */
+    provider: string;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -710,6 +961,107 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+export type LoginAuthLoginPostData = {
+    body: LoginRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/login';
+};
+
+export type LoginAuthLoginPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LoginAuthLoginPostError = LoginAuthLoginPostErrors[keyof LoginAuthLoginPostErrors];
+
+export type LoginAuthLoginPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserResponse;
+};
+
+export type LoginAuthLoginPostResponse = LoginAuthLoginPostResponses[keyof LoginAuthLoginPostResponses];
+
+export type RefreshAuthRefreshPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/refresh';
+};
+
+export type RefreshAuthRefreshPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserResponse;
+};
+
+export type RefreshAuthRefreshPostResponse = RefreshAuthRefreshPostResponses[keyof RefreshAuthRefreshPostResponses];
+
+export type LogoutAuthLogoutPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/logout';
+};
+
+export type LogoutAuthLogoutPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LogoutAuthLogoutPostResponse = LogoutAuthLogoutPostResponses[keyof LogoutAuthLogoutPostResponses];
+
+export type MeAuthMeGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/me';
+};
+
+export type MeAuthMeGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserResponse;
+};
+
+export type MeAuthMeGetResponse = MeAuthMeGetResponses[keyof MeAuthMeGetResponses];
+
+export type OidcLoginAuthOidcLoginGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/oidc/login';
+};
+
+export type OidcLoginAuthOidcLoginGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type OidcCallbackAuthOidcCallbackGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/oidc/callback';
+};
+
+export type OidcCallbackAuthOidcCallbackGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
 };
 
 export type CreateDatasetForUrlDatasetGeneratePostData = {
@@ -745,6 +1097,72 @@ export type CreateDatasetForUrlDatasetGeneratePostResponses = {
 
 export type CreateDatasetForUrlDatasetGeneratePostResponse = CreateDatasetForUrlDatasetGeneratePostResponses[keyof CreateDatasetForUrlDatasetGeneratePostResponses];
 
+export type CreateDatasetForFileDatasetGenerateFilePostData = {
+    body: BodyCreateDatasetForFileDatasetGenerateFilePost;
+    path?: never;
+    query?: never;
+    url: '/dataset/generate/file';
+};
+
+export type CreateDatasetForFileDatasetGenerateFilePostErrors = {
+    /**
+     * Invalid parameters or unsupported/corrupt file
+     */
+    400: ErrorResponse;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type CreateDatasetForFileDatasetGenerateFilePostError = CreateDatasetForFileDatasetGenerateFilePostErrors[keyof CreateDatasetForFileDatasetGenerateFilePostErrors];
+
+export type CreateDatasetForFileDatasetGenerateFilePostResponses = {
+    /**
+     * Dataset created successfully
+     */
+    201: DatasetGenerationResponse;
+};
+
+export type CreateDatasetForFileDatasetGenerateFilePostResponse = CreateDatasetForFileDatasetGenerateFilePostResponses[keyof CreateDatasetForFileDatasetGenerateFilePostResponses];
+
+export type CreateDatasetForGithubDatasetGenerateGithubPostData = {
+    body: GitHubGenerationRequest;
+    path?: never;
+    query?: never;
+    url: '/dataset/generate/github';
+};
+
+export type CreateDatasetForGithubDatasetGenerateGithubPostErrors = {
+    /**
+     * Invalid parameters or unknown GitHub user
+     */
+    400: ErrorResponse;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type CreateDatasetForGithubDatasetGenerateGithubPostError = CreateDatasetForGithubDatasetGenerateGithubPostErrors[keyof CreateDatasetForGithubDatasetGenerateGithubPostErrors];
+
+export type CreateDatasetForGithubDatasetGenerateGithubPostResponses = {
+    /**
+     * Dataset created successfully
+     */
+    201: DatasetGenerationResponse;
+};
+
+export type CreateDatasetForGithubDatasetGenerateGithubPostResponse = CreateDatasetForGithubDatasetGenerateGithubPostResponses[keyof CreateDatasetForGithubDatasetGenerateGithubPostResponses];
+
 export type StreamDatasetForUrlDatasetGenerateStreamPostData = {
     body: DatasetGenerationRequest;
     path?: never;
@@ -775,7 +1193,7 @@ export type GetAllDatasetsDatasetGetData = {
         /**
          * Dataset Id
          *
-         * Optional dataset ID to get specific dataset details
+         * Optional dataset name to get a specific dataset's details
          */
         dataset_id?: string;
     };
@@ -840,13 +1258,13 @@ export type CreateDatasetDatasetPostResponses = {
 
 export type CreateDatasetDatasetPostResponse = CreateDatasetDatasetPostResponses[keyof CreateDatasetDatasetPostResponses];
 
-export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetData = {
+export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetData = {
     body?: never;
     path: {
         /**
-         * Dataset Id
+         * Dataset Name
          */
-        dataset_id: string;
+        dataset_name: string;
     };
     query?: {
         /**
@@ -856,34 +1274,34 @@ export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetData = {
          */
         threshold?: number;
     };
-    url: '/dataset/{dataset_id}/analyze-similarities';
+    url: '/dataset/{dataset_name}/analyze-similarities';
 };
 
-export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetErrors = {
+export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetError = AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetErrors[keyof AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetErrors];
+export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetError = AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetErrors[keyof AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetErrors];
 
-export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetResponses = {
+export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponses = {
     /**
      * Successful Response
      */
     200: SimilarityAnalysisResponse;
 };
 
-export type AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetResponse = AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetResponses[keyof AnalyzeSimilaritiesDatasetDatasetIdAnalyzeSimilaritiesGetResponses];
+export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponse = AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponses[keyof AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponses];
 
-export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostData = {
+export type CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostData = {
     body?: never;
     path: {
         /**
-         * Dataset Id
+         * Dataset Name
          */
-        dataset_id: string;
+        dataset_name: string;
     };
     query?: {
         /**
@@ -893,64 +1311,64 @@ export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostData = {
          */
         threshold?: number;
     };
-    url: '/dataset/{dataset_id}/clean-similarities';
+    url: '/dataset/{dataset_name}/clean-similarities';
 };
 
-export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostErrors = {
+export type CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostError = CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostErrors[keyof CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostErrors];
+export type CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostError = CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors[keyof CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors];
 
-export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostResponses = {
+export type CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses = {
     /**
      * Successful Response
      */
     200: CleanSimilarityResponse;
 };
 
-export type CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostResponse = CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostResponses[keyof CleanSimilaritiesDatasetDatasetIdCleanSimilaritiesPostResponses];
+export type CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponse = CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses[keyof CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses];
 
-export type DeleteDatasetDatasetDatasetIdDeleteData = {
+export type DeleteDatasetDatasetDatasetNameDeleteData = {
     body?: never;
     path: {
         /**
-         * Dataset Id
+         * Dataset Name
          */
-        dataset_id: string;
+        dataset_name: string;
     };
     query?: never;
-    url: '/dataset/{dataset_id}';
+    url: '/dataset/{dataset_name}';
 };
 
-export type DeleteDatasetDatasetDatasetIdDeleteErrors = {
+export type DeleteDatasetDatasetDatasetNameDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DeleteDatasetDatasetDatasetIdDeleteError = DeleteDatasetDatasetDatasetIdDeleteErrors[keyof DeleteDatasetDatasetDatasetIdDeleteErrors];
+export type DeleteDatasetDatasetDatasetNameDeleteError = DeleteDatasetDatasetDatasetNameDeleteErrors[keyof DeleteDatasetDatasetDatasetNameDeleteErrors];
 
-export type DeleteDatasetDatasetDatasetIdDeleteResponses = {
+export type DeleteDatasetDatasetDatasetNameDeleteResponses = {
     /**
      * Successful Response
      */
     200: DeleteDatasetResponse;
 };
 
-export type DeleteDatasetDatasetDatasetIdDeleteResponse = DeleteDatasetDatasetDatasetIdDeleteResponses[keyof DeleteDatasetDatasetDatasetIdDeleteResponses];
+export type DeleteDatasetDatasetDatasetNameDeleteResponse = DeleteDatasetDatasetDatasetNameDeleteResponses[keyof DeleteDatasetDatasetDatasetNameDeleteResponses];
 
-export type GetQaByDatasetQaDatasetIdGetData = {
+export type GetQaByDatasetQaDatasetNameGetData = {
     body?: never;
     path: {
         /**
-         * Dataset Id
+         * Dataset Name
          */
-        dataset_id: string;
+        dataset_name: string;
     };
     query?: {
         /**
@@ -966,56 +1384,26 @@ export type GetQaByDatasetQaDatasetIdGetData = {
          */
         offset?: number | null;
     };
-    url: '/q_a/{dataset_id}';
+    url: '/q_a/{dataset_name}';
 };
 
-export type GetQaByDatasetQaDatasetIdGetErrors = {
+export type GetQaByDatasetQaDatasetNameGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type GetQaByDatasetQaDatasetIdGetError = GetQaByDatasetQaDatasetIdGetErrors[keyof GetQaByDatasetQaDatasetIdGetErrors];
+export type GetQaByDatasetQaDatasetNameGetError = GetQaByDatasetQaDatasetNameGetErrors[keyof GetQaByDatasetQaDatasetNameGetErrors];
 
-export type GetQaByDatasetQaDatasetIdGetResponses = {
+export type GetQaByDatasetQaDatasetNameGetResponses = {
     /**
      * Successful Response
      */
     200: QaListResponse;
 };
 
-export type GetQaByDatasetQaDatasetIdGetResponse = GetQaByDatasetQaDatasetIdGetResponses[keyof GetQaByDatasetQaDatasetIdGetResponses];
-
-export type GetQaByIdQaIdQaIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Qa Id
-         */
-        qa_id: string;
-    };
-    query?: never;
-    url: '/q_a/id/{qa_id}';
-};
-
-export type GetQaByIdQaIdQaIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetQaByIdQaIdQaIdGetError = GetQaByIdQaIdQaIdGetErrors[keyof GetQaByIdQaIdQaIdGetErrors];
-
-export type GetQaByIdQaIdQaIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: QaResponse;
-};
-
-export type GetQaByIdQaIdQaIdGetResponse = GetQaByIdQaIdQaIdGetResponses[keyof GetQaByIdQaIdQaIdGetResponses];
+export type GetQaByDatasetQaDatasetNameGetResponse = GetQaByDatasetQaDatasetNameGetResponses[keyof GetQaByDatasetQaDatasetNameGetResponses];
 
 export type ListOpenaiModelsOpenaiModelsGetData = {
     body?: never;
@@ -1055,6 +1443,190 @@ export type QaAgentTestAgentQaTestPostResponses = {
 };
 
 export type QaAgentTestAgentQaTestPostResponse = QaAgentTestAgentQaTestPostResponses[keyof QaAgentTestAgentQaTestPostResponses];
+
+export type GetCollectionsCollectionsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/collections';
+};
+
+export type GetCollectionsCollectionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionsResponse;
+};
+
+export type GetCollectionsCollectionsGetResponse = GetCollectionsCollectionsGetResponses[keyof GetCollectionsCollectionsGetResponses];
+
+export type PushCollectionToQdrantCollectionsDatasetNameQdrantPostData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: never;
+    url: '/collections/{dataset_name}/qdrant';
+};
+
+export type PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PushCollectionToQdrantCollectionsDatasetNameQdrantPostError = PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors[keyof PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors];
+
+export type PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: QdrantSyncResponse;
+};
+
+export type PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponse = PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses[keyof PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses];
+
+export type SearchCollectionEndpointCollectionsDatasetNameSearchPostData = {
+    body: CollectionSearchRequest;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: never;
+    url: '/collections/{dataset_name}/search';
+};
+
+export type SearchCollectionEndpointCollectionsDatasetNameSearchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchCollectionEndpointCollectionsDatasetNameSearchPostError = SearchCollectionEndpointCollectionsDatasetNameSearchPostErrors[keyof SearchCollectionEndpointCollectionsDatasetNameSearchPostErrors];
+
+export type SearchCollectionEndpointCollectionsDatasetNameSearchPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionSearchResponse;
+};
+
+export type SearchCollectionEndpointCollectionsDatasetNameSearchPostResponse = SearchCollectionEndpointCollectionsDatasetNameSearchPostResponses[keyof SearchCollectionEndpointCollectionsDatasetNameSearchPostResponses];
+
+export type PreviewDatasetTransformationLangfusePreviewGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Dataset Name
+         *
+         * Dataset name in Langfuse
+         */
+        dataset_name: string;
+    };
+    url: '/langfuse/preview';
+};
+
+export type PreviewDatasetTransformationLangfusePreviewGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewDatasetTransformationLangfusePreviewGetError = PreviewDatasetTransformationLangfusePreviewGetErrors[keyof PreviewDatasetTransformationLangfusePreviewGetErrors];
+
+export type PreviewDatasetTransformationLangfusePreviewGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ListLangfuseDatasetsLangfuseDatasetsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/langfuse/datasets';
+};
+
+export type ListLangfuseDatasetsLangfuseDatasetsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ListDatasetVersionsLangfuseVersionsDatasetGetData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset
+         */
+        dataset: string;
+    };
+    query?: never;
+    url: '/langfuse/versions/{dataset}';
+};
+
+export type ListDatasetVersionsLangfuseVersionsDatasetGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListDatasetVersionsLangfuseVersionsDatasetGetError = ListDatasetVersionsLangfuseVersionsDatasetGetErrors[keyof ListDatasetVersionsLangfuseVersionsDatasetGetErrors];
+
+export type ListDatasetVersionsLangfuseVersionsDatasetGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ExportDatasetLangfuseExportPostData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Dataset Name
+         *
+         * Dataset name in Langfuse
+         */
+        dataset_name: string;
+        /**
+         * Langfuse Dataset Name
+         *
+         * Custom name for the dataset in Langfuse
+         */
+        langfuse_dataset_name?: string | null;
+    };
+    url: '/langfuse/export';
+};
+
+export type ExportDatasetLangfuseExportPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExportDatasetLangfuseExportPostError = ExportDatasetLangfuseExportPostErrors[keyof ExportDatasetLangfuseExportPostErrors];
+
+export type ExportDatasetLangfuseExportPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 
 export type RootGetData = {
     body?: never;

@@ -181,6 +181,26 @@ def revoke_refresh_token(db: Session, raw: str) -> None:
         db.commit()
 
 
+def purge_expired_refresh_tokens(db: Session) -> int:
+    """Delete revoked/expired refresh token rows. Returns the number removed.
+
+    Nothing else ever deletes a row (rotation/logout/replay only set
+    ``revoked_at``), so the table grows without bound otherwise. Run at
+    startup (see ``main.py``'s lifespan) — cheap enough not to need a
+    separate cron given the low volume.
+    """
+    deleted = (
+        db.query(RefreshToken)
+        .filter(
+            (RefreshToken.revoked_at.is_not(None))
+            | (RefreshToken.expires_at < _utcnow())
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
+
+
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     """Return the user if the email/password pair is valid and active."""
     user = get_user_by_email(db, email)

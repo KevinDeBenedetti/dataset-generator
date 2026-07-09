@@ -6,11 +6,13 @@ from starlette.requests import Request
 
 from server.core.config import config
 from server.services.auth import (
+    _hash_refresh_token,
     authenticate_user,
     create_access_token,
     decode_access_token,
     get_current_user,
     issue_refresh_token,
+    purge_expired_refresh_tokens,
     require_admin,
     revoke_refresh_token,
     rotate_refresh_token,
@@ -161,3 +163,33 @@ class TestRefreshTokens:
 
     def test_revoke_unknown_token_is_noop(self, test_db):
         revoke_refresh_token(test_db, "never-issued")
+
+
+class TestPurgeExpiredRefreshTokens:
+    def test_deletes_revoked_and_expired_rows(self, test_db, monkeypatch):
+        user = create_user(test_db, email="purge@example.com", password="pw")
+
+        # Revoked (via logout).
+        revoked_raw = issue_refresh_token(test_db, user)
+        revoke_refresh_token(test_db, revoked_raw)
+
+        # Expired but never revoked.
+        monkeypatch.setattr(config, "auth_refresh_token_ttl_seconds", -10)
+        issue_refresh_token(test_db, user)
+        monkeypatch.setattr(config, "auth_refresh_token_ttl_seconds", 1209600)
+
+        # Still live — must survive the purge.
+        live_raw = issue_refresh_token(test_db, user)
+
+        deleted = purge_expired_refresh_tokens(test_db)
+        assert deleted == 2
+
+        remaining = test_db.query(RefreshToken).all()
+        assert len(remaining) == 1
+        assert remaining[0].token_hash == _hash_refresh_token(live_raw)
+
+    def test_noop_when_nothing_to_purge(self, test_db):
+        user = create_user(test_db, email="clean@example.com", password="pw")
+        issue_refresh_token(test_db, user)
+        assert purge_expired_refresh_tokens(test_db) == 0
+        assert test_db.query(RefreshToken).count() == 1

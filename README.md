@@ -83,6 +83,22 @@ These can also be overridden per request: the `POST /dataset/generate` body acce
 
 > 📖 For a full walkthrough of how crawling works (BFS traversal, env vars, the crawl4ai service, per-request overrides and tuning), see [docs/crawling.md](docs/crawling.md).
 
+### Langfuse is a hard dependency
+
+There is no local database fallback for datasets — Langfuse is the sole source of truth, not an optional export target:
+
+- **Reads**: `GET /dataset`, `/langfuse/preview` and `/langfuse/export` read directly from Langfuse. Every dataset/Q&A read endpoint returns `503` when `LANGFUSE_SECRET_KEY`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_HOST` aren't set or Langfuse is unreachable.
+- **Writes**: generation only durably stores Q&A pairs by syncing to Langfuse at the end of the pipeline (see `LANGFUSE_AUTO_SYNC`/`sync_langfuse` above). If that step is skipped or fails, the generated pairs are still returned in the API response but nothing is persisted server-side for later retrieval — there's no local table to fall back to or re-sync from afterwards.
+- **Deletion**: `DELETE /dataset/{name}` removes every item via the Langfuse API, but the empty dataset "shell" remains — Langfuse has no delete-dataset endpoint.
+
+### File uploads (PDF/image)
+
+`POST /dataset/generate/file` reads each page with a vision-capable model, so `OPENAI_VLM_MODEL` is **required** for this source — without it the endpoint returns `400 No vision model configured`. It can also be overridden per request via the `model_vlm` form field.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENAI_VLM_MODEL` | _(none — required for file uploads)_ | Vision model used to transcribe each page of an uploaded PDF/image into text before QA generation |
+
 ### Authentication & dev users
 
 The API supports two roles — `user` and `admin` — backed by a `users` table

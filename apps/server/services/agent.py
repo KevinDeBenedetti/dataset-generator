@@ -6,6 +6,7 @@ parse tolerantly. No agent framework / LiteLLM layer is involved, so provider
 params (e.g. ``reasoning_effort`` for gpt-oss models) are forwarded verbatim.
 """
 
+import functools
 import json
 import logging
 import re
@@ -202,8 +203,11 @@ def _parse_qa_list(text: str) -> List[QA]:
 class QAAgentService:
     """Generate QA pairs by calling the configured model over the OpenAI SDK."""
 
-    def __init__(self):
-        self.client = openai.AsyncOpenAI(
+    @functools.cached_property
+    def client(self) -> openai.AsyncOpenAI:
+        # Lazy for the same reason as LLMService.client: building the real
+        # client touches SSL/certifi at construction time.
+        return openai.AsyncOpenAI(
             api_key=config.openai_api_key,
             base_url=config.openai_base_url or None,
         )

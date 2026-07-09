@@ -23,6 +23,8 @@ export type GenerateParams =
       crawl?: boolean
       maxDepth?: number | null
       maxPages?: number | null
+      crawlDelaySeconds?: number | null
+      maxPagesPerDomain?: number | null
       syncLangfuse?: boolean
     }
   | {
@@ -97,6 +99,8 @@ export function useGenerateDataset() {
         crawl: params.crawl,
         max_depth: params.maxDepth,
         max_pages: params.maxPages,
+        crawl_delay_seconds: params.crawlDelaySeconds,
+        max_pages_per_domain: params.maxPagesPerDomain,
         sync_langfuse: params.syncLangfuse,
       }
       // Stream pipeline progress so the timeline fills in live.

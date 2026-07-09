@@ -4,9 +4,8 @@ import logging
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 
 from server.schemas.dataset import TargetLanguage
 from server.schemas.generate import (
@@ -17,7 +16,6 @@ from server.schemas.generate import (
     PipelineStep,
     QAPair,
 )
-from server.core.database import get_db
 from server.pipelines.dataset import DatasetPipeline
 from server.core.config import config
 
@@ -136,7 +134,7 @@ def _build_response(
     },
 )
 async def create_dataset_for_url(
-    request: DatasetGenerationRequest, db: Session = Depends(get_db)
+    request: DatasetGenerationRequest,
 ) -> DatasetGenerationResponse:
     """
     Create a new dataset by processing the content of a given URL.
@@ -149,7 +147,7 @@ async def create_dataset_for_url(
     try:
         model_cleaning, target_language_enum, model_qa = _validate_and_resolve(request)
 
-        pipeline = DatasetPipeline(db)
+        pipeline = DatasetPipeline()
         result = await pipeline.process_url(
             url=str(request.url),
             dataset_name=request.dataset_name,
@@ -251,7 +249,6 @@ async def create_dataset_for_file(
     model_vlm: Optional[str] = Form(None),
     similarity_threshold: float = Form(0.9, ge=0.0, le=1.0),
     sync_langfuse: bool = Form(True),
-    db: Session = Depends(get_db),
 ) -> DatasetGenerationResponse:
     """Create a dataset from an uploaded PDF/image via the vision model."""
     start_time = time.time()
@@ -267,7 +264,7 @@ async def create_dataset_for_file(
         )
 
     try:
-        pipeline = DatasetPipeline(db)
+        pipeline = DatasetPipeline()
         result = await pipeline.process_file(
             content=content,
             filename=file.filename or "upload",
@@ -325,7 +322,7 @@ async def create_dataset_for_file(
     },
 )
 async def create_dataset_for_github(
-    request: GitHubGenerationRequest, db: Session = Depends(get_db)
+    request: GitHubGenerationRequest,
 ) -> DatasetGenerationResponse:
     """Create a dataset from a GitHub account's public README/docs."""
     start_time = time.time()
@@ -335,7 +332,7 @@ async def create_dataset_for_github(
     )
 
     try:
-        pipeline = DatasetPipeline(db)
+        pipeline = DatasetPipeline()
         result = await pipeline.process_github(
             username=request.github_username,
             token=request.github_token,
@@ -380,7 +377,7 @@ async def create_dataset_for_github(
     "per crawled page, then a final `result` (or `error`) event.",
 )
 async def stream_dataset_for_url(
-    request: DatasetGenerationRequest, db: Session = Depends(get_db)
+    request: DatasetGenerationRequest,
 ) -> StreamingResponse:
     """Stream the generation pipeline's progress to the client over SSE.
 
@@ -398,7 +395,7 @@ async def stream_dataset_for_url(
         # Called synchronously from the pipeline (same event loop) — safe.
         queue.put_nowait(event)
 
-    pipeline = DatasetPipeline(db)
+    pipeline = DatasetPipeline()
 
     async def run() -> None:
         try:
