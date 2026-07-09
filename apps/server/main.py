@@ -35,6 +35,18 @@ def _seed_dev_users() -> None:
         db.close()
 
 
+def _purge_expired_refresh_tokens() -> None:
+    """Delete revoked/expired refresh token rows. Runs in a worker thread."""
+    from server.services.auth import purge_expired_refresh_tokens
+
+    db = SessionLocal()
+    try:
+        deleted = purge_expired_refresh_tokens(db)
+        logger.info("Refresh token purge: %d row(s) deleted", deleted)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Bind the running loop so log records emitted from worker threads can be
@@ -56,6 +68,12 @@ async def lifespan(app: FastAPI):
             await asyncio.to_thread(_seed_dev_users)
         except Exception:
             logger.exception("Dev user seeding failed")
+
+    # Sweep revoked/expired refresh tokens (nothing else ever deletes a row).
+    try:
+        await asyncio.to_thread(_purge_expired_refresh_tokens)
+    except Exception:
+        logger.exception("Refresh token purge failed")
 
     yield
 

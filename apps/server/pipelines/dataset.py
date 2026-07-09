@@ -1,7 +1,6 @@
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
-from sqlalchemy.orm import Session
 
 from server.core.config import config
 from server.services.files import file_to_page_images
@@ -9,22 +8,23 @@ from server.services.github import fetch_account_docs
 from server.services.scraper import ScraperService
 from server.services.llm import LLMService
 from server.services.agent import QAAgentService
-from server.services.dataset import DatasetService, get_qa_records_for_dataset
 from server.services.qa import QAService
 from server.services.langfuse import is_langfuse_available, sync_qa_to_langfuse
 from server.schemas.dataset import TargetLanguage
 
 
 class DatasetPipeline:
-    """Pipeline to process a URL and generate a QA dataset"""
+    """Pipeline to process a URL and generate a QA dataset.
 
-    def __init__(self, db: Session):
-        self.db = db
+    Langfuse is the sole persistence layer (see ``_sync_to_langfuse``): if
+    that step is skipped or fails, the generated pairs are still returned in
+    the response but nothing is stored server-side for later retrieval.
+    """
+
+    def __init__(self):
         self.scraper_service = ScraperService()
         self.llm_service = LLMService()
         self.qa_agent_service = QAAgentService()
-        self.dataset_service = DatasetService(db)
-        self.qa_service = QAService(db)
 
     async def process_url(
         self,
@@ -133,26 +133,11 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            # 1. Get or create the dataset
-            t = time.perf_counter()
-            dataset = self.dataset_service.get_or_create_dataset(
-                name=dataset_name,
-                description=f"Dataset automatically created for {url}",
-                target_language=target_language_str,
-            )
-            record(
-                "dataset",
-                "Prepare dataset",
-                "success",
-                t,
-                f"Dataset '{dataset_name}' ready",
-            )
+            qa_service = QAService(dataset_name)
 
-            # 2. Scrape: a single page, or a breadth-first crawl of the site.
+            # 1. Scrape: a single page, or a breadth-first crawl of the site.
             # The scraper is stateless — it returns page content in memory,
-            # nothing written to the DB; the dataset is only the Langfuse container.
-            assert dataset.id is not None
-            assert isinstance(dataset.id, str)
+            # nothing written to a DB; Langfuse is the only persistence layer.
             t = time.perf_counter()
             if crawl:
                 on_page: Optional[Callable[[Dict[str, Any]], None]] = None
@@ -190,10 +175,11 @@ class DatasetPipeline:
                     f"Fetched {scraped_len:,} characters from {url}",
                 )
 
-            # 3-6. Clean → generate → deduplicate & save, per page. Aggregated so
+            # 2-5. Clean → generate → deduplicate, per page. Aggregated so
             # the whole crawl produces one dataset with the maximum of QA pairs.
             qa_list: List[Any] = []
             qa_stats = {"total": 0, "exact_duplicates": 0, "similar_duplicates": 0}
+            saved_items: List[Dict[str, Any]] = []
             scraped_chunks: List[str] = []
 
             # Clean/QA/save are interleaved per page, so we accumulate the time
@@ -220,19 +206,17 @@ class DatasetPipeline:
                 qa_list.extend(page_qa)
                 qa_s += time.perf_counter() - t_stage
 
-                # Deduplicate (across the whole dataset) and save.
+                # Deduplicate against the dataset's existing Langfuse items.
                 t_stage = time.perf_counter()
-                page_stats = self.qa_service.process_qa_pairs(
+                page_stats = qa_service.process_qa_pairs(
                     qa_list=page_qa,
                     cleaned_text=cleaned_text,
                     url=page_url,
-                    page_snapshot_id=None,
-                    dataset_name=dataset_name,
                     model=model_qa_str,
-                    dataset_id=dataset.id,
                     similarity_threshold=similarity_threshold,
                 )
                 save_s += time.perf_counter() - t_stage
+                saved_items.extend(page_stats["items"])
                 for key in qa_stats:
                     qa_stats[key] += page_stats.get(key, 0)
 
@@ -257,27 +241,29 @@ class DatasetPipeline:
             )
             record(
                 "save",
-                "Deduplicate & save",
+                "Deduplicate",
                 "success",
                 0,
-                f"Saved {qa_stats['total']} pairs · skipped "
+                f"Kept {qa_stats['total']} pairs · skipped "
                 f"{qa_stats['exact_duplicates']} exact and "
                 f"{qa_stats['similar_duplicates']} similar duplicates "
                 f"(threshold {similarity_threshold})",
                 duration_ms=int(save_s * 1000),
             )
 
-            # 7. Version & sync to Langfuse (DVC-like commit) when available.
+            # 6. Version & sync to Langfuse (DVC-like commit) when available.
             # Gating on availability (memoised auth_check) — not just configured
             # — means an invalid/unreachable key is detected once, not retried
-            # noisily on every generation.
+            # noisily on every generation. This is the only persistence step:
+            # if it's skipped, the pairs below are still returned in the
+            # response but not stored anywhere server-side.
             langfuse_result: Optional[Dict[str, Any]] = None
             if sync_langfuse and config.langfuse_auto_sync and is_langfuse_available():
                 t = time.perf_counter()
                 try:
                     langfuse_result = self._sync_to_langfuse(
-                        dataset_id=dataset.id,
                         dataset_name=dataset_name,
+                        items=saved_items,
                         source_url=url,
                         stats={**qa_stats, "pages_crawled": len(pages)},
                         target_language=target_language_str,
@@ -301,12 +287,12 @@ class DatasetPipeline:
                         f"Langfuse sync skipped: {exc}",
                     )
 
-            # 8. Return results
+            # 7. Return results
             return {
                 "qa_pairs": qa_list,
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
-                "dataset_id": dataset.id,  # Explicitly add the dataset ID to the result
+                "dataset_id": dataset_name,
                 "pages_crawled": len(pages),
                 "steps": steps,
                 "scraped_content": "\n\n".join(scraped_chunks),
@@ -335,9 +321,8 @@ class DatasetPipeline:
 
         The file is rasterised to one image per page and transcribed with the
         configured vision model; each page's text is then mined for QA pairs and
-        deduplicated/saved exactly like :meth:`process_url` — minus scraping and
-        crawling. ``QASource`` rows are saved with a ``file://<name>`` source and
-        no page snapshot (the column is nullable).
+        deduplicated exactly like :meth:`process_url` — minus scraping and
+        crawling. Items are synced to Langfuse with a ``file://<name>`` source.
         """
         try:
             similarity_threshold = self._normalize_threshold(similarity_threshold)
@@ -381,23 +366,9 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            # 1. Get or create the dataset.
-            t = time.perf_counter()
-            dataset = self.dataset_service.get_or_create_dataset(
-                name=dataset_name,
-                description=f"Dataset automatically created for {filename}",
-                target_language=target_language_str,
-            )
-            assert dataset.id is not None
-            record(
-                "dataset",
-                "Prepare dataset",
-                "success",
-                t,
-                f"Dataset '{dataset_name}' ready",
-            )
+            qa_service = QAService(dataset_name)
 
-            # 2. Rasterise the file to one image per page.
+            # 1. Rasterise the file to one image per page.
             t = time.perf_counter()
             page_images = file_to_page_images(content, content_type, filename)
             record(
@@ -408,10 +379,11 @@ class DatasetPipeline:
                 f"Prepared {len(page_images)} page(s) from {filename}",
             )
 
-            # 3-5. Transcribe each page with the VLM, generate QA, deduplicate &
-            # save. Times are accumulated per stage across all pages (like crawl).
+            # 2-4. Transcribe each page with the VLM, generate QA, deduplicate.
+            # Times are accumulated per stage across all pages (like crawl).
             qa_list: List[Any] = []
             qa_stats = {"total": 0, "exact_duplicates": 0, "similar_duplicates": 0}
+            saved_items: List[Dict[str, Any]] = []
             extracted_chunks: List[str] = []
             extract_s = qa_s = save_s = 0.0
             extract_chars = 0
@@ -435,17 +407,15 @@ class DatasetPipeline:
                 qa_s += time.perf_counter() - t_stage
 
                 t_stage = time.perf_counter()
-                page_stats = self.qa_service.process_qa_pairs(
+                page_stats = qa_service.process_qa_pairs(
                     qa_list=page_qa,
                     cleaned_text=text,
                     url=source_url,
-                    page_snapshot_id=None,
-                    dataset_name=dataset_name,
                     model=model_qa_str,
-                    dataset_id=dataset.id,
                     similarity_threshold=similarity_threshold,
                 )
                 save_s += time.perf_counter() - t_stage
+                saved_items.extend(page_stats["items"])
                 for key in qa_stats:
                     qa_stats[key] += page_stats.get(key, 0)
 
@@ -472,24 +442,24 @@ class DatasetPipeline:
             )
             record(
                 "save",
-                "Deduplicate & save",
+                "Deduplicate",
                 "success",
                 0,
-                f"Saved {qa_stats['total']} pairs · skipped "
+                f"Kept {qa_stats['total']} pairs · skipped "
                 f"{qa_stats['exact_duplicates']} exact and "
                 f"{qa_stats['similar_duplicates']} similar duplicates "
                 f"(threshold {similarity_threshold})",
                 duration_ms=int(save_s * 1000),
             )
 
-            # 6. Version & sync to Langfuse when available (same gate as the URL path).
+            # 5. Version & sync to Langfuse when available (same gate as the URL path).
             langfuse_result: Optional[Dict[str, Any]] = None
             if sync_langfuse and config.langfuse_auto_sync and is_langfuse_available():
                 t = time.perf_counter()
                 try:
                     langfuse_result = self._sync_to_langfuse(
-                        dataset_id=dataset.id,
                         dataset_name=dataset_name,
+                        items=saved_items,
                         source_url=source_url,
                         stats={**qa_stats, "pages_crawled": len(page_images)},
                         target_language=target_language_str,
@@ -517,7 +487,7 @@ class DatasetPipeline:
                 "qa_pairs": qa_list,
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
-                "dataset_id": dataset.id,
+                "dataset_id": dataset_name,
                 "pages_crawled": len(page_images),
                 "steps": steps,
                 "scraped_content": "\n\n".join(extracted_chunks),
@@ -545,10 +515,10 @@ class DatasetPipeline:
         """Generate a QA dataset from a GitHub account's public documentation.
 
         Fetches each public repo's README and top-level docs, then cleans →
-        generates QA → deduplicates/saves per document, exactly like
+        generates QA → deduplicates per document, exactly like
         :meth:`process_url` (minus scraping). The token, if given, only raises the
-        GitHub API rate limit — only public data is read. ``QASource`` rows are
-        saved with a ``github://<user>`` source and no page snapshot.
+        GitHub API rate limit — only public data is read. Items are synced to
+        Langfuse with a ``github://<user>`` source.
         """
         try:
             similarity_threshold = self._normalize_threshold(similarity_threshold)
@@ -592,25 +562,11 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            # 1. Get or create the dataset.
-            t = time.perf_counter()
-            dataset = self.dataset_service.get_or_create_dataset(
-                name=dataset_name,
-                description=f"Dataset automatically created for github.com/{username}",
-                target_language=target_language_str,
-            )
-            assert dataset.id is not None
-            record(
-                "dataset",
-                "Prepare dataset",
-                "success",
-                t,
-                f"Dataset '{dataset_name}' ready",
-            )
+            qa_service = QAService(dataset_name)
 
-            # 2. Fetch the account's public README + top-level docs.
+            # 1. Fetch the account's public README + top-level docs.
             t = time.perf_counter()
-            docs = fetch_account_docs(username, token=token, max_repos=max_repos)
+            docs = await fetch_account_docs(username, token=token, max_repos=max_repos)
             record(
                 "fetch",
                 "Fetch GitHub docs",
@@ -621,9 +577,10 @@ class DatasetPipeline:
                 else f"No public docs found for github.com/{username}",
             )
 
-            # 3-5. Clean → generate QA → deduplicate & save, per document.
+            # 2-4. Clean → generate QA → deduplicate, per document.
             qa_list: List[Any] = []
             qa_stats = {"total": 0, "exact_duplicates": 0, "similar_duplicates": 0}
+            saved_items: List[Dict[str, Any]] = []
             fetched_chunks: List[str] = []
             clean_s = qa_s = save_s = 0.0
             clean_chars = 0
@@ -643,17 +600,15 @@ class DatasetPipeline:
                 qa_s += time.perf_counter() - t_stage
 
                 t_stage = time.perf_counter()
-                doc_stats = self.qa_service.process_qa_pairs(
+                doc_stats = qa_service.process_qa_pairs(
                     qa_list=doc_qa,
                     cleaned_text=cleaned_text,
                     url=source_url,
-                    page_snapshot_id=None,
-                    dataset_name=dataset_name,
                     model=model_qa_str,
-                    dataset_id=dataset.id,
                     similarity_threshold=similarity_threshold,
                 )
                 save_s += time.perf_counter() - t_stage
+                saved_items.extend(doc_stats["items"])
                 for key in qa_stats:
                     qa_stats[key] += doc_stats.get(key, 0)
 
@@ -678,24 +633,24 @@ class DatasetPipeline:
             )
             record(
                 "save",
-                "Deduplicate & save",
+                "Deduplicate",
                 "success",
                 0,
-                f"Saved {qa_stats['total']} pairs · skipped "
+                f"Kept {qa_stats['total']} pairs · skipped "
                 f"{qa_stats['exact_duplicates']} exact and "
                 f"{qa_stats['similar_duplicates']} similar duplicates "
                 f"(threshold {similarity_threshold})",
                 duration_ms=int(save_s * 1000),
             )
 
-            # 6. Version & sync to Langfuse when available (same gate as the URL path).
+            # 5. Version & sync to Langfuse when available (same gate as the URL path).
             langfuse_result: Optional[Dict[str, Any]] = None
             if sync_langfuse and config.langfuse_auto_sync and is_langfuse_available():
                 t = time.perf_counter()
                 try:
                     langfuse_result = self._sync_to_langfuse(
-                        dataset_id=dataset.id,
                         dataset_name=dataset_name,
+                        items=saved_items,
                         source_url=source_url,
                         stats={**qa_stats, "pages_crawled": len(docs)},
                         target_language=target_language_str,
@@ -723,7 +678,7 @@ class DatasetPipeline:
                 "qa_pairs": qa_list,
                 **qa_stats,
                 "similarity_threshold": similarity_threshold,
-                "dataset_id": dataset.id,
+                "dataset_id": dataset_name,
                 "pages_crawled": len(docs),
                 "steps": steps,
                 "scraped_content": "\n\n".join(fetched_chunks),
@@ -754,15 +709,18 @@ class DatasetPipeline:
 
     def _sync_to_langfuse(
         self,
-        dataset_id: str,
         dataset_name: str,
+        items: List[Dict[str, Any]],
         source_url: str,
         stats: Dict[str, Any],
         target_language: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Push all current QA items for the dataset to Langfuse as a new version."""
-        records = get_qa_records_for_dataset(self.db, dataset_id)
-        items = [record.to_langfuse_dataset_item() for record in records]
+        """Push this run's new QA items to Langfuse as a new version.
+
+        Item ids are content hashes (see ``compute_hash_from_content``), so
+        this stays idempotent across re-runs even though it only pushes the
+        pairs generated in *this* call, not a full re-read of the dataset.
+        """
         return sync_qa_to_langfuse(
             dataset_name=dataset_name,
             items=items,

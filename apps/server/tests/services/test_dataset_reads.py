@@ -56,12 +56,15 @@ def test_views_raise_when_langfuse_unavailable():
 
 def test_list_datasets_view_maps_shape():
     # The Q/A count is the live item count, not the dataset's metadata value.
-    with patch(
-        "server.services.dataset_reads.list_datasets",
-        return_value=[_dataset("alpha", 5)],
-    ), patch(
-        "server.services.dataset_reads.count_dataset_items",
-        return_value=42,
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets",
+            return_value=[_dataset("alpha", 5)],
+        ),
+        patch(
+            "server.services.dataset_reads.count_dataset_items",
+            return_value=42,
+        ),
     ):
         result = list_datasets_view()
     assert result == [
@@ -78,12 +81,15 @@ def test_list_datasets_view_maps_shape():
 
 def test_list_datasets_view_keeps_metadata_count_when_count_fails():
     # If the live count errors, the metadata-derived value is kept (best-effort).
-    with patch(
-        "server.services.dataset_reads.list_datasets",
-        return_value=[_dataset("alpha", 5)],
-    ), patch(
-        "server.services.dataset_reads.count_dataset_items",
-        side_effect=RuntimeError("boom"),
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets",
+            return_value=[_dataset("alpha", 5)],
+        ),
+        patch(
+            "server.services.dataset_reads.count_dataset_items",
+            side_effect=RuntimeError("boom"),
+        ),
     ):
         result = list_datasets_view()
     assert result[0]["qa_sources_count"] == 5

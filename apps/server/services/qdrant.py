@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 # Re-exported for callers that import it from this module.
 __all__ = ["LangfuseUnavailableError"]
 
+# Q/A pairs are embedded in batches rather than one `embeddings.create` call
+# for the whole dataset — a large dataset could otherwise exceed the
+# embedding endpoint's per-request token/size limit.
+_EMBED_BATCH_SIZE = 100
+
 
 class Embedder(Protocol):
     """Anything that can turn texts into vectors (LLMService satisfies this)."""
@@ -109,7 +114,7 @@ def _item_fields(item: Dict[str, Any]) -> Dict[str, Any]:
     """Extract the Q/A fields from a Langfuse dataset item.
 
     Items are stored as ``input={question, context, source_url}`` and
-    ``expected_output={answer, confidence}`` (see QASource.to_langfuse_dataset_item).
+    ``expected_output={answer, confidence}`` (see ``QAService.process_qa_pairs``).
     """
     inp = _as_dict(item.get("input"))
     out = _as_dict(item.get("expected_output"))
@@ -129,6 +134,14 @@ def _item_to_text(item: Dict[str, Any]) -> str:
     f = _item_fields(item)
     parts = [f["question"], f["answer"], f["context"]]
     return "\n\n".join(part for part in parts if part).strip()
+
+
+def _embed_in_batches(llm_service: Embedder, texts: List[str]) -> List[List[float]]:
+    """Embed ``texts`` in fixed-size batches (``_EMBED_BATCH_SIZE``), preserving order."""
+    vectors: List[List[float]] = []
+    for i in range(0, len(texts), _EMBED_BATCH_SIZE):
+        vectors.extend(llm_service.embed_texts(texts[i : i + _EMBED_BATCH_SIZE]))
+    return vectors
 
 
 def delete_collection_for(dataset_name: str) -> bool:
@@ -204,7 +217,7 @@ def sync_dataset_to_qdrant(
     collection_name = collection_name_for(dataset_name)
 
     texts = [_item_to_text(it) for it in items]
-    vectors = llm_service.embed_texts(texts)
+    vectors = _embed_in_batches(llm_service, texts)
     if len(vectors) != len(items):
         raise RuntimeError(
             f"Embedding count mismatch: {len(vectors)} vectors for {len(items)} items"
