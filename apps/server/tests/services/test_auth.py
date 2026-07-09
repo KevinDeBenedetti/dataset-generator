@@ -135,7 +135,9 @@ class TestRefreshTokens:
     def test_reuse_revokes_the_whole_family(self, test_db):
         user = create_user(test_db, email="steal@example.com", password="pw")
         raw = issue_refresh_token(test_db, user)
-        _, successor = rotate_refresh_token(test_db, raw)
+        rotated = rotate_refresh_token(test_db, raw)
+        assert rotated is not None
+        _, successor = rotated
 
         # Replaying the consumed token is rejected...
         assert rotate_refresh_token(test_db, raw) is None

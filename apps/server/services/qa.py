@@ -32,7 +32,7 @@ class QAService:
                 items = []
             self._existing_entries = [
                 QAEntry(
-                    hash=item.get("id"),
+                    hash=item.get("id", ""),
                     question=(item.get("input") or {}).get("question", ""),
                     context=(item.get("input") or {}).get("context", ""),
                     source_url=(item.get("input") or {}).get("source_url", ""),

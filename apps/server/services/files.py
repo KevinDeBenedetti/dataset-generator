@@ -67,7 +67,7 @@ def _pdf_to_images(content: bytes, filename: str) -> List[PageImage]:
     pages: List[PageImage] = []
     try:
         matrix = pymupdf.Matrix(_PDF_ZOOM, _PDF_ZOOM)
-        for i, page in enumerate(doc):
+        for i, page in enumerate(doc.pages()):
             pix = page.get_pixmap(matrix=matrix)
             pages.append((f"{filename} p.{i + 1}", pix.tobytes("png"), "image/png"))
     finally:
