@@ -2,15 +2,15 @@
 
 The comparison logic lives here, free of any database or ORM dependency, so it
 can be unit-tested directly and reused as the QA storage layer evolves.
-``server.services.qa.QAService`` loads existing ``QASource`` rows into
-:class:`QAEntry` values once per pipeline run (via ``QASource._to_entry``) and
-delegates every comparison to :func:`classify_duplicate` against that
-in-memory pool — no DB query is repeated per QA pair.
+``server.services.qa.QAService`` loads the target dataset's existing Langfuse
+items into :class:`QAEntry` values once per pipeline run and delegates every
+comparison to :func:`classify_duplicate` against that in-memory pool — no
+network call is repeated per QA pair.
 
-Semantics (preserved verbatim from the previous DB-backed implementation):
+Semantics:
 
-* **exact** — a candidate whose content hash already exists (anywhere) is an
-  exact duplicate; this always wins over a similarity match.
+* **exact** — a candidate whose content hash already exists (anywhere in the
+  pool) is an exact duplicate; this always wins over a similarity match.
 * **similar** — otherwise, a candidate is a similar duplicate of the first
   existing entry with the *same source URL* whose question similarity clears
   the caller's ``threshold`` **and** whose context similarity clears
@@ -18,6 +18,7 @@ Semantics (preserved verbatim from the previous DB-backed implementation):
 * **new** — anything else.
 """
 
+import hashlib
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Iterable, List, Literal, Optional, Tuple
@@ -48,6 +49,16 @@ class DuplicateVerdict:
     type: DuplicateType
     duplicate_hash: Optional[str]
     similarity_score: float
+
+
+def compute_hash_from_content(
+    question: str, answer: str, context: str, source_url: str = ""
+) -> str:
+    """Content-hash id for a QA pair — stable across re-runs (idempotent sync)."""
+    question_normalized = " ".join(question.strip().split())
+    context_normalized = " ".join(context.strip().split())
+    content = f"{question_normalized}|{context_normalized}|{source_url}"
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _ratio(a: str, b: str) -> float:

@@ -183,6 +183,25 @@ def test_sync_empty_dataset_raises_value_error():
         )
 
 
+def test_sync_embeds_in_batches(monkeypatch):
+    """Large datasets are embedded in fixed-size batches, not one giant call."""
+    monkeypatch.setattr(qdrant_service, "_EMBED_BATCH_SIZE", 2)
+    items = [_item(f"h{i}", i) for i in range(5)]
+    fake_client = FakeQdrantClient()
+    fake_llm = FakeLLM()
+
+    result = sync_dataset_to_qdrant(
+        "My Dataset", llm_service=fake_llm, client=fake_client, items=items
+    )
+
+    # 5 items batched by 2 → 3 embedding calls (2, 2, 1), but still one point
+    # per item, correctly matched (order preserved across batches).
+    assert fake_llm.calls == 3
+    assert result["points_upserted"] == 5
+    points = fake_client.collections[result["collection_name"]]["points"]
+    assert len(points) == 5
+
+
 # --- search ------------------------------------------------------------------
 
 

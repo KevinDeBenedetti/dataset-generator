@@ -55,6 +55,8 @@ export function DatasetGenerate() {
   const [crawl, setCrawl] = useState(true);
   const [maxDepth, setMaxDepth] = useState("2");
   const [maxPages, setMaxPages] = useState("50");
+  const [crawlDelaySeconds, setCrawlDelaySeconds] = useState("");
+  const [maxPagesPerDomain, setMaxPagesPerDomain] = useState("");
   const [syncLangfuse, setSyncLangfuse] = useState(true);
 
   const { data: datasets = [] } = useDatasets();
@@ -136,6 +138,12 @@ export function DatasetGenerate() {
                 crawl,
                 maxDepth: crawl ? Number(maxDepth) || null : null,
                 maxPages: crawl ? Number(maxPages) || null : null,
+                crawlDelaySeconds: crawl
+                  ? Number(crawlDelaySeconds) || null
+                  : null,
+                maxPagesPerDomain: crawl
+                  ? Number(maxPagesPerDomain) || null
+                  : null,
                 syncLangfuse,
               }
       );
@@ -329,6 +337,33 @@ export function DatasetGenerate() {
                         min={1}
                         value={maxPages}
                         onChange={(e) => setMaxPages(e.target.value)}
+                        disabled={isAnyProcessing}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-500">
+                        Crawl delay (s)
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={crawlDelaySeconds}
+                        onChange={(e) => setCrawlDelaySeconds(e.target.value)}
+                        placeholder="default"
+                        disabled={isAnyProcessing}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-500">
+                        Max pages/domain
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={maxPagesPerDomain}
+                        onChange={(e) => setMaxPagesPerDomain(e.target.value)}
+                        placeholder="unlimited"
                         disabled={isAnyProcessing}
                       />
                     </div>

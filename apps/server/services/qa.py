@@ -1,25 +1,44 @@
 import logging
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
-from server.models.dataset import QASource
-from server.services.dedup import QAEntry, classify_duplicate
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from server.services.dedup import QAEntry, classify_duplicate, compute_hash_from_content
+from server.services.langfuse import get_dataset_items
 
 
 class QAService:
-    def __init__(self, db: Session):
-        self.db = db
-        # In-memory dedup pool, loaded once (lazily, on first use) instead of
-        # once per QA pair. Previously every candidate re-ran `db.query(...).all()`
-        # against the whole table; now that's a single load per pipeline run,
-        # and comparisons happen in memory via the pure dedup logic. Grown
-        # after each process_qa_pairs call's commit (see its docstring) so a
-        # later call — e.g. the next crawled page — sees this call's additions.
+    """Deduplicates generated QA pairs against a dataset's existing items.
+
+    The dedup pool is the target dataset's *existing Langfuse items*, loaded
+    once (lazily) per pipeline run — scoped to this one dataset, not global,
+    since Langfuse has no cheap "every item across every dataset" read. Grown
+    in place after each :meth:`process_qa_pairs` call so a later call (e.g.
+    the next crawled page) sees this call's additions.
+
+    This service only classifies and shapes QA pairs; it writes nothing
+    anywhere — the caller is responsible for syncing the returned items to
+    Langfuse (see ``DatasetPipeline._sync_to_langfuse``).
+    """
+
+    def __init__(self, dataset_name: str):
+        self.dataset_name = dataset_name
         self._existing_entries: Optional[List[QAEntry]] = None
 
     def _load_existing_entries(self) -> List[QAEntry]:
         if self._existing_entries is None:
+            try:
+                items = get_dataset_items(self.dataset_name)
+            except Exception:  # noqa: BLE001 — new dataset, or Langfuse unreachable
+                items = []
             self._existing_entries = [
-                QASource._to_entry(record) for record in self.db.query(QASource).all()
+                QAEntry(
+                    hash=item.get("id"),
+                    question=(item.get("input") or {}).get("question", ""),
+                    context=(item.get("input") or {}).get("context", ""),
+                    source_url=(item.get("input") or {}).get("source_url", ""),
+                )
+                for item in items
+                if (item.get("status") or "ACTIVE") == "ACTIVE"
             ]
         return self._existing_entries
 
@@ -28,38 +47,32 @@ class QAService:
         qa_list: List[Any],
         cleaned_text: str,
         url: str,
-        page_snapshot_id: Optional[str],
-        dataset_name: str,
         model: str,
-        dataset_id: Optional[str] = None,
         similarity_threshold: float = 0.9,
-    ) -> Dict[str, int]:
-        """Processes and saves QA pairs, deduplicating against an in-memory pool.
-
-        `QASource` is still written to (it remains the store `/langfuse/export`
-        and `/langfuse/preview` read from later) — only the *dedup lookup*
-        moved in-memory, so it no longer re-scans the whole table per pair.
+    ) -> Dict[str, Any]:
+        """Classify `qa_list` against the in-memory pool.
 
         Candidates are checked only against the pool as it stood at the start
         of this call — not against siblings added earlier in the same
-        ``qa_list`` — matching the DB session's ``autoflush=False`` (see
-        ``core/database.py``): the old ``db.query(...).all()`` lookup never
-        saw same-call, not-yet-committed rows either. The pool is extended
-        with this call's new entries only after commit, so a *later* call
-        (e.g. the next crawled page) does see them.
+        ``qa_list``, matching the previous DB-backed behaviour. Returns the
+        surviving (non-duplicate) items in Langfuse dataset-item shape,
+        alongside per-call stats.
         """
         existing = self._load_existing_entries()
-        qa_records = []
+        new_items: List[Dict[str, Any]] = []
         new_entries: List[QAEntry] = []
         exact_duplicates = 0
         similar_duplicates = 0
 
-        for i, qa_item in enumerate(qa_list):
+        for qa_item in qa_list:
+            question = qa_item.question
+            answer = qa_item.answer
+            confidence = getattr(qa_item, "confidence", 1.0)
+            item_hash = compute_hash_from_content(question, answer, cleaned_text, url)
+
             candidate = QAEntry(
-                hash=QASource.compute_hash_from_content(
-                    qa_item.question, qa_item.answer, cleaned_text, url
-                ),
-                question=qa_item.question,
+                hash=item_hash,
+                question=question,
                 context=cleaned_text,
                 source_url=url,
             )
@@ -86,34 +99,43 @@ class QAService:
                 )
 
             else:  # new
-                qa_record = QASource.from_qa_generation(
-                    question=qa_item.question,
-                    answer=qa_item.answer,
-                    context=cleaned_text,
-                    confidence=getattr(qa_item, "confidence", 1.0),
-                    source_url=url,
-                    page_snapshot_id=page_snapshot_id,
-                    dataset_id=dataset_id,  # Passage du dataset_id
-                    index=i,
+                new_items.append(
+                    {
+                        "id": item_hash,
+                        "input": {
+                            "question": question,
+                            "context": cleaned_text,
+                            "source_url": url,
+                        },
+                        "expected_output": {
+                            "answer": answer,
+                            "confidence": float(confidence),
+                        },
+                        "metadata": {
+                            "model": model,
+                            "generation_timestamp": datetime.now(
+                                timezone.utc
+                            ).isoformat(),
+                            "context_length": len(cleaned_text) if cleaned_text else 0,
+                            "question_length": len(question),
+                            "answer_length": len(answer),
+                            "content_hash": item_hash,
+                        },
+                    }
                 )
-
-                qa_record.dataset_name = dataset_name
-                qa_record.model = model
-                qa_records.append(qa_record)
-                self.db.add(qa_record)
                 new_entries.append(candidate)
 
-        self.db.commit()
         existing.extend(new_entries)
 
         logging.info(
-            f"Added {len(qa_records)} new QA pairs, "
+            f"Added {len(new_items)} new QA pairs, "
             f"skipped {exact_duplicates} exact duplicates, "
             f"skipped {similar_duplicates} similar duplicates"
         )
 
         return {
-            "total": len(qa_records),
+            "items": new_items,
+            "total": len(new_items),
             "exact_duplicates": exact_duplicates,
             "similar_duplicates": similar_duplicates,
         }

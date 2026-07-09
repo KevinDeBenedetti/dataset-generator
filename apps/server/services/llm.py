@@ -1,4 +1,5 @@
 import base64
+import functools
 import logging
 import openai
 import instructor
@@ -59,13 +60,23 @@ class PromptManager:
 
 class LLMService:
     def __init__(self):
-        self.client = openai.OpenAI(
+        self.prompt_manager = PromptManager()
+
+    @functools.cached_property
+    def client(self) -> openai.OpenAI:
+        # Lazy: building the real client touches SSL/certifi at construction
+        # time, which some sandboxes block. Deferring it to first use means
+        # instantiating LLMService is always safe, even when every method
+        # that would touch the client is mocked out (as most tests do).
+        return openai.OpenAI(
             api_key=config.openai_api_key, base_url=config.openai_base_url
         )
-        self.instructor_client = cast(
+
+    @functools.cached_property
+    def instructor_client(self) -> Any:
+        return cast(
             Any, instructor.from_openai(self.client, mode=instructor.Mode.MD_JSON)
         )
-        self.prompt_manager = PromptManager()
 
     def clean_text(self, text: str, model: Optional[str] = None) -> str:
         """Clean text using provided model or fallback to config.model_cleaning."""
@@ -116,9 +127,7 @@ class LLMService:
                             },
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{b64}"
-                                },
+                                "image_url": {"url": f"data:{mime_type};base64,{b64}"},
                             },
                         ],
                     }
