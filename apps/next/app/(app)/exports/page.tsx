@@ -52,10 +52,38 @@ type ExportRow = {
 }
 
 const RECENT: ExportRow[] = [
-  { dataset: 'docs-fr', format: 'langfuse', pairs: '1,190', date: '12 min ago', status: 'Succeeded', variant: 'success' },
-  { dataset: 'api-reference-en', format: 'jsonl', pairs: '1,730', date: 'yesterday', status: 'Succeeded', variant: 'success' },
-  { dataset: 'legal-es', format: 'csv', pairs: '958', date: '2d ago', status: 'Succeeded', variant: 'success' },
-  { dataset: 'faq-produit-de', format: 'langfuse', pairs: '—', date: '3d ago', status: 'Auth failed', variant: 'destructive' },
+  {
+    dataset: 'docs-fr',
+    format: 'langfuse',
+    pairs: '1,190',
+    date: '12 min ago',
+    status: 'Succeeded',
+    variant: 'success',
+  },
+  {
+    dataset: 'api-reference-en',
+    format: 'jsonl',
+    pairs: '1,730',
+    date: 'yesterday',
+    status: 'Succeeded',
+    variant: 'success',
+  },
+  {
+    dataset: 'legal-es',
+    format: 'csv',
+    pairs: '958',
+    date: '2d ago',
+    status: 'Succeeded',
+    variant: 'success',
+  },
+  {
+    dataset: 'faq-produit-de',
+    format: 'langfuse',
+    pairs: '—',
+    date: '3d ago',
+    status: 'Auth failed',
+    variant: 'destructive',
+  },
 ]
 
 export default function ExportsPage() {
@@ -131,21 +159,27 @@ export default function ExportsPage() {
                   <option>staging · eval</option>
                 </select>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <div>
                   <div className="label">Include metadata</div>
                   <div className="hint">Source, quality score, version.</div>
                 </div>
                 <span className="switch on" />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <div>
                   <div className="label">Exclude pairs &lt; 0.80</div>
                   <div className="hint">Filters out low scores.</div>
                 </div>
                 <span className="switch on" />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <div>
                   <div className="label">Anonymize source URLs</div>
                 </div>

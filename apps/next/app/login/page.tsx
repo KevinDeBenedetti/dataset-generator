@@ -4,13 +4,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useLogin } from '@/hooks/use-auth'
 import { oidcLoginUrl } from '@/api/sdk'
@@ -72,9 +66,7 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" disabled={loginMutation.isPending}>
-              {loginMutation.isPending && (
-                <Loader2 className="size-4 animate-spin" />
-              )}
+              {loginMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Sign in
             </Button>
           </form>
