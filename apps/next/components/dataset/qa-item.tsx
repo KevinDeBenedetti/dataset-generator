@@ -1,11 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { truncateText } from '@/lib/text-utils'
 import type { QaItem } from '@/api/types'
 
@@ -36,9 +32,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
                 Confidence: {(qa.confidence * 100).toFixed(1)}%
               </span>
             )}
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              ID: {qa.id.substring(0, 8)}...
-            </span>
+            <span className="bg-gray-100 px-2 py-1 rounded">ID: {qa.id.substring(0, 8)}...</span>
             {qa.created_at && (
               <span className="bg-green-100 px-2 py-1 rounded">
                 {new Date(qa.created_at).toLocaleDateString('en-US')}
@@ -122,9 +116,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
               )}
               <div className="flex gap-2">
                 <span className="font-medium text-yellow-800">Full ID:</span>
-                <span className="font-mono text-xs bg-white px-2 py-1 rounded border">
-                  {qa.id}
-                </span>
+                <span className="font-mono text-xs bg-white px-2 py-1 rounded border">{qa.id}</span>
               </div>
               {qa.metadata && (
                 <div className="flex gap-2">

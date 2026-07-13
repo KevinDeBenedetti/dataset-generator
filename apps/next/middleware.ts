@@ -4,8 +4,7 @@ import type { NextRequest } from 'next/server'
 // Names of the httpOnly auth cookies set by the API (see AUTH_COOKIE_NAME and
 // AUTH_REFRESH_COOKIE_NAME).
 const AUTH_COOKIE = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ?? 'access_token'
-const REFRESH_COOKIE =
-  process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_token'
+const REFRESH_COOKIE = process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_token'
 
 // Routes reachable without authentication. Everything else (the whole `(app)`
 // shell: /dashboard, /datasets, /generate, /jobs, /quality, /sources, …) is
@@ -25,8 +24,7 @@ export function middleware(request: NextRequest) {
   // what marks a still-renewable session — the API client refreshes the access
   // token transparently on the first 401. Either one counts as signed in.
   const isAuthenticated = Boolean(
-    request.cookies.get(AUTH_COOKIE)?.value ||
-      request.cookies.get(REFRESH_COOKIE)?.value
+    request.cookies.get(AUTH_COOKIE)?.value || request.cookies.get(REFRESH_COOKIE)?.value,
   )
   const isPublic = PUBLIC_PATHS.includes(pathname)
 

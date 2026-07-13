@@ -56,17 +56,11 @@ export default function DatasetDetailPage() {
       <div className="page-head">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span
-              className="cell-ic ic-lg"
-              style={{ width: 42, height: 42, borderRadius: 10 }}
-            >
+            <span className="cell-ic ic-lg" style={{ width: 42, height: 42, borderRadius: 10 }}>
               <Icon name="database" className="ic-lg" />
             </span>
             <div>
-              <h1
-                className="page-title"
-                style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-              >
+              <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 docs-fr <span className="tag">v4</span>
               </h1>
               <p className="page-sub" style={{ marginTop: 3 }}>
@@ -132,17 +126,10 @@ export default function DatasetDetailPage() {
         </div>
 
         {/* Add Q/A inline */}
-        <div
-          className="card"
-          id="addqa"
-          style={{ marginBottom: 18, borderStyle: 'dashed' }}
-        >
+        <div className="card" id="addqa" style={{ marginBottom: 18, borderStyle: 'dashed' }}>
           <div className="card-head" style={{ paddingBottom: 12 }}>
             <div>
-              <div
-                className="card-title"
-                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-              >
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Icon name="plus" />
                 Add a Q/A pair
               </div>
@@ -175,7 +162,11 @@ export default function DatasetDetailPage() {
                 flexWrap: 'wrap',
               }}
             >
-              <select className="select" style={{ width: 'auto' }} defaultValue="Source: docs.example.com">
+              <select
+                className="select"
+                style={{ width: 'auto' }}
+                defaultValue="Source: docs.example.com"
+              >
                 <option>Source: docs.example.com</option>
                 <option>Source: sitemap</option>
                 <option>No source</option>
@@ -337,7 +328,9 @@ export default function DatasetDetailPage() {
                   Before — raw scraped HTML
                 </h4>
                 <pre>
-                  <span className="del">{'<nav class="site-header">…menu, cookies, ads…</nav>'}</span>
+                  <span className="del">
+                    {'<nav class="site-header">…menu, cookies, ads…</nav>'}
+                  </span>
                   {'\n'}
                   {'<h1>API Authentication</h1>\n'}
                   {'To authenticate, copy the file\n'}

@@ -29,9 +29,7 @@ export default function GeneratePage() {
 
   return (
     <section className="max-w-2xl mx-auto flex flex-col gap-4 p-4">
-      <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">
-        Generate a dataset
-      </h1>
+      <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">Generate a dataset</h1>
 
       <DatasetGenerate />
 
@@ -40,10 +38,7 @@ export default function GeneratePage() {
       )}
 
       {generationStatus === 'success' && dataset && 'steps' in dataset && (
-        <GenerationTimeline
-          steps={dataset.steps ?? []}
-          scrapedContent={dataset.scraped_content}
-        />
+        <GenerationTimeline steps={dataset.steps ?? []} scrapedContent={dataset.scraped_content} />
       )}
 
       {generationStatus === 'success' && dataset && (

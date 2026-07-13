@@ -1,9 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  getCollections,
-  searchCollection,
-  syncCollectionToQdrant,
-} from '@/api/sdk'
+import { getCollections, searchCollection, syncCollectionToQdrant } from '@/api/sdk'
 
 export const COLLECTIONS_QUERY_KEY = ['collections']
 

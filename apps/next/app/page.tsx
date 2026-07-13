@@ -6,7 +6,6 @@ import {
   Download,
   FileJson,
   FilterX,
-  Github,
   GitBranch,
   Globe,
   Languages,
@@ -38,26 +37,22 @@ const features = [
   {
     icon: CopyCheck,
     title: 'Duplicate detection',
-    description:
-      'Semantic similarity filters out redundancy before pairs reach your dataset.',
+    description: 'Semantic similarity filters out redundancy before pairs reach your dataset.',
   },
   {
     icon: Languages,
     title: 'Multi-language',
-    description:
-      'Generation in French, English, Spanish and German, with localized prompts.',
+    description: 'Generation in French, English, Spanish and German, with localized prompts.',
   },
   {
     icon: ShieldCheck,
     title: 'Quality control',
-    description:
-      'Automatic validation and filtering, quality scores and configurable thresholds.',
+    description: 'Automatic validation and filtering, quality scores and configurable thresholds.',
   },
   {
     icon: Command,
     title: 'REST API',
-    description:
-      'Programmatic access to embed generation into your own workflows.',
+    description: 'Programmatic access to embed generation into your own workflows.',
   },
 ]
 
@@ -142,7 +137,7 @@ export default function HomePage() {
             <ThemeToggle />
             <Button asChild size="sm" variant="ghost">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer">
-                <Github className="size-4" />
+                <GitBranch className="size-4" />
                 GitHub
               </a>
             </Button>
@@ -171,9 +166,8 @@ export default function HomePage() {
             <span className="text-muted-foreground">straight from the web.</span>
           </h1>
           <p className="mt-5 max-w-[56ch] text-[17px] leading-[1.55] text-muted-foreground">
-            Scrape reliable sources, generate context-aware question-answer
-            pairs with an LLM, catch duplicates, and export to Langfuse, JSONL
-            or CSV — all from a single interface.
+            Scrape reliable sources, generate context-aware question-answer pairs with an LLM, catch
+            duplicates, and export to Langfuse, JSONL or CSV — all from a single interface.
           </p>
           <div className="mt-[30px] flex flex-wrap gap-[11px]">
             <Button asChild size="lg">
@@ -191,12 +185,11 @@ export default function HomePage() {
           </div>
           <div className="mt-[34px] flex flex-wrap gap-[22px] text-[13px] text-muted-foreground">
             <div>
-              <b className="font-semibold tabular-nums text-foreground">4</b>{' '}
-              languages — FR · EN · ES · DE
+              <b className="font-semibold tabular-nums text-foreground">4</b> languages — FR · EN ·
+              ES · DE
             </div>
             <div>
-              <b className="font-semibold tabular-nums text-foreground">70%+</b>{' '}
-              test coverage
+              <b className="font-semibold tabular-nums text-foreground">70%+</b> test coverage
             </div>
             <div>
               <b className="font-semibold text-foreground">FastAPI</b> + Next.js
@@ -217,24 +210,23 @@ export default function HomePage() {
           <pre className="overflow-x-auto whitespace-pre px-5 py-[18px] font-mono text-[13px] leading-[1.85]">
             <span className="text-muted-foreground"># Run the pipeline on a source</span>
             {'\n'}
-            <span className="text-success">$</span>{' '}
-            <span className="text-info">datasetgen</span> generate{' '}
-            <span className="text-warning">--url</span> https://docs.example.com{' '}
+            <span className="text-success">$</span> <span className="text-info">datasetgen</span>{' '}
+            generate <span className="text-warning">--url</span> https://docs.example.com{' '}
             <span className="text-warning">--lang</span> en{' '}
             <span className="text-warning">--n</span> 50{'\n'}
-            <span className="text-muted-foreground">→ scraping     </span>{' '}
+            <span className="text-muted-foreground">→ scraping </span>{' '}
             <span className="text-success">12 pages · 48,320 tokens</span>
             {'\n'}
-            <span className="text-muted-foreground">→ cleaning     </span>{' '}
+            <span className="text-muted-foreground">→ cleaning </span>{' '}
             <span className="text-success">normalized · 9,540 tokens kept</span>
             {'\n'}
             <span className="text-muted-foreground">→ qa-generation</span>{' '}
             <span className="text-success">50 Q/A pairs · gpt-4o-mini</span>
             {'\n'}
-            <span className="text-muted-foreground">→ dedup        </span>{' '}
+            <span className="text-muted-foreground">→ dedup </span>{' '}
             <span className="text-success">3 duplicates removed (cosine ≥ 0.92)</span>
             {'\n'}
-            <span className="text-muted-foreground">→ export       </span>{' '}
+            <span className="text-muted-foreground">→ export </span>{' '}
             <span className="text-success">langfuse · dataset &quot;docs-en&quot; #v4</span>
             {'\n'}
             <span className="text-success">✓</span> dataset ready —{' '}
@@ -246,14 +238,14 @@ export default function HomePage() {
         {/* Features */}
         <section id="features" className="scroll-mt-20 border-t border-border py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {"// features"}
+            {'// features'}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
             The whole pipeline, without gluing scripts together.
           </h2>
           <p className="mt-3 max-w-[58ch] text-[15px] text-muted-foreground">
-            Each step is a module: scraper, LLM client, data manager, export.
-            Compose them from the UI or the REST API.
+            Each step is a module: scraper, LLM client, data manager, export. Compose them from the
+            UI or the REST API.
           </p>
           <div className="mt-[34px] grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, description }) => (
@@ -276,7 +268,7 @@ export default function HomePage() {
         {/* Workflow */}
         <section id="workflow" className="scroll-mt-20 border-t border-border py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {"// pipeline"}
+            {'// pipeline'}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
             Six steps, from raw page to versioned dataset.
@@ -287,9 +279,7 @@ export default function HomePage() {
                 <div className="font-mono text-xs text-muted-foreground">{num}</div>
                 <Icon className="mt-3.5 size-[18px]" />
                 <h4 className="mt-2.5 text-[13.5px] font-semibold">{title}</h4>
-                <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
-                  {description}
-                </p>
+                <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">{description}</p>
               </div>
             ))}
           </div>
@@ -298,7 +288,7 @@ export default function HomePage() {
         {/* Formats */}
         <section id="formats" className="scroll-mt-20 border-t border-border py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {"// exports"}
+            {'// exports'}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
             Send your data wherever you need it.
@@ -312,9 +302,7 @@ export default function HomePage() {
                 <Icon className="size-5 text-muted-foreground" />
                 <div>
                   <b className="font-mono text-[13.5px] font-semibold">{name}</b>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {description}
-                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
                 </div>
               </div>
             ))}
@@ -328,8 +316,8 @@ export default function HomePage() {
               Build your first dataset in minutes.
             </h2>
             <p className="mx-auto mt-3 max-w-[48ch] text-muted-foreground">
-              Pick a source, run the pipeline, review the Q/A pairs and export.
-              Without leaving the interface.
+              Pick a source, run the pipeline, review the Q/A pairs and export. Without leaving the
+              interface.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-[11px]">
               <Button asChild size="lg">
@@ -355,8 +343,8 @@ export default function HomePage() {
                 <Brand />
               </Link>
               <p className="mt-3 text-[13px] leading-[1.6] text-muted-foreground">
-                Automated question-answer dataset generation via web scraping
-                and LLMs. Duplicate detection and Langfuse export.
+                Automated question-answer dataset generation via web scraping and LLMs. Duplicate
+                detection and Langfuse export.
               </p>
             </div>
             <FooterCol
@@ -387,9 +375,7 @@ export default function HomePage() {
             />
           </div>
           <div className="mt-9 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 text-[12.5px] text-muted-foreground">
-            <span>
-              © 2026 DatasetGen — Kévin De Benedetti. Open-source licensed.
-            </span>
+            <span>© 2026 DatasetGen. Open-source licensed.</span>
             <span className="font-mono">Python · FastAPI · Next.js · shadcn/ui</span>
           </div>
         </div>
@@ -398,13 +384,7 @@ export default function HomePage() {
   )
 }
 
-function FooterCol({
-  title,
-  links,
-}: {
-  title: string
-  links: { href: string; label: string }[]
-}) {
+function FooterCol({ title, links }: { title: string; links: { href: string; label: string }[] }) {
   return (
     <div className="text-[13px]">
       <h5 className="mb-3 text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">

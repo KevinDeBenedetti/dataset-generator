@@ -1,12 +1,81 @@
-.jobs-page .job { border: 1px solid var(--border); border-radius: 11px; padding: 16px 18px; margin-bottom: 12px; }
-.jobs-page .job-top { display: flex; align-items: center; gap: 12px; }
-.jobs-page .job-ic { width: 36px; height: 36px; border-radius: 9px; background: var(--secondary); display: flex; align-items: center; justify-content: center; flex: none; }
-.jobs-page .job-stages { display: flex; gap: 0; margin-top: 14px; }
-.jobs-page .stage { flex: 1; text-align: center; font-size: 11px; color: var(--muted-foreground); position: relative; padding-top: 16px; }
-.jobs-page .stage::before { content: ''; position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--border); }
-.jobs-page .stage::after { content: ''; position: absolute; top: 1px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 99px; background: var(--background); border: 2px solid var(--border); }
-.jobs-page .stage.done::before, .jobs-page .stage.done::after { background: var(--success); border-color: var(--success); }
-.jobs-page .stage.run::after { background: var(--info); border-color: var(--info); box-shadow: 0 0 0 3px color-mix(in oklch, var(--info) 25%, transparent); }
-.jobs-page .stage.done { color: var(--foreground); }
-.jobs-page .stage.run { color: var(--info); font-weight: 500; }
-.jobs-page .spin { display:inline-block; animation: spin 1.2s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+.jobs-page .job {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.jobs-page .job-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.jobs-page .job-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.jobs-page .job-stages {
+  display: flex;
+  gap: 0;
+  margin-top: 14px;
+}
+.jobs-page .stage {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  position: relative;
+  padding-top: 16px;
+}
+.jobs-page .stage::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+.jobs-page .stage::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 99px;
+  background: var(--background);
+  border: 2px solid var(--border);
+}
+.jobs-page .stage.done::before,
+.jobs-page .stage.done::after {
+  background: var(--success);
+  border-color: var(--success);
+}
+.jobs-page .stage.run::after {
+  background: var(--info);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--info) 25%, transparent);
+}
+.jobs-page .stage.done {
+  color: var(--foreground);
+}
+.jobs-page .stage.run {
+  color: var(--info);
+  font-weight: 500;
+}
+.jobs-page .spin {
+  display: inline-block;
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,126 +1,113 @@
-"use client";
+'use client'
 
-import { useState, useMemo } from "react";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useState, useMemo } from 'react'
+import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { DatasetGenerateAnalyse } from "./dataset-generate-analyse";
-import { DatasetGenerateClean } from "./dataset-generate-clean";
-import { useGenerateStore } from "@/stores/generate";
-import { useDatasetStore } from "@/stores/dataset";
-import {
-  useDatasets,
-  useGenerateDataset,
-  useAnalyzeDataset,
-  useCleanDataset,
-} from "@/hooks";
+} from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { DatasetGenerateAnalyse } from './dataset-generate-analyse'
+import { DatasetGenerateClean } from './dataset-generate-clean'
+import { useGenerateStore } from '@/stores/generate'
+import { useDatasetStore } from '@/stores/dataset'
+import { useDatasets, useGenerateDataset, useAnalyzeDataset, useCleanDataset } from '@/hooks'
 
 const availableLanguages = [
-  { value: "fr", label: "French" },
-  { value: "en", label: "English" },
-  { value: "es", label: "Spanish" },
-  { value: "de", label: "German" },
-];
+  { value: 'fr', label: 'French' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'de', label: 'German' },
+]
 
-type SourceKind = "url" | "file" | "github";
+type SourceKind = 'url' | 'file' | 'github'
 
 const sourceOptions: { value: SourceKind; label: string }[] = [
-  { value: "url", label: "URL" },
-  { value: "file", label: "File" },
-  { value: "github", label: "GitHub" },
-];
+  { value: 'url', label: 'URL' },
+  { value: 'file', label: 'File' },
+  { value: 'github', label: 'GitHub' },
+]
 
 export function DatasetGenerate() {
-  const [source, setSource] = useState<SourceKind>("url");
-  const [url, setUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [githubUsername, setGithubUsername] = useState("");
-  const [githubToken, setGithubToken] = useState("");
-  const [maxRepos, setMaxRepos] = useState("");
-  const [manualDatasetName, setManualDatasetName] = useState("");
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(
-    null
-  );
-  const [targetLanguage, setTargetLanguage] = useState<string>("fr");
-  const [similarityThreshold, setSimilarityThreshold] = useState([0.9]);
-  const [crawl, setCrawl] = useState(true);
-  const [maxDepth, setMaxDepth] = useState("2");
-  const [maxPages, setMaxPages] = useState("50");
-  const [crawlDelaySeconds, setCrawlDelaySeconds] = useState("");
-  const [maxPagesPerDomain, setMaxPagesPerDomain] = useState("");
-  const [syncLangfuse, setSyncLangfuse] = useState(true);
+  const [source, setSource] = useState<SourceKind>('url')
+  const [url, setUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [githubUsername, setGithubUsername] = useState('')
+  const [githubToken, setGithubToken] = useState('')
+  const [maxRepos, setMaxRepos] = useState('')
+  const [manualDatasetName, setManualDatasetName] = useState('')
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null)
+  const [targetLanguage, setTargetLanguage] = useState<string>('fr')
+  const [similarityThreshold, setSimilarityThreshold] = useState([0.9])
+  const [crawl, setCrawl] = useState(true)
+  const [maxDepth, setMaxDepth] = useState('2')
+  const [maxPages, setMaxPages] = useState('50')
+  const [crawlDelaySeconds, setCrawlDelaySeconds] = useState('')
+  const [maxPagesPerDomain, setMaxPagesPerDomain] = useState('')
+  const [syncLangfuse, setSyncLangfuse] = useState(true)
 
-  const { data: datasets = [] } = useDatasets();
-  const generateMutation = useGenerateDataset();
-  const analyzeMutation = useAnalyzeDataset();
-  const cleanMutation = useCleanDataset();
+  const { data: datasets = [] } = useDatasets()
+  const generateMutation = useGenerateDataset()
+  const analyzeMutation = useAnalyzeDataset()
+  const cleanMutation = useCleanDataset()
 
-  const generationStatus = useGenerateStore((state) => state.generationStatus);
-  const dataset = useGenerateStore((state) => state.dataset);
-  const error = useGenerateStore((state) => state.error);
-  const analyzeStatus = useDatasetStore((state) => state.analyzeStatus);
-  const cleanStatus = useDatasetStore((state) => state.cleanStatus);
+  const generationStatus = useGenerateStore((state) => state.generationStatus)
+  const dataset = useGenerateStore((state) => state.dataset)
+  const error = useGenerateStore((state) => state.error)
+  const analyzeStatus = useDatasetStore((state) => state.analyzeStatus)
+  const cleanStatus = useDatasetStore((state) => state.cleanStatus)
 
   // Derive datasetName from selected dataset or use manual input
   const datasetName = useMemo(() => {
     if (selectedDatasetId) {
-      const found = datasets.find((d) => d.id === selectedDatasetId);
-      return found?.name || manualDatasetName;
+      const found = datasets.find((d) => d.id === selectedDatasetId)
+      return found?.name || manualDatasetName
     }
-    return manualDatasetName;
-  }, [selectedDatasetId, datasets, manualDatasetName]);
+    return manualDatasetName
+  }, [selectedDatasetId, datasets, manualDatasetName])
 
   // Show analyze/clean when an existing dataset is selected or when the entered name matches one
   const showActions = useMemo(() => {
-    return (
-      selectedDatasetId !== null ||
-      datasets.some((d) => d.name === datasetName) ||
-      !!dataset
-    );
-  }, [selectedDatasetId, datasets, datasetName, dataset]);
+    return selectedDatasetId !== null || datasets.some((d) => d.name === datasetName) || !!dataset
+  }, [selectedDatasetId, datasets, datasetName, dataset])
 
   const isAnyProcessing =
-    generationStatus === "pending" ||
-    analyzeStatus === "pending" ||
-    cleanStatus === "pending";
+    generationStatus === 'pending' || analyzeStatus === 'pending' || cleanStatus === 'pending'
 
   // Whether the current source has the input it needs to run.
   const hasSource = useMemo(() => {
-    if (source === "url") return !!url;
-    if (source === "file") return !!file;
-    return !!githubUsername;
-  }, [source, url, file, githubUsername]);
+    if (source === 'url') return !!url
+    if (source === 'file') return !!file
+    return !!githubUsername
+  }, [source, url, file, githubUsername])
 
   const handleGenerate = async () => {
     if (!hasSource || !datasetName) {
-      return;
+      return
     }
 
-    const threshold = similarityThreshold[0] ?? 0.9;
+    const threshold = similarityThreshold[0] ?? 0.9
 
     try {
       const result = await generateMutation.mutateAsync(
-        source === "file"
+        source === 'file'
           ? {
-              source: "file",
+              source: 'file',
               file: file as File,
               name: datasetName,
               targetLanguage,
               similarityThreshold: threshold,
               syncLangfuse,
             }
-          : source === "github"
+          : source === 'github'
             ? {
-                source: "github",
+                source: 'github',
                 githubUsername,
                 githubToken: githubToken || null,
                 name: datasetName,
@@ -130,7 +117,7 @@ export function DatasetGenerate() {
                 syncLangfuse,
               }
             : {
-                source: "url",
+                source: 'url',
                 url,
                 name: datasetName,
                 targetLanguage,
@@ -138,45 +125,41 @@ export function DatasetGenerate() {
                 crawl,
                 maxDepth: crawl ? Number(maxDepth) || null : null,
                 maxPages: crawl ? Number(maxPages) || null : null,
-                crawlDelaySeconds: crawl
-                  ? Number(crawlDelaySeconds) || null
-                  : null,
-                maxPagesPerDomain: crawl
-                  ? Number(maxPagesPerDomain) || null
-                  : null,
+                crawlDelaySeconds: crawl ? Number(crawlDelaySeconds) || null : null,
+                maxPagesPerDomain: crawl ? Number(maxPagesPerDomain) || null : null,
                 syncLangfuse,
-              }
-      );
+              },
+      )
 
       // Analyze/clean are keyed by the Langfuse dataset name (the source of
       // truth). datasetName is already the selected/entered name.
-      const name = datasetName || result?.dataset_name;
+      const name = datasetName || result?.dataset_name
       if (name) {
-        await analyzeMutation.mutateAsync(name);
-        toast.success("Dataset analyzed successfully!");
-        await cleanMutation.mutateAsync(name);
-        toast.success("Dataset cleaned successfully!");
+        await analyzeMutation.mutateAsync(name)
+        toast.success('Dataset analyzed successfully!')
+        await cleanMutation.mutateAsync(name)
+        toast.success('Dataset cleaned successfully!')
       }
     } catch (err) {
-      toast.error("Error during dataset generation");
-      toast.error(err instanceof Error ? err.message : String(err));
+      toast.error('Error during dataset generation')
+      toast.error(err instanceof Error ? err.message : String(err))
     }
-  };
+  }
 
   const handleDatasetSelect = (value: string) => {
-    if (value === "none") {
-      setSelectedDatasetId(null);
-      return;
+    if (value === 'none') {
+      setSelectedDatasetId(null)
+      return
     }
-    setSelectedDatasetId(value);
-  };
+    setSelectedDatasetId(value)
+  }
 
   return (
     <div className="w-full flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         {/* Select for existing dataset */}
         <Select
-          value={selectedDatasetId || "none"}
+          value={selectedDatasetId || 'none'}
           onValueChange={handleDatasetSelect}
           disabled={isAnyProcessing}
         >
@@ -210,8 +193,8 @@ export function DatasetGenerate() {
               disabled={isAnyProcessing}
               className={`rounded-md py-1.5 text-sm font-medium transition-colors ${
                 source === opt.value
-                  ? "bg-white shadow-sm text-gray-900"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? 'bg-white shadow-sm text-gray-900'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               {opt.label}
@@ -219,7 +202,7 @@ export function DatasetGenerate() {
           ))}
         </div>
 
-        {source === "url" && (
+        {source === 'url' && (
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -228,7 +211,7 @@ export function DatasetGenerate() {
           />
         )}
 
-        {source === "file" && (
+        {source === 'file' && (
           <div className="flex flex-col gap-1">
             <input
               type="file"
@@ -243,7 +226,7 @@ export function DatasetGenerate() {
           </div>
         )}
 
-        {source === "github" && (
+        {source === 'github' && (
           <div className="flex flex-col gap-2">
             <Input
               value={githubUsername}
@@ -287,9 +270,7 @@ export function DatasetGenerate() {
 
             <div className="flex flex-col gap-1">
               <div className="flex justify-between">
-                <label className="text-xs text-gray-500">
-                  Similarity Threshold
-                </label>
+                <label className="text-xs text-gray-500">Similarity Threshold</label>
                 <span className="text-xs">{similarityThreshold[0]}</span>
               </div>
               <Slider
@@ -302,7 +283,7 @@ export function DatasetGenerate() {
             </div>
 
             {/* Crawl the whole site (URL source only) */}
-            {source === "url" && (
+            {source === 'url' && (
               <div className="flex flex-col gap-2 border-t pt-3">
                 <label className="flex items-center gap-2 text-xs text-gray-700">
                   <input
@@ -313,9 +294,7 @@ export function DatasetGenerate() {
                     disabled={isAnyProcessing}
                   />
                   <span className="font-medium">Crawl entire site</span>
-                  <span className="text-gray-400">
-                    (follow same-domain links)
-                  </span>
+                  <span className="text-gray-400">(follow same-domain links)</span>
                 </label>
 
                 {crawl && (
@@ -341,9 +320,7 @@ export function DatasetGenerate() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">
-                        Crawl delay (s)
-                      </label>
+                      <label className="text-xs text-gray-500">Crawl delay (s)</label>
                       <Input
                         type="number"
                         min={0}
@@ -355,9 +332,7 @@ export function DatasetGenerate() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">
-                        Max pages/domain
-                      </label>
+                      <label className="text-xs text-gray-500">Max pages/domain</label>
                       <Input
                         type="number"
                         min={0}
@@ -373,11 +348,9 @@ export function DatasetGenerate() {
             )}
 
             {/* Max repos (GitHub source only) */}
-            {source === "github" && (
+            {source === 'github' && (
               <div className="flex flex-col gap-1 border-t pt-3">
-                <label className="text-xs text-gray-500">
-                  Max repos (optional)
-                </label>
+                <label className="text-xs text-gray-500">Max repos (optional)</label>
                 <Input
                   type="number"
                   min={1}
@@ -400,9 +373,7 @@ export function DatasetGenerate() {
                   disabled={isAnyProcessing}
                 />
                 <span className="font-medium">Version to Langfuse</span>
-                <span className="text-gray-400">
-                  (create & version dataset)
-                </span>
+                <span className="text-gray-400">(create & version dataset)</span>
               </label>
             </div>
           </div>
@@ -414,7 +385,7 @@ export function DatasetGenerate() {
             className="flex-1"
             onClick={handleGenerate}
           >
-            {generationStatus === "pending" ? (
+            {generationStatus === 'pending' ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <span>Generate Dataset</span>
@@ -425,12 +396,10 @@ export function DatasetGenerate() {
           {showActions && <DatasetGenerateClean />}
         </div>
 
-        {(generationStatus === "error" ||
-          analyzeStatus === "error" ||
-          cleanStatus === "error") && (
+        {(generationStatus === 'error' || analyzeStatus === 'error' || cleanStatus === 'error') && (
           <div className="text-red-500 text-sm">{error}</div>
         )}
       </div>
     </div>
-  );
+  )
 }

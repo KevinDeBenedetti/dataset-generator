@@ -1,13 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronDown,
-  FileText,
-  XCircle,
-} from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, FileText, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,10 +12,7 @@ import type { PipelineStep } from '@/api/types'
 // the backend actually emits.
 type PipelineStepStatus = 'success' | 'warning' | 'error'
 
-const STATUS_CONFIG: Record<
-  PipelineStepStatus,
-  { icon: typeof CheckCircle2; color: string }
-> = {
+const STATUS_CONFIG: Record<PipelineStepStatus, { icon: typeof CheckCircle2; color: string }> = {
   success: { icon: CheckCircle2, color: 'text-green-600' },
   warning: { icon: AlertTriangle, color: 'text-amber-500' },
   error: { icon: XCircle, color: 'text-red-600' },
@@ -37,10 +28,7 @@ interface GenerationTimelineProps {
   scrapedContent?: string | null
 }
 
-export function GenerationTimeline({
-  steps,
-  scrapedContent,
-}: GenerationTimelineProps) {
+export function GenerationTimeline({ steps, scrapedContent }: GenerationTimelineProps) {
   const [showContent, setShowContent] = useState(false)
 
   if (!steps?.length) {
@@ -56,20 +44,17 @@ export function GenerationTimeline({
       <CardContent>
         <ol className="relative">
           {steps.map((step, index) => {
-            const config =
-              STATUS_CONFIG[step.status as PipelineStepStatus] ?? STATUS_CONFIG.success
+            const config = STATUS_CONFIG[step.status as PipelineStepStatus] ?? STATUS_CONFIG.success
             const Icon = config.icon
             const isLast = index === steps.length - 1
 
             return (
               <li key={step.key} className="relative pl-9 pb-5 last:pb-0">
-                {!isLast && (
-                  <span className="absolute left-[13px] top-7 bottom-0 w-px bg-border" />
-                )}
+                {!isLast && <span className="absolute left-[13px] top-7 bottom-0 w-px bg-border" />}
                 <span
                   className={cn(
                     'absolute left-0 top-0 flex items-center justify-center bg-card',
-                    config.color
+                    config.color,
                   )}
                 >
                   <Icon className="w-[26px] h-[26px]" />
@@ -82,9 +67,7 @@ export function GenerationTimeline({
                   </span>
                 </div>
                 {step.detail && (
-                  <p className="mt-0.5 text-xs text-muted-foreground break-words">
-                    {step.detail}
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground break-words">{step.detail}</p>
                 )}
               </li>
             )
@@ -102,10 +85,7 @@ export function GenerationTimeline({
               <FileText className="w-3.5 h-3.5" />
               {showContent ? 'Hide' : 'View'} scraped content
               <ChevronDown
-                className={cn(
-                  'w-3.5 h-3.5 transition-transform',
-                  showContent && 'rotate-180'
-                )}
+                className={cn('w-3.5 h-3.5 transition-transform', showContent && 'rotate-180')}
               />
             </Button>
 

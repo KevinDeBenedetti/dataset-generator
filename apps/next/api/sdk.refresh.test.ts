@@ -13,11 +13,7 @@ function jsonResponse(status: number, body: unknown): Response {
 
 function pathnameOf(input: RequestInfo | URL): string {
   const url =
-    typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
   return new URL(url).pathname
 }
 
@@ -94,10 +90,7 @@ describe('sdk.ts silent session refresh', () => {
     })
 
     const client = await loadClient()
-    await Promise.all([
-      client.get({ url: '/dataset' }),
-      client.get({ url: '/dataset' }),
-    ])
+    await Promise.all([client.get({ url: '/dataset' }), client.get({ url: '/dataset' })])
 
     expect(refreshCalls).toBe(1)
   })

@@ -14,11 +14,7 @@ import { cn } from '@/lib/utils'
  */
 
 const debugFlag = (process.env.NEXT_PUBLIC_DEBUG_LOGS ?? '').toLowerCase()
-const ENABLED =
-  debugFlag !== '' &&
-  debugFlag !== '0' &&
-  debugFlag !== 'false' &&
-  debugFlag !== 'no'
+const ENABLED = debugFlag !== '' && debugFlag !== '0' && debugFlag !== 'false' && debugFlag !== 'no'
 
 const MAX_LINES = 1000
 
@@ -120,11 +116,7 @@ export function DevLogConsole() {
                 title={paused ? 'Resume' : 'Pause'}
                 className="flex h-7 w-7 items-center justify-center rounded hover:bg-zinc-800"
               >
-                {paused ? (
-                  <Play className="size-4" />
-                ) : (
-                  <Pause className="size-4" />
-                )}
+                {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
               </button>
               <button
                 type="button"
@@ -145,10 +137,7 @@ export function DevLogConsole() {
             </div>
           </div>
 
-          <div
-            ref={scrollRef}
-            className="h-[calc(100%-2.5rem)] overflow-auto px-3 py-2"
-          >
+          <div ref={scrollRef} className="h-[calc(100%-2.5rem)] overflow-auto px-3 py-2">
             {logs.length === 0 ? (
               <p className="text-zinc-600">Waiting for logs…</p>
             ) : (
@@ -157,9 +146,7 @@ export function DevLogConsole() {
                   <span
                     className={cn(
                       'shrink-0 font-semibold',
-                      entry.source === 'fastapi'
-                        ? 'text-emerald-400'
-                        : 'text-sky-400'
+                      entry.source === 'fastapi' ? 'text-emerald-400' : 'text-sky-400',
                     )}
                   >
                     [{entry.source === 'fastapi' ? 'api' : 'web'}]

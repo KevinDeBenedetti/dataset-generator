@@ -1,9 +1,5 @@
 import { create } from 'zustand'
-import type {
-  DatasetResponse,
-  DatasetGenerationResponse,
-  PipelineStep,
-} from '@/api/types'
+import type { DatasetResponse, DatasetGenerationResponse, PipelineStep } from '@/api/types'
 
 type GenerationStatus = 'idle' | 'pending' | 'success' | 'error'
 
@@ -32,8 +28,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setGenerationStatus: (generationStatus) => set({ generationStatus }),
   setError: (error) => set({ error }),
   setLiveSteps: (liveSteps) => set({ liveSteps }),
-  appendLiveStep: (step) =>
-    set((state) => ({ liveSteps: [...state.liveSteps, step] })),
+  appendLiveStep: (step) => set((state) => ({ liveSteps: [...state.liveSteps, step] })),
   resetStatus: () =>
     set({
       generationStatus: 'idle',

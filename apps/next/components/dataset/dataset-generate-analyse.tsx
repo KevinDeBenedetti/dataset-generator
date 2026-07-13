@@ -16,16 +16,10 @@ export function DatasetGenerateAnalyse() {
 
   // Keyed by the Langfuse dataset name (the source of truth). The store value
   // is a generation result (dataset_name) or a dataset row (name).
-  const datasetId = dataset
-    ? 'dataset_name' in dataset
-      ? dataset.dataset_name
-      : dataset.name
-    : ''
+  const datasetId = dataset ? ('dataset_name' in dataset ? dataset.dataset_name : dataset.name) : ''
 
   const isAnyProcessing =
-    generationStatus === 'pending' ||
-    analyzeStatus === 'pending' ||
-    cleanStatus === 'pending'
+    generationStatus === 'pending' || analyzeStatus === 'pending' || cleanStatus === 'pending'
 
   const handleAnalyze = async () => {
     if (!datasetId) {
@@ -45,12 +39,7 @@ export function DatasetGenerateAnalyse() {
   }
 
   return (
-    <Button
-      disabled={isAnyProcessing}
-      variant="outline"
-      className="flex-1"
-      onClick={handleAnalyze}
-    >
+    <Button disabled={isAnyProcessing} variant="outline" className="flex-1" onClick={handleAnalyze}>
       {analyzeStatus === 'pending' ? (
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
       ) : (

@@ -3,8 +3,16 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Icon } from '@/components/app/icon'
-import { useLangfuseDatasets } from '@/hooks'
-import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useCollections, useLangfuseDatasets } from '@/hooks'
+import { useCurrentUser, useLogout } from '@/hooks/use-auth'
+import { cn, initialsFor } from '@/lib/utils'
 
 type NavItem = {
   icon: string
@@ -44,17 +52,26 @@ const NAV: { label: string; items: NavItem[] }[] = [
 
 export function AppSidebar() {
   const pathname = usePathname() ?? ''
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/')
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   // Real dataset count for the Datasets nav badge. Uses the same source as the
   // /datasets page (Langfuse) so the badge matches what's listed there; the
   // shared react-query cache means no extra request.
   const { data: langfuse } = useLangfuseDatasets()
   const datasetCount = langfuse?.total ?? langfuse?.datasets.length
+
+  // Number of collections actually synced into Qdrant (not just Langfuse
+  // datasets projected as collections) for the Collections nav badge.
+  const { data: collections } = useCollections()
+  const qdrantCollectionCount = collections?.collections.filter((c) => c.in_qdrant).length
+
   const counts: Record<string, string | undefined> = {
     '/datasets': datasetCount != null ? String(datasetCount) : undefined,
+    '/collections': qdrantCollectionCount != null ? String(qdrantCollectionCount) : undefined,
   }
+
+  const { data: user } = useCurrentUser()
+  const logoutMutation = useLogout()
 
   return (
     <aside className="sidebar">
@@ -91,10 +108,7 @@ export function AppSidebar() {
         ))}
         <div className="sb-group">
           <div className="sb-label">Account</div>
-          <Link
-            href="/settings"
-            className={cn('sb-link', isActive('/settings') && 'active')}
-          >
+          <Link href="/settings" className={cn('sb-link', isActive('/settings') && 'active')}>
             <Icon name="settings" />
             <span>Settings</span>
           </Link>
@@ -105,14 +119,33 @@ export function AppSidebar() {
         </div>
       </nav>
       <div className="sb-foot">
-        <Link className="sb-user" href="/settings">
-          <span className="avatar">KB</span>
-          <span className="meta">
-            <span className="nm">Kévin De Benedetti</span>
-            <span className="em">kevin@datasetgen.io</span>
-          </span>
-          <Icon name="chevronDown" className="ic-sm" />
-        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="sb-user">
+            <span className="avatar">{initialsFor(user?.email)}</span>
+            <span className="meta">
+              <span className="nm">{user?.email ?? 'Loading…'}</span>
+              <span className="em">{user?.role ?? ''}</span>
+            </span>
+            <Icon name="chevronDown" className="ic-sm" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" style={{ width: 220 }}>
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <Icon name="settings" className="ic-sm" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={logoutMutation.isPending}
+              onSelect={() => logoutMutation.mutate()}
+            >
+              <Icon name="logout" className="ic-sm" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   )
