@@ -1,20 +1,121 @@
-.dd-page .qa { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; background: var(--card); }
-.dd-page .qa-q { font-weight: 500; font-size: 14.5px; display: flex; gap: 10px; }
-.dd-page .qa-q .qmark { font-family: var(--font-mono), ui-monospace, monospace; color: var(--muted-foreground); flex: none; }
-.dd-page .qa-a { color: var(--muted-foreground); font-size: 13.5px; margin-top: 9px; padding-left: 24px; line-height: 1.6; }
-.dd-page .qa-meta { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-left: 24px; flex-wrap: wrap; }
-.dd-page .qa-actions { display: flex; gap: 4px; }
-.dd-page .tabpane { display: none; }
-.dd-page .tabpane.active { display: block; }
-.dd-page .ver { display: flex; gap: 14px; padding-bottom: 22px; position: relative; }
-.dd-page .ver::before { content:''; position:absolute; left:13px; top:28px; bottom:-4px; width:2px; background:var(--border); }
-.dd-page .ver:last-child::before { display:none; }
-.dd-page .ver .vdot { width: 28px; height: 28px; border-radius: 99px; background: var(--secondary); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex: none; z-index: 1; }
-.dd-page .ver .vdot .ic { width: 14px; height: 14px; }
-.dd-page .ver.cur .vdot { background: var(--primary); color: var(--primary-foreground); }
-.dd-page .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.dd-page .diff .col h4 { font-size: 13px; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
-.dd-page .diff pre { background: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 14px; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; }
-.dd-page .del { background: color-mix(in oklch, var(--destructive) 14%, transparent); color: var(--destructive); text-decoration: none; border-radius: 3px; }
-.dd-page .add { background: color-mix(in oklch, var(--success) 16%, transparent); color: var(--success); border-radius: 3px; }
-@media (max-width:860px){ .dd-page .diff{ grid-template-columns:1fr; } }
+.dd-page .qa {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  background: var(--card);
+}
+.dd-page .qa-q {
+  font-weight: 500;
+  font-size: 14.5px;
+  display: flex;
+  gap: 10px;
+}
+.dd-page .qa-q .qmark {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  color: var(--muted-foreground);
+  flex: none;
+}
+.dd-page .qa-a {
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+  margin-top: 9px;
+  padding-left: 24px;
+  line-height: 1.6;
+}
+.dd-page .qa-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-left: 24px;
+  flex-wrap: wrap;
+}
+.dd-page .qa-actions {
+  display: flex;
+  gap: 4px;
+}
+.dd-page .tabpane {
+  display: none;
+}
+.dd-page .tabpane.active {
+  display: block;
+}
+.dd-page .ver {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 22px;
+  position: relative;
+}
+.dd-page .ver::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--border);
+}
+.dd-page .ver:last-child::before {
+  display: none;
+}
+.dd-page .ver .vdot {
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  z-index: 1;
+}
+.dd-page .ver .vdot .ic {
+  width: 14px;
+  height: 14px;
+}
+.dd-page .ver.cur .vdot {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.dd-page .diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.dd-page .diff .col h4 {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.dd-page .diff pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow: auto;
+}
+.dd-page .del {
+  background: color-mix(in oklch, var(--destructive) 14%, transparent);
+  color: var(--destructive);
+  text-decoration: none;
+  border-radius: 3px;
+}
+.dd-page .add {
+  background: color-mix(in oklch, var(--success) 16%, transparent);
+  color: var(--success);
+  border-radius: 3px;
+}
+@media (max-width: 860px) {
+  .dd-page .diff {
+    grid-template-columns: 1fr;
+  }
+}

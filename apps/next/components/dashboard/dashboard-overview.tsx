@@ -40,20 +40,9 @@ function relativeTime(dateStr: string | null | undefined, now: number): string {
 }
 
 /** A bento tile — rounded, subtly bordered, hover-lift. */
-function Tile({
-  className,
-  children,
-}: {
-  className?: string
-  children: React.ReactNode
-}) {
+function Tile({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div
-      className={cn(
-        'rounded-2xl border bg-card p-5 transition-colors',
-        className
-      )}
-    >
+    <div className={cn('rounded-2xl border bg-card p-5 transition-colors', className)}>
       {children}
     </div>
   )
@@ -76,9 +65,7 @@ function StatTile({
         <Icon className="size-5" />
       </div>
       <div>
-        <p className="text-3xl font-semibold tracking-tight tabular-nums">
-          {value}
-        </p>
+        <p className="text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         <p className="text-sm text-muted-foreground">{label}</p>
         {hint && <p className="mt-0.5 text-xs text-muted-foreground/70">{hint}</p>}
       </div>
@@ -98,11 +85,7 @@ export function DashboardOverview() {
     const avg = total ? Math.round(totalPairs / total) : 0
 
     const recent = [...list]
-      .sort(
-        (a, b) =>
-          new Date(b.created_at ?? 0).getTime() -
-          new Date(a.created_at ?? 0).getTime()
-      )
+      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
       .slice(0, 5)
 
     // Datasets created per week over the last WEEKS weeks (oldest → newest).
@@ -132,9 +115,7 @@ export function DashboardOverview() {
 
   if (error) {
     return (
-      <Tile className="text-center text-sm text-destructive">
-        Failed to load dashboard data.
-      </Tile>
+      <Tile className="text-center text-sm text-destructive">Failed to load dashboard data.</Tile>
     )
   }
 
@@ -155,21 +136,9 @@ export function DashboardOverview() {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <StatTile
-        icon={Database}
-        label="Datasets"
-        value={stats.total}
-      />
-      <StatTile
-        icon={MessagesSquare}
-        label="Q/A pairs"
-        value={stats.totalPairs}
-      />
-      <StatTile
-        icon={Gauge}
-        label="Avg pairs / dataset"
-        value={stats.avg}
-      />
+      <StatTile icon={Database} label="Datasets" value={stats.total} />
+      <StatTile icon={MessagesSquare} label="Q/A pairs" value={stats.totalPairs} />
+      <StatTile icon={Gauge} label="Avg pairs / dataset" value={stats.avg} />
 
       {/* Quick actions tile */}
       <Tile className="flex flex-col justify-between gap-4 bg-primary text-primary-foreground">
@@ -200,10 +169,7 @@ export function DashboardOverview() {
             <Clock className="size-4 text-muted-foreground" />
             <h2 className="font-semibold">Recent datasets</h2>
           </div>
-          <Link
-            href="/datasets"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/datasets" className="text-sm text-muted-foreground hover:text-foreground">
             View all
           </Link>
         </div>
@@ -228,9 +194,7 @@ export function DashboardOverview() {
                   href={`/datasets/${d.id}`}
                   className="group flex items-center justify-between gap-3 py-3 transition-colors hover:bg-accent/40 -mx-2 px-2 rounded-md"
                 >
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {d.name}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
                   <span className="shrink-0 tabular-nums text-sm text-muted-foreground">
                     {d.qa_sources_count ?? 0} pairs
                   </span>
@@ -251,9 +215,7 @@ export function DashboardOverview() {
             <Activity className="size-4 text-muted-foreground" />
             <h2 className="font-semibold">Activity</h2>
           </div>
-          <span className="text-xs text-muted-foreground/70">
-            last {WEEKS} weeks
-          </span>
+          <span className="text-xs text-muted-foreground/70">last {WEEKS} weeks</span>
         </div>
         <Sparkline values={stats.buckets} labels={stats.bucketLabels} />
       </Tile>

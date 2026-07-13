@@ -2,22 +2,12 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Icon } from '@/components/app/icon'
-import {
-  useCollections,
-  useSearchCollection,
-  useSyncCollectionToQdrant,
-} from '@/hooks'
+import { useCollections, useSearchCollection, useSyncCollectionToQdrant } from '@/hooks'
 import { useIsAdmin } from '@/hooks/use-auth'
 import type { Collection, CollectionSearchResult } from '@/api/sdk'
 
@@ -32,9 +22,7 @@ function SearchPanel({ datasetName }: { datasetName: string }) {
     try {
       await search.mutateAsync({ datasetName, query: q })
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to search collection'
-      )
+      toast.error(error instanceof Error ? error.message : 'Failed to search collection')
     }
   }
 
@@ -50,11 +38,7 @@ function SearchPanel({ datasetName }: { datasetName: string }) {
           placeholder="Search this collection…"
           aria-label={`Search ${datasetName}`}
         />
-        <Button
-          size="sm"
-          onClick={handleSearch}
-          disabled={search.isPending || !query.trim()}
-        >
+        <Button size="sm" onClick={handleSearch} disabled={search.isPending || !query.trim()}>
           {search.isPending ? (
             <Icon name="loader" className="animate-spin" />
           ) : (
@@ -70,10 +54,7 @@ function SearchPanel({ datasetName }: { datasetName: string }) {
       {results.length > 0 && (
         <ul className="flex flex-col gap-2">
           {results.map((r, i) => (
-            <li
-              key={r.qa_id ?? i}
-              className="rounded-md border bg-muted/30 p-2 text-xs"
-            >
+            <li key={r.qa_id ?? i} className="rounded-md border bg-muted/30 p-2 text-xs">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-medium text-foreground">{r.question}</p>
                 {r.score != null && (
@@ -105,13 +86,9 @@ function CollectionCard({
   const handleSync = async () => {
     try {
       const result = await sync.mutateAsync(collection.name)
-      toast.success(
-        `Added ${result.points_upserted} item(s) to "${result.collection_name}".`
-      )
+      toast.success(`Added ${result.points_upserted} item(s) to "${result.collection_name}".`)
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to add collection to Qdrant'
-      )
+      toast.error(error instanceof Error ? error.message : 'Failed to add collection to Qdrant')
     }
   }
 
@@ -210,8 +187,8 @@ export default function CollectionsPage() {
       <header className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Collections</h1>
         <p className="text-muted-foreground">
-          Your datasets, ready to be embedded into a Qdrant vector store for
-          semantic search and retrieval.
+          Your datasets, ready to be embedded into a Qdrant vector store for semantic search and
+          retrieval.
         </p>
       </header>
 
@@ -219,16 +196,14 @@ export default function CollectionsPage() {
         <div className="mb-6 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Qdrant is not configured.</p>
           <p className="mt-1">
-            Set <code>QDRANT_URL</code> (and optionally <code>QDRANT_API_KEY</code>)
-            in your <code>.env</code> to enable pushing collections to Qdrant.
-            Datasets are still listed below.
+            Set <code>QDRANT_URL</code> (and optionally <code>QDRANT_API_KEY</code>) in your{' '}
+            <code>.env</code> to enable pushing collections to Qdrant. Datasets are still listed
+            below.
           </p>
         </div>
       )}
 
-      {isLoading && (
-        <p className="py-12 text-center text-muted-foreground">Loading collections…</p>
-      )}
+      {isLoading && <p className="py-12 text-center text-muted-foreground">Loading collections…</p>}
 
       {!isLoading && error && (
         <p className="py-12 text-center text-destructive">

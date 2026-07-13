@@ -10,7 +10,13 @@ type PromptItem = {
 }
 
 const prompts: PromptItem[] = [
-  { name: 'qa-fr', version: 'v2', meta: 'fr · gpt-4o-mini · 9 datasets', selected: true, versionBadge: true },
+  {
+    name: 'qa-fr',
+    version: 'v2',
+    meta: 'fr · gpt-4o-mini · 9 datasets',
+    selected: true,
+    versionBadge: true,
+  },
   { name: 'qa-en', version: 'v3', meta: 'en · gpt-4o · 6 datasets' },
   { name: 'qa-factuel', version: 'v1', meta: 'multi · claude-3.5 · 2 datasets' },
   { name: 'qa-de', version: 'v1', meta: 'de · gpt-4o-mini · 3 datasets' },
@@ -35,11 +41,20 @@ export default function PromptsPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">LLM Prompts</h1>
-          <p className="page-sub">Versioned prompt templates for Q/A pair generation. Reusable per dataset and per language.</p>
+          <p className="page-sub">
+            Versioned prompt templates for Q/A pair generation. Reusable per dataset and per
+            language.
+          </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-outline"><Icon name="copy" />Duplicate</button>
-          <button className="btn btn-primary"><Icon name="plus" />New prompt</button>
+          <button className="btn btn-outline">
+            <Icon name="copy" />
+            Duplicate
+          </button>
+          <button className="btn btn-primary">
+            <Icon name="plus" />
+            New prompt
+          </button>
         </div>
       </div>
 
@@ -51,10 +66,13 @@ export default function PromptsPage() {
                 {p.name}{' '}
                 {p.versionBadge ? (
                   <span className="badge badge-success" style={{ height: '18px' }}>
-                    <span className="dot"></span>{p.version}
+                    <span className="dot"></span>
+                    {p.version}
                   </span>
                 ) : (
-                  <span className="tag" style={{ fontSize: '11px' }}>{p.version}</span>
+                  <span className="tag" style={{ fontSize: '11px' }}>
+                    {p.version}
+                  </span>
                 )}
               </div>
               <div className="pm">{p.meta}</div>
@@ -66,17 +84,29 @@ export default function PromptsPage() {
           <div className="card">
             <div className="card-head">
               <div>
-                <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                <div
+                  className="card-title"
+                  style={{ display: 'flex', alignItems: 'center', gap: '9px' }}
+                >
                   qa-fr <span className="tag">v2</span>
                 </div>
                 <div className="card-desc">Modified 2 days ago · used by 9 datasets</div>
               </div>
               <div className="page-actions">
-                <button className="btn btn-ghost btn-sm"><Icon name="clock" />History</button>
-                <button className="btn btn-primary btn-sm"><Icon name="check" />Save</button>
+                <button className="btn btn-ghost btn-sm">
+                  <Icon name="clock" />
+                  History
+                </button>
+                <button className="btn btn-primary btn-sm">
+                  <Icon name="check" />
+                  Save
+                </button>
               </div>
             </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div
+              className="card-body"
+              style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            >
               <div className="field">
                 <label className="label">System</label>
                 <textarea className="textarea editor" rows={5} defaultValue={systemPrompt} />
@@ -86,7 +116,9 @@ export default function PromptsPage() {
                 <textarea className="textarea editor" rows={3} defaultValue={userInstruction} />
               </div>
               <div>
-                <div className="label" style={{ marginBottom: '8px' }}>Detected variables</div>
+                <div className="label" style={{ marginBottom: '8px' }}>
+                  Detected variables
+                </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <span className="var">{'{context}'}</span>
                   <span className="var">{'{n}'}</span>
@@ -100,9 +132,14 @@ export default function PromptsPage() {
           <div className="grid-2">
             <div className="card">
               <div className="card-head">
-                <div><div className="card-title">Default parameters</div></div>
+                <div>
+                  <div className="card-title">Default parameters</div>
+                </div>
               </div>
-              <div className="card-body" style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div
+                className="card-body"
+                style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}
+              >
                 <div className="field">
                   <label className="label">Model</label>
                   <select className="select" defaultValue="gpt-4o-mini">
@@ -129,15 +166,39 @@ export default function PromptsPage() {
                   <div className="card-title">Quick test</div>
                   <div className="card-desc">Run on an excerpt</div>
                 </div>
-                <button className="btn btn-outline btn-sm"><Icon name="play" />Test</button>
+                <button className="btn btn-outline btn-sm">
+                  <Icon name="play" />
+                  Test
+                </button>
               </div>
               <div className="card-body" style={{ paddingTop: 0 }}>
-                <div style={{ background: 'var(--muted)', border: '1px solid var(--border)', borderRadius: '9px', padding: '12px 14px', fontSize: '12.5px' }}>
-                  <div style={{ fontFamily: "'Geist Mono', monospace", color: 'var(--muted-foreground)', fontSize: '11.5px', marginBottom: '8px' }}>{'// test output'}</div>
+                <div
+                  style={{
+                    background: 'var(--muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '9px',
+                    padding: '12px 14px',
+                    fontSize: '12.5px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'Geist Mono', monospace",
+                      color: 'var(--muted-foreground)',
+                      fontSize: '11.5px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    {'// test output'}
+                  </div>
                   <div style={{ fontWeight: 500 }}>Q: How do I launch the application?</div>
-                  <div className="muted" style={{ marginTop: '5px', lineHeight: 1.5 }}>A: Run <code>make start</code> after configuring the .env file.</div>
+                  <div className="muted" style={{ marginTop: '5px', lineHeight: 1.5 }}>
+                    A: Run <code>make start</code> after configuring the .env file.
+                  </div>
                   <div style={{ marginTop: '10px' }}>
-                    <span className="badge badge-success"><span className="dot"></span>score 0.95</span>
+                    <span className="badge badge-success">
+                      <span className="dot"></span>score 0.95
+                    </span>
                   </div>
                 </div>
               </div>

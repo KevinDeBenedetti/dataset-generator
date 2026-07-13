@@ -11,7 +11,7 @@ interface ResultProps {
 }
 
 function isGenerationResponse(
-  result: DatasetGenerationResponse | DatasetResponse
+  result: DatasetGenerationResponse | DatasetResponse,
 ): result is DatasetGenerationResponse {
   return 'qa_pairs' in result
 }
@@ -42,9 +42,7 @@ export function Result({ result }: ResultProps) {
             <Badge variant="secondary">Threshold: {result.similarity_threshold}</Badge>
             <Badge variant="secondary">Language: {result.target_language}</Badge>
             {result.pages_crawled != null && (
-              <Badge variant="secondary">
-                Pages crawled: {result.pages_crawled}
-              </Badge>
+              <Badge variant="secondary">Pages crawled: {result.pages_crawled}</Badge>
             )}
             {result.langfuse && (
               <Badge variant="secondary">
@@ -72,10 +70,7 @@ export function Result({ result }: ResultProps) {
         <ScrollArea className="h-64">
           <div className="space-y-3 p-2">
             {result.qa_pairs.map((pair, index) => (
-              <div
-                key={index}
-                className="p-3 border border-gray-200 rounded-md bg-white"
-              >
+              <div key={index} className="p-3 border border-gray-200 rounded-md bg-white">
                 <p className="font-medium">Q: {pair.question}</p>
                 <p className="mt-1 text-gray-700">A: {pair.answer}</p>
               </div>

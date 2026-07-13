@@ -20,6 +20,6 @@ export function useIsDark() {
   return useSyncExternalStore(
     subscribe,
     () => document.documentElement.classList.contains('dark'),
-    () => false
+    () => false,
   )
 }

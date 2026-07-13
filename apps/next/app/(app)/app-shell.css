@@ -45,13 +45,19 @@ kbd {
   white-space: nowrap;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s,
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s,
     opacity 0.15s;
   user-select: none;
 }
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--ring);
 }
 .btn .ic {
   width: 16px;
@@ -232,7 +238,9 @@ kbd {
   color: var(--foreground);
   border: 1px solid var(--input);
   border-radius: calc(var(--radius) - 2px);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .textarea {
   height: auto;
@@ -533,7 +541,9 @@ kbd {
   font-weight: 450;
   color: var(--sidebar-foreground);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   white-space: nowrap;
 }
 .sb-link > span:not(.count) {

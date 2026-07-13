@@ -4,12 +4,7 @@ import { useState } from 'react'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { testQaAgent } from '@/api/sdk'
 import type { QaAgentTestResponse } from '@/api/types'
@@ -57,12 +52,10 @@ export default function AgentTestPage() {
 
   return (
     <section className="max-w-3xl mx-auto flex flex-col gap-4 p-4">
-      <h1 className="w-full mt-6 mb-1 text-3xl font-bold text-center">
-        Verify QA agent
-      </h1>
+      <h1 className="w-full mt-6 mb-1 text-3xl font-bold text-center">Verify QA agent</h1>
       <p className="text-sm text-muted-foreground text-center mb-2">
-        Runs the QA agent on the text below and shows the raw model response and
-        the parsed pairs — without the scrape/clean pipeline.
+        Runs the QA agent on the text below and shows the raw model response and the parsed pairs —
+        without the scrape/clean pipeline.
       </p>
 
       <textarea
@@ -88,11 +81,7 @@ export default function AgentTestPage() {
         </select>
 
         <Button onClick={run} disabled={!text.trim() || loading} className="flex-1">
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <span>Run agent</span>
-          )}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Run agent</span>}
         </Button>
       </div>
 
@@ -119,9 +108,7 @@ export default function AgentTestPage() {
 
           <CardContent className="flex flex-col gap-4">
             {result.error && (
-              <div className="text-red-600 text-sm break-words">
-                Error: {result.error}
-              </div>
+              <div className="text-red-600 text-sm break-words">Error: {result.error}</div>
             )}
 
             <div>
@@ -135,15 +122,10 @@ export default function AgentTestPage() {
 
             {result.qa_pairs && result.qa_pairs.length > 0 && (
               <div>
-                <p className="text-sm font-medium mb-1">
-                  Parsed Q&amp;A pairs ({result.count})
-                </p>
+                <p className="text-sm font-medium mb-1">Parsed Q&amp;A pairs ({result.count})</p>
                 <div className="space-y-2">
                   {(result.qa_pairs as AgentQaPair[]).map((pair, index) => (
-                    <div
-                      key={index}
-                      className="p-3 border border-gray-200 rounded-md bg-white"
-                    >
+                    <div key={index} className="p-3 border border-gray-200 rounded-md bg-white">
                       <p className="font-medium text-sm">Q: {pair.question}</p>
                       <p className="mt-1 text-sm text-gray-700">A: {pair.answer}</p>
                       {pair.context && (

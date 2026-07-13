@@ -25,9 +25,7 @@ export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
   return (
     <div className="border rounded-lg overflow-x-auto">
       <Table className="w-full">
-        <TableCaption>
-          {datasets.length} dataset(s) in Langfuse
-        </TableCaption>
+        <TableCaption>{datasets.length} dataset(s) in Langfuse</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
@@ -41,18 +39,12 @@ export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
               <TableCell className="font-medium">{dataset.name}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {dataset.description || '—'}
-              </TableCell>
-              <TableCell className="text-center">
-                {dataset.item_count ?? '—'}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{dataset.description || '—'}</TableCell>
+              <TableCell className="text-center">{dataset.item_count ?? '—'}</TableCell>
               <TableCell className="text-center">
                 {dataset.version != null ? `v${dataset.version}` : '—'}
               </TableCell>
-              <TableCell className="text-center">
-                {formatDate(dataset.created_at)}
-              </TableCell>
+              <TableCell className="text-center">{formatDate(dataset.created_at)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

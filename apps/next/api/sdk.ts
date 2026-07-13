@@ -13,9 +13,7 @@ import { client } from './client.gen'
 // when running several dev stacks) without editing the generated client.
 client.setConfig({
   credentials: 'include',
-  baseUrl:
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
-    'http://localhost:8000',
+  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000',
 })
 
 // ── Silent session refresh ───────────────────────────────────────────────────
@@ -133,7 +131,7 @@ export async function getDatasets(): Promise<DatasetResponse[]> {
 }
 
 export async function generateDataset(
-  body: DatasetGenerationRequest
+  body: DatasetGenerationRequest,
 ): Promise<DatasetGenerationResponse> {
   const response = await client.post<DatasetGenerationResponse>({
     url: '/dataset/generate',
@@ -163,7 +161,7 @@ export interface GenerateFromFileParams {
 }
 
 export async function generateDatasetFromFile(
-  params: GenerateFromFileParams
+  params: GenerateFromFileParams,
 ): Promise<DatasetGenerationResponse> {
   const baseUrl = client.getConfig().baseUrl ?? ''
   const form = new FormData()
@@ -213,7 +211,7 @@ export interface GenerateFromGitHubParams {
 }
 
 export async function generateDatasetFromGitHub(
-  body: GenerateFromGitHubParams
+  body: GenerateFromGitHubParams,
 ): Promise<DatasetGenerationResponse> {
   const response = await client.post<DatasetGenerationResponse>({
     url: '/dataset/generate/github',
@@ -221,9 +219,7 @@ export async function generateDatasetFromGitHub(
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(
-      getErrorMessage(response.error, 'Failed to generate dataset from GitHub')
-    )
+    throw new Error(getErrorMessage(response.error, 'Failed to generate dataset from GitHub'))
   }
   return response.data as unknown as DatasetGenerationResponse
 }
@@ -244,7 +240,7 @@ interface GenerateStreamHandlers {
 // Resolves with the final `result` payload; rejects on an `error` event.
 export async function generateDatasetStream(
   body: DatasetGenerationRequest,
-  handlers: GenerateStreamHandlers = {}
+  handlers: GenerateStreamHandlers = {},
 ): Promise<DatasetGenerationResponse> {
   const baseUrl = client.getConfig().baseUrl ?? ''
   const response = await fetch(`${baseUrl}/dataset/generate/stream`, {
@@ -290,9 +286,7 @@ export async function generateDatasetStream(
 
   // SSE frames are separated by a blank line; each carries one `data:` line.
   const flushFrame = (frame: string) => {
-    const dataLine = frame
-      .split('\n')
-      .find((line) => line.startsWith('data:'))
+    const dataLine = frame.split('\n').find((line) => line.startsWith('data:'))
     if (!dataLine) return
     const payload = dataLine.slice('data:'.length).trim()
     if (!payload) return
@@ -323,9 +317,7 @@ export async function generateDatasetStream(
 }
 
 // Datasets are keyed by their Langfuse name (the source of truth).
-export async function deleteDataset(
-  datasetName: string
-): Promise<DeleteDatasetResponse> {
+export async function deleteDataset(datasetName: string): Promise<DeleteDatasetResponse> {
   const response = await client.delete<DeleteDatasetResponse>({
     url: `/dataset/${encodeURIComponent(datasetName)}`,
   })
@@ -337,7 +329,7 @@ export async function deleteDataset(
 
 export async function analyzeSimilarities(
   datasetId: string,
-  threshold?: number
+  threshold?: number,
 ): Promise<SimilarityAnalysisResponse> {
   const seg = encodeURIComponent(datasetId)
   // Check for undefined explicitly: a valid threshold of 0 is falsy and must
@@ -358,7 +350,7 @@ export async function analyzeSimilarities(
 
 export async function cleanSimilarities(
   datasetId: string,
-  threshold?: number
+  threshold?: number,
 ): Promise<CleanSimilarityResponse> {
   const seg = encodeURIComponent(datasetId)
   // Check for undefined explicitly: a valid threshold of 0 is falsy and must
@@ -379,9 +371,7 @@ export async function cleanSimilarities(
 
 // Agent (ADK) diagnostics
 
-export async function testQaAgent(
-  body: QaAgentTestRequest
-): Promise<QaAgentTestResponse> {
+export async function testQaAgent(body: QaAgentTestRequest): Promise<QaAgentTestResponse> {
   const response = await client.post<QaAgentTestResponse>({
     url: '/agent/qa-test',
     body,
@@ -399,7 +389,7 @@ export async function testQaAgent(
 
 export async function getQAByDataset(
   datasetId: string,
-  options?: { limit?: number; offset?: number }
+  options?: { limit?: number; offset?: number },
 ): Promise<QaListResponse> {
   const params = new URLSearchParams()
   if (options?.limit) params.set('limit', String(options.limit))
@@ -460,9 +450,7 @@ export interface LangfuseVersionsResponse {
   versions: LangfuseVersion[]
 }
 
-export async function getLangfuseVersions(
-  dataset: string
-): Promise<LangfuseVersionsResponse> {
+export async function getLangfuseVersions(dataset: string): Promise<LangfuseVersionsResponse> {
   const response = await client.get<LangfuseVersionsResponse>({
     url: `/langfuse/versions/${encodeURIComponent(dataset)}`,
   })
@@ -474,7 +462,7 @@ export async function getLangfuseVersions(
 
 export async function exportToLangfuse(
   datasetName: string,
-  langfuseDatasetName?: string | null
+  langfuseDatasetName?: string | null,
 ): Promise<unknown> {
   const params = new URLSearchParams()
   params.set('dataset_name', datasetName)
@@ -526,9 +514,7 @@ export interface QdrantSyncResponse {
 }
 
 // Datasets are keyed by their Langfuse name (the source of truth).
-export async function syncCollectionToQdrant(
-  datasetName: string
-): Promise<QdrantSyncResponse> {
+export async function syncCollectionToQdrant(datasetName: string): Promise<QdrantSyncResponse> {
   const response = await client.post<QdrantSyncResponse>({
     url: `/collections/${encodeURIComponent(datasetName)}/qdrant`,
   })
@@ -561,16 +547,14 @@ export interface CollectionSearchResponse {
 export async function searchCollection(
   datasetName: string,
   query: string,
-  options?: { limit?: number; scoreThreshold?: number }
+  options?: { limit?: number; scoreThreshold?: number },
 ): Promise<CollectionSearchResponse> {
   const response = await client.post<CollectionSearchResponse>({
     url: `/collections/${encodeURIComponent(datasetName)}/search`,
     body: {
       query,
       ...(options?.limit !== undefined ? { limit: options.limit } : {}),
-      ...(options?.scoreThreshold !== undefined
-        ? { score_threshold: options.scoreThreshold }
-        : {}),
+      ...(options?.scoreThreshold !== undefined ? { score_threshold: options.scoreThreshold } : {}),
     },
     headers: { 'Content-Type': 'application/json' },
   })
@@ -619,16 +603,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (response.response?.status === 401) {
       return null
     }
-    throw new Error(
-      getErrorMessage(response.error, 'Failed to fetch the current user')
-    )
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch the current user'))
   }
   return response.data as unknown as AuthUser
 }
 
 // Absolute URL the browser navigates to in order to start the OIDC flow.
 export function oidcLoginUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'
   return `${base}/auth/oidc/login`
 }

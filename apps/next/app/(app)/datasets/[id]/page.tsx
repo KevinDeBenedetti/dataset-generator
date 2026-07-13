@@ -1,22 +1,22 @@
-"use client";
+'use client'
 
-import { useMemo } from "react";
-import { useParams } from "next/navigation";
-import { DatasetDetail, LoadingState } from "@/components/dataset";
-import { useDatasets } from "@/hooks";
+import { useMemo } from 'react'
+import { useParams } from 'next/navigation'
+import { DatasetDetail, LoadingState } from '@/components/dataset'
+import { useDatasets } from '@/hooks'
 
 export default function DatasetDetailPage() {
-  const params = useParams();
+  const params = useParams()
   // Datasets are keyed by their Langfuse name (URL-encoded in the route).
-  const datasetName = decodeURIComponent(params.id as string);
+  const datasetName = decodeURIComponent(params.id as string)
 
-  const { data: datasets, isLoading } = useDatasets();
+  const { data: datasets, isLoading } = useDatasets()
 
   const dataset = useMemo(() => {
-    return datasets?.find((d) => d.name === datasetName) || null;
-  }, [datasets, datasetName]);
+    return datasets?.find((d) => d.name === datasetName) || null
+  }, [datasets, datasetName])
 
-  const pageTitle = dataset?.name || "Dataset";
+  const pageTitle = dataset?.name || 'Dataset'
 
   return (
     <section className="max-w-2xl mx-auto flex flex-col gap-4 w-full p-4">
@@ -26,5 +26,5 @@ export default function DatasetDetailPage() {
 
       {!isLoading && <DatasetDetail key={dataset?.id} dataset={dataset} />}
     </section>
-  );
+  )
 }

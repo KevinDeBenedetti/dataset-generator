@@ -1,8 +1,59 @@
-.exports-page .fmt-card { padding: 18px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
-.exports-page .fmt-card.sel { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.exports-page .fmt-card .fh { display: flex; align-items: center; gap: 11px; }
-.exports-page .fmt-card .fi { width: 36px; height: 36px; border-radius: 9px; background: var(--secondary); display: flex; align-items: center; justify-content: center; }
-.exports-page .fmt-card h4 { font-size: 14.5px; } .exports-page .fmt-card .ext { font-family:var(--font-mono), ui-monospace, monospace; font-size: 12px; color: var(--muted-foreground); }
-.exports-page .fmt-card p { font-size: 12.5px; color: var(--muted-foreground); margin-top: 12px; line-height: 1.5; }
-.exports-page .codeblock { background: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12.5px; line-height: 1.7; overflow-x: auto; white-space: pre; }
-.exports-page .codeblock .k { color: var(--info); } .exports-page .codeblock .s { color: var(--success); } .exports-page .codeblock .n { color: var(--warning); }
+.exports-page .fmt-card {
+  padding: 18px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.exports-page .fmt-card.sel {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.exports-page .fmt-card .fh {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.exports-page .fmt-card .fi {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.exports-page .fmt-card h4 {
+  font-size: 14.5px;
+}
+.exports-page .fmt-card .ext {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.exports-page .fmt-card p {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.exports-page .codeblock {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+}
+.exports-page .codeblock .k {
+  color: var(--info);
+}
+.exports-page .codeblock .s {
+  color: var(--success);
+}
+.exports-page .codeblock .n {
+  color: var(--warning);
+}

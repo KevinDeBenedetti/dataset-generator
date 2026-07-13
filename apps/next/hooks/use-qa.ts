@@ -4,7 +4,7 @@ import { useQAStore } from '@/stores/qa'
 
 export function useQAByDataset(
   datasetId: string,
-  options?: { limit?: number; offset?: number; enabled?: boolean }
+  options?: { limit?: number; offset?: number; enabled?: boolean },
 ) {
   const { setQaItems, setQaResponse, setLoading, setError } = useQAStore()
 

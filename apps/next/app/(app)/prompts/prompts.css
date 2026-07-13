@@ -1,9 +1,57 @@
-.prompts-page .pe { display: grid; grid-template-columns: 250px 1fr; gap: 22px; align-items: start; }
-.prompts-page .plist { display: flex; flex-direction: column; gap: 4px; }
-.prompts-page .pitem { padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; }
-.prompts-page .pitem.sel { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 5%, transparent); }
-.prompts-page .pitem .pn { font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; justify-content: space-between; }
-.prompts-page .pitem .pm { font-size: 11.5px; color: var(--muted-foreground); margin-top: 4px; font-family: var(--font-mono), ui-monospace, monospace; }
-.prompts-page .editor { font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; line-height: 1.7; min-height: 260px; }
-.prompts-page .var { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:6px; background:color-mix(in oklch, var(--info) 14%, transparent); color:var(--info); font-family:var(--font-mono), ui-monospace, monospace; font-size:12px; }
-@media (max-width:860px){ .prompts-page .pe{ grid-template-columns:1fr; } }
+.prompts-page .pe {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+.prompts-page .plist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.prompts-page .pitem {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.prompts-page .pitem.sel {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 5%, transparent);
+}
+.prompts-page .pitem .pn {
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: space-between;
+}
+.prompts-page .pitem .pm {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+.prompts-page .editor {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  min-height: 260px;
+}
+.prompts-page .var {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--info) 14%, transparent);
+  color: var(--info);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .prompts-page .pe {
+    grid-template-columns: 1fr;
+  }
+}

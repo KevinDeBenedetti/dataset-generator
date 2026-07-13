@@ -2,12 +2,7 @@
 
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import {
-  ChevronFirst,
-  ChevronLast,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface PaginationWrapperProps {
@@ -105,13 +100,13 @@ export function PaginationWrapper({
               page === currentPage
                 ? 'bg-primary text-primary-foreground'
                 : 'text-gray-700 hover:bg-gray-100',
-              disabled && 'opacity-50 cursor-not-allowed'
+              disabled && 'opacity-50 cursor-not-allowed',
             )}
             onClick={() => handlePageChange(page as number)}
           >
             {page}
           </button>
-        )
+        ),
       )}
 
       <Button

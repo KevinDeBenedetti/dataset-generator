@@ -128,11 +128,19 @@ repos:
   # ===============================
   - repo: local
     hooks:
-      - id: eslint-next
-        name: 🔍 ESLint (Next.js)
+      - id: oxlint-next
+        name: 🔍 Oxlint (Next.js)
         entry: bash -c 'cd apps/next && bun run lint:fix'
         language: system
         files: ^apps/next/.*\.(ts|tsx|js|jsx|mjs)$
+        pass_filenames: false
+        priority: 10
+
+      - id: oxfmt-next
+        name: 🎨 Oxfmt (Next.js)
+        entry: bash -c 'cd apps/next && bun run format'
+        language: system
+        files: ^apps/next/.*\.(ts|tsx|js|jsx|mjs|css|json)$
         pass_filenames: false
         priority: 10
 
