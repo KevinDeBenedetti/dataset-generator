@@ -108,12 +108,26 @@ export default function PromptsPage() {
               style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
             >
               <div className="field">
-                <label className="label">System</label>
-                <textarea className="textarea editor" rows={5} defaultValue={systemPrompt} />
+                <label htmlFor="prompt-system" className="label">
+                  System
+                </label>
+                <textarea
+                  id="prompt-system"
+                  className="textarea editor"
+                  rows={5}
+                  defaultValue={systemPrompt}
+                />
               </div>
               <div className="field">
-                <label className="label">User instruction</label>
-                <textarea className="textarea editor" rows={3} defaultValue={userInstruction} />
+                <label htmlFor="prompt-user-instruction" className="label">
+                  User instruction
+                </label>
+                <textarea
+                  id="prompt-user-instruction"
+                  className="textarea editor"
+                  rows={3}
+                  defaultValue={userInstruction}
+                />
               </div>
               <div>
                 <div className="label" style={{ marginBottom: '8px' }}>
@@ -141,8 +155,10 @@ export default function PromptsPage() {
                 style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}
               >
                 <div className="field">
-                  <label className="label">Model</label>
-                  <select className="select" defaultValue="gpt-4o-mini">
+                  <label htmlFor="prompt-model" className="label">
+                    Model
+                  </label>
+                  <select id="prompt-model" className="select" defaultValue="gpt-4o-mini">
                     <option>gpt-4o-mini</option>
                     <option>gpt-4o</option>
                     <option>claude-3.5-sonnet</option>
@@ -150,12 +166,16 @@ export default function PromptsPage() {
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <div className="field" style={{ flex: 1 }}>
-                    <label className="label">Temperature</label>
-                    <input className="input" defaultValue="0.3" />
+                    <label htmlFor="prompt-temperature" className="label">
+                      Temperature
+                    </label>
+                    <input id="prompt-temperature" className="input" defaultValue="0.3" />
                   </div>
                   <div className="field" style={{ flex: 1 }}>
-                    <label className="label">max_words</label>
-                    <input className="input" defaultValue="60" />
+                    <label htmlFor="prompt-max-words" className="label">
+                      max_words
+                    </label>
+                    <input id="prompt-max-words" className="input" defaultValue="60" />
                   </div>
                 </div>
               </div>

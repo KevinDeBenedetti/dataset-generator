@@ -164,6 +164,17 @@ class DatasetPipeline:
                     if pages
                     else f"No pages crawled from {url}",
                 )
+                if not pages:
+                    # Every page — including the seed — failed to fetch (e.g.
+                    # blocked, unreachable, or timed out; see the per-page
+                    # warnings logged by ScraperService.crawl_site). Stop here
+                    # instead of silently continuing through the LLM stages and
+                    # returning a "successful" dataset with zero content.
+                    raise RuntimeError(
+                        f"No pages could be crawled from {url}. The seed URL "
+                        "and any discovered links all failed to fetch — check "
+                        "the server logs for the per-page error."
+                    )
             else:
                 pages = [await self.scraper_service.scrape_url(url)]
                 scraped_len = len(pages[0].content or "")

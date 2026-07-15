@@ -112,10 +112,10 @@ export function AppSidebar() {
             <Icon name="settings" />
             <span>Settings</span>
           </Link>
-          <a className="sb-link" href="#">
+          <button type="button" className="sb-link">
             <Icon name="fileText" />
             <span>Legal notice</span>
-          </a>
+          </button>
         </div>
       </nav>
       <div className="sb-foot">

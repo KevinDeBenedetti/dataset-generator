@@ -47,8 +47,12 @@ class TestDatasetVersioning:
 
         assert get_next_dataset_version("ds", client) == 1
 
-    def test_sync_creates_dataset_items_and_run(self):
+    def test_sync_creates_dataset_items_and_run(self, monkeypatch):
         """Sync upserts the dataset, each item, and records a versioned run."""
+        monkeypatch.setenv("LANGFUSE_HOST", "https://lf.example.com")
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
+
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[])
         client.start_observation.return_value = MagicMock(trace_id="trace-xyz")
@@ -68,13 +72,19 @@ class TestDatasetVersioning:
             },
         ]
 
-        result = sync_qa_to_langfuse(
-            "my-dataset",
-            items,
-            source_url="https://example.com",
-            stats={"total": 2},
-            langfuse_client=client,
-        )
+        post_resp = MagicMock()
+        post_resp.raise_for_status.return_value = None
+
+        with patch(
+            "server.services.langfuse.httpx.post", return_value=post_resp
+        ) as mock_post:
+            result = sync_qa_to_langfuse(
+                "my-dataset",
+                items,
+                source_url="https://example.com",
+                stats={"total": 2},
+                langfuse_client=client,
+            )
 
         # Dataset created with version metadata.
         create_kwargs = client.create_dataset.call_args.kwargs
@@ -82,11 +92,13 @@ class TestDatasetVersioning:
         assert create_kwargs["metadata"]["version"] == 1
         assert create_kwargs["metadata"]["source_url"] == "https://example.com"
 
-        # Both items synced, each stamped with the version.
-        assert client.create_dataset_item.call_count == 2
-        item_kwargs = client.create_dataset_item.call_args_list[0].kwargs
-        assert item_kwargs["id"] == "hash1"
-        assert item_kwargs["metadata"]["version"] == 1
+        # Both items synced via the REST API (not the SDK client — see
+        # sync_qa_to_langfuse), each stamped with the version.
+        assert mock_post.call_count == 2
+        _, post_kwargs = mock_post.call_args_list[0]
+        assert post_kwargs["json"]["id"] == "hash1"
+        assert post_kwargs["json"]["metadata"]["version"] == 1
+        assert post_kwargs["auth"] == ("pk", "sk")
 
         # A versioned dataset run was recorded by linking each item to the run
         # directly (no run_experiment / get_dataset / per-item task execution).
@@ -187,20 +199,30 @@ class TestListDatasets:
         )
         assert list_datasets(client) == []
 
-    def test_sync_continues_when_an_item_fails(self):
+    def test_sync_continues_when_an_item_fails(self, monkeypatch):
         """A single bad item is recorded as failed without aborting the sync."""
+        monkeypatch.setenv("LANGFUSE_HOST", "https://lf.example.com")
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
+
         client = MagicMock()
         client.get_dataset_runs.return_value = MagicMock(data=[MagicMock()])  # → v2
-        client.create_dataset_item.side_effect = [Exception("bad"), None]
+
+        ok_resp = MagicMock()
+        ok_resp.raise_for_status.return_value = None
 
         items = [
             {"id": "a", "input": {}, "expected_output": {}, "metadata": {}},
             {"id": "b", "input": {}, "expected_output": {}, "metadata": {}},
         ]
 
-        result = sync_qa_to_langfuse(
-            "ds", items, source_url="https://x", langfuse_client=client
-        )
+        with patch(
+            "server.services.langfuse.httpx.post",
+            side_effect=[Exception("bad"), ok_resp],
+        ):
+            result = sync_qa_to_langfuse(
+                "ds", items, source_url="https://x", langfuse_client=client
+            )
 
         assert result["version"] == 2
         assert result["run_name"] == "v2"
@@ -330,6 +352,12 @@ class TestScanDatasetFiles:
 class TestCreateLangfuseDatasetWithItems:
     """Tests for create_langfuse_dataset_with_items function."""
 
+    @pytest.fixture(autouse=True)
+    def _creds(self, monkeypatch):
+        monkeypatch.setenv("LANGFUSE_HOST", "https://lf.example.com")
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
+
     def test_create_dataset_success(self):
         """Test successful dataset creation."""
         mock_client = MagicMock()
@@ -337,9 +365,8 @@ class TestCreateLangfuseDatasetWithItems:
         mock_dataset.id = "dataset-123"
         mock_client.create_dataset.return_value = mock_dataset
 
-        mock_item = MagicMock()
-        mock_item.id = "item-1"
-        mock_client.create_dataset_item.return_value = mock_item
+        post_resp = MagicMock()
+        post_resp.raise_for_status.return_value = None
 
         config = {"name": "test-dataset", "description": "Test"}
         items = [
@@ -351,7 +378,10 @@ class TestCreateLangfuseDatasetWithItems:
             }
         ]
 
-        result = create_langfuse_dataset_with_items(config, items, mock_client)
+        with patch(
+            "server.services.langfuse.httpx.post", return_value=post_resp
+        ):
+            result = create_langfuse_dataset_with_items(config, items, mock_client)
 
         assert result["dataset_id"] == "dataset-123"
         assert result["created_count"] == 1
@@ -363,7 +393,6 @@ class TestCreateLangfuseDatasetWithItems:
         mock_dataset = MagicMock()
         mock_dataset.id = "dataset-123"
         mock_client.create_dataset.return_value = mock_dataset
-        mock_client.create_dataset_item.side_effect = Exception("Item creation failed")
 
         config = {"name": "test-dataset"}
         items = [
@@ -375,7 +404,11 @@ class TestCreateLangfuseDatasetWithItems:
             }
         ]
 
-        result = create_langfuse_dataset_with_items(config, items, mock_client)
+        with patch(
+            "server.services.langfuse.httpx.post",
+            side_effect=Exception("Item creation failed"),
+        ):
+            result = create_langfuse_dataset_with_items(config, items, mock_client)
 
         assert result["created_count"] == 0
         assert result["failed_count"] == 1

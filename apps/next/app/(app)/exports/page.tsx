@@ -153,8 +153,14 @@ export default function ExportsPage() {
               style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}
             >
               <div className="field">
-                <label className="label">Langfuse project</label>
-                <select className="select" defaultValue="prod · training-data">
+                <label htmlFor="export-langfuse-project" className="label">
+                  Langfuse project
+                </label>
+                <select
+                  id="export-langfuse-project"
+                  className="select"
+                  defaultValue="prod · training-data"
+                >
                   <option>prod · training-data</option>
                   <option>staging · eval</option>
                 </select>

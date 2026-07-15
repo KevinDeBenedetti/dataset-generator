@@ -1,169 +1,99 @@
-import { Icon } from '@/components/app/icon'
+'use client'
 
-type Source = {
-  host: string
-  type: string
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { Icon } from '@/components/app/icon'
+import { useLangfuseDatasets } from '@/hooks'
+import { relativeTime } from '@/lib/utils'
+import type { LangfuseDataset } from '@/api/sdk'
+
+type SourceGroup = {
+  key: string
+  label: string
   icon: string
-  pages: number
-  datasets: number
-  lastCrawl: string
-  frequency: string
-  status: string
-  variant: 'success' | 'info' | 'warning' | 'destructive'
+  datasetCount: number
+  lastGeneratedAt: string | null
 }
 
-const SOURCES: Source[] = [
-  {
-    host: 'docs.example.com',
-    type: 'sitemap',
-    icon: 'globe',
-    pages: 128,
-    datasets: 3,
-    lastCrawl: '12 min ago',
-    frequency: 'Daily',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'help.acme.io',
-    type: 'site',
-    icon: 'globe',
-    pages: 210,
-    datasets: 1,
-    lastCrawl: 'in progress',
-    frequency: 'Manual',
-    status: 'Crawling',
-    variant: 'info',
-  },
-  {
-    host: 'api.acme.io',
-    type: 'site',
-    icon: 'globe',
-    pages: 86,
-    datasets: 1,
-    lastCrawl: 'yesterday',
-    frequency: 'Weekly',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'blog.example.com/feed',
-    type: 'rss',
-    icon: 'rss',
-    pages: 42,
-    datasets: 2,
-    lastCrawl: '1d ago',
-    frequency: '6h',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'handbook.firma.de',
-    type: 'sitemap',
-    icon: 'workflow',
-    pages: 164,
-    datasets: 1,
-    lastCrawl: '2d ago',
-    frequency: 'Weekly',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'boe.es',
-    type: 'sitemap',
-    icon: 'workflow',
-    pages: 512,
-    datasets: 1,
-    lastCrawl: '1d ago',
-    frequency: 'Monthly',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'changelog.acme.io/rss',
-    type: 'rss',
-    icon: 'rss',
-    pages: 38,
-    datasets: 1,
-    lastCrawl: '3h ago',
-    frequency: '12h',
-    status: 'OK',
-    variant: 'success',
-  },
-  {
-    host: 'legacy.kb.example',
-    type: 'site',
-    icon: 'globe',
-    pages: 0,
-    datasets: 0,
-    lastCrawl: '4d ago',
-    frequency: '—',
-    status: 'Error 403',
-    variant: 'destructive',
-  },
-  {
-    host: 'intranet.firma.de',
-    type: 'site',
-    icon: 'globe',
-    pages: 0,
-    datasets: 0,
-    lastCrawl: '5d ago',
-    frequency: '—',
-    status: 'Auth required',
-    variant: 'warning',
-  },
-]
+// Datasets don't have a first-class "source" of their own — a source is
+// derived from the host (or scheme, for file:// / github:// origins) of the
+// datasets generated from it. Grouping client-side keeps this in sync with
+// the same data the Dashboard/Datasets pages already show, with no new
+// backend concept to maintain.
+function sourceKeyLabelIcon(sourceUrl: string | null | undefined) {
+  if (!sourceUrl) return { key: 'unknown', label: 'Unknown source', icon: 'globe' }
+  try {
+    const u = new URL(sourceUrl)
+    if (u.protocol === 'http:' || u.protocol === 'https:') {
+      return { key: u.host, label: u.host, icon: 'globe' }
+    }
+    if (u.protocol === 'github:') {
+      return { key: sourceUrl, label: sourceUrl.replace('github://', ''), icon: 'github' }
+    }
+    if (u.protocol === 'file:') {
+      return { key: sourceUrl, label: sourceUrl.replace('file://', ''), icon: 'fileText' }
+    }
+    return { key: sourceUrl, label: sourceUrl, icon: 'globe' }
+  } catch {
+    return { key: sourceUrl, label: sourceUrl, icon: 'globe' }
+  }
+}
 
-const STATS = [
-  { label: 'Active sources', icon: 'globe', value: '11', sub: '9 sites · 2 RSS', tone: 'muted' },
-  {
-    label: 'Indexed pages',
-    icon: 'fileText',
-    value: '3,420',
-    sub: 'last crawl 12 min ago',
-    tone: 'muted',
-  },
-  {
-    label: 'Scraped tokens',
-    icon: 'cpu',
-    value: '8.4M',
-    sub: 'after cleaning: 2.1M',
-    tone: 'muted',
-  },
-  { label: 'Failures', icon: 'alert', value: '2', sub: 'to reconnect', tone: 'down' },
-]
+function groupBySource(datasets: LangfuseDataset[]): SourceGroup[] {
+  const groups = new Map<string, SourceGroup>()
+  for (const d of datasets) {
+    const { key, label, icon } = sourceKeyLabelIcon(d.source_url)
+    const existing = groups.get(key)
+    if (existing) {
+      existing.datasetCount += 1
+      if (
+        d.created_at &&
+        (!existing.lastGeneratedAt || d.created_at > existing.lastGeneratedAt)
+      ) {
+        existing.lastGeneratedAt = d.created_at
+      }
+    } else {
+      groups.set(key, {
+        key,
+        label,
+        icon,
+        datasetCount: 1,
+        lastGeneratedAt: d.created_at ?? null,
+      })
+    }
+  }
+  return [...groups.values()].toSorted(
+    (a, b) => b.datasetCount - a.datasetCount || a.label.localeCompare(b.label),
+  )
+}
 
 export default function SourcesPage() {
+  const { data, isLoading, error } = useLangfuseDatasets()
+  const [filter, setFilter] = useState('')
+  const now = Date.now()
+
+  const sources = useMemo(() => groupBySource(data?.datasets ?? []), [data])
+  const filtered = filter.trim()
+    ? sources.filter((s) => s.label.toLowerCase().includes(filter.trim().toLowerCase()))
+    : sources
+
   return (
     <>
       <div className="page-head">
         <div>
           <h1 className="page-title">Sources</h1>
           <p className="page-sub">
-            Reusable content origins for your generations. 11 connected sources.
+            Content origins your datasets were generated from.{' '}
+            {sources.length > 0 &&
+              `${sources.length} connected source${sources.length === 1 ? '' : 's'}.`}
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-primary">
+          <Link href="/generate" className="btn btn-primary">
             <Icon name="plus" />
             Add a source
-          </button>
+          </Link>
         </div>
-      </div>
-
-      <div className="stat-grid" style={{ marginBottom: 18 }}>
-        {STATS.map((s) => (
-          <div className="card stat" key={s.label}>
-            <div className="stat-top">
-              <span className="stat-label">{s.label}</span>
-              <span className="stat-ic">
-                <Icon name={s.icon} />
-              </span>
-            </div>
-            <div className="stat-val">{s.value}</div>
-            <div className={`stat-delta ${s.tone}`}>{s.sub}</div>
-          </div>
-        ))}
       </div>
 
       <div className="card">
@@ -173,55 +103,59 @@ export default function SourcesPage() {
           </div>
           <label className="topbar-search" style={{ display: 'flex', minWidth: 240 }}>
             <Icon name="search" />
-            <input placeholder="Filter…" />
+            <input
+              placeholder="Filter…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
           </label>
         </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>Type</th>
-              <th>Pages</th>
-              <th>Linked datasets</th>
-              <th>Last crawl</th>
-              <th>Frequency</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {SOURCES.map((s) => (
-              <tr key={s.host} style={{ cursor: 'pointer' }}>
-                <td>
-                  <div className="cell-main">
-                    <span className="cell-ic">
-                      <Icon name={s.icon} />
-                    </span>
-                    <div className="cell-title">{s.host}</div>
-                  </div>
-                </td>
-                <td>
-                  <span className="tag">{s.type}</span>
-                </td>
-                <td className="mono">{s.pages || '—'}</td>
-                <td className="mono muted">{s.datasets || '—'}</td>
-                <td className="muted">{s.lastCrawl}</td>
-                <td className="muted">{s.frequency}</td>
-                <td>
-                  <span className={`badge badge-${s.variant}`}>
-                    {(s.variant === 'info' || s.variant === 'success') && <span className="dot" />}
-                    {s.status}
-                  </span>
-                </td>
-                <td>
-                  <button className="icon-btn">
-                    <Icon name="more" />
-                  </button>
-                </td>
+
+        {error ? (
+          <div className="card-body">
+            <p className="muted">Failed to load sources.</p>
+          </div>
+        ) : isLoading ? (
+          <div className="card-body">
+            <p className="muted">Loading sources…</p>
+          </div>
+        ) : sources.length === 0 ? (
+          <div className="card-body">
+            <p className="muted">
+              No sources yet. <Link href="/generate">Generate a dataset</Link> to connect one.
+            </p>
+          </div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Linked datasets</th>
+                <th>Last generated</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <tr key={s.key}>
+                  {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
+                      false positive: static, non-interactive cell; the icon is
+                      already aria-hidden (see Icon) and the cell has visible
+                      accessible text (s.label). */}
+                  <td>
+                    <div className="cell-main">
+                      <span className="cell-ic">
+                        <Icon name={s.icon} />
+                      </span>
+                      <div className="cell-title">{s.label}</div>
+                    </div>
+                  </td>
+                  <td className="mono">{s.datasetCount}</td>
+                  <td className="muted">{relativeTime(s.lastGeneratedAt, now)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   )

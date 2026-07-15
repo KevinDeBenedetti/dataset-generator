@@ -19,11 +19,13 @@ export default function SettingsPage() {
 
       <div className="set-grid">
         <div className="set-nav">
-          <a className="active">Profile</a>
-          <a>Generation defaults</a>
-          <a>Appearance</a>
-          <a>Notifications</a>
-          <a>Billing</a>
+          <button type="button" className="active">
+            Profile
+          </button>
+          <button type="button">Generation defaults</button>
+          <button type="button">Appearance</button>
+          <button type="button">Notifications</button>
+          <button type="button">Billing</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

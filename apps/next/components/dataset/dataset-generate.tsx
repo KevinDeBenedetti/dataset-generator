@@ -253,9 +253,11 @@ export function DatasetGenerate() {
 
           <div className="space-y-3">
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Target Language</label>
+              <label htmlFor="target-language" className="text-xs text-gray-500">
+                Target Language
+              </label>
               <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="target-language" className="w-full">
                   <SelectValue placeholder="Select a language" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,7 +272,10 @@ export function DatasetGenerate() {
 
             <div className="flex flex-col gap-1">
               <div className="flex justify-between">
-                <label className="text-xs text-gray-500">Similarity Threshold</label>
+                {/* Not a <label>: Radix's Slider thumb isn't a labelable
+                    element, so the accessible name is set via thumbLabel
+                    (aria-label) on the thumb itself instead. */}
+                <span className="text-xs text-gray-500">Similarity Threshold</span>
                 <span className="text-xs">{similarityThreshold[0]}</span>
               </div>
               <Slider
@@ -279,6 +284,7 @@ export function DatasetGenerate() {
                 min={0.1}
                 max={1}
                 step={0.05}
+                thumbLabel="Similarity threshold"
               />
             </div>
 
@@ -300,8 +306,11 @@ export function DatasetGenerate() {
                 {crawl && (
                   <div className="grid grid-cols-2 gap-2 pl-6">
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">Max depth</label>
+                      <label htmlFor="crawl-max-depth" className="text-xs text-gray-500">
+                        Max depth
+                      </label>
                       <Input
+                        id="crawl-max-depth"
                         type="number"
                         min={0}
                         value={maxDepth}
@@ -310,8 +319,11 @@ export function DatasetGenerate() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">Max pages</label>
+                      <label htmlFor="crawl-max-pages" className="text-xs text-gray-500">
+                        Max pages
+                      </label>
                       <Input
+                        id="crawl-max-pages"
                         type="number"
                         min={1}
                         value={maxPages}
@@ -320,8 +332,11 @@ export function DatasetGenerate() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">Crawl delay (s)</label>
+                      <label htmlFor="crawl-delay" className="text-xs text-gray-500">
+                        Crawl delay (s)
+                      </label>
                       <Input
+                        id="crawl-delay"
                         type="number"
                         min={0}
                         step={0.1}
@@ -332,8 +347,11 @@ export function DatasetGenerate() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-500">Max pages/domain</label>
+                      <label htmlFor="crawl-max-pages-per-domain" className="text-xs text-gray-500">
+                        Max pages/domain
+                      </label>
                       <Input
+                        id="crawl-max-pages-per-domain"
                         type="number"
                         min={0}
                         value={maxPagesPerDomain}
@@ -350,8 +368,11 @@ export function DatasetGenerate() {
             {/* Max repos (GitHub source only) */}
             {source === 'github' && (
               <div className="flex flex-col gap-1 border-t pt-3">
-                <label className="text-xs text-gray-500">Max repos (optional)</label>
+                <label htmlFor="github-max-repos" className="text-xs text-gray-500">
+                  Max repos (optional)
+                </label>
                 <Input
+                  id="github-max-repos"
                   type="number"
                   min={1}
                   value={maxRepos}
