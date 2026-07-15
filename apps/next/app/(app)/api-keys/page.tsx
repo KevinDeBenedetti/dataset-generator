@@ -94,7 +94,7 @@ export default function ApiKeysPage() {
                   <span className="dot" />
                   Active
                 </span>
-                <button className="icon-btn">
+                <button className="icon-btn" title="More actions" aria-label="More actions">
                   <Icon name="more" />
                 </button>
               </div>
