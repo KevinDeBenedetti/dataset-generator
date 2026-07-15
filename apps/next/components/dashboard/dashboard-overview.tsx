@@ -68,8 +68,10 @@ export function DashboardOverview() {
     const totalPairs = list.reduce((sum, d) => sum + (d.qa_sources_count ?? 0), 0)
     const avg = total ? Math.round(totalPairs / total) : 0
 
-    const recent = [...list]
-      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+    const recent = list
+      .toSorted(
+        (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+      )
       .slice(0, 5)
 
     // Datasets created per week over the last WEEKS weeks (oldest → newest).
@@ -92,7 +94,7 @@ export function DashboardOverview() {
       const lang = d.target_language || 'unknown'
       langMap.set(lang, (langMap.get(lang) ?? 0) + 1)
     }
-    const languages = [...langMap.entries()].sort((a, b) => b[1] - a[1])
+    const languages = [...langMap.entries()].toSorted((a, b) => b[1] - a[1])
 
     return { total, totalPairs, avg, recent, buckets, bucketLabels, languages }
   }, [datasets, now])
@@ -107,6 +109,9 @@ export function DashboardOverview() {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
+          // Interchangeable loading placeholders, never reordered/removed
+          // individually — replaced wholesale once data arrives.
+          // oxlint-disable-next-line react/no-array-index-key
           <Skeleton key={i} className="h-32 rounded-2xl" />
         ))}
         <Skeleton className="h-64 rounded-2xl sm:col-span-2 lg:row-span-2" />

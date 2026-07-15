@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Icon } from '@/components/app/icon'
 import { useIsDark } from '@/hooks/use-is-dark'
 import { useCurrentUser, useLogout } from '@/hooks/use-auth'
+import { toggleTheme } from '@/lib/utils'
 
 const LABELS: Record<string, string> = {
   '/dashboard': 'Overview',
@@ -23,7 +24,7 @@ const LABELS: Record<string, string> = {
 
 function labelFor(pathname: string) {
   if (LABELS[pathname]) return LABELS[pathname]
-  const seg = pathname.split('/').filter(Boolean)[0] ?? ''
+  const seg = pathname.split('/').find(Boolean) ?? ''
   if (!seg) return 'Overview'
   return seg.charAt(0).toUpperCase() + seg.slice(1)
 }
@@ -33,16 +34,6 @@ export function AppTopbar() {
   const dark = useIsDark()
   const { data: user } = useCurrentUser()
   const logoutMutation = useLogout()
-
-  function toggleTheme() {
-    const next = !document.documentElement.classList.contains('dark')
-    document.documentElement.classList.toggle('dark', next)
-    try {
-      localStorage.setItem('dg-theme', next ? 'dark' : 'light')
-    } catch {
-      // ignore storage errors
-    }
-  }
 
   return (
     <header className="topbar">

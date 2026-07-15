@@ -1,26 +1,16 @@
 'use client'
 
 import { Moon, Sun } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, toggleTheme } from '@/lib/utils'
 import { useIsDark } from '@/hooks/use-is-dark'
 
 export function ThemeToggle({ className }: { className?: string }) {
   const dark = useIsDark()
 
-  function toggle() {
-    const next = !document.documentElement.classList.contains('dark')
-    document.documentElement.classList.toggle('dark', next)
-    try {
-      localStorage.setItem('dg-theme', next ? 'dark' : 'light')
-    } catch {
-      // ignore storage errors (private mode, etc.)
-    }
-  }
-
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={toggleTheme}
       title="Theme"
       aria-label="Toggle theme"
       className={cn(

@@ -10,7 +10,7 @@ const REFRESH_COOKIE = process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_t
 // shell: /dashboard, /datasets, /generate, /jobs, /quality, /sources, …) is
 // gated — new app routes are protected automatically, no per-route allowlist
 // to maintain.
-const PUBLIC_PATHS = ['/', '/login']
+const PUBLIC_PATHS = new Set(['/', '/login'])
 
 // Middleware-level gate: presence of the auth cookie. The cookie is httpOnly
 // and set by the API on host `localhost` (shared across ports in dev), so the
@@ -26,7 +26,7 @@ export function middleware(request: NextRequest) {
   const isAuthenticated = Boolean(
     request.cookies.get(AUTH_COOKIE)?.value || request.cookies.get(REFRESH_COOKIE)?.value,
   )
-  const isPublic = PUBLIC_PATHS.includes(pathname)
+  const isPublic = PUBLIC_PATHS.has(pathname)
 
   // Already signed in but heading to /login → send to the app.
   if (pathname === '/login' && isAuthenticated) {

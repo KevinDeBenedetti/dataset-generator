@@ -88,7 +88,14 @@ export function PaginationWrapper({
 
       {visiblePages.map((page, index) =>
         page === '...' ? (
-          <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+          <span
+            // Ellipsis markers are fungible placeholders with no identity of
+            // their own (there's at most one leading and one trailing); the
+            // index just disambiguates the two.
+            // oxlint-disable-next-line react/no-array-index-key
+            key={`ellipsis-${index}`}
+            className="px-2 text-gray-400"
+          >
             ...
           </span>
         ) : (

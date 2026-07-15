@@ -378,9 +378,7 @@ class TestCreateLangfuseDatasetWithItems:
             }
         ]
 
-        with patch(
-            "server.services.langfuse.httpx.post", return_value=post_resp
-        ):
+        with patch("server.services.langfuse.httpx.post", return_value=post_resp):
             result = create_langfuse_dataset_with_items(config, items, mock_client)
 
         assert result["dataset_id"] == "dataset-123"

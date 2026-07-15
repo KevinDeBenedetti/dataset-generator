@@ -124,8 +124,11 @@ export default function AgentTestPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Parsed Q&amp;A pairs ({result.count})</p>
                 <div className="space-y-2">
-                  {(result.qa_pairs as AgentQaPair[]).map((pair, index) => (
-                    <div key={index} className="p-3 border border-gray-200 rounded-md bg-white">
+                  {(result.qa_pairs as AgentQaPair[]).map((pair) => (
+                    <div
+                      key={pair.question}
+                      className="p-3 border border-gray-200 rounded-md bg-white"
+                    >
                       <p className="font-medium text-sm">Q: {pair.question}</p>
                       <p className="mt-1 text-sm text-gray-700">A: {pair.answer}</p>
                       {pair.context && (
