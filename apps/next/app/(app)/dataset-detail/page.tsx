@@ -195,7 +195,7 @@ export default function DatasetDetailPage() {
 
         <div id="qalist">
           {QA.map((q, i) => (
-            <div className="qa" key={i}>
+            <div className="qa" key={q.q}>
               <div className="qa-q">
                 <span className="qmark">Q{i + 1}</span>
                 <span>{q.q}</span>

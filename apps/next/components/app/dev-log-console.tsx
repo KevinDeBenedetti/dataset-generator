@@ -58,7 +58,7 @@ export function DevLogConsole() {
   useEffect(() => {
     if (!ENABLED || !open) return
     const source = new EventSource('/api/debug/logs')
-    source.onmessage = (event) => {
+    const onMessage = (event: MessageEvent) => {
       if (pausedRef.current) return
       try {
         const { source: src, line } = JSON.parse(event.data) as {
@@ -73,7 +73,11 @@ export function DevLogConsole() {
         // ignore malformed events
       }
     }
-    return () => source.close()
+    source.addEventListener('message', onMessage)
+    return () => {
+      source.removeEventListener('message', onMessage)
+      source.close()
+    }
   }, [open])
 
   // Auto-scroll to the newest line unless paused.

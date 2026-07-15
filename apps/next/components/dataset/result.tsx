@@ -69,8 +69,11 @@ export function Result({ result }: ResultProps) {
         <h4 className="font-semibold mb-2">Q&A Pairs</h4>
         <ScrollArea className="h-64">
           <div className="space-y-3 p-2">
-            {result.qa_pairs.map((pair, index) => (
-              <div key={index} className="p-3 border border-gray-200 rounded-md bg-white">
+            {result.qa_pairs.map((pair) => (
+              // QaPair has no id field; the pipeline already deduplicates by
+              // similarity before pairs reach here, so the question is a
+              // safe, stable key.
+              <div key={pair.question} className="p-3 border border-gray-200 rounded-md bg-white">
                 <p className="font-medium">Q: {pair.question}</p>
                 <p className="mt-1 text-gray-700">A: {pair.answer}</p>
               </div>
