@@ -27,3 +27,14 @@ export function relativeTime(dateStr: string | null | undefined, now: number): s
   if (months < 12) return `${months}mo ago`
   return `${Math.floor(days / 365)}y ago`
 }
+
+// Flips the `dark` class on <html> and persists the choice.
+export function toggleTheme() {
+  const next = !document.documentElement.classList.contains('dark')
+  document.documentElement.classList.toggle('dark', next)
+  try {
+    localStorage.setItem('dg-theme', next ? 'dark' : 'light')
+  } catch {
+    // ignore storage errors (private mode, etc.)
+  }
+}

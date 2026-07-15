@@ -294,6 +294,9 @@ export async function generateDatasetStream(
   }
 
   while (true) {
+    // Each read() depends on the stream's current cursor and can't be known
+    // ahead of time, so there's nothing here to parallelize with Promise.all.
+    // oxlint-disable-next-line eslint/no-await-in-loop
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
