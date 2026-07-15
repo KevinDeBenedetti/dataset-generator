@@ -143,12 +143,21 @@ export default function DatasetDetailPage() {
             style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: 12 }}
           >
             <div className="field">
-              <label className="label">Question</label>
-              <input className="input" placeholder="How do I configure the API key?" />
+              <label htmlFor="qa-question" className="label">
+                Question
+              </label>
+              <input
+                id="qa-question"
+                className="input"
+                placeholder="How do I configure the API key?"
+              />
             </div>
             <div className="field">
-              <label className="label">Answer</label>
+              <label htmlFor="qa-answer" className="label">
+                Answer
+              </label>
               <textarea
+                id="qa-answer"
                 className="textarea"
                 rows={3}
                 placeholder="Copy the .env.example file to .env then set your key…"
@@ -391,6 +400,10 @@ export default function DatasetDetailPage() {
             </thead>
             <tbody>
               <tr>
+                {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
+                    false positive: static, non-interactive cell; the icon is
+                    already aria-hidden (see Icon) and the cell has visible
+                    accessible text (docs.example.com). */}
                 <td>
                   <div className="cell-main">
                     <span className="cell-ic">
@@ -413,6 +426,9 @@ export default function DatasetDetailPage() {
                 </td>
               </tr>
               <tr>
+                {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
+                    same false positive as above: static cell, icon already
+                    aria-hidden, cell has visible accessible text. */}
                 <td>
                   <div className="cell-main">
                     <span className="cell-ic">
@@ -451,8 +467,10 @@ export default function DatasetDetailPage() {
               style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
             >
               <div className="field">
-                <label className="label">LLM model</label>
-                <select className="select" defaultValue="gpt-4o-mini">
+                <label htmlFor="detail-llm-model" className="label">
+                  LLM model
+                </label>
+                <select id="detail-llm-model" className="select" defaultValue="gpt-4o-mini">
                   <option>gpt-4o-mini</option>
                   <option>gpt-4o</option>
                   <option>claude-3.5-sonnet</option>
@@ -460,8 +478,10 @@ export default function DatasetDetailPage() {
                 </select>
               </div>
               <div className="field">
-                <label className="label">Prompt</label>
-                <select className="select" defaultValue="qa-fr · v2">
+                <label htmlFor="detail-prompt" className="label">
+                  Prompt
+                </label>
+                <select id="detail-prompt" className="select" defaultValue="qa-fr · v2">
                   <option>qa-fr · v2</option>
                   <option>qa-fr · v1</option>
                 </select>

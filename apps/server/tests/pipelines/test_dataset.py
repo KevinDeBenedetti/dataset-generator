@@ -147,6 +147,27 @@ class TestDatasetPipeline:
         assert result["langfuse"] is None  # Langfuse not configured → skipped
 
     @pytest.mark.asyncio
+    async def test_process_url_crawl_no_pages_raises(
+        self, pipeline: DatasetPipeline, mock_qa_service
+    ):
+        """When every page fails to fetch (e.g. the seed is SSRF-blocked or
+        unreachable), crawl_site returns an empty list rather than raising —
+        the pipeline must still fail loudly instead of returning a
+        "successful" dataset with zero pages and zero QA pairs."""
+        with patch.object(
+            pipeline.scraper_service, "crawl_site", AsyncMock(return_value=[])
+        ):
+            with pytest.raises(RuntimeError, match="No pages could be crawled"):
+                await pipeline.process_url(
+                    url="https://example.com",
+                    dataset_name="test_dataset",
+                    model_cleaning="gpt-4o-mini",
+                    target_language="fr",
+                    model_qa="gpt-4o-mini",
+                    crawl=True,
+                )
+
+    @pytest.mark.asyncio
     async def test_process_url_default_similarity_threshold(
         self, pipeline: DatasetPipeline, mock_qa_service
     ):

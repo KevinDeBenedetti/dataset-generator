@@ -232,6 +232,10 @@ export default function JobsPage() {
           <tbody>
             {HISTORY_ROWS.map((row) => (
               <tr key={row.id}>
+                {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
+                    false positive: static, non-interactive cell; the icon is
+                    already aria-hidden (see Icon) and the cell has visible
+                    accessible text (row.name). */}
                 <td>
                   <div className="cell-main">
                     <span className="cell-ic">

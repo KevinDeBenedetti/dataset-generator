@@ -11,14 +11,18 @@
   flex-direction: column;
   gap: 2px;
 }
-.settings-page .set-nav a {
+.settings-page .set-nav button {
   padding: 8px 11px;
   border-radius: 8px;
   font-size: 13.5px;
   color: var(--muted-foreground);
   cursor: pointer;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: inherit;
 }
-.settings-page .set-nav a.active {
+.settings-page .set-nav button.active {
   background: var(--accent);
   color: var(--foreground);
   font-weight: 500;

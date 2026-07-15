@@ -107,22 +107,28 @@ def create_langfuse_dataset_with_items(
         metadata=dataset_config.get("metadata", {}),
     )
 
-    # Create the dataset items
+    # Create the dataset items via the REST API directly, not the SDK client:
+    # see the comment in sync_qa_to_langfuse for why (media_references).
+    host, public_key, secret_key = _langfuse_credentials()
     created_items = []
     failed_items = []
 
     for item in dataset_items:
         try:
-            created_item = langfuse_client.create_dataset_item(
-                dataset_name=dataset_config["name"],
-                input=item["input"],
-                expected_output=item["expected_output"],
-                metadata=item["metadata"],
-                id=item["id"],
+            resp = httpx.post(
+                f"{host}/api/public/dataset-items",
+                json={
+                    "datasetName": dataset_config["name"],
+                    "input": item["input"],
+                    "expectedOutput": item["expected_output"],
+                    "metadata": item["metadata"],
+                    "id": item["id"],
+                },
+                auth=(public_key, secret_key),
+                timeout=30.0,
             )
-            created_items.append(
-                created_item.id if hasattr(created_item, "id") else item["id"]
-            )
+            resp.raise_for_status()
+            created_items.append(item["id"])
             logging.info(f"Item created: {item['id']}")
         except Exception as e:
             logging.error(f"Error creating item {item['id']}: {e}")
@@ -407,17 +413,30 @@ def sync_qa_to_langfuse(
         metadata=dataset_metadata,
     )
 
+    # Item creation goes through the REST API directly rather than the SDK's
+    # create_dataset_item, for the same reason as get_dataset_items: the SDK
+    # parses the response into a DatasetItem model that requires a
+    # media_references field older/some Langfuse servers don't return, which
+    # fails client-side response validation even though the item was created
+    # successfully server-side (the POST already went through by then).
+    host, public_key, secret_key = _langfuse_credentials()
     created, failed = [], []
     for item in items:
         try:
             item_metadata = {**(item.get("metadata") or {}), "version": version}
-            langfuse_client.create_dataset_item(
-                dataset_name=dataset_name,
-                input=item["input"],
-                expected_output=item.get("expected_output"),
-                metadata=item_metadata,
-                id=item.get("id"),
+            resp = httpx.post(
+                f"{host}/api/public/dataset-items",
+                json={
+                    "datasetName": dataset_name,
+                    "input": item["input"],
+                    "expectedOutput": item.get("expected_output"),
+                    "metadata": item_metadata,
+                    "id": item.get("id"),
+                },
+                auth=(public_key, secret_key),
+                timeout=30.0,
             )
+            resp.raise_for_status()
             created.append(item.get("id"))
         except Exception as e:  # noqa: BLE001 — keep going on a single bad item
             logging.error(f"Error syncing item {item.get('id')}: {e}")
