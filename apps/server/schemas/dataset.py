@@ -122,3 +122,16 @@ class DeleteDatasetResponse(BaseModel):
     message: str
     dataset_id: str
     records_deleted: int
+
+
+class ResolvePairRequest(BaseModel):
+    """Arbitrate one duplicate pair: delete this record, keep the other."""
+
+    remove_id: str
+
+
+class ResolvePairResponse(BaseModel):
+    dataset_id: str
+    dataset_name: str
+    removed_id: str
+    removed_question: str

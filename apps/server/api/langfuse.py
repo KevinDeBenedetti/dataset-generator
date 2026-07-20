@@ -91,6 +91,8 @@ async def list_langfuse_datasets():
         raise HTTPException(status_code=503, detail="Langfuse is not configured")
     try:
         datasets = list_datasets()
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.exception("Error listing Langfuse datasets")
         raise HTTPException(
@@ -110,6 +112,8 @@ async def list_dataset_versions(dataset: str):
         raise HTTPException(status_code=503, detail="Langfuse is not configured")
     try:
         versions = list_dataset_runs(dataset)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.exception("Error listing Langfuse dataset versions")
         raise HTTPException(

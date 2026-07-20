@@ -5,12 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from server.services.auth import require_admin
 from server.services.dataset_reads import (
+    AmbiguousRecordError,
     list_datasets_view,
     get_dataset_view,
     create_dataset as create_dataset_view,
     delete_dataset as delete_dataset_view,
     analyze_similarities_view,
     clean_similarities_view,
+    resolve_similarity_pair,
 )
 from server.services.langfuse import LangfuseUnavailableError
 from server.schemas.dataset import (
@@ -18,6 +20,8 @@ from server.schemas.dataset import (
     SimilarityAnalysisResponse,
     CleanSimilarityResponse,
     DeleteDatasetResponse,
+    ResolvePairRequest,
+    ResolvePairResponse,
 )
 
 router = APIRouter(
@@ -109,6 +113,31 @@ async def clean_similarities(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logging.error(f"Error in clean_similarities endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/dataset/{dataset_name}/resolve-pair",
+    response_model=ResolvePairResponse,
+    # Destructive (deletes one Langfuse item) — admin only, like clean.
+    dependencies=[Depends(require_admin)],
+)
+async def resolve_pair(dataset_name: str, body: ResolvePairRequest):
+    """Arbitrate a single duplicate pair: delete the given record, keep the other.
+
+    Accepts the full item id or the 8-char prefix returned by
+    analyze-similarities.
+    """
+    try:
+        return resolve_similarity_pair(dataset_name, body.remove_id)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except AmbiguousRecordError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error in resolve_pair endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getQAByDataset } from '@/api/sdk'
+import { getQAByDataset, getQAStats } from '@/api/sdk'
 import { useQAStore } from '@/stores/qa'
 
 export function useQAByDataset(
@@ -29,6 +29,19 @@ export function useQAByDataset(
         setLoading(false)
       }
     },
+    enabled: options?.enabled !== false && !!datasetId,
+  })
+}
+
+// Server-side score aggregation over the whole dataset (accurate on large
+// datasets, unlike paging /q_a/{dataset} client-side).
+export function useQAStats(
+  datasetId: string,
+  options?: { scoreThreshold?: number; enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['qa-stats', datasetId, options?.scoreThreshold],
+    queryFn: () => getQAStats(datasetId, options?.scoreThreshold),
     enabled: options?.enabled !== false && !!datasetId,
   })
 }
