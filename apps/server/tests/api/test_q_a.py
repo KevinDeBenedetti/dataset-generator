@@ -146,9 +146,7 @@ def test_get_qa_stats_with_custom_threshold(client: TestClient):
             dataset_name, score_threshold
         ),
     ):
-        response = client.get(
-            "/q_a/my_dataset/stats", params={"score_threshold": 0.5}
-        )
+        response = client.get("/q_a/my_dataset/stats", params={"score_threshold": 0.5})
     assert response.status_code == 200
     assert response.json()["score_threshold"] == 0.5
 
@@ -160,6 +158,8 @@ def test_get_qa_stats_threshold_validation(client: TestClient):
         == 422
     )
     assert (
-        client.get("/q_a/my_dataset/stats", params={"score_threshold": -0.1}).status_code
+        client.get(
+            "/q_a/my_dataset/stats", params={"score_threshold": -0.1}
+        ).status_code
         == 422
     )

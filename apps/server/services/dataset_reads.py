@@ -365,9 +365,7 @@ def resolve_similarity_pair(dataset_name: str, remove_id: str) -> Dict[str, Any]
         it for it in items if str(it.get("id", "")).startswith(remove_id)
     ]
     if not matches:
-        raise ValueError(
-            f"Record '{remove_id}' not found in dataset '{dataset_name}'"
-        )
+        raise ValueError(f"Record '{remove_id}' not found in dataset '{dataset_name}'")
     if len(matches) > 1:
         raise AmbiguousRecordError(
             f"Record id '{remove_id}' matches {len(matches)} items — use the full id"

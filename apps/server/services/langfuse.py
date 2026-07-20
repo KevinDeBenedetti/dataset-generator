@@ -200,7 +200,9 @@ def list_dataset_runs(
     try:
         runs = langfuse_client.get_dataset_runs(dataset_name=dataset_name)
     except httpx.HTTPError as e:
-        logging.warning(f"Langfuse unreachable while listing runs for '{dataset_name}': {e}")
+        logging.warning(
+            f"Langfuse unreachable while listing runs for '{dataset_name}': {e}"
+        )
         raise LangfuseUnavailableError(f"Could not reach Langfuse: {e}") from e
     data = getattr(runs, "data", None) or []
 
