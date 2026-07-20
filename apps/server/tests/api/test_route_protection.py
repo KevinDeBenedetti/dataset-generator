@@ -144,8 +144,6 @@ def test_admin_routes_allow_admin(test_db):
         },
     ):
         assert (
-            client.put(
-                "/quality-rules", json={"min_answer_words": 5}
-            ).status_code
+            client.put("/quality-rules", json={"min_answer_words": 5}).status_code
             == 200
         )
