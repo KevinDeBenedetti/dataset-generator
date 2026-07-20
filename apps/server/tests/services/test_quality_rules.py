@@ -17,9 +17,7 @@ from server.services.quality_rules import (
 @pytest.fixture(autouse=True)
 def _isolated_db(monkeypatch, test_engine):
     """Point the service at the per-test in-memory engine, never datasets.db."""
-    TestingSession = sessionmaker(
-        autocommit=False, autoflush=False, bind=test_engine
-    )
+    TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
     @contextmanager
     def scoped():

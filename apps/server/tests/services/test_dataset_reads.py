@@ -277,9 +277,7 @@ def test_resolve_pair_unknown_record_raises():
     with patch(
         "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
     ):
-        with patch(
-            "server.services.dataset_reads.get_dataset_items", return_value=[]
-        ):
+        with patch("server.services.dataset_reads.get_dataset_items", return_value=[]):
             with pytest.raises(ValueError, match="not found"):
                 resolve_similarity_pair("ds", "nope1234")
 
