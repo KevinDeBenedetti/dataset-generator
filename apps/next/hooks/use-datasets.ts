@@ -7,6 +7,7 @@ import {
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
+  resolvePair,
 } from '@/api/sdk'
 import type { DatasetGenerationRequest } from '@/api/types'
 import { useDatasetStore } from '@/stores/dataset'
@@ -142,7 +143,8 @@ export function useAnalyzeDataset() {
   const { setAnalyzingResult, setAnalyzeStatus, setError } = useDatasetStore()
 
   return useMutation({
-    mutationFn: (datasetId: string) => analyzeSimilarities(datasetId),
+    mutationFn: ({ datasetId, threshold }: { datasetId: string; threshold?: number }) =>
+      analyzeSimilarities(datasetId, threshold),
     onMutate: () => {
       setAnalyzeStatus('pending')
       setError(null)
@@ -158,12 +160,21 @@ export function useAnalyzeDataset() {
   })
 }
 
+// Pair-level arbitration: deletes one record of a duplicate pair (admin only).
+export function useResolvePair() {
+  return useMutation({
+    mutationFn: ({ datasetId, removeId }: { datasetId: string; removeId: string }) =>
+      resolvePair(datasetId, removeId),
+  })
+}
+
 export function useCleanDataset() {
   const queryClient = useQueryClient()
   const { setCleaningResult, setCleanStatus, setError } = useDatasetStore()
 
   return useMutation({
-    mutationFn: (datasetId: string) => cleanSimilarities(datasetId),
+    mutationFn: ({ datasetId, threshold }: { datasetId: string; threshold?: number }) =>
+      cleanSimilarities(datasetId, threshold),
     onMutate: () => {
       setCleanStatus('pending')
       setError(null)

@@ -26,16 +26,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <script
           // Apply the stored theme before paint to avoid a flash of the wrong theme.
+          // Rendered at the top of <body> (not a manual <head>) so Next fully owns
+          // head resource management.
           dangerouslySetInnerHTML={{
             __html:
               "try{if(localStorage.getItem('dg-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}",
           }}
         />
-      </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <main className="min-h-screen">{children}</main>
           <DevLogConsole />

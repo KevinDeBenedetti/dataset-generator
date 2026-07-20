@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from server.services.dedup import QAEntry, classify_duplicate, compute_hash_from_content
 from server.services.langfuse import get_dataset_items
+from server.services.quality_rules import rejection_reason
 
 
 class QAService:
@@ -15,13 +16,21 @@ class QAService:
     in place after each :meth:`process_qa_pairs` call so a later call (e.g.
     the next crawled page) sees this call's additions.
 
+    When ``quality_rules`` is provided (see
+    ``server.services.quality_rules.get_quality_rules``) and its
+    ``auto_reject_enabled`` flag is on, pairs failing the rules (answer too
+    short, confidence too low) are rejected before deduplication.
+
     This service only classifies and shapes QA pairs; it writes nothing
     anywhere — the caller is responsible for syncing the returned items to
     Langfuse (see ``DatasetPipeline._sync_to_langfuse``).
     """
 
-    def __init__(self, dataset_name: str):
+    def __init__(
+        self, dataset_name: str, quality_rules: Optional[Dict[str, Any]] = None
+    ):
         self.dataset_name = dataset_name
+        self.quality_rules = quality_rules or {}
         self._existing_entries: Optional[List[QAEntry]] = None
 
     def _load_existing_entries(self) -> List[QAEntry]:
@@ -63,11 +72,21 @@ class QAService:
         new_entries: List[QAEntry] = []
         exact_duplicates = 0
         similar_duplicates = 0
+        quality_rejected = 0
 
         for qa_item in qa_list:
             question = qa_item.question
             answer = qa_item.answer
             confidence = getattr(qa_item, "confidence", 1.0)
+
+            # Quality rules first (cheaper than dedup classification); no-op
+            # unless auto_reject_enabled is set in the provided rules.
+            reason = rejection_reason(answer, confidence, self.quality_rules)
+            if reason is not None:
+                quality_rejected += 1
+                logging.info(f"Rejected QA pair by quality rules: {reason}")
+                continue
+
             item_hash = compute_hash_from_content(question, answer, cleaned_text, url)
 
             candidate = QAEntry(
@@ -130,7 +149,8 @@ class QAService:
         logging.info(
             f"Added {len(new_items)} new QA pairs, "
             f"skipped {exact_duplicates} exact duplicates, "
-            f"skipped {similar_duplicates} similar duplicates"
+            f"skipped {similar_duplicates} similar duplicates, "
+            f"rejected {quality_rejected} by quality rules"
         )
 
         return {
@@ -138,4 +158,5 @@ class QAService:
             "total": len(new_items),
             "exact_duplicates": exact_duplicates,
             "similar_duplicates": similar_duplicates,
+            "quality_rejected": quality_rejected,
         }

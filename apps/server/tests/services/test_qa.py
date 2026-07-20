@@ -293,3 +293,60 @@ class TestQAService:
             )
 
         assert result["total"] == 1
+
+    def test_process_qa_pairs_applies_quality_rules_when_enabled(self):
+        """With auto_reject_enabled, short answers and low-confidence pairs are
+        rejected before dedup; without rules, everything passes."""
+        rules = {
+            "auto_reject_enabled": True,
+            "min_answer_words": 3,
+            "reject_below_confidence": 0.7,
+        }
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset", quality_rules=rules)
+
+            too_short = Mock()
+            too_short.question = "Q1?"
+            too_short.answer = "Too short"  # 2 words < 3
+            too_short.confidence = 0.9
+
+            low_conf = Mock()
+            low_conf.question = "Q2?"
+            low_conf.answer = "A perfectly long enough answer"
+            low_conf.confidence = 0.5  # < 0.7
+
+            keeper = Mock()
+            keeper.question = "Q3?"
+            keeper.answer = "Another perfectly valid answer"
+            keeper.confidence = 0.9
+
+            result = qa_service.process_qa_pairs(
+                qa_list=[too_short, low_conf, keeper],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert result["quality_rejected"] == 2
+        assert result["total"] == 1
+        assert result["items"][0]["input"]["question"] == "Q3?"
+
+    def test_process_qa_pairs_quality_rules_disabled_by_default(self):
+        """No rules passed → nothing is rejected (backwards compatible)."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
+            mock_qa = Mock()
+            mock_qa.question = "Q?"
+            mock_qa.answer = "Short"
+            mock_qa.confidence = 0.1
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert result["quality_rejected"] == 0
+        assert result["total"] == 1

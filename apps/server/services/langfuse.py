@@ -197,7 +197,11 @@ def list_dataset_runs(
     if langfuse_client is None:
         langfuse_client = get_client()
 
-    runs = langfuse_client.get_dataset_runs(dataset_name=dataset_name)
+    try:
+        runs = langfuse_client.get_dataset_runs(dataset_name=dataset_name)
+    except httpx.HTTPError as e:
+        logging.warning(f"Langfuse unreachable while listing runs for '{dataset_name}': {e}")
+        raise LangfuseUnavailableError(f"Could not reach Langfuse: {e}") from e
     data = getattr(runs, "data", None) or []
 
     summaries = [_summarize_run(run) for run in data]
@@ -247,16 +251,20 @@ def list_datasets(langfuse_client: Optional[Langfuse] = None) -> List[Dict[str, 
 
     summaries: List[Dict[str, Any]] = []
     page = 1
-    while True:
-        resp = langfuse_client.api.datasets.list(page=page, limit=100)
-        data = getattr(resp, "data", None) or []
-        summaries.extend(_summarize_dataset(d) for d in data)
+    try:
+        while True:
+            resp = langfuse_client.api.datasets.list(page=page, limit=100)
+            data = getattr(resp, "data", None) or []
+            summaries.extend(_summarize_dataset(d) for d in data)
 
-        meta = getattr(resp, "meta", None)
-        total_pages = getattr(meta, "total_pages", None) if meta else None
-        if not data or not total_pages or page >= total_pages:
-            break
-        page += 1
+            meta = getattr(resp, "meta", None)
+            total_pages = getattr(meta, "total_pages", None) if meta else None
+            if not data or not total_pages or page >= total_pages:
+                break
+            page += 1
+    except httpx.HTTPError as e:
+        logging.warning(f"Langfuse unreachable while listing datasets: {e}")
+        raise LangfuseUnavailableError(f"Could not reach Langfuse: {e}") from e
 
     # Newest first by creation date (falls back to name for stability).
     summaries.sort(key=lambda d: (d["created_at"] or "", d["name"] or ""), reverse=True)

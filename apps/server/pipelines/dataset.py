@@ -9,6 +9,7 @@ from server.services.scraper import ScraperService
 from server.services.llm import LLMService
 from server.services.agent import QAAgentService
 from server.services.qa import QAService
+from server.services.quality_rules import get_quality_rules
 from server.services.langfuse import is_langfuse_available, sync_qa_to_langfuse
 from server.schemas.dataset import TargetLanguage
 
@@ -133,7 +134,7 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            qa_service = QAService(dataset_name)
+            qa_service = QAService(dataset_name, quality_rules=get_quality_rules())
 
             # 1. Scrape: a single page, or a breadth-first crawl of the site.
             # The scraper is stateless — it returns page content in memory,
@@ -377,7 +378,7 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            qa_service = QAService(dataset_name)
+            qa_service = QAService(dataset_name, quality_rules=get_quality_rules())
 
             # 1. Rasterise the file to one image per page.
             t = time.perf_counter()
@@ -573,7 +574,7 @@ class DatasetPipeline:
                 if on_progress is not None:
                     on_progress({"type": "step", "step": steps[-1]})
 
-            qa_service = QAService(dataset_name)
+            qa_service = QAService(dataset_name, quality_rules=get_quality_rules())
 
             # 1. Fetch the account's public README + top-level docs.
             t = time.perf_counter()

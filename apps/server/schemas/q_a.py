@@ -35,3 +35,38 @@ class QAListResponse(BaseModel):
     offset: int = Field(0, description="Applied offset")
     limit: Optional[int] = Field(None, description="Applied limit")
     qa_data: List[QAItem] = Field(..., description="List of question-answers")
+
+
+class QAScoreBucket(BaseModel):
+    """One bucket of the confidence-score distribution"""
+
+    label: str = Field(..., description="Human-readable bucket range, e.g. '0.9–1.0'")
+    count: int = Field(..., ge=0, description="Number of scored items in the bucket")
+
+
+class QAStatsResponse(BaseModel):
+    """Aggregated confidence-score statistics over a whole dataset.
+
+    Computed server-side over every active item so the quality page doesn't
+    have to sample a capped page of Q&A items client-side.
+    """
+
+    dataset_name: str = Field(..., description="Dataset name")
+    dataset_id: str = Field(..., description="Dataset ID")
+    total_count: int = Field(..., description="Total number of active items")
+    scored_count: int = Field(
+        ..., description="Items carrying a confidence score (the stats basis)"
+    )
+    average_score: Optional[float] = Field(
+        None, description="Mean confidence of scored items (null when none)"
+    )
+    score_threshold: float = Field(..., description="Threshold used for the split")
+    below_threshold_count: int = Field(
+        ..., description="Scored items strictly below the threshold"
+    )
+    validated_count: int = Field(
+        ..., description="Scored items at or above the threshold"
+    )
+    distribution: List[QAScoreBucket] = Field(
+        ..., description="Score distribution buckets, highest range first"
+    )

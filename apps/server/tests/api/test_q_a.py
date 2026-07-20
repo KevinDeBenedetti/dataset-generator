@@ -90,3 +90,76 @@ def test_get_qa_by_dataset_limit_validation(client: TestClient):
     """Test Q&A endpoint with invalid limit values (rejected before the handler)."""
     assert client.get("/q_a/my_dataset", params={"limit": 2000}).status_code == 422
     assert client.get("/q_a/my_dataset", params={"limit": -1}).status_code == 422
+
+
+def _qa_stats_fn(dataset_name="my_dataset", score_threshold=0.8):
+    return {
+        "dataset_name": dataset_name,
+        "dataset_id": dataset_name,
+        "total_count": 10,
+        "scored_count": 8,
+        "average_score": 0.87,
+        "score_threshold": score_threshold,
+        "below_threshold_count": 2,
+        "validated_count": 6,
+        "distribution": [
+            {"label": "0.9–1.0", "count": 4},
+            {"label": "0.8–0.9", "count": 2},
+            {"label": "< 0.8", "count": 2},
+        ],
+    }
+
+
+def test_get_qa_stats_not_found(client: TestClient):
+    """Test getting Q&A stats for a non-existent dataset."""
+    with patch(
+        "server.api.q_a.get_qa_stats_view",
+        side_effect=ValueError("Dataset 'nope' not found"),
+    ):
+        response = client.get("/q_a/nope/stats")
+    assert response.status_code == 404
+
+
+def test_get_qa_stats(client: TestClient):
+    """Test getting aggregated Q&A stats for a dataset."""
+    with patch(
+        "server.api.q_a.get_qa_stats_view",
+        return_value=_qa_stats_fn(),
+    ):
+        response = client.get("/q_a/my_dataset/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dataset_name"] == "my_dataset"
+    assert data["total_count"] == 10
+    assert data["scored_count"] == 8
+    assert data["average_score"] == 0.87
+    assert data["validated_count"] == 6
+    assert data["below_threshold_count"] == 2
+    assert len(data["distribution"]) == 3
+
+
+def test_get_qa_stats_with_custom_threshold(client: TestClient):
+    """Test that score_threshold is passed through to the view."""
+    with patch(
+        "server.api.q_a.get_qa_stats_view",
+        side_effect=lambda dataset_name, score_threshold: _qa_stats_fn(
+            dataset_name, score_threshold
+        ),
+    ):
+        response = client.get(
+            "/q_a/my_dataset/stats", params={"score_threshold": 0.5}
+        )
+    assert response.status_code == 200
+    assert response.json()["score_threshold"] == 0.5
+
+
+def test_get_qa_stats_threshold_validation(client: TestClient):
+    """Test the stats endpoint rejects out-of-range thresholds."""
+    assert (
+        client.get("/q_a/my_dataset/stats", params={"score_threshold": 1.5}).status_code
+        == 422
+    )
+    assert (
+        client.get("/q_a/my_dataset/stats", params={"score_threshold": -0.1}).status_code
+        == 422
+    )

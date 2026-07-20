@@ -196,3 +196,59 @@ def test_clean_similarities_success(client: TestClient):
     data = response.json()
     assert data["dataset_id"] == "my_dataset"
     assert data["removed_records"] == 1
+
+
+def test_resolve_pair_success(client: TestClient):
+    """Test arbitrating a single duplicate pair."""
+    fake = {
+        "dataset_id": "my_dataset",
+        "dataset_name": "my_dataset",
+        "removed_id": "aaaa1111",
+        "removed_question": "What is Python?",
+    }
+    with patch("server.api.dataset.resolve_similarity_pair", return_value=fake):
+        response = client.post(
+            "/dataset/my_dataset/resolve-pair", json={"remove_id": "aaaa1111"}
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["removed_id"] == "aaaa1111"
+    assert data["removed_question"] == "What is Python?"
+
+
+def test_resolve_pair_dataset_not_found(client: TestClient):
+    """Test resolving a pair in a non-existent dataset."""
+    with patch(
+        "server.api.dataset.resolve_similarity_pair",
+        side_effect=ValueError("Dataset 'nope' not found"),
+    ):
+        response = client.post(
+            "/dataset/nope/resolve-pair", json={"remove_id": "aaaa1111"}
+        )
+    assert response.status_code == 404
+
+
+def test_resolve_pair_record_not_found(client: TestClient):
+    """Test resolving a pair with an id that matches no record."""
+    with patch(
+        "server.api.dataset.resolve_similarity_pair",
+        side_effect=ValueError("Record 'zzzz9999' not found in dataset 'my_dataset'"),
+    ):
+        response = client.post(
+            "/dataset/my_dataset/resolve-pair", json={"remove_id": "zzzz9999"}
+        )
+    assert response.status_code == 404
+
+
+def test_resolve_pair_ambiguous_id(client: TestClient):
+    """Test resolving a pair with a prefix that matches more than one record."""
+    from server.services.dataset_reads import AmbiguousRecordError
+
+    with patch(
+        "server.api.dataset.resolve_similarity_pair",
+        side_effect=AmbiguousRecordError("Record id 'aaaa' matches 2 items"),
+    ):
+        response = client.post(
+            "/dataset/my_dataset/resolve-pair", json={"remove_id": "aaaa"}
+        )
+    assert response.status_code == 409

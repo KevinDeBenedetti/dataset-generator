@@ -5,13 +5,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from server.services.dataset_reads import (
+    AmbiguousRecordError,
     analyze_similarities_view,
     clean_similarities_view,
     create_dataset,
     delete_dataset,
     get_dataset_view,
+    get_qa_stats_view,
     get_qa_view,
     list_datasets_view,
+    resolve_similarity_pair,
 )
 from server.services.langfuse import LangfuseUnavailableError
 
@@ -121,6 +124,67 @@ def test_get_qa_view_unknown_dataset_raises():
                 get_qa_view("ghost")
 
 
+def test_get_qa_stats_aggregates_scores():
+    items = [
+        _item("a", "q1", confidence=0.95),
+        _item("b", "q2", confidence=0.85),
+        _item("c", "q3", confidence=0.75),
+        _item("d", "q4", confidence=0.5),
+    ]
+    with patch("server.services.dataset_reads.get_dataset_items", return_value=items):
+        stats = get_qa_stats_view("ds", score_threshold=0.8)
+
+    assert stats["total_count"] == 4
+    assert stats["scored_count"] == 4
+    assert stats["average_score"] == round((0.95 + 0.85 + 0.75 + 0.5) / 4, 4)
+    assert stats["below_threshold_count"] == 2
+    assert stats["validated_count"] == 2
+    assert [(b["label"], b["count"]) for b in stats["distribution"]] == [
+        ("0.9–1.0", 1),
+        ("0.8–0.9", 1),
+        ("0.7–0.8", 1),
+        ("< 0.7", 1),
+    ]
+
+
+def test_get_qa_stats_ignores_unscored_and_reads_metadata_fallback():
+    # One unscored item (no confidence anywhere) must not drag the average to 0;
+    # one item scored only via metadata (the generation sync path) must count.
+    unscored = _item("u", "q-unscored")
+    unscored["expected_output"] = {"answer": "a"}
+    via_metadata = _item("m", "q-meta")
+    via_metadata["expected_output"] = {"answer": "a"}
+    via_metadata["metadata"] = {"confidence": 0.9}
+
+    with patch(
+        "server.services.dataset_reads.get_dataset_items",
+        return_value=[unscored, via_metadata],
+    ):
+        stats = get_qa_stats_view("ds")
+
+    assert stats["total_count"] == 2
+    assert stats["scored_count"] == 1
+    assert stats["average_score"] == 0.9
+
+
+def test_get_qa_stats_empty_existing_dataset():
+    with patch("server.services.dataset_reads.get_dataset_items", return_value=[]):
+        with patch(
+            "server.services.dataset_reads.list_datasets",
+            return_value=[_dataset("ds")],
+        ):
+            stats = get_qa_stats_view("ds")
+    assert stats["total_count"] == 0
+    assert stats["average_score"] is None
+
+
+def test_get_qa_stats_unknown_dataset_raises():
+    with patch("server.services.dataset_reads.get_dataset_items", return_value=[]):
+        with patch("server.services.dataset_reads.list_datasets", return_value=[]):
+            with pytest.raises(ValueError, match="not found"):
+                get_qa_stats_view("ghost")
+
+
 def test_analyze_similarities_finds_near_duplicates():
     items = [
         _item("a", "What is Python used for?"),
@@ -159,6 +223,65 @@ def test_clean_similarities_deletes_lower_confidence():
     # The lower-confidence duplicate is the one deleted.
     mock_delete.assert_called_once_with("drop")
     assert result["removed_items"][0]["id"] == "drop"
+
+
+def test_resolve_pair_deletes_by_prefix():
+    items = [_item("abcdef1234567890", "q1"), _item("zzzzzz9876543210", "q2")]
+    with patch(
+        "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+    ):
+        with patch(
+            "server.services.dataset_reads.get_dataset_items", return_value=items
+        ):
+            with patch(
+                "server.services.dataset_reads.delete_dataset_item"
+            ) as mock_delete:
+                result = resolve_similarity_pair("ds", "abcdef12")
+
+    mock_delete.assert_called_once_with("abcdef1234567890")
+    assert result["removed_id"] == "abcdef1234567890"
+    assert result["removed_question"] == "q1"
+
+
+def test_resolve_pair_ambiguous_prefix_raises():
+    items = [_item("abcdef1234", "q1"), _item("abcdef1299", "q2")]
+    with patch(
+        "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+    ):
+        with patch(
+            "server.services.dataset_reads.get_dataset_items", return_value=items
+        ):
+            with pytest.raises(AmbiguousRecordError):
+                resolve_similarity_pair("ds", "abcdef12")
+
+
+def test_resolve_pair_exact_id_wins_over_prefix():
+    # An id that is itself a prefix of another must match exactly, not both.
+    items = [_item("abcd", "q1"), _item("abcdef", "q2")]
+    with patch(
+        "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+    ):
+        with patch(
+            "server.services.dataset_reads.get_dataset_items", return_value=items
+        ):
+            with patch(
+                "server.services.dataset_reads.delete_dataset_item"
+            ) as mock_delete:
+                result = resolve_similarity_pair("ds", "abcd")
+
+    mock_delete.assert_called_once_with("abcd")
+    assert result["removed_question"] == "q1"
+
+
+def test_resolve_pair_unknown_record_raises():
+    with patch(
+        "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+    ):
+        with patch(
+            "server.services.dataset_reads.get_dataset_items", return_value=[]
+        ):
+            with pytest.raises(ValueError, match="not found"):
+                resolve_similarity_pair("ds", "nope1234")
 
 
 def test_create_dataset_creates_when_absent():

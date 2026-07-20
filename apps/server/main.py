@@ -10,7 +10,17 @@ from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from server.core import logger as logger_module
-from server.api import agent, auth, collections, dataset, generate, q_a, openai
+from server.api import (
+    agent,
+    auth,
+    collections,
+    dataset,
+    generate,
+    q_a,
+    openai,
+    prompts,
+    quality_rules,
+)
 from server.services import langfuse
 from server.services.auth import get_current_user
 from server.migrations.utils.db_utils import upgrade_db
@@ -115,6 +125,8 @@ app.include_router(q_a.router, dependencies=auth_required)
 app.include_router(openai.router, dependencies=auth_required)
 app.include_router(agent.router, dependencies=auth_required)
 app.include_router(collections.router, dependencies=auth_required)
+app.include_router(quality_rules.router, dependencies=auth_required)
+app.include_router(prompts.router, dependencies=auth_required)
 
 if config.debug_logs:
     from server.api import debug as debug_api

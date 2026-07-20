@@ -11,7 +11,7 @@ from unittest.mock import patch
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import collections, dataset, generate
+from server.api import collections, dataset, generate, quality_rules
 from server.core.database import get_db
 from server.models.user import User, UserRole
 from server.services.auth import get_current_user
@@ -23,6 +23,7 @@ def _build_protected_app(test_db):
     app.include_router(dataset.router, dependencies=auth_required)
     app.include_router(generate.router, dependencies=auth_required)
     app.include_router(collections.router, dependencies=auth_required)
+    app.include_router(quality_rules.router, dependencies=auth_required)
 
     def override_get_db():
         yield test_db
@@ -68,7 +69,9 @@ def test_protected_routes_allow_authenticated(test_db):
 _ADMIN_ONLY_ROUTES = [
     ("delete", "/dataset/my_dataset"),
     ("post", "/dataset/my_dataset/clean-similarities"),
+    ("post", "/dataset/my_dataset/resolve-pair"),
     ("post", "/collections/my_dataset/qdrant"),
+    ("put", "/quality-rules"),
 ]
 
 
@@ -116,3 +119,33 @@ def test_admin_routes_allow_admin(test_db):
         },
     ):
         assert client.post("/dataset/my_dataset/clean-similarities").status_code == 200
+    with patch(
+        "server.api.dataset.resolve_similarity_pair",
+        return_value={
+            "dataset_id": "my_dataset",
+            "dataset_name": "my_dataset",
+            "removed_id": "aaaa1111",
+            "removed_question": "What is Python?",
+        },
+    ):
+        assert (
+            client.post(
+                "/dataset/my_dataset/resolve-pair", json={"remove_id": "aaaa1111"}
+            ).status_code
+            == 200
+        )
+    with patch(
+        "server.api.quality_rules.update_quality_rules",
+        return_value={
+            "min_answer_words": 5,
+            "reject_below_confidence": 0.5,
+            "auto_reject_enabled": True,
+            "updated_at": None,
+        },
+    ):
+        assert (
+            client.put(
+                "/quality-rules", json={"min_answer_words": 5}
+            ).status_code
+            == 200
+        )

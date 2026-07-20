@@ -28,7 +28,7 @@ export function DatasetGenerateAnalyse() {
     }
 
     try {
-      await analyzeMutation.mutateAsync(datasetId)
+      await analyzeMutation.mutateAsync({ datasetId })
     } catch (error) {
       console.error('Error during analysis:', error)
     }

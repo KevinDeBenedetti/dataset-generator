@@ -135,9 +135,9 @@ export function DatasetGenerate() {
       // truth). datasetName is already the selected/entered name.
       const name = datasetName || result?.dataset_name
       if (name) {
-        await analyzeMutation.mutateAsync(name)
+        await analyzeMutation.mutateAsync({ datasetId: name })
         toast.success('Dataset analyzed successfully!')
-        await cleanMutation.mutateAsync(name)
+        await cleanMutation.mutateAsync({ datasetId: name })
         toast.success('Dataset cleaned successfully!')
       }
     } catch (err) {

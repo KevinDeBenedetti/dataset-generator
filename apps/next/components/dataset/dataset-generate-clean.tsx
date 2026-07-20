@@ -28,7 +28,7 @@ export function DatasetGenerateClean() {
     }
 
     try {
-      await cleanMutation.mutateAsync(datasetId)
+      await cleanMutation.mutateAsync({ datasetId })
     } catch (error) {
       console.error('Error during cleaning:', error)
     }

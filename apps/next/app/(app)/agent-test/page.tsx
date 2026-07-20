@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { testQaAgent } from '@/api/sdk'
+import { getAvailableModels, testQaAgent } from '@/api/sdk'
 import type { QaAgentTestResponse } from '@/api/types'
 
 // The generated `qa_pairs` is `unknown[]`; this is the shape the agent returns.
@@ -32,16 +33,25 @@ const LANGUAGES = [
 export default function AgentTestPage() {
   const [text, setText] = useState(SAMPLE_TEXT)
   const [language, setLanguage] = useState('fr')
+  const [model, setModel] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<QaAgentTestResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Real model list from the configured provider (GET /openai/models); an
+  // empty selection lets the server use its configured default.
+  const modelsQuery = useQuery({
+    queryKey: ['openai-models'],
+    queryFn: getAvailableModels,
+    retry: false,
+  })
 
   const run = async () => {
     setLoading(true)
     setError(null)
     setResult(null)
     try {
-      const res = await testQaAgent({ text, target_language: language })
+      const res = await testQaAgent({ text, target_language: language, model: model || null })
       setResult(res)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -71,11 +81,27 @@ export default function AgentTestPage() {
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           disabled={loading}
+          aria-label="Target language"
           className="h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
         >
           {LANGUAGES.map((l) => (
             <option key={l.value} value={l.value}>
               {l.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={loading || modelsQuery.isLoading}
+          aria-label="Model"
+          className="h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+        >
+          <option value="">Server default model</option>
+          {(modelsQuery.data ?? []).map((id) => (
+            <option key={id} value={id}>
+              {id}
             </option>
           ))}
         </select>
