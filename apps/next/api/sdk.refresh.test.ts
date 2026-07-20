@@ -66,7 +66,7 @@ describe('sdk.ts silent session refresh', () => {
 
     expect(refreshCalls).toBe(1)
     expect(datasetCalls).toBe(2) // original 401 + replayed 200
-    expect(result.response.status).toBe(200)
+    expect(result.response?.status).toBe(200)
     expect(result.data).toEqual([{ id: '1', name: 'ds' }])
   })
 
@@ -113,7 +113,7 @@ describe('sdk.ts silent session refresh', () => {
     const result = await client.get({ url: '/auth/login' })
 
     expect(refreshCalls).toBe(0)
-    expect(result.response.status).toBe(401)
+    expect(result.response?.status).toBe(401)
   })
 
   it('returns the original 401 unchanged when the refresh itself fails', async () => {
@@ -134,6 +134,6 @@ describe('sdk.ts silent session refresh', () => {
     const result = await client.get({ url: '/dataset' })
 
     expect(datasetCalls).toBe(1) // no retry — the refresh didn't succeed
-    expect(result.response.status).toBe(401)
+    expect(result.response?.status).toBe(401)
   })
 })

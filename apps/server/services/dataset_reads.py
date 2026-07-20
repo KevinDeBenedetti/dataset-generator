@@ -231,6 +231,70 @@ def get_qa_view(
     }
 
 
+# --- Q/A score stats ----------------------------------------------------------
+
+
+def _raw_confidence(item: Dict[str, Any]) -> Optional[float]:
+    """The item's confidence score, or None when it was never scored.
+
+    Unlike ``_item_fields`` (which coerces a missing score to 0.0 for the list
+    view), stats must distinguish "scored 0.0" from "not scored" — otherwise
+    unscored items would drag the average down and pile into the lowest bucket.
+    Reads ``expected_output`` first, then ``metadata`` (where the generation
+    sync path stores it).
+    """
+    out = _as_dict(item.get("expected_output"))
+    value = out.get("confidence")
+    if value is None:
+        metadata = item.get("metadata")
+        if isinstance(metadata, dict):
+            value = metadata.get("confidence")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+# Buckets shown on the quality page, highest range first. Each entry is
+# (label, predicate) over a confidence score.
+_SCORE_BUCKETS = [
+    ("0.9–1.0", lambda s: s >= 0.9),
+    ("0.8–0.9", lambda s: 0.8 <= s < 0.9),
+    ("0.7–0.8", lambda s: 0.7 <= s < 0.8),
+    ("< 0.7", lambda s: s < 0.7),
+]
+
+
+def get_qa_stats_view(
+    dataset_name: str, score_threshold: float = 0.8
+) -> Dict[str, Any]:
+    """Aggregate confidence-score stats over every active item of a dataset.
+
+    QAStatsResponse shape. Raises ValueError when the dataset doesn't exist.
+    """
+    _require_langfuse()
+    items = _active_items(dataset_name)
+    if not items and get_dataset_view(dataset_name) is None:
+        raise ValueError(f"Dataset '{dataset_name}' not found")
+
+    scores = [s for s in (_raw_confidence(it) for it in items) if s is not None]
+    below = sum(1 for s in scores if s < score_threshold)
+
+    return {
+        "dataset_name": dataset_name,
+        "dataset_id": dataset_name,
+        "total_count": len(items),
+        "scored_count": len(scores),
+        "average_score": round(sum(scores) / len(scores), 4) if scores else None,
+        "score_threshold": score_threshold,
+        "below_threshold_count": below,
+        "validated_count": len(scores) - below,
+        "distribution": [
+            {"label": label, "count": sum(1 for s in scores if predicate(s))}
+            for label, predicate in _SCORE_BUCKETS
+        ],
+    }
+
+
 # --- similarity analyse / clean ----------------------------------------------
 
 
@@ -275,6 +339,47 @@ def analyze_similarities_view(
         "similarities": sorted(
             similarities, key=lambda x: x["similarity"], reverse=True
         ),
+    }
+
+
+class AmbiguousRecordError(ValueError):
+    """A record id prefix matched more than one item."""
+
+
+def resolve_similarity_pair(dataset_name: str, remove_id: str) -> Dict[str, Any]:
+    """Arbitrate one duplicate pair by deleting a single record.
+
+    ``remove_id`` may be the full Langfuse item id or the 8-char prefix the
+    analyze view exposes (see ``analyze_similarities_view``, which truncates
+    ids for display). A prefix must match exactly one active item; otherwise
+    :class:`AmbiguousRecordError` is raised so the caller can ask for the
+    full id. Raises ValueError when the dataset or record doesn't exist.
+    """
+    _require_langfuse()
+    if get_dataset_view(dataset_name) is None:
+        raise ValueError(f"Dataset '{dataset_name}' not found")
+
+    items = _active_items(dataset_name)
+    exact = [it for it in items if str(it.get("id", "")) == remove_id]
+    matches = exact or [
+        it for it in items if str(it.get("id", "")).startswith(remove_id)
+    ]
+    if not matches:
+        raise ValueError(
+            f"Record '{remove_id}' not found in dataset '{dataset_name}'"
+        )
+    if len(matches) > 1:
+        raise AmbiguousRecordError(
+            f"Record id '{remove_id}' matches {len(matches)} items — use the full id"
+        )
+
+    item = matches[0]
+    delete_dataset_item(item["id"])
+    return {
+        "dataset_id": dataset_name,
+        "dataset_name": dataset_name,
+        "removed_id": item["id"],
+        "removed_question": _item_fields(item)["question"],
     }
 
 

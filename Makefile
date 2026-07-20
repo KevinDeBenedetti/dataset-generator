@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models
+.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models api-client
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -143,6 +143,24 @@ test-ci:
 		--cov-report=xml \
 		--cov-report=term-missing \
 		--cov-fail-under=70
+
+## Regenerate the Next.js OpenAPI client (apps/next/api/*.gen.ts) from the running API.
+## Requires the FastAPI server to be up (make dev). The generator runs from an
+## isolated install in apps/next/openapi-codegen: @hey-api/openapi-ts needs the
+## TypeScript 5 JS compiler API, which the project's typescript@7 (native tsgo)
+## no longer ships — so a pinned TS 5 lives there, without downgrading the app.
+api-client:
+	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
+	port="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \
+	url="http://localhost:$$port/openapi.json"; \
+	if ! curl -fs -o /dev/null "$$url"; then \
+		printf '  \033[1;31m✗ API not reachable at %s — start it first (make dev).\033[0m\n' "$$url"; \
+		exit 1; \
+	fi; \
+	printf '  \033[1;36m▶ Generating the API client from %s\033[0m\n' "$$url"; \
+	cd $(NEXT_DIR) && bun install --cwd openapi-codegen && \
+	OPENAPI_INPUT="$$url" ./openapi-codegen/node_modules/.bin/openapi-ts && \
+	printf '  \033[1;32m✓ Client regenerated in apps/next/api/\033[0m\n'
 
 ## List models from the configured OpenAI-compatible provider (reads .env).
 models:

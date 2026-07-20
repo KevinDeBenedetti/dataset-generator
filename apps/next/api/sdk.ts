@@ -372,6 +372,71 @@ export async function cleanSimilarities(
   return response.data as unknown as CleanSimilarityResponse
 }
 
+// Hand-written: mirrors ResolvePairResponse (apps/server/schemas/dataset.py).
+export interface ResolvePairResponse {
+  dataset_id: string
+  dataset_name: string
+  removed_id: string
+  removed_question: string
+}
+
+// Arbitrate one duplicate pair: delete `removeId` (full id or the 8-char
+// prefix from analyze-similarities), keep the other record. Admin only.
+export async function resolvePair(
+  datasetId: string,
+  removeId: string,
+): Promise<ResolvePairResponse> {
+  const response = await client.post<ResolvePairResponse>({
+    url: `/dataset/${encodeURIComponent(datasetId)}/resolve-pair`,
+    body: { remove_id: removeId },
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to resolve the duplicate pair'))
+  }
+  return response.data as unknown as ResolvePairResponse
+}
+
+// Models available from the configured OpenAI-compatible provider
+// (GET /openai/models returns {models: [{id, object}]}).
+export async function getAvailableModels(): Promise<string[]> {
+  const response = await client.get<{ models: Array<{ id: string }> }>({
+    url: '/openai/models',
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch available models'))
+  }
+  const data = response.data as unknown as { models: Array<{ id: string }> }
+  return (data.models ?? []).map((m) => m.id)
+}
+
+// Hand-written: mirrors PromptsResponse (apps/server/schemas/prompts.py).
+export interface PromptInfo {
+  key: string
+  label: string
+  role: string
+  model: string
+  used_by: string
+  active: boolean
+  content: string
+}
+
+export interface PromptsResponse {
+  total: number
+  prompts: PromptInfo[]
+}
+
+// The LLM prompts the app actually ships (read-only — they live in code).
+export async function getPrompts(): Promise<PromptsResponse> {
+  const response = await client.get<PromptsResponse>({ url: '/prompts' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch prompts'))
+  }
+  return response.data as unknown as PromptsResponse
+}
+
 // Agent (ADK) diagnostics
 
 export async function testQaAgent(body: QaAgentTestRequest): Promise<QaAgentTestResponse> {
@@ -411,6 +476,75 @@ export async function getQAByDataset(
   return response.data as unknown as QaListResponse
 }
 
+// Hand-written: mirrors QAStatsResponse (apps/server/schemas/q_a.py). Regenerate
+// api/types.gen.ts (npm run api:generate) to pick up the generated equivalent.
+export interface QAScoreBucket {
+  label: string
+  count: number
+}
+
+export interface QAStats {
+  dataset_name: string
+  dataset_id: string
+  total_count: number
+  scored_count: number
+  average_score: number | null
+  score_threshold: number
+  below_threshold_count: number
+  validated_count: number
+  distribution: QAScoreBucket[]
+}
+
+// Hand-written: mirrors QualityRulesResponse (apps/server/schemas/quality_rules.py).
+export interface QualityRules {
+  min_answer_words: number
+  reject_below_confidence: number
+  auto_reject_enabled: boolean
+  updated_at: string | null
+}
+
+export type QualityRulesUpdate = Partial<
+  Pick<QualityRules, 'min_answer_words' | 'reject_below_confidence' | 'auto_reject_enabled'>
+>
+
+export async function getQualityRules(): Promise<QualityRules> {
+  const response = await client.get<QualityRules>({ url: '/quality-rules' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch quality rules'))
+  }
+  return response.data as unknown as QualityRules
+}
+
+export async function updateQualityRules(body: QualityRulesUpdate): Promise<QualityRules> {
+  const response = await client.put<QualityRules>({
+    url: '/quality-rules',
+    body,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to update quality rules'))
+  }
+  return response.data as unknown as QualityRules
+}
+
+export async function getQAStats(datasetId: string, scoreThreshold?: number): Promise<QAStats> {
+  const seg = encodeURIComponent(datasetId)
+  // Check for undefined explicitly: a valid threshold of 0 is falsy and must
+  // still be forwarded rather than falling back to the server default.
+  const url =
+    scoreThreshold !== undefined
+      ? `/q_a/${seg}/stats?score_threshold=${scoreThreshold}`
+      : `/q_a/${seg}/stats`
+
+  const response = await client.get<QAStats>({ url })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch Q&A stats'))
+  }
+  return response.data as unknown as QAStats
+}
+
 // Langfuse endpoints
 
 export interface LangfuseDataset {
@@ -444,6 +578,8 @@ export interface LangfuseVersion {
   version?: number | null
   item_count?: number | null
   created_at?: string | null
+  source_url?: string | null
+  description?: string | null
   [key: string]: unknown
 }
 
