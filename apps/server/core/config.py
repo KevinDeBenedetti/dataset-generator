@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 import os
 
 from dotenv import load_dotenv
@@ -164,6 +164,16 @@ class Config:
         default_factory=lambda: os.getenv("FRONTEND_URL", "http://localhost:3000")
     )
 
+    # Browser origins allowed to make credentialed cross-origin calls. Comma-
+    # separated; when unset it falls back to frontend_url alone. Never "*": the
+    # session lives in cookies, and Starlette answers a credentialed request
+    # with the *reflected* origin when allow_origins is "*", which would let any
+    # site read authenticated responses (see cors_allow_origin_regex below for
+    # how local dev keeps working without widening this).
+    cors_allow_origins_raw: str = field(
+        default_factory=lambda: os.getenv("CORS_ALLOW_ORIGINS", "")
+    )
+
     # When true (and Langfuse is configured), every generation also creates/updates
     # the dataset in Langfuse and records a versioned dataset run (DVC-like commit).
     langfuse_auto_sync: bool = field(
@@ -223,6 +233,31 @@ class Config:
     def is_development(self) -> bool:
         """True only for an explicitly-declared local/dev environment."""
         return self.environment in ("development", "dev", "local")
+
+    @property
+    def cors_allow_origins(self) -> List[str]:
+        """Explicit list of origins allowed to send credentialed requests."""
+        explicit = [
+            origin.strip()
+            for origin in self.cors_allow_origins_raw.split(",")
+            if origin.strip()
+        ]
+        if explicit:
+            return explicit
+        return [self.frontend_url] if self.frontend_url else []
+
+    @property
+    def cors_allow_origin_regex(self) -> Optional[str]:
+        """Extra origin pattern accepted in development only.
+
+        Local dev moves the front between ports (dev-port lanes, a second stack,
+        `next dev -p …`), so pinning CORS to a single frontend_url would break as
+        soon as the port changes. In development any localhost origin is allowed;
+        outside it, only :attr:`cors_allow_origins` applies.
+        """
+        if not self.is_development:
+            return None
+        return r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     # Validation
     def __post_init__(self):

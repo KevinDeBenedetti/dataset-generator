@@ -16,8 +16,8 @@ Create quality datasets for training AI models by automatically scraping reliabl
 cp .env.example .env
 # Edit .env with your API keys
 
-# Launch
-make start
+# Launch (builds if needed, then streams logs; Ctrl-C stops the stack)
+make dev
 ```
 
 ## 🏗️ Architecture
@@ -142,6 +142,16 @@ Auth is configured via these env vars:
 | `AUTH_COOKIE_NAME` | `access_token` | Name of the httpOnly access-token cookie |
 | `AUTH_REFRESH_COOKIE_NAME` | `refresh_token` | Name of the httpOnly refresh-token cookie |
 | `AUTH_COOKIE_SECURE` | `false` | Send the cookies only over HTTPS (enable behind TLS) |
+| `CORS_ALLOW_ORIGINS` | _(falls back to `FRONTEND_URL`)_ | Comma-separated browser origins allowed to call the API with credentials — see below |
+
+Because the session lives in cookies, CORS is **credentialed** and the allowed
+origins are always explicit: `allow_origins=["*"]` is not usable here, since
+Starlette answers a credentialed request by reflecting the caller's origin,
+which would let any site read authenticated responses. Set
+`CORS_ALLOW_ORIGINS` (or leave it unset to allow `FRONTEND_URL` alone) to the
+origin(s) serving the UI. While `ENVIRONMENT=development`, any `localhost` /
+`127.0.0.1` origin is additionally accepted, so moving the front to another dev
+port doesn't require touching this.
 
 #### Access & refresh tokens
 
@@ -157,7 +167,7 @@ family is revoked**, forcing a fresh login on every device that held a token
 from it. `POST /auth/logout` revokes the family server-side and clears both
 cookies. If `AUTH_REFRESH_COOKIE_NAME` is customised, mirror it to the frontend
 via `NEXT_PUBLIC_REFRESH_COOKIE_NAME` (as with `NEXT_PUBLIC_AUTH_COOKIE_NAME`)
-so the Next.js middleware recognises a renewable session.
+so the Next.js proxy (`apps/next/proxy.ts`) recognises a renewable session.
 
 Login via **Infomaniak OIDC** is enabled only when the following are all set
 (routes return `503` otherwise). Register a client with Infomaniak and add:
@@ -220,3 +230,26 @@ uv run prek run --all-files
 - **Codecov**: [View detailed coverage on Codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
 
 Current coverage threshold: **70%** minimum required for CI to pass
+
+### API client drift
+
+`apps/next/api/*.gen.ts` is generated from the server's OpenAPI schema and
+committed, so the front-end can drift from the API without anything failing to
+compile. CI guards it with an `API client drift` job that regenerates the client
+and fails on any diff:
+
+```bash
+# Dump the schema from the app (no running server needed) → openapi.json
+make api-schema
+
+# Regenerate from that schema and fail if the committed client differs
+make api-check
+
+# Fix a failure: regenerate against a running API, then commit the result
+make api-client
+```
+
+`make api-check` is what CI runs. Because it feeds the generator a schema file
+rather than a live URL, `openapi-ts.config.ts` sets `baseUrl: false` on the
+client plugin — the generated client carries no base URL at all, and
+`api/sdk.ts` supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.

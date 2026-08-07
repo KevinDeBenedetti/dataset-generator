@@ -4,7 +4,7 @@ import { LangfuseDatasetTable, LoadingState, EmptyState } from '@/components/dat
 import { useLangfuseDatasets } from '@/hooks'
 
 export default function DatasetsPage() {
-  const { data, isLoading, error } = useLangfuseDatasets()
+  const { data, isPending, error } = useLangfuseDatasets()
   const datasets = data?.datasets ?? []
 
   // The wrapper throws "Langfuse is not configured" on a 503 — surface that
@@ -15,9 +15,9 @@ export default function DatasetsPage() {
     <section className="max-w-3xl mx-auto flex flex-col gap-4 w-full p-4">
       <h1 className="mt-6 mb-4 text-3xl font-bold text-center">Langfuse datasets</h1>
 
-      {isLoading && <LoadingState />}
+      {isPending && <LoadingState />}
 
-      {!isLoading && notConfigured && (
+      {!isPending && notConfigured && (
         <div className="text-center p-8 text-muted-foreground">
           <p>Langfuse is not configured.</p>
           <p className="text-sm mt-1">
@@ -27,16 +27,16 @@ export default function DatasetsPage() {
         </div>
       )}
 
-      {!isLoading && error && !notConfigured && (
+      {!isPending && error && !notConfigured && (
         <div className="text-center p-8 text-red-500">
           <p>Error loading datasets from Langfuse</p>
           <p className="text-sm mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
         </div>
       )}
 
-      {!isLoading && !error && datasets.length > 0 && <LangfuseDatasetTable datasets={datasets} />}
+      {!isPending && !error && datasets.length > 0 && <LangfuseDatasetTable datasets={datasets} />}
 
-      {!isLoading && !error && datasets.length === 0 && <EmptyState />}
+      {!isPending && !error && datasets.length === 0 && <EmptyState />}
     </section>
   )
 }

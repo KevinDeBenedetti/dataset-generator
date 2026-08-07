@@ -162,6 +162,24 @@ api-client:
 	OPENAPI_INPUT="$$url" ./openapi-codegen/node_modules/.bin/openapi-ts && \
 	printf '  \033[1;32m✓ Client regenerated in apps/next/api/\033[0m\n'
 
+## Dump the OpenAPI schema straight from the app (no server needed) to openapi.json.
+api-schema:
+	PYTHONPATH=$(PWD)/apps uv run python -m server.scripts.dump_openapi openapi.json
+
+## Fail if the committed API client has drifted from the server's OpenAPI schema.
+## Regenerates from a freshly dumped schema and diffs — run `make api-client`
+## (or this target without the diff) and commit when it fails.
+api-check: api-schema
+	cd $(NEXT_DIR) && bun install --cwd openapi-codegen && \
+	OPENAPI_INPUT="$(PWD)/openapi.json" ./openapi-codegen/node_modules/.bin/openapi-ts
+	@rm -f openapi.json
+	@if ! git diff --exit-code -- $(NEXT_DIR)/api; then \
+		printf '\n  \033[1;31m✗ The committed API client is out of date.\033[0m\n'; \
+		printf '     Regenerate it and commit the result:  make api-client\n\n'; \
+		exit 1; \
+	fi
+	@printf '  \033[1;32m✓ API client is in sync with the server schema.\033[0m\n'
+
 ## List models from the configured OpenAI-compatible provider (reads .env).
 models:
 	@set -a; . ./.env 2>/dev/null; set +a; \

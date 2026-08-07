@@ -10,7 +10,7 @@ export default function DatasetDetailPage() {
   // Datasets are keyed by their Langfuse name (URL-encoded in the route).
   const datasetName = decodeURIComponent(params.id as string)
 
-  const { data: datasets, isLoading } = useDatasets()
+  const { data: datasets, isPending } = useDatasets()
 
   const dataset = useMemo(() => {
     return datasets?.find((d) => d.name === datasetName) || null
@@ -22,9 +22,9 @@ export default function DatasetDetailPage() {
     <section className="max-w-2xl mx-auto flex flex-col gap-4 w-full p-4">
       <h1 className="mt-6 mb-4 text-3xl font-bold text-center">{pageTitle}</h1>
 
-      {isLoading && <LoadingState />}
+      {isPending && <LoadingState />}
 
-      {!isLoading && <DatasetDetail key={dataset?.id} dataset={dataset} />}
+      {!isPending && <DatasetDetail key={dataset?.id} dataset={dataset} />}
     </section>
   )
 }

@@ -4,7 +4,7 @@ import { login, logout, getCurrentUser, type AuthUser } from '@/api/sdk'
 
 export const CURRENT_USER_QUERY_KEY = ['auth', 'me']
 
-// Where to land after login: the `?from=` deep-link the middleware set when it
+// Where to land after login: the `?from=` deep-link the proxy set when it
 // bounced an unauthenticated request, falling back to /dashboard. Read from the
 // live URL (login runs client-side only) so we don't need a useSearchParams
 // Suspense boundary. Only same-origin absolute paths are honoured — protocol-

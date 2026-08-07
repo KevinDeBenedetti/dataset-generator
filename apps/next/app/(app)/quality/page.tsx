@@ -18,7 +18,7 @@ const DEFAULT_SIMILARITY_THRESHOLD = 0.8
 const DUPLICATES_PAGE_SIZE = 5
 
 export default function QualityPage() {
-  const { data: datasets, isLoading: datasetsLoading } = useDatasets()
+  const { data: datasets, isPending: datasetsPending } = useDatasets()
   const [selectedDataset, setSelectedDataset] = useState('')
   const [threshold, setThreshold] = useState(DEFAULT_SIMILARITY_THRESHOLD)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -131,7 +131,7 @@ export default function QualityPage() {
   const visibleDuplicates = activeTab === 'pending' ? pendingDuplicates : resolvedDuplicates
   const shownDuplicates = showAllDuplicates ? visibleDuplicates : visibleDuplicates.slice(0, DUPLICATES_PAGE_SIZE)
 
-  if (!datasetsLoading && (!datasets || datasets.length === 0)) {
+  if (!datasetsPending && (!datasets || datasets.length === 0)) {
     return (
       <div className="quality-page">
         <div className="page-head">
@@ -167,7 +167,7 @@ export default function QualityPage() {
             aria-label="Dataset"
             value={selectedDataset}
             onChange={(e) => setSelectedDataset(e.target.value)}
-            disabled={datasetsLoading || !datasets?.length}
+            disabled={datasetsPending || !datasets?.length}
           >
             {datasets?.map((dataset) => (
               <option key={dataset.id} value={dataset.name}>
@@ -246,8 +246,12 @@ export default function QualityPage() {
             </div>
           </div>
           <div className="card-body" style={{ paddingTop: 6 }}>
-            {statsQuery.isLoading && <p className="muted">Loading scores…</p>}
-            {!statsQuery.isLoading && scoreStats.total === 0 && (
+            {/* isPending (not isLoading) so a paused query — the browser
+                reports offline — still shows the loading line. It must be
+                gated on selectedDataset: while none is picked the query is
+                disabled, and a disabled query stays `pending` forever. */}
+            {selectedDataset && statsQuery.isPending && <p className="muted">Loading scores…</p>}
+            {!(selectedDataset && statsQuery.isPending) && scoreStats.total === 0 && (
               <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
             )}
             {scoreStats.buckets.map((bucket, i) => (

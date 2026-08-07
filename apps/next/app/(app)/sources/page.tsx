@@ -68,7 +68,7 @@ function groupBySource(datasets: LangfuseDataset[]): SourceGroup[] {
 }
 
 export default function SourcesPage() {
-  const { data, isLoading, error } = useLangfuseDatasets()
+  const { data, isPending, error } = useLangfuseDatasets()
   const [filter, setFilter] = useState('')
   const now = Date.now()
 
@@ -115,7 +115,7 @@ export default function SourcesPage() {
           <div className="card-body">
             <p className="muted">Failed to load sources.</p>
           </div>
-        ) : isLoading ? (
+        ) : isPending ? (
           <div className="card-body">
             <p className="muted">Loading sources…</p>
           </div>

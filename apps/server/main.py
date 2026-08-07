@@ -95,13 +95,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The session is carried by cookies, so CORS is credentialed and must name the
+# allowed origins explicitly: with allow_origins=["*"], Starlette answers a
+# credentialed request by reflecting the caller's origin, which would let any
+# site read authenticated responses. Origins come from CORS_ALLOW_ORIGINS (or
+# FRONTEND_URL); local dev additionally accepts any localhost port.
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    allow_origins=["*"],
+    allow_origins=config.cors_allow_origins,
+    allow_origin_regex=config.cors_allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info("CORS allowed origins: %s", config.cors_allow_origins or "(none)")
 
 # Required by Authlib's OIDC client to hold the OAuth state/nonce between the
 # /auth/oidc/login redirect and the /auth/oidc/callback.

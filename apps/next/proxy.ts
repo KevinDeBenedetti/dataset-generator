@@ -12,13 +12,16 @@ const REFRESH_COOKIE = process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_t
 // to maintain.
 const PUBLIC_PATHS = new Set(['/', '/login'])
 
-// Middleware-level gate: presence of the auth cookie. The cookie is httpOnly
-// and set by the API on host `localhost` (shared across ports in dev), so the
-// middleware can read it. It only checks presence — the JWT is verified by the
-// API on each request (and by /auth/me). If the front and API ever live on
-// different domains, the cookie won't be visible here and this must move to a
-// same-origin proxy or a server-readable token.
-export function middleware(request: NextRequest) {
+// Proxy-level gate: presence of the auth cookie. The cookie is httpOnly and set
+// by the API on host `localhost` (shared across ports in dev), so the proxy can
+// read it. It only checks presence — the JWT is verified by the API on each
+// request (and by /auth/me). If the front and API ever live on different
+// domains, the cookie won't be visible here and this must move to a same-origin
+// proxy or a server-readable token.
+//
+// `proxy.ts` is the Next 16 replacement for `middleware.ts`; it runs on the
+// nodejs runtime (edge is not supported), which this cookie check doesn't need.
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   // The access cookie expires quickly (short max_age); the refresh cookie is
   // what marks a still-renewable session — the API client refreshes the access
