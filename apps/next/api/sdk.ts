@@ -1,6 +1,6 @@
 // Hand-written, friendlier wrappers around the auto-generated client.
 //
-// `@hey-api/openapi-ts` regenerates `sdk.gen.ts`/`types.gen.ts`/`index.ts`, so
+// `@hey-api/openapi-ts` regenerates `sdk.gen.ts` and `types.gen.ts`, so
 // these higher-level helpers (which unwrap responses, flatten errors and add the
 // SSE streaming endpoint) live here, in a file the generator never touches.
 import { client } from './client.gen'

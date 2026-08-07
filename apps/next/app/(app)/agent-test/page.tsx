@@ -94,7 +94,7 @@ export default function AgentTestPage() {
         <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          disabled={loading || modelsQuery.isLoading}
+          disabled={loading || modelsQuery.isPending}
           aria-label="Model"
           className="h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
         >
