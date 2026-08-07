@@ -374,4 +374,5 @@ urls/
 datasets.db
 .claude
 
-TODO.md
+# OpenAPI schema dumped by `make api-schema` / `make api-check`
+openapi.json

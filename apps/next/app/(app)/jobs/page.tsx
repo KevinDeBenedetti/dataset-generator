@@ -116,12 +116,12 @@ export default function JobsPage() {
             </div>
           </div>
         </div>
-        {runsQuery.isLoading && (
+        {runsQuery.isPending && (
           <div className="card-body">
             <p className="muted">Loading runs…</p>
           </div>
         )}
-        {!runsQuery.isLoading && notConfigured && (
+        {!runsQuery.isPending && notConfigured && (
           <div className="card-body">
             <p className="muted">
               Langfuse is not configured — set <code>LANGFUSE_*</code> in your <code>.env</code> to
@@ -129,7 +129,7 @@ export default function JobsPage() {
             </p>
           </div>
         )}
-        {!runsQuery.isLoading && runsQuery.error && !notConfigured && (
+        {!runsQuery.isPending && runsQuery.error && !notConfigured && (
           <div className="card-body">
             <p className="hint" style={{ color: 'var(--destructive)' }}>
               {runsQuery.error instanceof Error
@@ -138,7 +138,7 @@ export default function JobsPage() {
             </p>
           </div>
         )}
-        {!runsQuery.isLoading && !runsQuery.error && runs.length === 0 && (
+        {!runsQuery.isPending && !runsQuery.error && runs.length === 0 && (
           <div className="card-body">
             <p className="muted">No generation runs recorded yet.</p>
           </div>
