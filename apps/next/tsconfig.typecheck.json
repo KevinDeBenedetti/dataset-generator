@@ -1,0 +1,19 @@
+{
+  // Config used by `bun run typecheck` (and therefore by CI).
+  //
+  // Identical to tsconfig.json except that `.next` is left out. The editor
+  // config includes `.next/types/**` on purpose — that is where Next generates
+  // the typed-routes helpers — but those files are build output:
+  //
+  //   * in CI the checkout has no `.next`, so they contribute nothing;
+  //   * locally a `.next` left behind by an older `next dev` still does, and
+  //     its stale validator fails against the current types ("Type 'Route' does
+  //     not satisfy the constraint 'never'").
+  //
+  // Checking them would make the same command pass in CI and fail on a
+  // developer's machine for a reason that has nothing to do with their changes.
+  // Route/page types are still validated by `next build`, which CI runs on PRs.
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts"],
+  "exclude": ["node_modules", ".next"]
+}

@@ -131,8 +131,8 @@ export default function PromptsPage() {
                     value={selected.content}
                   />
                   <div className="hint">
-                    Read-only: prompts are versioned with the code (apps/server/services). Edit
-                    them there and redeploy.
+                    Read-only: prompts are versioned with the code (apps/server/services). Edit them
+                    there and redeploy.
                   </div>
                 </div>
                 {variables.length > 0 && (
@@ -169,12 +169,16 @@ export default function PromptsPage() {
                 className="card-body"
                 style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <div className="label">Model</div>
                   <span className="tag">{selected.model || 'default'}</span>
                 </div>
                 <hr className="sep" />
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <div className="label">Sent as</div>
                   <span className="tag">{selected.role} message</span>
                 </div>

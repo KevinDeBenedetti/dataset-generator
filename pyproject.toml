@@ -9,31 +9,42 @@ dependencies = [
     # QA generation calls the OpenAI-compatible endpoint directly via the openai
     # SDK (see services/agent.py) — no agent framework / LiteLLM layer. crawl4ai
     # runs as a separate Docker service, so neither is a Python dependency.
-    "fastapi[standard]>=0.139.0",
+    "fastapi[standard]>=0.141.1",
     "httpx>=0.28.1",
     "instructor>=1.15.4",
-    "langfuse>=4.13.2",
-    "openai>=2.44.0",
+    "langfuse>=4.14.4",
+    "openai>=3.1.0",
+    "psycopg[binary]>=3.2.0",
     "pydantic>=2.13.4",
     "pytest>=9.1.1",
     "sqlmodel>=0.0.39",
-    "alembic>=1.18.5",
-    "uvicorn[standard]>=0.51.0",
+    "alembic>=1.19.1",
+    "uvicorn[standard]>=0.52.3",
     "bcrypt>=5.0.0",
     "authlib>=1.7.2",
     "itsdangerous>=2.2.0",
-    "qdrant-client>=1.12.0",
-    "redis>=5.0.0",
-    "pymupdf>=1.28.0",
+    "qdrant-client>=1.19.0",
+    "redis>=8.1.0",
+    "pymupdf>=1.28.2",
 ]
 
 [dependency-groups]
 dev = [
     "pytest-cov>=7.0.0",
     "pytest-asyncio>=1.4.0",
-    "ruff>=0.15.20",
-    "ty>=0.0.57",
-    "prek>=0.4.8",
+    # Tests run against a real, throwaway Postgres container (there is no
+    # embeddable Postgres, and the app is Postgres-only now), so Docker must be
+    # reachable to run the suite.
+    "testcontainers[postgres]>=4.9.0",
+    "ruff>=0.16.3",
+    "ty>=0.0.72",
+    "prek>=0.4.13",
+    # starlette.testclient prefers httpx2 and warns (StarletteDeprecationWarning)
+    # when it falls back to httpx — a warning slated to become an error. Only
+    # TestClient needs it: the app's own HTTP calls (scraper, github, langfuse)
+    # still use the httpx pinned in the runtime dependencies above, and the two
+    # install side by side under different module names.
+    "httpx2>=2.10.0",
 ]
 migration = [
     "alembic>=1.16.5",

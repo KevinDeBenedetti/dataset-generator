@@ -46,10 +46,7 @@ function groupBySource(datasets: LangfuseDataset[]): SourceGroup[] {
     const existing = groups.get(key)
     if (existing) {
       existing.datasetCount += 1
-      if (
-        d.created_at &&
-        (!existing.lastGeneratedAt || d.created_at > existing.lastGeneratedAt)
-      ) {
+      if (d.created_at && (!existing.lastGeneratedAt || d.created_at > existing.lastGeneratedAt)) {
         existing.lastGeneratedAt = d.created_at
       }
     } else {
