@@ -83,6 +83,32 @@ These can also be overridden per request: the `POST /dataset/generate` body acce
 
 > 📖 For a full walkthrough of how crawling works (BFS traversal, env vars, the crawl4ai service, per-request overrides and tuning), see [docs/crawling.md](docs/crawling.md).
 
+### Database (PostgreSQL)
+
+The application database is **PostgreSQL** — it is the only supported backend,
+and `DATABASE_URL` is rejected at startup if it isn't a PostgreSQL URL. It holds
+the operational tables only (`users`, `refresh_tokens`, `quality_rules`);
+datasets and Q&A pairs live in Langfuse (see below).
+
+`make dev` starts a `postgres` service and the server connects to it in-network
+at `postgres:5432`. It is also published on the host at `5452` (this project's
+dev-port lane) for `psql` or a GUI client. Alembic migrations run automatically
+from the server's startup lifespan, so a fresh volume is schema-ready on first
+boot. Data persists in the `postgres_data` volume — note that `make reset` uses
+`docker compose down -v` and therefore **destroys it**.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POSTGRES_USER` | `datasets` | Role created by the compose service; also used to build the server's `DATABASE_URL` |
+| `POSTGRES_PASSWORD` | `datasets` | Password for that role (change it in any shared environment) |
+| `POSTGRES_DB` | `datasets` | Database name |
+| `POSTGRES_HOST_PORT` | `5452` | Host port published for external clients (the server always uses `5432` in-network) |
+| `DATABASE_URL` | _(built from the vars above)_ | Set only to point at a Postgres outside compose, e.g. a managed instance. `postgres://` and `postgresql://` are accepted and rewritten to the `psycopg` (v3) driver |
+
+Running the server outside Docker (`make dev-local`) needs no extra setup: with
+`DATABASE_URL` unset it targets the compose Postgres through the published host
+port, using the same `POSTGRES_*` credentials.
+
 ### Langfuse is a hard dependency
 
 There is no local database fallback for datasets — Langfuse is the sole source of truth, not an optional export target:
@@ -185,6 +211,11 @@ Auth endpoints: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`,
 `GET /auth/me`, and the OIDC flow `GET /auth/oidc/login` →
 `GET /auth/oidc/callback`.
 
+> 📖 For the full picture — roles and which routes are admin-only, refresh-token
+> rotation and theft detection, login throttling and its Redis backend, the OIDC
+> account-resolution rules, every auth env var and a troubleshooting section —
+> see [docs/authentication.md](docs/authentication.md).
+
 ### Dev log console
 
 For local debugging you can stream both servers' logs into an in-browser terminal:
@@ -211,6 +242,13 @@ Once the stack is up, toggle the console with **Ctrl+`** (or the floating termin
 ## 🧪 Testing & Coverage
 
 This project maintains high test coverage to ensure code quality and reliability.
+
+The suite runs against a **real PostgreSQL instance**, started as a throwaway
+container by [testcontainers](https://testcontainers-python.readthedocs.io/), so
+a reachable Docker daemon is required. One container is shared by the whole
+session and the schema is recreated around each test. To reuse an already-running
+Postgres instead (and skip the container), point `TEST_DATABASE_URL` at it —
+be aware the suite drops and recreates its tables there.
 
 ```bash
 # Run tests with coverage (HTML report)
@@ -239,17 +277,20 @@ compile. CI guards it with an `API client drift` job that regenerates the client
 and fails on any diff:
 
 ```bash
-# Dump the schema from the app (no running server needed) → openapi.json
-make api-schema
-
-# Regenerate from that schema and fail if the committed client differs
-make api-check
-
-# Fix a failure: regenerate against a running API, then commit the result
+# Regenerate the client, then commit the result — no running server needed
 make api-client
+
+# Same generation, plus a diff that fails when the committed client is stale
+make api-check
 ```
 
-`make api-check` is what CI runs. Because it feeds the generator a schema file
-rather than a live URL, `openapi-ts.config.ts` sets `baseUrl: false` on the
-client plugin — the generated client carries no base URL at all, and
-`api/sdk.ts` supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.
+Both targets dump the schema from the app itself (`make api-schema`) and feed
+the generator that **same file**, so a client generated locally and one
+generated in CI are byte-identical. Two details make that hold:
+
+- The dump preserves the app's own key order rather than sorting it — the
+  generator emits operations in schema order, so sorting would produce a diff
+  that regenerating could never settle.
+- `openapi-ts.config.ts` sets `baseUrl: false` on the client plugin, so no base
+  URL is baked into `client.gen.ts` from whatever input URL was used;
+  `api/sdk.ts` supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.

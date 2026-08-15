@@ -2,7 +2,9 @@
 
 import pytest
 from unittest.mock import patch
-from server.core.database import get_db, get_scoped_db, create_db_and_tables
+from sqlalchemy import inspect
+
+from server.core.database import Base, get_db, get_scoped_db, create_db_and_tables
 
 
 class TestGetDb:
@@ -50,10 +52,18 @@ class TestGetScopedDb:
 class TestCreateDbAndTables:
     """Tests for create_db_and_tables function"""
 
-    def test_create_db_and_tables_success(self):
-        """Test successful database creation"""
-        # Should not raise any exception
+    def test_create_db_and_tables_success(self, test_engine, monkeypatch):
+        """Test successful database creation.
+
+        Bound to the test engine: the module-level one points at the dev
+        Postgres, which the suite must not touch (and which need not be up).
+        """
+        monkeypatch.setattr("server.core.database.engine", test_engine)
+        Base.metadata.drop_all(bind=test_engine)
+
         create_db_and_tables()
+
+        assert "users" in inspect(test_engine).get_table_names()
 
     @patch("server.core.database.Base.metadata.create_all")
     def test_create_db_and_tables_error(self, mock_create_all):

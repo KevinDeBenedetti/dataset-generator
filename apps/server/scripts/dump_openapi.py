@@ -35,7 +35,11 @@ def main() -> None:
     output = sys.argv[1] if len(sys.argv) > 1 else "openapi.json"
     schema = app.openapi()
     with open(output, "w", encoding="utf-8") as fh:
-        json.dump(schema, fh, indent=2, sort_keys=True, ensure_ascii=False)
+        # Keys are written in the app's own order, NOT sorted: the client
+        # generator emits operations in schema order, so sorting here would make
+        # the generated client differ from one built against the live server —
+        # a diff no amount of regenerating could settle.
+        json.dump(schema, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     print(f"OpenAPI schema written to {output} ({len(schema.get('paths', {}))} paths)")
 

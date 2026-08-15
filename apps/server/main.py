@@ -78,6 +78,13 @@ async def lifespan(app: FastAPI):
             await asyncio.to_thread(_seed_dev_users)
         except Exception:
             logger.exception("Dev user seeding failed")
+    else:
+        # Without this, an unset SEED_DEV_USERS is completely silent and the only
+        # symptom is a 401 on every login — with no hint that no account exists.
+        logger.info(
+            "Dev user seeding is off (SEED_DEV_USERS unset/false): no local account "
+            "is created, so POST /auth/login answers 401 until one exists."
+        )
 
     # Sweep revoked/expired refresh tokens (nothing else ever deletes a row).
     try:

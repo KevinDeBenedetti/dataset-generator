@@ -132,3 +132,30 @@ def test_redis_clear_drops_all_keys():
     limiter.clear()
     assert limiter.retry_after("a") == 0.0
     assert limiter.retry_after("b") == 0.0
+
+
+class DeadRedis:
+    """Stands in for a Redis that was reachable at startup and died later."""
+
+    def __getattr__(self, _name):
+        def _boom(*args, **kwargs):
+            raise ConnectionError("Connection refused")
+
+        return _boom
+
+
+def test_redis_going_down_does_not_break_logins():
+    """A Redis that dies after the backend was picked must degrade, not raise.
+
+    The backend is selected once at startup, so without this the login route
+    turns every attempt into a 500 the moment Redis becomes unreachable.
+    """
+    limiter = RedisSlidingWindowRateLimiter(
+        max_attempts=1, window_seconds=60, client=DeadRedis()
+    )
+    # Fails open: the attempt is allowed through rather than 500-ing.
+    assert limiter.retry_after("ip") == 0.0
+    limiter.register_failure("ip")
+    limiter.reset("ip")
+    limiter.clear()
+    assert limiter.retry_after("ip") == 0.0

@@ -92,7 +92,11 @@ def _utcnow() -> datetime:
 
 
 def _as_utc(dt: datetime) -> datetime:
-    """Normalize a stored datetime for comparison (SQLite returns them naive)."""
+    """Normalize a stored datetime for comparison.
+
+    The columns are ``TIMESTAMP WITHOUT TIME ZONE``, so Postgres hands back
+    naive datetimes; the values are written as UTC, so that is what we assume.
+    """
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 

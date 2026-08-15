@@ -17,27 +17,78 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
 
-from server.core.database import Base, get_db
+from server.core.database import Base, get_db, normalize_database_url
 
 
-# Use in-memory SQLite for tests
-TEST_DATABASE_URL = "sqlite:///:memory:"
+@pytest.fixture(scope="session")
+def postgres_url() -> Generator[str, None, None]:
+    """URL of a throwaway Postgres for the whole test session.
+
+    The app is Postgres-only, so the suite exercises the real dialect rather
+    than a stand-in. One container is started per session (spinning one up per
+    test would dominate the runtime); isolation comes from ``test_engine``
+    creating and dropping the schema around each test.
+
+    Honours ``TEST_DATABASE_URL`` when set, so CI or a developer can point the
+    suite at an already-running Postgres and skip the container entirely.
+    """
+    preset = os.environ.get("TEST_DATABASE_URL")
+    if preset:
+        yield normalize_database_url(preset)
+        return
+
+    from testcontainers.community.postgres import PostgresContainer
+
+    with PostgresContainer("postgres:17-alpine", driver="psycopg") as container:
+        yield normalize_database_url(container.get_connection_url())
 
 
 @pytest.fixture(scope="function")
-def test_engine():
-    """Create a test database engine."""
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def test_engine(postgres_url: str):
+    """Create a test database engine on a clean schema."""
+    engine = create_engine(postgres_url)
+    # A test that left the schema dirty (or a previous crashed run against a
+    # preset TEST_DATABASE_URL) would otherwise fail every later create_all.
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def make_database(postgres_url: str):
+    """Factory creating throwaway databases on the session's Postgres server.
+
+    Tests that need two *independent* databases (e.g. proving migrations hit the
+    URL they were given and not the one in the environment) used to point at two
+    sqlite files; on Postgres the equivalent is two databases on one server.
+    Each is dropped when the test ends.
+    """
+    from sqlalchemy import make_url, text
+
+    base = make_url(postgres_url)
+    # CREATE DATABASE cannot run inside a transaction, and cannot run from a
+    # connection to the database being dropped — hence AUTOCOMMIT on "postgres".
+    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    created: list[str] = []
+
+    def _make(name: str) -> str:
+        if not name.replace("_", "").isalnum():
+            raise ValueError(f"unsafe database name: {name!r}")
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+        created.append(name)
+        return base.set(database=name).render_as_string(hide_password=False)
+
+    yield _make
+
+    with admin.connect() as conn:
+        for name in created:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+    admin.dispose()
 
 
 @pytest.fixture(scope="function")
