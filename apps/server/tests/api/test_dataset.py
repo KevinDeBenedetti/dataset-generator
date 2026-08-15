@@ -4,7 +4,10 @@ Tests for dataset API endpoints.
 
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
+
+from server.services.langfuse import LangfuseUnavailableError
 
 # Datasets are now created/read/deleted in Langfuse (the source of truth), so
 # these tests mock the Langfuse-backed view functions.
@@ -252,3 +255,47 @@ def test_resolve_pair_ambiguous_id(client: TestClient):
             "/dataset/my_dataset/resolve-pair", json={"remove_id": "aaaa"}
         )
     assert response.status_code == 409
+
+
+# Every handler funnels service errors through the same mapping:
+# LangfuseUnavailableError -> 503, ValueError -> 404 (400 on create), and
+# anything unexpected -> 500. The success and ValueError branches are covered
+# case by case above; the two tables below cover the 503 and 500 branches for
+# *every* endpoint, so an endpoint added without them shows up as a coverage
+# drop instead of silently returning a raw 500 traceback to the client.
+_ENDPOINTS = [
+    ("create_dataset_view", lambda c: c.post("/dataset", params={"name": "d"})),
+    ("list_datasets_view", lambda c: c.get("/dataset")),
+    ("get_dataset_view", lambda c: c.get("/dataset", params={"dataset_id": "d"})),
+    ("analyze_similarities_view", lambda c: c.get("/dataset/d/analyze-similarities")),
+    ("clean_similarities_view", lambda c: c.post("/dataset/d/clean-similarities")),
+    (
+        "resolve_similarity_pair",
+        lambda c: c.post("/dataset/d/resolve-pair", json={"remove_id": "aaaa1111"}),
+    ),
+    ("delete_dataset_view", lambda c: c.delete("/dataset/d")),
+]
+
+_ENDPOINT_IDS = [view for view, _ in _ENDPOINTS]
+
+
+@pytest.mark.parametrize("view,call", _ENDPOINTS, ids=_ENDPOINT_IDS)
+def test_langfuse_unavailable_returns_503(client: TestClient, view, call):
+    """Langfuse is the sole source of truth, so "it's down" must not read as 500."""
+    with patch(
+        f"server.api.dataset.{view}",
+        side_effect=LangfuseUnavailableError("Langfuse is not configured."),
+    ):
+        response = call(client)
+
+    assert response.status_code == 503
+    assert "Langfuse is not configured." in response.json()["detail"]
+
+
+@pytest.mark.parametrize("view,call", _ENDPOINTS, ids=_ENDPOINT_IDS)
+def test_unexpected_service_error_returns_500(client: TestClient, view, call):
+    with patch(f"server.api.dataset.{view}", side_effect=RuntimeError("boom")):
+        response = call(client)
+
+    assert response.status_code == 500
+    assert "boom" in response.json()["detail"]

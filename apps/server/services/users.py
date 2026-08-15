@@ -86,6 +86,16 @@ def seed_dev_users(
     created = 0
     for spec in DEV_USERS:
         if get_user_by_email(db, spec["email"]):
+            # Seeding never rewrites an existing account, so a stale row keeps
+            # whatever password it was created with — a silent skip here is the
+            # usual reason "the documented dev password doesn't work".
+            logging.info(
+                "Dev user %s already exists — left untouched; its password is the "
+                "one it was created with, not necessarily %s / the built-in default. "
+                "Delete the row to re-seed it.",
+                spec["email"],
+                spec["password_env"],
+            )
             continue
         password = os.getenv(spec["password_env"])
         if not password:

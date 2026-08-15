@@ -171,12 +171,22 @@ export default function JobsPage() {
                     </div>
                   </td>
                   <td>
-                    <span className="tag">{run.run_name ?? (run.version != null ? `v${run.version}` : '—')}</span>
+                    <span className="tag">
+                      {run.run_name ?? (run.version != null ? `v${run.version}` : '—')}
+                    </span>
                   </td>
                   <td className="muted">
                     {run.item_count != null ? `${run.item_count} pairs` : '—'}
                   </td>
-                  <td className="muted" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td
+                    className="muted"
+                    style={{
+                      maxWidth: 220,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {run.source_url ?? '—'}
                   </td>
                   <td className="muted">{formatDate(run.created_at)}</td>

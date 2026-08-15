@@ -9,7 +9,9 @@ Used to throttle brute-force login attempts. Two backends share one interface:
 
 The module-level ``login_rate_limiter`` picks the Redis backend when
 ``config.redis_url`` is set and reachable, falling back to the in-process one
-otherwise (an unset/unreachable Redis must not break logins).
+otherwise (an unset/unreachable Redis must not break logins). That guarantee
+also holds once the backend is chosen: a Redis that goes away later degrades to
+"no throttling" rather than failing the login (see ``_guard``).
 """
 
 import logging
@@ -111,35 +113,65 @@ class RedisSlidingWindowRateLimiter:
     def _rkey(self, key: str) -> str:
         return f"{self._key_prefix}{key}"
 
+    def _guard(self, action: str, fn, default=None):
+        """Run a Redis call, degrading to ``default`` if Redis is unreachable.
+
+        The backend is chosen once at startup, so a Redis that dies *afterwards*
+        would otherwise raise straight through :func:`login` and turn every
+        attempt into a 500. Rate limiting is a defensive layer, not an
+        authentication check: losing it must not lock everyone out. Failures are
+        logged so a persistently unreachable Redis stays visible.
+        """
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never crash
+            logging.warning(
+                "Redis unavailable for login rate limiting during %s (%s) — "
+                "allowing the attempt; brute-force throttling is degraded.",
+                action,
+                exc,
+            )
+            return default
+
     def retry_after(self, key: str) -> float:
-        now = time.time()
-        rkey = self._rkey(key)
-        self._client.zremrangebyscore(rkey, 0, now - self.window_seconds)
-        count = self._client.zcard(rkey)
-        if count >= self.max_attempts:
-            oldest = self._client.zrange(rkey, 0, 0, withscores=True)
-            if oldest:
-                oldest_score = oldest[0][1]
-                return max(0.0, oldest_score + self.window_seconds - now)
-        return 0.0
+        def _run() -> float:
+            now = time.time()
+            rkey = self._rkey(key)
+            self._client.zremrangebyscore(rkey, 0, now - self.window_seconds)
+            count = self._client.zcard(rkey)
+            if count >= self.max_attempts:
+                oldest = self._client.zrange(rkey, 0, 0, withscores=True)
+                if oldest:
+                    oldest_score = oldest[0][1]
+                    return max(0.0, oldest_score + self.window_seconds - now)
+            return 0.0
+
+        return self._guard("retry_after", _run, default=0.0)
 
     def register_failure(self, key: str) -> None:
-        now = time.time()
-        rkey = self._rkey(key)
-        # Unique member per attempt (ns timestamp) so concurrent failures at the
-        # same second don't collide into one sorted-set entry.
-        self._client.zadd(rkey, {str(time.time_ns()): now})
-        # Refresh the TTL so an idle key is reclaimed a full window after its
-        # last failure (ceil so a sub-second window still gets >=1s).
-        self._client.expire(rkey, int(self.window_seconds) + 1)
+        def _run() -> None:
+            now = time.time()
+            rkey = self._rkey(key)
+            # Unique member per attempt (ns timestamp) so concurrent failures at
+            # the same second don't collide into one sorted-set entry.
+            self._client.zadd(rkey, {str(time.time_ns()): now})
+            # Refresh the TTL so an idle key is reclaimed a full window after its
+            # last failure (ceil so a sub-second window still gets >=1s).
+            self._client.expire(rkey, int(self.window_seconds) + 1)
+
+        self._guard("register_failure", _run)
 
     def reset(self, key: str) -> None:
-        self._client.delete(self._rkey(key))
+        self._guard("reset", lambda: self._client.delete(self._rkey(key)))
 
     def clear(self) -> None:
         """Drop all keys under the prefix (mainly for test isolation)."""
-        for rkey in self._client.scan_iter(match=f"{self._key_prefix}*"):
-            self._client.delete(rkey)
+
+        def _run() -> None:
+            for rkey in self._client.scan_iter(match=f"{self._key_prefix}*"):
+                self._client.delete(rkey)
+
+        self._guard("clear", _run)
 
 
 def _build_login_limiter() -> RateLimiter:

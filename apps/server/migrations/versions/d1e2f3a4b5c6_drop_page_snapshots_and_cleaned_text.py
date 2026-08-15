@@ -25,21 +25,28 @@ down_revision: Union[str, Sequence[str], None] = "c9d0e1f2a3b4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# The original FK on qa_sources.page_snapshot_id was created unnamed; SQLite
-# requires a naming_convention at reflection time so batch mode (needed here —
-# SQLite has no ALTER TABLE DROP CONSTRAINT) can address it.
-_NAMING_CONVENTION = {
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"
-}
-_FK_NAME = "fk_qa_sources_page_snapshot_id_page_snapshots"
+# The original FK on qa_sources.page_snapshot_id was created unnamed, so its
+# actual name is whatever Postgres auto-assigned (normally
+# "qa_sources_page_snapshot_id_fkey"). Reflect it rather than hardcoding that
+# spelling: a database restored from a dump, or one created back when this
+# project still ran on SQLite, can carry a different name.
+_FK_NAME = "qa_sources_page_snapshot_id_fkey"
+
+
+def _reflected_fk_name() -> str | None:
+    """Name of the qa_sources → page_snapshots FK, or None if already gone."""
+    inspector = sa.inspect(op.get_bind())
+    for fk in inspector.get_foreign_keys("qa_sources"):
+        if fk.get("referred_table") == "page_snapshots":
+            return fk.get("name")
+    return None
 
 
 def upgrade() -> None:
     """Upgrade schema."""
-    with op.batch_alter_table(
-        "qa_sources", naming_convention=_NAMING_CONVENTION
-    ) as batch_op:
-        batch_op.drop_constraint(_FK_NAME, type_="foreignkey")
+    fk_name = _reflected_fk_name()
+    if fk_name:
+        op.drop_constraint(fk_name, "qa_sources", type_="foreignkey")
 
     op.drop_table("cleaned_text")
     op.drop_index("ix_page_snapshots_url_hash", table_name="page_snapshots")
@@ -76,7 +83,6 @@ def downgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    with op.batch_alter_table("qa_sources") as batch_op:
-        batch_op.create_foreign_key(
-            _FK_NAME, "page_snapshots", ["page_snapshot_id"], ["id"]
-        )
+    op.create_foreign_key(
+        _FK_NAME, "qa_sources", "page_snapshots", ["page_snapshot_id"], ["id"]
+    )

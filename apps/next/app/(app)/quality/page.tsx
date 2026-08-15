@@ -64,7 +64,9 @@ export default function QualityPage() {
 
   const handleResolvePair = (removeId: string, question: string) => {
     if (!selectedDataset) return
-    const confirmed = window.confirm(`Delete "${question}" and keep the other one? This can't be undone.`)
+    const confirmed = window.confirm(
+      `Delete "${question}" and keep the other one? This can't be undone.`,
+    )
     if (!confirmed) return
     resolvePairMutation.mutate(
       { datasetId: selectedDataset, removeId },
@@ -121,7 +123,10 @@ export default function QualityPage() {
     ],
   }
 
-  const similarities = useMemo(() => analyzeMutation.data?.similarities ?? [], [analyzeMutation.data])
+  const similarities = useMemo(
+    () => analyzeMutation.data?.similarities ?? [],
+    [analyzeMutation.data],
+  )
   const pendingDuplicates = similarities.filter(
     (pair) => !dismissedIds.has(`${pair.record1_id}-${pair.record2_id}`),
   )
@@ -129,7 +134,9 @@ export default function QualityPage() {
     dismissedIds.has(`${pair.record1_id}-${pair.record2_id}`),
   )
   const visibleDuplicates = activeTab === 'pending' ? pendingDuplicates : resolvedDuplicates
-  const shownDuplicates = showAllDuplicates ? visibleDuplicates : visibleDuplicates.slice(0, DUPLICATES_PAGE_SIZE)
+  const shownDuplicates = showAllDuplicates
+    ? visibleDuplicates
+    : visibleDuplicates.slice(0, DUPLICATES_PAGE_SIZE)
 
   if (!datasetsPending && (!datasets || datasets.length === 0)) {
     return (
@@ -197,7 +204,9 @@ export default function QualityPage() {
               <Icon name="shield" />
             </span>
           </div>
-          <div className="stat-val">{scoreStats.avg !== null ? scoreStats.avg.toFixed(2) : '—'}</div>
+          <div className="stat-val">
+            {scoreStats.avg !== null ? scoreStats.avg.toFixed(2) : '—'}
+          </div>
           <div className="stat-delta muted">
             {stats ? `${stats.scored_count} of ${stats.total_count} scored` : '—'}
           </div>
@@ -221,7 +230,9 @@ export default function QualityPage() {
           </div>
           <div className="stat-val">{scoreStats.below}</div>
           <div className="stat-delta muted">
-            {scoreStats.total ? `${((scoreStats.below / scoreStats.total) * 100).toFixed(1)}% of the dataset` : '—'}
+            {scoreStats.total
+              ? `${((scoreStats.below / scoreStats.total) * 100).toFixed(1)}% of the dataset`
+              : '—'}
           </div>
         </div>
         <div className="card stat">
@@ -233,7 +244,9 @@ export default function QualityPage() {
           </div>
           <div className="stat-val">{scoreStats.validated}</div>
           <div className="stat-delta muted">
-            {scoreStats.total ? `${((scoreStats.validated / scoreStats.total) * 100).toFixed(1)}%` : '—'}
+            {scoreStats.total
+              ? `${((scoreStats.validated / scoreStats.total) * 100).toFixed(1)}%`
+              : '—'}
           </div>
         </div>
       </div>
@@ -260,8 +273,11 @@ export default function QualityPage() {
                 <div className="progress" style={{ flex: 1 }}>
                   <span
                     style={{
-                      width: scoreStats.total ? `${(bucket.count / scoreStats.total) * 100}%` : '0%',
-                      background: i === 2 ? 'var(--warning)' : i === 3 ? 'var(--destructive)' : undefined,
+                      width: scoreStats.total
+                        ? `${(bucket.count / scoreStats.total) * 100}%`
+                        : '0%',
+                      background:
+                        i === 2 ? 'var(--warning)' : i === 3 ? 'var(--destructive)' : undefined,
                     }}
                   />
                 </div>
@@ -280,7 +296,14 @@ export default function QualityPage() {
             className="card-body"
             style={{ paddingTop: 2, display: 'flex', flexDirection: 'column', gap: 12 }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
               <div>
                 <div className="label">Duplicate threshold</div>
                 <div className="hint">Text similarity used by analyze &amp; clean</div>
@@ -297,7 +320,14 @@ export default function QualityPage() {
               />
             </div>
             <hr className="sep" />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
               <div>
                 <div className="label">Quality rejection threshold</div>
                 <div className="hint">Minimum confidence kept as &quot;validated&quot;</div>
@@ -320,7 +350,14 @@ export default function QualityPage() {
               />
             </div>
             <hr className="sep" />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
               <div>
                 <div className="label">Min. answer length</div>
                 <div className="hint">Words (0 = no minimum)</div>
@@ -385,7 +422,9 @@ export default function QualityPage() {
             <button
               className="btn btn-outline btn-sm"
               onClick={handleClean}
-              disabled={!selectedDataset || cleanMutation.isPending || pendingDuplicates.length === 0}
+              disabled={
+                !selectedDataset || cleanMutation.isPending || pendingDuplicates.length === 0
+              }
             >
               <Icon
                 name={cleanMutation.isPending ? 'loader' : 'trash'}
@@ -395,7 +434,8 @@ export default function QualityPage() {
             </button>
             {cleanMutation.isSuccess && cleanMutation.data && (
               <p className="hint">
-                Removed {cleanMutation.data.removed_records} of {cleanMutation.data.total_records} records.
+                Removed {cleanMutation.data.removed_records} of {cleanMutation.data.total_records}{' '}
+                records.
               </p>
             )}
             {cleanMutation.isError && (
@@ -453,11 +493,15 @@ export default function QualityPage() {
                 : 'Failed to analyze similarities'}
             </p>
           )}
-          {!analyzeMutation.isPending && analyzeMutation.isSuccess && visibleDuplicates.length === 0 && (
-            <p className="muted">
-              {activeTab === 'pending' ? 'No duplicate pairs above the threshold.' : 'Nothing kept yet.'}
-            </p>
-          )}
+          {!analyzeMutation.isPending &&
+            analyzeMutation.isSuccess &&
+            visibleDuplicates.length === 0 && (
+              <p className="muted">
+                {activeTab === 'pending'
+                  ? 'No duplicate pairs above the threshold.'
+                  : 'Nothing kept yet.'}
+              </p>
+            )}
 
           {shownDuplicates.map((pair, index) => {
             const pairId = `${pair.record1_id}-${pair.record2_id}`
@@ -468,7 +512,9 @@ export default function QualityPage() {
                     <Icon name="copyCheck" />
                   </span>
                   <b style={{ fontSize: 13 }}>Duplicate #{index + 1}</b>
-                  <span className="badge badge-warning">similarity {(pair.similarity * 100).toFixed(0)}%</span>
+                  <span className="badge badge-warning">
+                    similarity {(pair.similarity * 100).toFixed(0)}%
+                  </span>
                 </div>
                 <div className="dup-pair">
                   <div className="dup-side">
@@ -518,7 +564,10 @@ export default function QualityPage() {
 
           {visibleDuplicates.length > DUPLICATES_PAGE_SIZE && (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setShowAllDuplicates((prev) => !prev)}>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowAllDuplicates((prev) => !prev)}
+              >
                 <Icon name="chevronDown" />
                 {showAllDuplicates
                   ? 'Show fewer'

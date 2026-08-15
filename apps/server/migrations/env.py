@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from server.core.database import Base
+from server.core.database import Base, default_database_url, normalize_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -35,11 +35,11 @@ def _resolve_db_url() -> str:
        — so an explicit argument (tests, ``reset_db``) wins.
     2. The OS env ``DATABASE_URL`` — so a deployed Postgres is honoured when
        alembic is driven directly from the CLI.
-    3. The sqlite dev default.
+    3. The local-dev Postgres default shared with ``core.database``.
 
     Previously this read the Alembic *option* ``DATABASE_URL`` (never the OS
-    env) and overwrote the caller's ``sqlalchemy.url`` with the sqlite default,
-    so migrations silently ran against the wrong database when ``DATABASE_URL``
+    env) and overwrote the caller's ``sqlalchemy.url`` with a default, so
+    migrations silently ran against the wrong database when ``DATABASE_URL``
     was set.
     """
     try:
@@ -47,7 +47,9 @@ def _resolve_db_url() -> str:
     except Exception:
         # Unresolved ``%(DATABASE_URL)s`` interpolation from alembic.ini.
         existing = None
-    return existing or os.environ.get("DATABASE_URL") or "sqlite:///./datasets.db"
+    return normalize_database_url(
+        existing or os.environ.get("DATABASE_URL") or default_database_url()
+    )
 
 
 config.set_main_option("sqlalchemy.url", _resolve_db_url())

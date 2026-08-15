@@ -50,7 +50,10 @@ jobs:
       working-directory: apps/next
       package-manager: bun
       run-lint: true
-      run-typecheck: false
+      # Runs `bun run typecheck` (tsc --noEmit). oxlint alone never checks types,
+      # so without this nothing guarded the front-end against a type error — in
+      # particular one introduced by regenerating apps/next/api from the schema.
+      run-typecheck: true
       run-test: true
       # next build needs no backend at build time; enable as a pre-merge gate on PRs.
       run-build: ${{ github.event_name == 'pull_request' }}
