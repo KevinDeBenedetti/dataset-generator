@@ -1,11 +1,27 @@
-"""Sliding-window rate limiting for the login endpoint.
+"""Rate limiting for the login endpoint.
 
 Used to throttle brute-force login attempts. Two backends share one interface:
 
 - :class:`SlidingWindowRateLimiter` keeps state in this process only, so it is
   NOT shared across uvicorn workers or replicas — a first defensive layer.
-- :class:`RedisSlidingWindowRateLimiter` keeps the same window in a Redis sorted
-  set, so the quota is shared across all workers/replicas.
+- :class:`RedisRateLimiter` delegates to ``redis-fastapi``'s ``RateLimitBackend``
+  (Redis' own FastAPI SDK), so the quota is shared across all workers/replicas
+  and each attempt is counted **atomically** (INCREX on Redis 8.8+, an atomic
+  Lua script below that). The previous hand-rolled sorted-set backend read and
+  wrote in separate round trips, so concurrent attempts could both observe a
+  count under the cap and slip past it.
+
+The trade-off of that move: the Redis backend is now a **fixed** window (a
+counter with a TTL) rather than a sliding one. The window starts at the first
+counted failure and does not extend as more arrive; the in-process backend still
+slides. For an anti-brute-force throttle the difference is a boundary effect, not
+a hole — the cap per window is unchanged.
+
+The SDK reads its own settings from ``REDIS_*`` env vars: the key namespace
+(``REDIS_PREFIX``, default ``redis:fastapi``) and ``REDIS_RATE_LIMIT_FAIL_CLOSED``
+(default false). Leave the latter false — a Redis outage must cost throttling,
+not logins; :meth:`RedisRateLimiter._guard` enforces the same rule for anything
+the SDK doesn't catch.
 
 The module-level ``login_rate_limiter`` picks the Redis backend when
 ``config.redis_url`` is set and reachable, falling back to the in-process one
@@ -15,10 +31,11 @@ also holds once the backend is chosen: a Redis that goes away later degrades to
 """
 
 import logging
+import math
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Optional, Protocol
+from typing import Any, Callable, Deque, Dict, Optional, Protocol
 
 
 class RateLimiter(Protocol):
@@ -87,34 +104,61 @@ class SlidingWindowRateLimiter:
             self._events.clear()
 
 
-class RedisSlidingWindowRateLimiter:
-    """Redis-backed sliding window, shared across workers/replicas.
+class RedisRateLimiter:
+    """Login throttling on ``redis-fastapi``'s ``RateLimitBackend``.
 
-    Each key maps to a Redis sorted set whose members are individual failed
-    attempts scored by wall-clock time. Stale members are pruned by score on
-    read, and the set is given a TTL so idle keys expire on their own.
+    The SDK owns the counting: one Redis key per identifier, incremented
+    atomically (``INCREX``, or an atomic Lua script on servers without it) and
+    expiring on its own after the window. That atomicity is the reason this
+    replaced the hand-rolled sorted-set backend.
 
-    Uses wall-clock ``time.time()`` (not monotonic) so timestamps are comparable
-    across processes. The ``client`` is injectable for testing.
+    Two adaptations sit here rather than in the SDK:
+
+    * **Only failures are counted.** The SDK's ``hit`` is called from
+      :meth:`register_failure`, never on the way in; :meth:`retry_after` uses
+      ``peek``, which reads the counter without consuming from it. A legitimate
+      login therefore never spends quota, and a successful one clears the key.
+    * **Nothing may break the login.** The SDK already fails open on Redis
+      errors (``REDIS_RATE_LIMIT_FAIL_CLOSED`` defaults to false), but that only
+      covers ``RedisError``/``OSError``. :meth:`_guard` widens it to anything —
+      including the "not in a worker thread" case below — so a degraded Redis
+      costs throttling, never availability.
+
+    ``backend`` is the SDK's **async** ``RateLimitBackend``; its coroutines are
+    driven from this sync API via ``anyio.from_thread.run``, which requires a
+    FastAPI worker thread — what a sync ``def`` endpoint runs in (see
+    ``api/auth.py:login``). Turning that route into ``async def`` would move it
+    onto the event-loop thread, where the bridge raises and this limiter would
+    degrade to "no throttling" (loudly, one warning per call).
     """
 
     def __init__(
         self,
         max_attempts: int,
         window_seconds: float,
-        client: Any,
-        key_prefix: str = "ratelimit:login:",
+        backend: Any,
+        client: Any = None,
+        key_prefix: str = "",
     ):
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
+        # The SDK counts in whole seconds; never round a sub-second window to 0.
+        self._window = max(1, math.ceil(window_seconds))
+        self._backend = backend
+        # Only :meth:`clear` needs the raw client (the SDK has no "drop every
+        # key in this scope" operation).
         self._client = client
         self._key_prefix = key_prefix
 
-    def _rkey(self, key: str) -> str:
-        return f"{self._key_prefix}{key}"
+    @staticmethod
+    def _run_async(factory: Callable[[], Any]) -> Any:
+        """Await an SDK coroutine from this synchronous API."""
+        import anyio.from_thread
 
-    def _guard(self, action: str, fn, default=None):
-        """Run a Redis call, degrading to ``default`` if Redis is unreachable.
+        return anyio.from_thread.run(factory)
+
+    def _guard(self, action: str, factory: Callable[[], Any], default=None):
+        """Run an async backend call, degrading to ``default`` on any failure.
 
         The backend is chosen once at startup, so a Redis that dies *afterwards*
         would otherwise raise straight through :func:`login` and turn every
@@ -123,7 +167,7 @@ class RedisSlidingWindowRateLimiter:
         logged so a persistently unreachable Redis stays visible.
         """
         try:
-            return fn()
+            return self._run_async(factory)
         except Exception as exc:  # noqa: BLE001 — degrade gracefully, never crash
             logging.warning(
                 "Redis unavailable for login rate limiting during %s (%s) — "
@@ -134,44 +178,47 @@ class RedisSlidingWindowRateLimiter:
             return default
 
     def retry_after(self, key: str) -> float:
-        def _run() -> float:
-            now = time.time()
-            rkey = self._rkey(key)
-            self._client.zremrangebyscore(rkey, 0, now - self.window_seconds)
-            count = self._client.zcard(rkey)
-            if count >= self.max_attempts:
-                oldest = self._client.zrange(rkey, 0, 0, withscores=True)
-                if oldest:
-                    oldest_score = oldest[0][1]
-                    return max(0.0, oldest_score + self.window_seconds - now)
+        """Seconds until the next attempt is allowed; 0.0 when not blocked."""
+        result = self._guard(
+            "retry_after",
+            lambda: self._backend.peek(
+                key, limit=self.max_attempts, window=self._window
+            ),
+        )
+        # No result (backend error) or under the cap → let the attempt through.
+        # A degraded result carries the fail-open verdict the SDK already made.
+        if result is None or result.allowed:
             return 0.0
-
-        return self._guard("retry_after", _run, default=0.0)
+        return float(result.retry_after)
 
     def register_failure(self, key: str) -> None:
-        def _run() -> None:
-            now = time.time()
-            rkey = self._rkey(key)
-            # Unique member per attempt (ns timestamp) so concurrent failures at
-            # the same second don't collide into one sorted-set entry.
-            self._client.zadd(rkey, {str(time.time_ns()): now})
-            # Refresh the TTL so an idle key is reclaimed a full window after its
-            # last failure (ceil so a sub-second window still gets >=1s).
-            self._client.expire(rkey, int(self.window_seconds) + 1)
-
-        self._guard("register_failure", _run)
+        """Count one failed attempt for ``key``."""
+        self._guard(
+            "register_failure",
+            lambda: self._backend.hit(
+                key, limit=self.max_attempts, window=self._window
+            ),
+        )
 
     def reset(self, key: str) -> None:
-        self._guard("reset", lambda: self._client.delete(self._rkey(key)))
+        """Forget a key's counter (e.g. after a successful login)."""
+        self._guard("reset", lambda: self._backend.reset(key))
 
     def clear(self) -> None:
-        """Drop all keys under the prefix (mainly for test isolation)."""
+        """Drop every key in this limiter's scope (mainly for test isolation)."""
+        if self._client is None:
+            return
 
-        def _run() -> None:
-            for rkey in self._client.scan_iter(match=f"{self._key_prefix}*"):
-                self._client.delete(rkey)
+        async def _run() -> None:
+            async for rkey in self._client.scan_iter(match=f"{self._key_prefix}*"):
+                await self._client.delete(rkey)
 
         self._guard("clear", _run)
+
+
+# Scope segment the SDK puts between its global prefix and the identifier, so
+# the login counters sit in their own namespace (redis:fastapi:ratelimit:login:*).
+LOGIN_SCOPE = "login"
 
 
 def _build_login_limiter() -> RateLimiter:
@@ -192,8 +239,21 @@ def _build_login_limiter() -> RateLimiter:
     try:
         import redis
 
-        client = redis.Redis.from_url(config.redis_url, decode_responses=True)
-        client.ping()
+        # Reachability probe only: the SDK backend needs an *async* client, and
+        # awaiting a ping at import time would bind its pool to a throwaway
+        # event loop. This sync client is closed immediately; an unreachable
+        # Redis at startup still means the in-process limiter, as before.
+        probe = redis.Redis.from_url(config.redis_url)
+        probe.ping()
+        probe.close()
+
+        from redis.asyncio import Redis as AsyncRedis
+        from redis_fastapi import RateLimitBackend
+        from redis_fastapi.config import get_settings
+
+        client = AsyncRedis.from_url(config.redis_url, decode_responses=True)
+        backend = RateLimitBackend(client, scope=LOGIN_SCOPE)
+        key_prefix = f"{get_settings().pattern_prefix('ratelimit')}:{LOGIN_SCOPE}:"
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, never crash
         logging.warning(
             "Redis unavailable for login rate limiting (%s) — falling back to "
@@ -203,10 +263,12 @@ def _build_login_limiter() -> RateLimiter:
         return in_process
 
     logging.info("Login rate limiter backed by Redis at %s", config.redis_url)
-    return RedisSlidingWindowRateLimiter(
+    return RedisRateLimiter(
         max_attempts=config.auth_login_max_attempts,
         window_seconds=config.auth_login_window_seconds,
+        backend=backend,
         client=client,
+        key_prefix=key_prefix,
     )
 
 

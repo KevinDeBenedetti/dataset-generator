@@ -28,6 +28,10 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "qdrant-client>=1.19.0",
     "redis>=8.1.0",
+    # Redis' own FastAPI integration — backs the login rate limiter
+    # (services/rate_limit.py). Alpha (0.x): pinned to a minor range so a
+    # breaking 0.9 can't land silently on an auth-adjacent control.
+    "fastapi-redis-sdk>=0.8.0,<0.9.0",
     "pymupdf>=1.28.2",
 ]
 

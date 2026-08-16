@@ -132,6 +132,57 @@ def test_delete_dataset_not_found(client: TestClient):
     assert "not found" in response.json()["detail"]
 
 
+def test_get_sources_success(client: TestClient):
+    """Sources + analysis history are returned in the documented shape."""
+    fake = {
+        "dataset_id": "my_dataset",
+        "dataset_name": "my_dataset",
+        "total_sources": 1,
+        "total_qa": 3,
+        "sources": [
+            {
+                "url": "https://docs.example.com/api",
+                "kind": "web",
+                "label": "docs.example.com/api",
+                "qa_count": 3,
+                "first_seen_at": "2026-01-01T00:00:00+00:00",
+                "last_seen_at": "2026-01-02T00:00:00+00:00",
+            }
+        ],
+        "total_analyses": 1,
+        "history": [
+            {
+                "run_name": "v1",
+                "version": 1,
+                "source_url": "https://docs.example.com",
+                "kind": "web",
+                "label": "docs.example.com",
+                "item_count": 3,
+                "pages_analyzed": 4,
+                "new_pairs": 3,
+                "duplicates_skipped": 2,
+                "created_at": "2026-01-02T00:00:00Z",
+            }
+        ],
+    }
+    with patch("server.api.dataset.get_dataset_sources_view", return_value=fake):
+        response = client.get("/dataset/my_dataset/sources")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_sources"] == 1
+    assert data["sources"][0]["kind"] == "web"
+    assert data["history"][0]["pages_analyzed"] == 4
+
+
+def test_get_sources_dataset_not_found(client: TestClient):
+    with patch(
+        "server.api.dataset.get_dataset_sources_view",
+        side_effect=ValueError("Dataset 'nope' not found"),
+    ):
+        response = client.get("/dataset/nope/sources")
+    assert response.status_code == 404
+
+
 def test_analyze_similarities_dataset_not_found(client: TestClient):
     """Test analyze similarities with non-existent dataset."""
     with patch(
@@ -267,6 +318,7 @@ _ENDPOINTS = [
     ("create_dataset_view", lambda c: c.post("/dataset", params={"name": "d"})),
     ("list_datasets_view", lambda c: c.get("/dataset")),
     ("get_dataset_view", lambda c: c.get("/dataset", params={"dataset_id": "d"})),
+    ("get_dataset_sources_view", lambda c: c.get("/dataset/d/sources")),
     ("analyze_similarities_view", lambda c: c.get("/dataset/d/analyze-similarities")),
     ("clean_similarities_view", lambda c: c.post("/dataset/d/clean-similarities")),
     (

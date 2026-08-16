@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -38,7 +39,16 @@ export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
         <TableBody>
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
-              <TableCell className="font-medium">{dataset.name}</TableCell>
+              <TableCell className="font-medium">
+                {/* Datasets are keyed by their Langfuse name — the detail route
+                    takes that name, URL-encoded. */}
+                <Link
+                  href={`/datasets/${encodeURIComponent(dataset.name)}`}
+                  className="hover:underline"
+                >
+                  {dataset.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-muted-foreground">{dataset.description || '—'}</TableCell>
               <TableCell className="text-center">{dataset.item_count ?? '—'}</TableCell>
               <TableCell className="text-center">

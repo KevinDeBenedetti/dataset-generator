@@ -72,6 +72,7 @@ client.interceptors.response.use(async (response, request, options) => {
 })
 import type {
   DatasetResponse,
+  DatasetSourcesResponse,
   DatasetGenerationRequest,
   DatasetGenerationResponse,
   SimilarityAnalysisResponse,
@@ -328,6 +329,19 @@ export async function deleteDataset(datasetName: string): Promise<DeleteDatasetR
     throw new Error(getErrorMessage(response.error, 'Failed to delete dataset'))
   }
   return response.data as unknown as DeleteDatasetResponse
+}
+
+// The origins a dataset was built from (one row per crawled page/file/account)
+// plus the history of the analyses that fed it. Datasets are keyed by their
+// Langfuse name (the source of truth).
+export async function getDatasetSources(datasetName: string): Promise<DatasetSourcesResponse> {
+  const response = await client.get<DatasetSourcesResponse>({
+    url: `/dataset/${encodeURIComponent(datasetName)}/sources`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch the dataset sources'))
+  }
+  return response.data as unknown as DatasetSourcesResponse
 }
 
 export async function analyzeSimilarities(

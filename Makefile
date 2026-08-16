@@ -18,10 +18,12 @@ help:
 env:
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 
-## Install all dependencies: Python server (uv) and the Next.js client (bun).
+## Install all dependencies: Python server (uv) and the Next.js client (bun),
+## then install the git hook shims declared in prek.toml.
 setup:
 	uv venv --clear && uv sync
 	cd $(NEXT_DIR) && bun install
+	uv run prek install
 
 ## Start the full stack with Docker (FastAPI + Next.js), building images if needed.
 ## Runs in the foreground with `--watch`: container logs stream live with a
