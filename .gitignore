@@ -371,5 +371,7 @@ yarn-error.log
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,node,vue,vuejs
 
 urls/
-datasets.db
 .claude
+
+# OpenAPI schema dumped by `make api-schema` / `make api-check`
+openapi.json

@@ -1,10 +1,11 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from server.core.database import Base
+from server.core.database import Base, default_database_url, normalize_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,13 +22,37 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-config.set_main_option(
-    "sqlalchemy.url", config.get_main_option("DATABASE_URL", "sqlite:///./datasets.db")
-)
+def _resolve_db_url() -> str:
+    """Resolve the database URL migrations run against, with precedence:
+
+    1. A URL the caller already injected into the Alembic config
+       (``db_utils.upgrade_db`` / ``get_alembic_config`` set ``sqlalchemy.url``)
+       — so an explicit argument (tests, ``reset_db``) wins.
+    2. The OS env ``DATABASE_URL`` — so a deployed Postgres is honoured when
+       alembic is driven directly from the CLI.
+    3. The local-dev Postgres default shared with ``core.database``.
+
+    Previously this read the Alembic *option* ``DATABASE_URL`` (never the OS
+    env) and overwrote the caller's ``sqlalchemy.url`` with a default, so
+    migrations silently ran against the wrong database when ``DATABASE_URL``
+    was set.
+    """
+    try:
+        existing = config.get_main_option("sqlalchemy.url")
+    except Exception:
+        # Unresolved ``%(DATABASE_URL)s`` interpolation from alembic.ini.
+        existing = None
+    return normalize_database_url(
+        existing or os.environ.get("DATABASE_URL") or default_database_url()
+    )
+
+
+config.set_main_option("sqlalchemy.url", _resolve_db_url())
 
 
 def run_migrations_offline() -> None:

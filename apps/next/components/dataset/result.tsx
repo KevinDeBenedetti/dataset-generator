@@ -11,7 +11,7 @@ interface ResultProps {
 }
 
 function isGenerationResponse(
-  result: DatasetGenerationResponse | DatasetResponse
+  result: DatasetGenerationResponse | DatasetResponse,
 ): result is DatasetGenerationResponse {
   return 'qa_pairs' in result
 }
@@ -41,6 +41,15 @@ export function Result({ result }: ResultProps) {
             <Badge variant="secondary">Model: {result.model_qa}</Badge>
             <Badge variant="secondary">Threshold: {result.similarity_threshold}</Badge>
             <Badge variant="secondary">Language: {result.target_language}</Badge>
+            {result.pages_crawled != null && (
+              <Badge variant="secondary">Pages crawled: {result.pages_crawled}</Badge>
+            )}
+            {result.langfuse && (
+              <Badge variant="secondary">
+                Langfuse: {String(result.langfuse.run_name ?? '')} (
+                {String(result.langfuse.total_items ?? 0)} items)
+              </Badge>
+            )}
           </div>
         </CardDescription>
       </CardHeader>
@@ -60,11 +69,11 @@ export function Result({ result }: ResultProps) {
         <h4 className="font-semibold mb-2">Q&A Pairs</h4>
         <ScrollArea className="h-64">
           <div className="space-y-3 p-2">
-            {result.qa_pairs.map((pair, index) => (
-              <div
-                key={index}
-                className="p-3 border border-gray-200 rounded-md bg-white"
-              >
+            {result.qa_pairs.map((pair) => (
+              // QaPair has no id field; the pipeline already deduplicates by
+              // similarity before pairs reach here, so the question is a
+              // safe, stable key.
+              <div key={pair.question} className="p-3 border border-gray-200 rounded-md bg-white">
                 <p className="font-medium">Q: {pair.question}</p>
                 <p className="mt-1 text-gray-700">A: {pair.answer}</p>
               </div>

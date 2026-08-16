@@ -37,40 +37,36 @@ class QAListResponse(BaseModel):
     qa_data: List[QAItem] = Field(..., description="List of question-answers")
 
 
-class QAResponse(BaseModel):
-    """Response model for an individual Q&A"""
+class QAScoreBucket(BaseModel):
+    """One bucket of the confidence-score distribution"""
 
-    id: str = Field(..., description="Unique ID of the question-answer")
-    question: str = Field(..., description="Question")
-    answer: str = Field(..., description="Answer")
-    context: str = Field(..., description="Source context")
-    source_url: Optional[str] = Field(None, description="Source URL")
-    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
-    created_at: datetime = Field(..., description="Creation date")
-    updated_at: Optional[datetime] = Field(None, description="Last modification date")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
-    dataset: Optional[Dict[str, Optional[str]]] = Field(
-        None, description="Associated dataset information"
+    label: str = Field(..., description="Human-readable bucket range, e.g. '0.9–1.0'")
+    count: int = Field(..., ge=0, description="Number of scored items in the bucket")
+
+
+class QAStatsResponse(BaseModel):
+    """Aggregated confidence-score statistics over a whole dataset.
+
+    Computed server-side over every active item so the quality page doesn't
+    have to sample a capped page of Q&A items client-side.
+    """
+
+    dataset_name: str = Field(..., description="Dataset name")
+    dataset_id: str = Field(..., description="Dataset ID")
+    total_count: int = Field(..., description="Total number of active items")
+    scored_count: int = Field(
+        ..., description="Items carrying a confidence score (the stats basis)"
     )
-
-
-class UnitQuestionAnswer(BaseModel):
-    question: str = Field(..., description="The generated question")
-    answer: str = Field(..., description="The generated answer")
-    context: str = Field(
-        ..., description="The context from which the question was generated"
+    average_score: Optional[float] = Field(
+        None, description="Mean confidence of scored items (null when none)"
     )
-    confidence: float = Field(
-        ...,
-        description="The confidence score of the generated answer 0-1",
-        ge=0.0,
-        le=1.0,
+    score_threshold: float = Field(..., description="Threshold used for the split")
+    below_threshold_count: int = Field(
+        ..., description="Scored items strictly below the threshold"
     )
-
-
-class UnitQuestionAnswerResponse(UnitQuestionAnswer):
-    file_id: str
-    dataset_id: str
-    human_reviewed: bool = Field(
-        False, description="Indicates if the Q&A has been human reviewed"
+    validated_count: int = Field(
+        ..., description="Scored items at or above the threshold"
+    )
+    distribution: List[QAScoreBucket] = Field(
+        ..., description="Score distribution buckets, highest range first"
     )

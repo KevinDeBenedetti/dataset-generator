@@ -1,307 +1,352 @@
 """Tests for QA service"""
 
-import pytest
-from typing import Any, cast
 from unittest.mock import Mock, patch
-from sqlalchemy.orm import Session
 
 from server.services.qa import QAService
-from server.models.dataset import QASource, Dataset
+from server.services.dedup import DuplicateVerdict, compute_hash_from_content
 
 
-@pytest.fixture
-def qa_service(db: Session):
-    """Create a QAService instance"""
-    return QAService(db)
-
-
-@pytest.fixture
-def sample_dataset(db: Session):
-    """Create a sample dataset"""
-    dataset = Dataset(name="test_dataset", description="Test dataset")
-    db.add(dataset)
-    db.commit()
-    db.refresh(dataset)
-    return dataset
-
-
-@pytest.fixture
-def sample_qa_source(db: Session, sample_dataset):
-    """Create a sample QASource"""
-    qa = QASource.from_qa_generation(
-        question="What is Python?",
-        answer="A programming language",
-        context="Python is a high-level programming language.",
-        source_url="https://example.com",
-        dataset_id=sample_dataset.id,
-        page_snapshot_id="1",
-    )
-    qa.model = "gpt-4o-mini"
-    qa.dataset_name = sample_dataset.name
-    db.add(qa)
-    db.commit()
-    db.refresh(qa)
-    return qa
+def _existing_item(question: str, answer: str, context: str, source_url: str) -> dict:
+    """A Langfuse dataset item shaped like `get_dataset_items` returns."""
+    return {
+        "id": compute_hash_from_content(question, answer, context, source_url),
+        "status": "ACTIVE",
+        "input": {"question": question, "context": context, "source_url": source_url},
+        "expected_output": {"answer": answer},
+        "metadata": {},
+    }
 
 
 class TestQAService:
     """Tests for QAService class"""
 
-    def test_add_qa_source(self, qa_service: QAService, db: Session, sample_dataset):
-        """Test adding a new QASource"""
-        qa = QASource.from_qa_generation(
-            question="What is FastAPI?",
-            answer="A modern web framework",
-            context="FastAPI is a modern, fast web framework for building APIs.",
-            source_url="https://example.com",
-            dataset_id=sample_dataset.id,
-            page_snapshot_id="1",
-        )
-        qa.model = "gpt-4o-mini"
-        qa.dataset_name = sample_dataset.name
+    def test_process_qa_pairs_new_items(self):
+        """New QA pairs (no existing items) are all kept."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
 
-        result = qa_service.add_qa_source(qa)
+            mock_qa1 = Mock()
+            mock_qa1.question = "What is Docker?"
+            mock_qa1.answer = "A containerization platform"
+            mock_qa1.confidence = 0.9
 
-        assert result.id is not None
-        assert result.question == "What is FastAPI?"
-        assert result.answer == "A modern web framework"
+            mock_qa2 = Mock()
+            mock_qa2.question = "What is Kubernetes?"
+            mock_qa2.answer = "An orchestration system"
+            mock_qa2.confidence = 0.85
 
-    def test_delete_qa_source(
-        self, qa_service: QAService, sample_qa_source: QASource, db: Session
-    ):
-        """Test deleting a QASource"""
-        qa_id = str(sample_qa_source.id)
-
-        qa_service.delete_qa_source(qa_id)
-
-        # Verify it's deleted
-        deleted_qa = db.query(QASource).filter(QASource.id == qa_id).first()
-        assert deleted_qa is None
-
-    def test_delete_nonexistent_qa_source(self, qa_service: QAService):
-        """Test deleting a non-existent QASource (should not raise error)"""
-        qa_service.delete_qa_source("nonexistent-id")
-        # Should complete without error
-
-    def test_update_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
-        """Test updating a QASource"""
-        input_data = cast(dict[str, Any], sample_qa_source.input)
-        output_data = cast(dict[str, Any], sample_qa_source.expected_output)
-        updates = {
-            "input": {**input_data, "question": "What is Python used for?"},
-            "expected_output": {**output_data, "confidence": 0.95},
-        }
-
-        result = qa_service.update_qa_source(str(sample_qa_source.id), updates)
-
-        assert result.question == "What is Python used for?"
-        assert result.confidence == 0.95
-
-    def test_update_qa_source_not_found(self, qa_service: QAService):
-        """Test updating a non-existent QASource"""
-        with pytest.raises(ValueError, match="not found"):
-            qa_service.update_qa_source("nonexistent-id", {"question": "New question"})
-
-    def test_get_qa_source(self, qa_service: QAService, sample_qa_source: QASource):
-        """Test retrieving a QASource by ID"""
-        result = qa_service.get_qa_source(str(sample_qa_source.id))
-
-        assert result.id == sample_qa_source.id
-        assert result.question == sample_qa_source.question
-
-    def test_get_qa_source_not_found(self, qa_service: QAService):
-        """Test retrieving a non-existent QASource"""
-        with pytest.raises(ValueError, match="not found"):
-            qa_service.get_qa_source("nonexistent-id")
-
-    def test_process_qa_pairs_new_items(
-        self, qa_service: QAService, db: Session, sample_dataset
-    ):
-        """Test processing new QA pairs without duplicates"""
-        # Create mock QA items
-        mock_qa1 = Mock()
-        mock_qa1.question = "What is Docker?"
-        mock_qa1.answer = "A containerization platform"
-        mock_qa1.confidence = 0.9
-
-        mock_qa2 = Mock()
-        mock_qa2.question = "What is Kubernetes?"
-        mock_qa2.answer = "An orchestration system"
-        mock_qa2.confidence = 0.85
-
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa1, mock_qa2],
-            cleaned_text="Docker and Kubernetes are important DevOps tools.",
-            url="https://example.com",
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
-        )
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa1, mock_qa2],
+                cleaned_text="Docker and Kubernetes are important DevOps tools.",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
         assert result["total"] == 2
         assert result["exact_duplicates"] == 0
         assert result["similar_duplicates"] == 0
+        assert len(result["items"]) == 2
+        assert {i["input"]["question"] for i in result["items"]} == {
+            "What is Docker?",
+            "What is Kubernetes?",
+        }
 
-        # Verify QA records were saved
-        qa_records = (
-            db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
+    def test_process_qa_pairs_exact_duplicate(self):
+        """A candidate matching an existing item's content hash is dropped."""
+        existing = _existing_item(
+            question="What is Python?",
+            answer="A programming language",
+            context="Python is a high-level programming language.",
+            source_url="https://example.com",
         )
-        assert len(qa_records) == 2
+        with patch("server.services.qa.get_dataset_items", return_value=[existing]):
+            qa_service = QAService("test_dataset")
 
-    def test_process_qa_pairs_exact_duplicate(
-        self, qa_service: QAService, db: Session, sample_dataset, sample_qa_source
-    ):
-        """Test processing QA pairs with exact duplicate"""
-        mock_qa = Mock()
-        mock_qa.question = sample_qa_source.question
-        mock_qa.answer = sample_qa_source.answer
+            mock_qa = Mock()
+            mock_qa.question = "What is Python?"
+            mock_qa.answer = "A programming language"
 
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa],
-            cleaned_text=sample_qa_source.context,
-            url=sample_qa_source.source_url,
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
-        )
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="Python is a high-level programming language.",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
         assert result["exact_duplicates"] == 1
         assert result["total"] == 0
+        assert result["items"] == []
 
-    @patch("server.models.dataset.QASource.check_for_duplicates")
-    def test_process_qa_pairs_similar_duplicate(
-        self, mock_check_duplicates, qa_service: QAService, db: Session, sample_dataset
-    ):
-        """Test processing QA pairs with similar duplicate"""
-        # Mock duplicate check to return similar
-        mock_check_duplicates.return_value = {
-            "type": "similar",
-            "duplicate_id": "similar-id",
-            "similarity_score": 0.92,
-        }
-
-        mock_qa = Mock()
-        mock_qa.question = "What exactly is Python?"
-        mock_qa.answer = "Python is a programming language"
-
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa],
-            cleaned_text="Python programming",
-            url="https://example.com",
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
+    @patch("server.services.qa.classify_duplicate")
+    def test_process_qa_pairs_similar_duplicate(self, mock_classify):
+        """Mocked dedup classification of 'similar' drops the candidate."""
+        mock_classify.return_value = DuplicateVerdict(
+            type="similar", duplicate_hash="similar-id", similarity_score=0.92
         )
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
+
+            mock_qa = Mock()
+            mock_qa.question = "What exactly is Python?"
+            mock_qa.answer = "Python is a programming language"
+
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="Python programming",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
         assert result["similar_duplicates"] == 1
         assert result["total"] == 0
 
-    def test_process_qa_pairs_without_confidence(
-        self, qa_service: QAService, db: Session, sample_dataset
-    ):
-        """Test processing QA pairs without confidence attribute"""
-        mock_qa = Mock(spec=["question", "answer"])  # No confidence attribute
-        mock_qa.question = "What is Redis?"
-        mock_qa.answer = "An in-memory database"
+    def test_process_qa_pairs_without_confidence(self):
+        """Missing `confidence` attribute defaults to 1.0."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
 
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa],
-            cleaned_text="Redis is fast",
-            url="https://example.com",
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
-        )
+            mock_qa = Mock(spec=["question", "answer"])  # No confidence attribute
+            mock_qa.question = "What is Redis?"
+            mock_qa.answer = "An in-memory database"
+
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="Redis is fast",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
         assert result["total"] == 1
-        # Should use default confidence of 1.0
-        qa_records = (
-            db.query(QASource).filter(QASource.dataset_id == sample_dataset.id).all()
+        assert result["items"][0]["expected_output"]["confidence"] == 1.0
+
+    def test_process_qa_pairs_mixed_results(self):
+        """A mix of new and exact-duplicate candidates in one call."""
+        existing = _existing_item(
+            question="What is Python?",
+            answer="A programming language",
+            context="ctx",
+            source_url="https://example.com",
         )
-        redis_qa = [qa for qa in qa_records if qa.question == "What is Redis?"][0]
-        assert redis_qa.confidence == 1.0
+        with patch("server.services.qa.get_dataset_items", return_value=[existing]):
+            qa_service = QAService("test_dataset")
 
-    def test_process_qa_pairs_mixed_results(
-        self, qa_service: QAService, db: Session, sample_dataset, sample_qa_source
-    ):
-        """Test processing QA pairs with mixed results (new, exact, similar)"""
-        # First QA - new
-        mock_qa1 = Mock()
-        mock_qa1.question = "New question 1?"
-        mock_qa1.answer = "New answer 1"
-        mock_qa1.confidence = 0.9
+            mock_qa1 = Mock()
+            mock_qa1.question = "New question 1?"
+            mock_qa1.answer = "New answer 1"
+            mock_qa1.confidence = 0.9
 
-        # Second QA - exact duplicate
-        mock_qa2 = Mock()
-        mock_qa2.question = sample_qa_source.question
-        mock_qa2.answer = sample_qa_source.answer
-        mock_qa2.confidence = 0.9  # Add confidence to avoid Mock in getattr
+            mock_qa2 = Mock()
+            mock_qa2.question = "What is Python?"
+            mock_qa2.answer = "A programming language"
+            mock_qa2.confidence = 0.9
 
-        # Third QA - new
-        mock_qa3 = Mock()
-        mock_qa3.question = "New question 2?"
-        mock_qa3.answer = "New answer 2"
-        mock_qa3.confidence = 0.8
+            mock_qa3 = Mock()
+            mock_qa3.question = "New question 2?"
+            mock_qa3.answer = "New answer 2"
+            mock_qa3.confidence = 0.8
 
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa1, mock_qa2, mock_qa3],
-            cleaned_text=sample_qa_source.context,  # Use same context as sample for duplicate detection
-            url=sample_qa_source.source_url,  # Use same URL for duplicate detection
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
-        )
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa1, mock_qa2, mock_qa3],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
-        assert result["total"] == 2  # Two new items
+        assert result["total"] == 2
         assert result["exact_duplicates"] == 1
 
-    def test_process_qa_pairs_empty_list(
-        self, qa_service: QAService, db: Session, sample_dataset
-    ):
-        """Test processing empty QA list"""
-        result = qa_service.process_qa_pairs(
-            qa_list=[],
-            cleaned_text="Some text",
-            url="https://example.com",
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.9,
-        )
+    def test_process_qa_pairs_empty_list(self):
+        """Empty input yields empty output, no calls needed."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
+            result = qa_service.process_qa_pairs(
+                qa_list=[],
+                cleaned_text="Some text",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
 
         assert result["total"] == 0
         assert result["exact_duplicates"] == 0
         assert result["similar_duplicates"] == 0
+        assert result["items"] == []
 
-    def test_process_qa_pairs_custom_similarity_threshold(
-        self, qa_service: QAService, db: Session, sample_dataset
-    ):
-        """Test processing with custom similarity threshold"""
-        mock_qa = Mock()
-        mock_qa.question = "What is PostgreSQL?"
-        mock_qa.answer = "A relational database"
-        mock_qa.confidence = 0.9
+    def test_process_qa_pairs_dedups_across_calls_without_requery(self):
+        """A duplicate introduced across two process_qa_pairs calls (e.g. two
+        pages in the same pipeline run) is caught by the in-memory pool, with
+        no extra Langfuse fetch between calls."""
+        with patch(
+            "server.services.qa.get_dataset_items", return_value=[]
+        ) as mock_fetch:
+            qa_service = QAService("test_dataset")
 
-        result = qa_service.process_qa_pairs(
-            qa_list=[mock_qa],
-            cleaned_text="PostgreSQL is a powerful database",
-            url="https://example.com",
-            page_snapshot_id="1",
-            dataset_name=sample_dataset.name,
-            model="gpt-4o-mini",
-            dataset_id=sample_dataset.id,
-            similarity_threshold=0.75,  # Lower threshold
-        )
+            mock_qa1 = Mock()
+            mock_qa1.question = "What is Terraform?"
+            mock_qa1.answer = "An infrastructure-as-code tool"
+            mock_qa1.confidence = 0.9
 
+            first = qa_service.process_qa_pairs(
+                qa_list=[mock_qa1],
+                cleaned_text="Terraform manages infrastructure.",
+                url="https://example.com/page1",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+            assert first["total"] == 1
+
+            mock_qa2 = Mock()
+            mock_qa2.question = "What is Terraform?"
+            mock_qa2.answer = "An infrastructure-as-code tool"
+
+            second = qa_service.process_qa_pairs(
+                qa_list=[mock_qa2],
+                cleaned_text="Terraform manages infrastructure.",
+                url="https://example.com/page1",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert second["exact_duplicates"] == 1
+        assert second["total"] == 0
+        mock_fetch.assert_called_once()
+
+    def test_process_qa_pairs_reuses_the_same_in_memory_pool(self):
+        """The existing-entries pool is loaded once (lazily) and reused across
+        calls — not reloaded from Langfuse every time."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
+            assert qa_service._existing_entries is None
+
+            mock_qa1 = Mock()
+            mock_qa1.question = "Q1?"
+            mock_qa1.answer = "A1"
+            mock_qa1.confidence = 0.9
+            qa_service.process_qa_pairs(
+                qa_list=[mock_qa1],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+            pool_after_first_call = qa_service._existing_entries
+            assert pool_after_first_call is not None
+            assert len(pool_after_first_call) == 1
+
+            mock_qa2 = Mock()
+            mock_qa2.question = "Q2?"
+            mock_qa2.answer = "A2"
+            mock_qa2.confidence = 0.9
+            qa_service.process_qa_pairs(
+                qa_list=[mock_qa2],
+                cleaned_text="ctx2",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+            # Same list object reused (not reloaded) and grown in place.
+            assert qa_service._existing_entries is pool_after_first_call
+            assert len(qa_service._existing_entries) == 2
+
+    def test_process_qa_pairs_scoped_to_this_dataset_only(self):
+        """`get_dataset_items` is called with this dataset's name, not globally."""
+        with patch(
+            "server.services.qa.get_dataset_items", return_value=[]
+        ) as mock_fetch:
+            qa_service = QAService("my-dataset")
+            mock_qa = Mock()
+            mock_qa.question = "Q?"
+            mock_qa.answer = "A"
+            mock_qa.confidence = 0.9
+            qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+        mock_fetch.assert_called_once_with("my-dataset")
+
+    def test_process_qa_pairs_langfuse_unreachable_falls_back_to_empty_pool(self):
+        """If the Langfuse fetch errors (e.g. unreachable), dedup proceeds
+        against an empty pool rather than failing generation."""
+        with patch(
+            "server.services.qa.get_dataset_items",
+            side_effect=RuntimeError("unreachable"),
+        ):
+            qa_service = QAService("test_dataset")
+            mock_qa = Mock()
+            mock_qa.question = "Q?"
+            mock_qa.answer = "A"
+            mock_qa.confidence = 0.9
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert result["total"] == 1
+
+    def test_process_qa_pairs_applies_quality_rules_when_enabled(self):
+        """With auto_reject_enabled, short answers and low-confidence pairs are
+        rejected before dedup; without rules, everything passes."""
+        rules = {
+            "auto_reject_enabled": True,
+            "min_answer_words": 3,
+            "reject_below_confidence": 0.7,
+        }
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset", quality_rules=rules)
+
+            too_short = Mock()
+            too_short.question = "Q1?"
+            too_short.answer = "Too short"  # 2 words < 3
+            too_short.confidence = 0.9
+
+            low_conf = Mock()
+            low_conf.question = "Q2?"
+            low_conf.answer = "A perfectly long enough answer"
+            low_conf.confidence = 0.5  # < 0.7
+
+            keeper = Mock()
+            keeper.question = "Q3?"
+            keeper.answer = "Another perfectly valid answer"
+            keeper.confidence = 0.9
+
+            result = qa_service.process_qa_pairs(
+                qa_list=[too_short, low_conf, keeper],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert result["quality_rejected"] == 2
+        assert result["total"] == 1
+        assert result["items"][0]["input"]["question"] == "Q3?"
+
+    def test_process_qa_pairs_quality_rules_disabled_by_default(self):
+        """No rules passed → nothing is rejected (backwards compatible)."""
+        with patch("server.services.qa.get_dataset_items", return_value=[]):
+            qa_service = QAService("test_dataset")
+            mock_qa = Mock()
+            mock_qa.question = "Q?"
+            mock_qa.answer = "Short"
+            mock_qa.confidence = 0.1
+            result = qa_service.process_qa_pairs(
+                qa_list=[mock_qa],
+                cleaned_text="ctx",
+                url="https://example.com",
+                model="gpt-4o-mini",
+                similarity_threshold=0.9,
+            )
+
+        assert result["quality_rejected"] == 0
         assert result["total"] == 1

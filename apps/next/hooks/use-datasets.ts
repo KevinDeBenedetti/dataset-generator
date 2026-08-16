@@ -1,14 +1,52 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDatasets,
-  generateDataset,
+  getDatasetSources,
+  generateDatasetStream,
+  generateDatasetFromFile,
+  generateDatasetFromGitHub,
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
-} from '@/api'
+  resolvePair,
+} from '@/api/sdk'
 import type { DatasetGenerationRequest } from '@/api/types'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
+
+// The /generate form can mine three kinds of source; the mutation branches on it.
+export type GenerateParams =
+  | {
+      source: 'url'
+      url: string
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      crawl?: boolean
+      maxDepth?: number | null
+      maxPages?: number | null
+      crawlDelaySeconds?: number | null
+      maxPagesPerDomain?: number | null
+      syncLangfuse?: boolean
+    }
+  | {
+      source: 'file'
+      file: File
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      syncLangfuse?: boolean
+    }
+  | {
+      source: 'github'
+      githubUsername: string
+      githubToken?: string | null
+      name: string
+      targetLanguage: string | null
+      similarityThreshold: number
+      maxRepos?: number | null
+      syncLangfuse?: boolean
+    }
 
 export const DATASETS_QUERY_KEY = ['datasets']
 
@@ -25,33 +63,78 @@ export function useDatasets() {
   })
 }
 
+export const DATASET_SOURCES_QUERY_KEY = 'dataset-sources'
+
+// The sources a dataset was built from + the history of the analyses that fed
+// it. Both live in Langfuse, which may be unconfigured (503) — don't retry.
+export function useDatasetSources(datasetName: string | null | undefined) {
+  return useQuery({
+    queryKey: [DATASET_SOURCES_QUERY_KEY, datasetName],
+    queryFn: () => getDatasetSources(datasetName as string),
+    enabled: !!datasetName,
+    retry: false,
+  })
+}
+
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
-  const { setDataset, setGenerationStatus, setError } = useGenerateStore()
+  const { setDataset, setGenerationStatus, setError, setLiveSteps, appendLiveStep } =
+    useGenerateStore()
 
   return useMutation({
-    mutationFn: async (params: {
-      url: string
-      name: string
-      targetLanguage: string | null
-      similarityThreshold: number
-    }) => {
+    mutationFn: async (params: GenerateParams) => {
+      if (params.source === 'file') {
+        // No streaming variant for file uploads; the final result carries steps.
+        return generateDatasetFromFile({
+          file: params.file,
+          datasetName: params.name,
+          targetLanguage: params.targetLanguage,
+          similarityThreshold: params.similarityThreshold,
+          syncLangfuse: params.syncLangfuse,
+        })
+      }
+
+      if (params.source === 'github') {
+        return generateDatasetFromGitHub({
+          github_username: params.githubUsername,
+          github_token: params.githubToken,
+          dataset_name: params.name,
+          target_language: params.targetLanguage,
+          similarity_threshold: params.similarityThreshold,
+          max_repos: params.maxRepos,
+          sync_langfuse: params.syncLangfuse,
+        })
+      }
+
       const body: DatasetGenerationRequest = {
         url: params.url,
         dataset_name: params.name,
         target_language: params.targetLanguage,
         similarity_threshold: params.similarityThreshold,
+        crawl: params.crawl,
+        max_depth: params.maxDepth,
+        max_pages: params.maxPages,
+        crawl_delay_seconds: params.crawlDelaySeconds,
+        max_pages_per_domain: params.maxPagesPerDomain,
+        sync_langfuse: params.syncLangfuse,
       }
-      return generateDataset(body)
+      // Stream pipeline progress so the timeline fills in live.
+      return generateDatasetStream(body, {
+        onStep: (step) => appendLiveStep(step),
+      })
     },
     onMutate: () => {
       setGenerationStatus('pending')
       setError(null)
+      setLiveSteps([])
     },
     onSuccess: (data) => {
       setDataset(data)
       setGenerationStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
+      // A generation adds pairs, sources and a run: the detail page's sources
+      // and history are stale as soon as it lands.
+      queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to generate dataset')
@@ -77,7 +160,8 @@ export function useAnalyzeDataset() {
   const { setAnalyzingResult, setAnalyzeStatus, setError } = useDatasetStore()
 
   return useMutation({
-    mutationFn: (datasetId: string) => analyzeSimilarities(datasetId),
+    mutationFn: ({ datasetId, threshold }: { datasetId: string; threshold?: number }) =>
+      analyzeSimilarities(datasetId, threshold),
     onMutate: () => {
       setAnalyzeStatus('pending')
       setError(null)
@@ -93,12 +177,21 @@ export function useAnalyzeDataset() {
   })
 }
 
+// Pair-level arbitration: deletes one record of a duplicate pair (admin only).
+export function useResolvePair() {
+  return useMutation({
+    mutationFn: ({ datasetId, removeId }: { datasetId: string; removeId: string }) =>
+      resolvePair(datasetId, removeId),
+  })
+}
+
 export function useCleanDataset() {
   const queryClient = useQueryClient()
   const { setCleaningResult, setCleanStatus, setError } = useDatasetStore()
 
   return useMutation({
-    mutationFn: (datasetId: string) => cleanSimilarities(datasetId),
+    mutationFn: ({ datasetId, threshold }: { datasetId: string; threshold?: number }) =>
+      cleanSimilarities(datasetId, threshold),
     onMutate: () => {
       setCleanStatus('pending')
       setError(null)
@@ -107,6 +200,8 @@ export function useCleanDataset() {
       setCleaningResult(data)
       setCleanStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
+      // Cleaning deletes items, so the per-source pair counts move too.
+      queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to clean dataset')

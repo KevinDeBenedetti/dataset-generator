@@ -23,8 +23,14 @@ services:
     # so a single variable drives the host mapping, container port, healthcheck and Next.
     environment:
       PORT: ${NEXT_PORT:-3000}
+      # Dev log console (DEBUG_LOGS=1 make dev). DEBUG_LOGS drives both the
+      # server-side capture + SSE proxy and the client-side terminal widget.
+      DEBUG_LOGS: ${DEBUG_LOGS:-}
+      NEXT_PUBLIC_DEBUG_LOGS: ${DEBUG_LOGS:-}
+      # Server-to-server URL for the FastAPI SSE proxy (browser uses localhost).
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://server:8000}
     ports:
-      - ${NEXT_HOST_PORT:-3000}:${NEXT_PORT:-3000}
+      - ${NEXT_HOST_PORT:-${NEXT_PORT:-3000}}:${NEXT_PORT:-3000}
     volumes:
       - ./apps/next:/app
       - next_node_modules:/app/node_modules
@@ -48,8 +54,32 @@ services:
 
   server:
     container_name: server-fastapi
+    depends_on:
+      crawl4ai:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
     env_file:
       - .env
+    # The scraper talks to the crawl4ai service over HTTP instead of running
+    # crawl4ai (and its browser stack) in-process. Default points at the
+    # compose service; override CRAWL4AI_BASE_URL in .env to use a remote one.
+    environment:
+      CRAWL4AI_BASE_URL: ${CRAWL4AI_BASE_URL:-http://crawl4ai:11235}
+      # Postgres, reached in-network (the host mapping below is for psql/GUI
+      # clients only). Built from the same POSTGRES_* vars the database service
+      # uses, so overriding the credentials in .env keeps both sides in sync.
+      # Set DATABASE_URL in .env to point at a managed Postgres instead.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
+      # Shared login rate-limiter store; in-network address. Override REDIS_URL
+      # in .env to point at a managed Redis.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
+      DEBUG_LOGS: ${DEBUG_LOGS:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -69,7 +99,7 @@ services:
         cache-to:
           - type=local,dest=/tmp/.buildx-cache
     ports:
-      - "${SERVER_HOST_PORT:-8000}:8000"
+      - "${SERVER_HOST_PORT:-${SERVER_PORT:-8000}}:8000"
     volumes:
       - ./apps/server:/app/server
       - ./pyproject.toml:/app/pyproject.toml:ro
@@ -85,6 +115,101 @@ services:
         - action: rebuild
           path: ./uv.lock
 
+  # Headless crawl4ai service: runs the browser stack and exposes a REST API.
+  # Keeping it in its own container isolates crawl4ai's dependencies (notably
+  # its `unclecode-litellm` fork) from the server, which uses the real litellm.
+  crawl4ai:
+    container_name: crawl4ai
+    image: ${CRAWL4AI_IMAGE:-unclecode/crawl4ai:0.8.9}
+    restart: always
+    # Chromium needs a larger /dev/shm than Docker's 64MB default.
+    shm_size: "1gb"
+    # Reachable from the server over the compose network; not published to the
+    # host by default. Map a host port here if you want the /playground UI.
+    expose:
+      - "11235"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Postgres: the application database (users, refresh tokens, quality rules).
+  # The server reaches it in-network at postgres:5432; it is also published to
+  # the host on the project's slot-2 Postgres port (5452) so psql / a GUI client
+  # can reach it. Alembic migrations run from the server's lifespan on startup,
+  # which is why the server waits for the healthcheck rather than just the
+  # container start. Data persists in the postgres_data volume (`make reset`
+  # purges it).
+  postgres:
+    container_name: postgres
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-datasets}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datasets}
+      POSTGRES_DB: ${POSTGRES_DB:-datasets}
+    expose:
+      - "5432"
+    ports:
+      - "${POSTGRES_HOST_PORT:-5452}:5432"
+    healthcheck:
+      # -U/-d are required: pg_isready otherwise probes with the *root* user and
+      # reports the server ready before the init script has created the app role.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-datasets} -d ${POSTGRES_DB:-datasets}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Qdrant vector store. The server reaches it over the compose network at
+  # http://qdrant:6333 (set QDRANT_URL accordingly). The REST API / dashboard is
+  # also published to the host on the project's slot-2 port (6353) so you can
+  # browse http://localhost:6353/dashboard. No healthcheck: the qdrant image has
+  # no curl/wget, so the server just waits for the container to start.
+  qdrant:
+    container_name: qdrant
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:latest}
+    restart: always
+    expose:
+      - "6333"
+    ports:
+      - "${QDRANT_HOST_PORT:-6353}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+  # Redis: shared store for the login rate limiter (so the quota holds across
+  # uvicorn workers/replicas). The server reaches it in-network at
+  # redis://redis:6379. Published to the host on the project's slot-2 Redis port
+  # (6399) for inspection. Persistence is on (appendonly) via the volume.
+  redis:
+    container_name: redis
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    expose:
+      - "6379"
+    ports:
+      - "${REDIS_HOST_PORT:-6399}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - redis_data:/data
+
 volumes:
   next_node_modules:
   server_venv:
+  postgres_data:
+  qdrant_storage:
+  redis_data:

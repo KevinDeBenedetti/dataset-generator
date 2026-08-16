@@ -14,20 +14,13 @@ export function QAList({ qaData, returnedCount }: QAListProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Questions & Answers</h3>
-        <span className="text-sm text-gray-500">
-          {returnedCount} question-answer pair(s) found
-        </span>
+        <span className="text-sm text-gray-500">{returnedCount} question-answer pair(s) found</span>
       </div>
 
       {qaData && qaData.length > 0 ? (
         <Accordion type="single" collapsible className="space-y-2">
           {qaData.map((qa, index) => (
-            <QAItem
-              key={qa.id}
-              qa={qa}
-              index={index}
-              value={`item-${index}`}
-            />
+            <QAItem key={qa.id} qa={qa} index={index} value={`item-${index}`} />
           ))}
         </Accordion>
       ) : (

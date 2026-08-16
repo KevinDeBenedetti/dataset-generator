@@ -1,0 +1,9 @@
+{
+  "name": "openapi-codegen-sandbox",
+  "private": true,
+  "description": "Isolated install for the OpenAPI client generator. @hey-api/openapi-ts needs the TypeScript 5 JS compiler API (ts.SyntaxKind…), which the project's typescript@7 (native tsgo) no longer ships — so the generator and a pinned TS 5 live here, resolved before the project's node_modules. Run it via `make api-client` or `bun run api:generate` from apps/next.",
+  "dependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "5.9.3"
+  }
+}

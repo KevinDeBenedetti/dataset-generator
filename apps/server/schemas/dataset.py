@@ -70,9 +70,54 @@ class DatasetResponse(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    target_language: Optional[str] = None
     qa_sources_count: Optional[int] = None
     created_at: Optional[str] = None
     message: Optional[str] = None
+
+
+class DatasetSource(BaseModel):
+    """One origin a dataset's Q/A pairs were generated from."""
+
+    url: Optional[str] = Field(
+        None, description="Source URL as recorded on the items (None if unknown)"
+    )
+    kind: str = Field(..., description="web | file | github | unknown")
+    label: str = Field(..., description="Readable form of the source (scheme stripped)")
+    qa_count: int = Field(..., description="Q/A pairs generated from this source")
+    first_seen_at: Optional[str] = None
+    last_seen_at: Optional[str] = None
+
+
+class DatasetAnalysis(BaseModel):
+    """One recorded analysis (generation run) that fed the dataset."""
+
+    run_name: Optional[str] = None
+    version: Optional[int] = None
+    source_url: Optional[str] = Field(
+        None, description="Seed analysed by this run (site root, file, account)"
+    )
+    kind: str = Field(..., description="web | file | github | unknown")
+    label: str
+    item_count: Optional[int] = None
+    pages_analyzed: Optional[int] = Field(
+        None, description="Pages/documents read during this run"
+    )
+    new_pairs: Optional[int] = Field(None, description="Pairs kept by this run")
+    duplicates_skipped: Optional[int] = Field(
+        None, description="Exact + similar duplicates skipped by this run"
+    )
+    created_at: Optional[str] = None
+
+
+class DatasetSourcesResponse(BaseModel):
+    dataset_id: str
+    dataset_name: str
+    total_sources: int
+    total_qa: int
+    sources: List[DatasetSource]
+    total_analyses: int
+    history: List[DatasetAnalysis]
 
 
 class SimilarityPair(BaseModel):
@@ -121,3 +166,16 @@ class DeleteDatasetResponse(BaseModel):
     message: str
     dataset_id: str
     records_deleted: int
+
+
+class ResolvePairRequest(BaseModel):
+    """Arbitrate one duplicate pair: delete this record, keep the other."""
+
+    remove_id: str
+
+
+class ResolvePairResponse(BaseModel):
+    dataset_id: str
+    dataset_name: str
+    removed_id: str
+    removed_question: str

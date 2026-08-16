@@ -4,23 +4,65 @@ import logging
 import asyncio
 from importlib import import_module
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from server.core import logger as logger_module
-from server.api import dataset, generate, q_a, openai, owui
+from server.api import (
+    agent,
+    auth,
+    collections,
+    dataset,
+    generate,
+    q_a,
+    openai,
+    prompts,
+    quality_rules,
+)
 from server.services import langfuse
+from server.services.auth import get_current_user
 from server.migrations.utils.db_utils import upgrade_db
-from server.core.database import SQLALCHEMY_DATABASE_URL
+from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal
+from server.core.config import config
+from server.core.log_stream import broadcaster
 
 logger_module.setup_logging()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def _seed_dev_users() -> None:
+    """Seed the local dev accounts (admin + user). Runs in a worker thread."""
+    from server.services.users import seed_dev_users
+
+    db = SessionLocal()
+    try:
+        created = seed_dev_users(db)
+        logger.info("Dev user seeding: %d account(s) created", created)
+    finally:
+        db.close()
+
+
+def _purge_expired_refresh_tokens() -> None:
+    """Delete revoked/expired refresh token rows. Runs in a worker thread."""
+    from server.services.auth import purge_expired_refresh_tokens
+
+    db = SessionLocal()
+    try:
+        deleted = purge_expired_refresh_tokens(db)
+        logger.info("Refresh token purge: %d row(s) deleted", deleted)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Bind the running loop so log records emitted from worker threads can be
+    # delivered to live /debug/logs subscribers.
+    broadcaster.bind_loop(asyncio.get_running_loop())
+
     db_url = SQLALCHEMY_DATABASE_URL
     try:
         logger.info("Starting migrations...")
@@ -29,6 +71,26 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.exception("Migration failed: %s", exc)
         raise exc
+
+    # Optionally seed the local dev accounts (opt-in via SEED_DEV_USERS).
+    if config.seed_dev_users:
+        try:
+            await asyncio.to_thread(_seed_dev_users)
+        except Exception:
+            logger.exception("Dev user seeding failed")
+    else:
+        # Without this, an unset SEED_DEV_USERS is completely silent and the only
+        # symptom is a 401 on every login — with no hint that no account exists.
+        logger.info(
+            "Dev user seeding is off (SEED_DEV_USERS unset/false): no local account "
+            "is created, so POST /auth/login answers 401 until one exists."
+        )
+
+    # Sweep revoked/expired refresh tokens (nothing else ever deletes a row).
+    try:
+        await asyncio.to_thread(_purge_expired_refresh_tokens)
+    except Exception:
+        logger.exception("Refresh token purge failed")
 
     yield
 
@@ -40,29 +102,68 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The session is carried by cookies, so CORS is credentialed and must name the
+# allowed origins explicitly: with allow_origins=["*"], Starlette answers a
+# credentialed request by reflecting the caller's origin, which would let any
+# site read authenticated responses. Origins come from CORS_ALLOW_ORIGINS (or
+# FRONTEND_URL); local dev additionally accepts any localhost port.
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    allow_origins=["*"],
+    allow_origins=config.cors_allow_origins,
+    allow_origin_regex=config.cors_allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info("CORS allowed origins: %s", config.cors_allow_origins or "(none)")
 
-app.include_router(generate.router)
-app.include_router(dataset.router)
-app.include_router(q_a.router)
-app.include_router(openai.router)
-app.include_router(owui.owui_router)
+# Required by Authlib's OIDC client to hold the OAuth state/nonce between the
+# /auth/oidc/login redirect and the /auth/oidc/callback.
+app.add_middleware(
+    cast(Any, SessionMiddleware),
+    secret_key=config.auth_secret_key,
+    https_only=config.auth_cookie_secure,
+    same_site="lax",
+)
 
-if langfuse.is_langfuse_available():
-    try:
-        langfuse_mod = import_module("server.api.langfuse")
-        app.include_router(langfuse_mod.router)
-        logging.info("Langfuse routes enabled")
-    except Exception as e:
-        logging.warning(f"Failed to load Langfuse routes: {e}")
-else:
-    logging.info("Langfuse not available, skipping Langfuse routes")
+# Every feature router requires an authenticated user. Applied at the
+# include level (not on the router objects) so the test app — which mounts the
+# same routers without this dependency — and any future unauthenticated reuse
+# stay unaffected. Public routes: /auth/*, /health, / and (dev-only) /debug/*.
+auth_required = [Depends(get_current_user)]
+
+app.include_router(auth.router)
+app.include_router(generate.router, dependencies=auth_required)
+app.include_router(dataset.router, dependencies=auth_required)
+app.include_router(q_a.router, dependencies=auth_required)
+app.include_router(openai.router, dependencies=auth_required)
+app.include_router(agent.router, dependencies=auth_required)
+app.include_router(collections.router, dependencies=auth_required)
+app.include_router(quality_rules.router, dependencies=auth_required)
+app.include_router(prompts.router, dependencies=auth_required)
+
+if config.debug_logs:
+    from server.api import debug as debug_api
+
+    app.include_router(debug_api.router)
+    logger.info("DEBUG_LOGS enabled — streaming server logs at /debug/logs")
+
+# Always mount the Langfuse routes: each endpoint guards itself with a clear
+# 503 when Langfuse isn't configured/reachable. Mounting them conditionally on
+# startup availability meant a missing/invalid config produced a confusing 404
+# and required a server restart once the config was fixed.
+try:
+    langfuse_mod = import_module("server.api.langfuse")
+    app.include_router(langfuse_mod.router, dependencies=auth_required)
+    if langfuse.is_langfuse_available():
+        logging.info("Langfuse routes enabled (Langfuse reachable)")
+    else:
+        logging.info(
+            "Langfuse routes enabled, but Langfuse is not configured/reachable; "
+            "endpoints will return 503 until LANGFUSE_* env vars are set."
+        )
+except Exception as e:
+    logging.warning(f"Failed to load Langfuse routes: {e}")
 
 
 @app.get("/")

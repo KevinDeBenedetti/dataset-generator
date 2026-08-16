@@ -2,12 +2,7 @@
 
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import {
-  ChevronFirst,
-  ChevronLast,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface PaginationWrapperProps {
@@ -93,7 +88,14 @@ export function PaginationWrapper({
 
       {visiblePages.map((page, index) =>
         page === '...' ? (
-          <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+          <span
+            // Ellipsis markers are fungible placeholders with no identity of
+            // their own (there's at most one leading and one trailing); the
+            // index just disambiguates the two.
+            // oxlint-disable-next-line react/no-array-index-key
+            key={`ellipsis-${index}`}
+            className="px-2 text-gray-400"
+          >
             ...
           </span>
         ) : (
@@ -105,13 +107,13 @@ export function PaginationWrapper({
               page === currentPage
                 ? 'bg-primary text-primary-foreground'
                 : 'text-gray-700 hover:bg-gray-100',
-              disabled && 'opacity-50 cursor-not-allowed'
+              disabled && 'opacity-50 cursor-not-allowed',
             )}
             onClick={() => handlePageChange(page as number)}
           >
             {page}
           </button>
-        )
+        ),
       )}
 
       <Button

@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local check-docker check-ports down logs clean lint lint-server lint-client precommit test test-ci models
+.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models api-client
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -18,25 +18,38 @@ help:
 env:
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 
-## Install all dependencies: Python server (uv) and the Next.js client (bun).
+## Install all dependencies: Python server (uv) and the Next.js client (bun),
+## then install the git hook shims declared in prek.toml.
 setup:
 	uv venv --clear && uv sync
 	cd $(NEXT_DIR) && bun install
+	uv run prek install
 
 ## Start the full stack with Docker (FastAPI + Next.js), building images if needed.
 ## Runs in the foreground with `--watch`: container logs stream live with a
 ## per-service prefix, and images rebuild automatically when dependencies change
 ## (source is bind-mounted, so edits hot-reload without a rebuild).
 ## Ctrl-C stops the stack (use `make down` if it was detached elsewhere).
+## Run `DEBUG_LOGS=1 make dev` to enable the in-browser dev log console
+## (FastAPI + Next.js logs streamed over SSE; toggle it with Ctrl-` in the UI).
 dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
-	n="$${NEXT_HOST_PORT:-3000}"; s="$${SERVER_HOST_PORT:-8000}"; \
-	printf '\n  \033[1;36mDataset Generator — dev services\033[0m\n'; \
-	printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
-	printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
-	printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
-	printf '  \033[1;36m▶ Streaming logs with watch — Ctrl-C stops the stack\033[0m\n\n'
-	docker compose up --build --watch
+	n="$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}"; s="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \
+	printf '\n  \033[1;36m▶ Building & starting the stack — Ctrl-C stops it\033[0m\n'; \
+	printf '    (service URLs are shown below once every service is healthy)\n\n'; \
+	( \
+	  health() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$$1" 2>/dev/null; }; \
+	  until [ "$$(health server-fastapi)" = "healthy" ] && [ "$$(health next)" = "healthy" ]; do \
+	    sleep 2; \
+	  done; \
+	  printf '\n  \033[1;32m✓ Dataset Generator — dev services ready\033[0m\n'; \
+	  printf '    Next.js    →  http://localhost:%s\n' "$$n"; \
+	  printf '    FastAPI    →  http://localhost:%s\n' "$$s"; \
+	  printf '    API docs   →  http://localhost:%s/docs\n\n' "$$s"; \
+	) & \
+	waiter=$$!; \
+	trap 'kill $$waiter 2>/dev/null || true' EXIT; \
+	COMPOSE_MENU=false docker compose up --build --watch
 
 ## Ensure the Docker daemon is reachable, starting Docker Desktop if needed.
 check-docker:
@@ -49,13 +62,13 @@ check-docker:
 		exit 1; \
 	fi
 
-## Free dev ports (NEXT_HOST_PORT/SERVER_HOST_PORT) if a crashed run left them bound.
+## Free dev ports (NEXT_HOST_PORT/NEXT_PORT, SERVER_HOST_PORT/SERVER_PORT, POSTGRES_HOST_PORT) if a crashed run left them bound.
 ## Releases this project's own containers via `compose down`; for anything else it
 ## diagnoses and aborts (it never kills the Docker daemon to "free" a port).
 check-ports:
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
 	docker compose down --remove-orphans >/dev/null 2>&1 || true; \
-	for p in "$${NEXT_HOST_PORT:-3000}" "$${SERVER_HOST_PORT:-8000}"; do \
+	for p in "$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}" "$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}" "$${POSTGRES_HOST_PORT:-5452}"; do \
 		holder="$$(lsof -nP -iTCP:$$p -sTCP:LISTEN +c0 -F c 2>/dev/null | sed -n 's/^c//p' | head -n1)"; \
 		[ -z "$$holder" ] && continue; \
 		cname="$$(docker ps --filter "publish=$$p" --format '{{.Names}}' 2>/dev/null | head -n1)"; \
@@ -78,6 +91,17 @@ dev-local: env
 ## Stop and remove all containers (no-op if the Docker daemon is not running).
 down:
 	@docker info >/dev/null 2>&1 && docker compose down || true
+
+## Purge persistent volumes (server venv + node_modules) and rebuild.
+## Use after a dependency change: `make dev` keeps the volumes, so a stale
+## venv would otherwise mask the new lockfile (e.g. an old litellm lingering).
+## WARNING: -v also drops postgres_data, qdrant_storage and redis_data — the
+## application database (users, refresh tokens, quality rules) is destroyed and
+## rebuilt from migrations on the next `make dev`.
+reset: check-docker
+	docker compose down -v --remove-orphans
+	docker compose build
+	@printf '  \033[1;32m✓ Volumes purged and images rebuilt — run `make dev`.\033[0m\n'
 
 ## Stream logs from all containers.
 logs:
@@ -109,6 +133,8 @@ precommit:
 	uv run prek run --all-files
 
 ## Run the test suite with coverage (HTML report).
+## Needs a reachable Docker daemon: the suite spins up a throwaway Postgres
+## (testcontainers). Set TEST_DATABASE_URL to reuse an existing Postgres instead.
 test:
 	uv run pytest -s -v $(SERVER_DIR)/tests/ \
 		--cov=$(SERVER_DIR) \
@@ -124,6 +150,34 @@ test-ci:
 		--cov-report=xml \
 		--cov-report=term-missing \
 		--cov-fail-under=70
+
+## Dump the OpenAPI schema straight from the app (no server needed) to openapi.json.
+api-schema:
+	@PYTHONPATH=$(PWD)/apps uv run python -m server.scripts.dump_openapi openapi.json
+
+## Regenerate the Next.js OpenAPI client (apps/next/api/*.gen.ts).
+## Reads the schema dumped by `api-schema` — no running server needed, and the
+## exact same input `api-check` uses, so local and CI generation can't diverge.
+## The generator runs from an isolated install in apps/next/openapi-codegen:
+## @hey-api/openapi-ts needs the TypeScript 5 JS compiler API, which the
+## project's typescript@7 (native tsgo) no longer ships — so a pinned TS 5 lives
+## there, without downgrading the app.
+api-client: api-schema
+	@printf '  \033[1;36m▶ Generating the API client from openapi.json\033[0m\n'
+	@cd $(NEXT_DIR) && bun install --cwd openapi-codegen && \
+	OPENAPI_INPUT="$(PWD)/openapi.json" ./openapi-codegen/node_modules/.bin/openapi-ts
+	@rm -f openapi.json
+	@printf '  \033[1;32m✓ Client regenerated in apps/next/api/\033[0m\n'
+
+## Fail if the committed API client has drifted from the server's OpenAPI schema.
+## Regenerates (same input as `api-client`) and diffs — this is what CI runs.
+api-check: api-client
+	@if ! git diff --exit-code -- $(NEXT_DIR)/api; then \
+		printf '\n  \033[1;31m✗ The committed API client is out of date.\033[0m\n'; \
+		printf '     Regenerate it and commit the result:  make api-client\n\n'; \
+		exit 1; \
+	fi
+	@printf '  \033[1;32m✓ API client is in sync with the server schema.\033[0m\n'
 
 ## List models from the configured OpenAI-compatible provider (reads .env).
 models:
