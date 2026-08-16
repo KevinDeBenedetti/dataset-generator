@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDatasets,
+  getDatasetSources,
   generateDatasetStream,
   generateDatasetFromFile,
   generateDatasetFromGitHub,
@@ -62,6 +63,19 @@ export function useDatasets() {
   })
 }
 
+export const DATASET_SOURCES_QUERY_KEY = 'dataset-sources'
+
+// The sources a dataset was built from + the history of the analyses that fed
+// it. Both live in Langfuse, which may be unconfigured (503) — don't retry.
+export function useDatasetSources(datasetName: string | null | undefined) {
+  return useQuery({
+    queryKey: [DATASET_SOURCES_QUERY_KEY, datasetName],
+    queryFn: () => getDatasetSources(datasetName as string),
+    enabled: !!datasetName,
+    retry: false,
+  })
+}
+
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
   const { setDataset, setGenerationStatus, setError, setLiveSteps, appendLiveStep } =
@@ -118,6 +132,9 @@ export function useGenerateDataset() {
       setDataset(data)
       setGenerationStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
+      // A generation adds pairs, sources and a run: the detail page's sources
+      // and history are stale as soon as it lands.
+      queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to generate dataset')
@@ -183,6 +200,8 @@ export function useCleanDataset() {
       setCleaningResult(data)
       setCleanStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
+      // Cleaning deletes items, so the per-source pair counts move too.
+      queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to clean dataset')

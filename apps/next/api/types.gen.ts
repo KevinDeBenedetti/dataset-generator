@@ -252,6 +252,64 @@ export type CollectionsResponse = {
 };
 
 /**
+ * DatasetAnalysis
+ *
+ * One recorded analysis (generation run) that fed the dataset.
+ */
+export type DatasetAnalysis = {
+    /**
+     * Run Name
+     */
+    run_name?: string | null;
+    /**
+     * Version
+     */
+    version?: number | null;
+    /**
+     * Source Url
+     *
+     * Seed analysed by this run (site root, file, account)
+     */
+    source_url?: string | null;
+    /**
+     * Kind
+     *
+     * web | file | github | unknown
+     */
+    kind: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Item Count
+     */
+    item_count?: number | null;
+    /**
+     * Pages Analyzed
+     *
+     * Pages/documents read during this run
+     */
+    pages_analyzed?: number | null;
+    /**
+     * New Pairs
+     *
+     * Pairs kept by this run
+     */
+    new_pairs?: number | null;
+    /**
+     * Duplicates Skipped
+     *
+     * Exact + similar duplicates skipped by this run
+     */
+    duplicates_skipped?: number | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
  * DatasetGenerationRequest
  *
  * Model for dataset generation request
@@ -451,6 +509,80 @@ export type DatasetResponse = {
      * Message
      */
     message?: string | null;
+};
+
+/**
+ * DatasetSource
+ *
+ * One origin a dataset's Q/A pairs were generated from.
+ */
+export type DatasetSource = {
+    /**
+     * Url
+     *
+     * Source URL as recorded on the items (None if unknown)
+     */
+    url?: string | null;
+    /**
+     * Kind
+     *
+     * web | file | github | unknown
+     */
+    kind: string;
+    /**
+     * Label
+     *
+     * Readable form of the source (scheme stripped)
+     */
+    label: string;
+    /**
+     * Qa Count
+     *
+     * Q/A pairs generated from this source
+     */
+    qa_count: number;
+    /**
+     * First Seen At
+     */
+    first_seen_at?: string | null;
+    /**
+     * Last Seen At
+     */
+    last_seen_at?: string | null;
+};
+
+/**
+ * DatasetSourcesResponse
+ */
+export type DatasetSourcesResponse = {
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Total Sources
+     */
+    total_sources: number;
+    /**
+     * Total Qa
+     */
+    total_qa: number;
+    /**
+     * Sources
+     */
+    sources: Array<DatasetSource>;
+    /**
+     * Total Analyses
+     */
+    total_analyses: number;
+    /**
+     * History
+     */
+    history: Array<DatasetAnalysis>;
 };
 
 /**
@@ -1492,6 +1624,36 @@ export type CreateDatasetDatasetPostResponses = {
 };
 
 export type CreateDatasetDatasetPostResponse = CreateDatasetDatasetPostResponses[keyof CreateDatasetDatasetPostResponses];
+
+export type GetDatasetSourcesDatasetDatasetNameSourcesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: never;
+    url: '/dataset/{dataset_name}/sources';
+};
+
+export type GetDatasetSourcesDatasetDatasetNameSourcesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetDatasetSourcesDatasetDatasetNameSourcesGetError = GetDatasetSourcesDatasetDatasetNameSourcesGetErrors[keyof GetDatasetSourcesDatasetDatasetNameSourcesGetErrors];
+
+export type GetDatasetSourcesDatasetDatasetNameSourcesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatasetSourcesResponse;
+};
+
+export type GetDatasetSourcesDatasetDatasetNameSourcesGetResponse = GetDatasetSourcesDatasetDatasetNameSourcesGetResponses[keyof GetDatasetSourcesDatasetDatasetNameSourcesGetResponses];
 
 export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetData = {
     body?: never;

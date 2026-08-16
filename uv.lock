@@ -646,6 +646,7 @@ dependencies = [
     { name = "bcrypt" },
     { name = "dotenv" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "fastapi-redis-sdk" },
     { name = "httpx" },
     { name = "instructor" },
     { name = "itsdangerous" },
@@ -682,6 +683,7 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
+    { name = "fastapi-redis-sdk", specifier = ">=0.8.0,<0.9.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "instructor", specifier = ">=1.15.4" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
@@ -850,6 +852,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ad/bf/97d19633c6ec6fb0ef59df474b9705ea992f7b4f879208d0007ac6d25ab6/fastapi_cloud_cli-0.20.0.tar.gz", hash = "sha256:9681c46adcd299024d0775658bd5d88992fd35c4ad42b1f045c6df913390ba37", size = 85904, upload-time = "2026-06-11T17:41:02.814Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/6e/bbb2e1b8f3170b6426b707d49981a838fc1d5cbb428dd9a271f1c3951c23/fastapi_cloud_cli-0.20.0-py3-none-any.whl", hash = "sha256:dcbf071fc659ae2d3fb30e221a661c3fa240b7d5091203cf941face31f6d7860", size = 68793, upload-time = "2026-06-11T17:41:01.804Z" },
+]
+
+[[package]]
+name = "fastapi-redis-sdk"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/48/1a8824d80385c1cf3f35dac11ede8d54470777267ebf04ba43bb7b906a50/fastapi_redis_sdk-0.8.0.tar.gz", hash = "sha256:a414e25ca1f41c277b06de6a640ddb1e8389e7d654280342746ce4d087dc04ed", size = 39086, upload-time = "2026-07-31T10:57:44.568Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/6b/433d99fe935ab3bab540a18fec67b110b04013c4a8216c4ec323989967ef/fastapi_redis_sdk-0.8.0-py3-none-any.whl", hash = "sha256:1f8d56e0279cc4941bfd6b4440d5e1bdf836ba35c10524f647aac823141ac8bd", size = 44507, upload-time = "2026-07-31T10:57:43.262Z" },
 ]
 
 [[package]]

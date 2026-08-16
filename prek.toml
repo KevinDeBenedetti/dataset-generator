@@ -1,0 +1,130 @@
+# Prek configuration — https://prek.j178.dev/
+#
+# Single source of truth for the git hooks: prek reads `prek.toml` natively, so
+# there is no `.pre-commit-config.yaml` side-car (and no pre-commit.ci block —
+# the hooks run locally and in `make precommit`, not on that hosted service).
+#
+# Two rules keep this file honest:
+#   * versions live where the tool is already pinned — ruff, ty and pytest run
+#     through `uv run` (pyproject's dev group) and oxlint/oxfmt through
+#     `bun run` (apps/next/package.json), so a hook can't lint with a different
+#     version than CI does;
+#   * anything prek ships natively uses `repo = "builtin"` — offline, no env to
+#     build, no `rev` to bump (`prek util list-builtins` lists them).
+minimum_prek_version = "0.4.13"
+
+default_stages = ["pre-commit", "pre-push"]
+
+# Applied before every hook's own `files`/`exclude`.
+exclude = '''(?x)^(
+    # Dependencies
+    .*/node_modules/.*|
+    .*/__pycache__/.*|
+    .*/\.venv/.*|
+    .*/\.cache/.*|
+    # Generated files
+    .*/migrations/versions/.*|
+    apps/next/api/.*|
+    # Assets (generated/external)
+    .*\.(svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot)$|
+    .*/public/.*\.svg|
+    # Data & logs
+    data/.*|
+    .*\.log|
+    # Lock files
+    bun\.lock|
+    pnpm-lock\.yaml|
+    uv\.lock
+)$'''
+
+# ===============================
+# Built-in fast hooks (offline, zero setup)
+# ===============================
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace", name = "✂️ Trim trailing whitespace", args = [
+    "--markdown-linebreak-ext=md,markdown",
+  ] },
+  { id = "end-of-file-fixer", name = "🔚 Fix EOF" },
+  # docker-compose.yml uses tags (`!reset`, merge keys) the strict parser rejects.
+  { id = "check-yaml", name = "🔍 Check YAML", args = [
+    "--allow-multiple-documents",
+  ], exclude = '''^docker-compose\.ya?ml$''' },
+  # JSONC (JSON + comments), which the strict parser rejects: VSCode settings,
+  # and tsconfig files — apps/next/tsconfig.typecheck.json documents in comments
+  # why it differs from the editor config.
+  { id = "check-json", name = "🔍 Check JSON", exclude = '''^(\.vscode/.*\.json|.*tsconfig[^/]*\.json)$''' },
+  { id = "check-toml", name = "🔍 Check TOML" },
+  { id = "check-added-large-files", name = "🚫 Check large files", args = [
+    "--maxkb=1000",
+  ] },
+  { id = "check-merge-conflict", name = "🔍 Check merge conflicts" },
+  { id = "detect-private-key", name = "🔐 Detect private keys" },
+  { id = "check-case-conflict", name = "🔍 Check case conflicts" },
+  { id = "mixed-line-ending", name = "🔍 Check line endings", args = ["--fix=lf"] },
+]
+
+# ===============================
+# Python — backend (apps/server)
+# ===============================
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "ruff", name = "🐍 Ruff lint", entry = "uv run ruff check --force-exclude --fix", language = "system", types_or = [
+    "python",
+    "pyi",
+  ], files = '''^apps/server/''' },
+  { id = "ruff-format", name = "🐍 Ruff format", entry = "uv run ruff format --force-exclude", language = "system", types_or = [
+    "python",
+    "pyi",
+  ], files = '''^apps/server/''' },
+  # ty reads the whole package, so it takes no filenames.
+  { id = "ty-check", name = "🔍 Type check (ty)", entry = "uv run ty check", language = "system", files = '''^apps/server/.*\.py$''', pass_filenames = false },
+]
+
+# ===============================
+# JavaScript/TypeScript — frontend (apps/next)
+# ===============================
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "oxlint-next", name = "🔍 Oxlint (Next.js)", entry = "bash -c 'cd apps/next && bun run lint:fix'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs)$''', pass_filenames = false },
+  { id = "oxfmt-next", name = "🎨 Oxfmt (Next.js)", entry = "bash -c 'cd apps/next && bun run format'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs|css|json)$''', pass_filenames = false },
+]
+
+# ===============================
+# Docker & infrastructure
+# ===============================
+[[repos]]
+repo = "https://github.com/hadolint/hadolint"
+rev = "v2.14.0"
+hooks = [
+  # DL3008: pinning apt versions in a dev image buys little and rots fast.
+  { id = "hadolint-docker", name = "🐳 Lint Dockerfiles", files = '''^apps/.*/Dockerfile.*''', args = [
+    "--ignore",
+    "DL3008",
+  ] },
+]
+
+# ===============================
+# Documentation / blanket suppressions
+# ===============================
+[[repos]]
+repo = "https://github.com/pre-commit/pygrep-hooks"
+rev = "v1.10.0"
+hooks = [
+  { id = "python-check-blanket-noqa", name = "🔍 Check blanket noqa", files = '''^apps/server/''' },
+  { id = "python-check-blanket-type-ignore", name = "🔍 Check blanket type:ignore", files = '''^apps/server/''' },
+]
+
+# ===============================
+# Tests — pre-push only (too slow for every commit; needs Docker for Postgres)
+# ===============================
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "pytest", name = "🧪 Run tests", entry = "uv run pytest -s -v apps/server/tests/ --cov", language = "system", files = '''^apps/server/.*\.py$''', pass_filenames = false, stages = [
+    "pre-push",
+  ] },
+]

@@ -261,6 +261,29 @@ make test-ci
 uv run prek run --all-files
 ```
 
+### Git hooks
+
+Hooks are managed by [prek](https://prek.j178.dev/) and declared in a single
+`prek.toml` at the repo root — there is no `.pre-commit-config.yaml`. The shims
+are installed by `make setup` (`uv run prek install`).
+
+Two things keep the hooks honest with CI: the linters run through `uv run` /
+`bun run`, so they use the versions already pinned in `pyproject.toml` and
+`apps/next/package.json`; and everything prek ships natively (whitespace, EOF,
+YAML/JSON/TOML syntax, private keys, …) uses `repo = "builtin"` — offline, no
+environment to build, no `rev` to bump.
+
+```bash
+uv run prek run --all-files      # every hook, every file
+uv run prek run                  # staged files only
+uv run prek run ruff             # a single hook
+uv run prek run --stage pre-push # includes the test suite
+uv run prek util list-builtins   # what "builtin" provides
+```
+
+`hadolint-docker` needs a running Docker daemon, and the `pytest` hook (pre-push
+only) needs one too — the suite starts a throwaway Postgres.
+
 ### Coverage Reports
 
 - **Local**: After running tests, view `htmlcov/index.html` for detailed coverage report

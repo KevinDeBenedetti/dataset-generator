@@ -10,6 +10,7 @@ from server.services.dataset_reads import (
     clean_similarities_view,
     create_dataset,
     delete_dataset,
+    get_dataset_sources_view,
     get_dataset_view,
     get_qa_stats_view,
     get_qa_view,
@@ -325,3 +326,191 @@ def test_delete_dataset_unknown_raises():
     with patch("server.services.dataset_reads.list_datasets", return_value=[]):
         with pytest.raises(ValueError, match="not found"):
             delete_dataset("ghost")
+
+
+# --- sources & analysis history ----------------------------------------------
+
+
+def _sourced_item(item_id, source_url, created_at):
+    """A minimal active item carrying a source URL and a creation date."""
+    return {
+        "id": item_id,
+        "status": "ACTIVE",
+        "input": {"question": "q?", "context": "ctx", "source_url": source_url},
+        "expected_output": {"answer": "a", "confidence": 0.9},
+        "metadata": {},
+        "created_at": created_at,
+    }
+
+
+def _run(name, version, source_url, **metadata):
+    return {
+        "run_name": name,
+        "version": version,
+        "description": None,
+        "item_count": metadata.get("item_count"),
+        "source_url": source_url,
+        "created_at": "2026-01-03T00:00:00Z",
+        "metadata": metadata,
+    }
+
+
+def test_get_sources_view_groups_items_by_source():
+    """One row per distinct source_url, busiest first, with a first/last seen."""
+    items = [
+        _sourced_item("a", "https://docs.example.com/api", "2026-01-02T00:00:00Z"),
+        _sourced_item("b", "https://docs.example.com/api", "2026-01-01T00:00:00Z"),
+        _sourced_item("c", "file://manual.pdf", "2026-01-01T00:00:00Z"),
+    ]
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=items),
+        patch("server.services.dataset_reads.list_dataset_runs", return_value=[]),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    assert view["total_qa"] == 3
+    assert view["total_sources"] == 2
+    web, file_source = view["sources"]
+    assert web["qa_count"] == 2
+    assert web["kind"] == "web"
+    assert web["label"] == "docs.example.com/api"
+    # Aggregated over both items, not just the first one seen.
+    assert web["first_seen_at"].startswith("2026-01-01")
+    assert web["last_seen_at"].startswith("2026-01-02")
+    assert file_source["kind"] == "file"
+    assert file_source["label"] == "manual.pdf"
+
+
+def test_get_sources_view_labels_every_source_kind():
+    items = [
+        _sourced_item("a", "github://octocat", "2026-01-01T00:00:00Z"),
+        _sourced_item("b", "", "2026-01-01T00:00:00Z"),
+    ]
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=items),
+        patch("server.services.dataset_reads.list_dataset_runs", return_value=[]),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    by_kind = {s["kind"]: s for s in view["sources"]}
+    assert by_kind["github"]["label"] == "octocat"
+    # An item with no recorded source still gets a row, with a null URL.
+    assert by_kind["unknown"]["url"] is None
+    assert by_kind["unknown"]["label"] == "Unknown source"
+
+
+def test_get_sources_view_tolerates_mixed_timestamp_offsets():
+    """Langfuse returns dates with and without an offset — both must aggregate."""
+    items = [
+        _sourced_item("a", "https://ex.com", "2026-01-02T00:00:00Z"),
+        _sourced_item("b", "https://ex.com", "2026-01-01T00:00:00"),
+    ]
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=items),
+        patch("server.services.dataset_reads.list_dataset_runs", return_value=[]),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    assert view["sources"][0]["qa_count"] == 2
+    assert view["sources"][0]["first_seen_at"].startswith("2026-01-01")
+
+
+def test_get_sources_view_maps_run_history():
+    runs = [
+        _run(
+            "v2",
+            2,
+            "https://docs.example.com",
+            item_count=5,
+            pages_crawled=4,
+            total=5,
+            exact_duplicates=2,
+            similar_duplicates=1,
+        )
+    ]
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=[]),
+        patch("server.services.dataset_reads.list_dataset_runs", return_value=runs),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    assert view["total_analyses"] == 1
+    analysis = view["history"][0]
+    assert analysis["run_name"] == "v2"
+    assert analysis["version"] == 2
+    assert analysis["pages_analyzed"] == 4
+    assert analysis["new_pairs"] == 5
+    assert analysis["duplicates_skipped"] == 3
+    assert analysis["kind"] == "web"
+
+
+def test_get_sources_view_history_without_stats_is_null_not_zero():
+    """A run recorded without stats must not claim "0 duplicates skipped"."""
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=[]),
+        patch(
+            "server.services.dataset_reads.list_dataset_runs",
+            return_value=[_run("v1", 1, "file://a.pdf")],
+        ),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    analysis = view["history"][0]
+    assert analysis["duplicates_skipped"] is None
+    assert analysis["pages_analyzed"] is None
+
+
+def test_get_sources_view_survives_unreadable_runs():
+    """Runs are best-effort (see sync_qa_to_langfuse): sources still render."""
+    items = [_sourced_item("a", "https://ex.com", "2026-01-01T00:00:00Z")]
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=items),
+        patch(
+            "server.services.dataset_reads.list_dataset_runs",
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
+        view = get_dataset_sources_view("ds")
+
+    assert view["total_sources"] == 1
+    assert view["history"] == []
+
+
+def test_get_sources_view_propagates_langfuse_unavailable():
+    """A down Langfuse is a 503, not an empty history."""
+    with (
+        patch(
+            "server.services.dataset_reads.list_datasets", return_value=[_dataset("ds")]
+        ),
+        patch("server.services.dataset_reads.get_dataset_items", return_value=[]),
+        patch(
+            "server.services.dataset_reads.list_dataset_runs",
+            side_effect=LangfuseUnavailableError("down"),
+        ),
+    ):
+        with pytest.raises(LangfuseUnavailableError):
+            get_dataset_sources_view("ds")
+
+
+def test_get_sources_view_unknown_dataset_raises():
+    with patch("server.services.dataset_reads.list_datasets", return_value=[]):
+        with pytest.raises(ValueError, match="not found"):
+            get_dataset_sources_view("ghost")

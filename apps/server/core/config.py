@@ -123,9 +123,10 @@ class Config:
     )
     # Anti-brute-force on POST /auth/login: after auth_login_max_attempts failed
     # attempts from one client IP within auth_login_window_seconds, further
-    # attempts get a 429 until the window slides. Backed by Redis when redis_url
-    # is set (shared across workers/replicas), else in-process (see
-    # services/rate_limit.py) — a first layer, not a distributed quota.
+    # attempts get a 429 until the window expires. Backed by Redis when redis_url
+    # is set — via redis-fastapi's atomic window counter, shared across
+    # workers/replicas — else by an in-process sliding window (see
+    # services/rate_limit.py), a first layer rather than a distributed quota.
     auth_login_max_attempts: int = field(
         default_factory=lambda: int(_env("AUTH_LOGIN_MAX_ATTEMPTS", "10"))
     )

@@ -34,14 +34,20 @@ const sourceOptions: { value: SourceKind; label: string }[] = [
   { value: 'github', label: 'GitHub' },
 ]
 
-export function DatasetGenerate() {
+interface DatasetGenerateProps {
+  // Pre-selects the dataset the generated pairs land in (the "add a source to
+  // an existing dataset" flow). Still editable — it only seeds the field.
+  initialDatasetName?: string
+}
+
+export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProps) {
   const [source, setSource] = useState<SourceKind>('url')
   const [url, setUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [githubUsername, setGithubUsername] = useState('')
   const [githubToken, setGithubToken] = useState('')
   const [maxRepos, setMaxRepos] = useState('')
-  const [manualDatasetName, setManualDatasetName] = useState('')
+  const [manualDatasetName, setManualDatasetName] = useState(initialDatasetName)
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null)
   const [targetLanguage, setTargetLanguage] = useState<string>('fr')
   const [similarityThreshold, setSimilarityThreshold] = useState([0.9])
