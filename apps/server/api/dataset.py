@@ -12,11 +12,13 @@ from server.services.dataset_reads import (
     delete_dataset as delete_dataset_view,
     analyze_similarities_view,
     clean_similarities_view,
+    get_dataset_sources_view,
     resolve_similarity_pair,
 )
 from server.services.langfuse import LangfuseUnavailableError
 from server.schemas.dataset import (
     DatasetResponse,
+    DatasetSourcesResponse,
     SimilarityAnalysisResponse,
     CleanSimilarityResponse,
     DeleteDatasetResponse,
@@ -69,6 +71,20 @@ async def get_all_datasets(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.error(f"Error fetching datasets: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dataset/{dataset_name}/sources", response_model=DatasetSourcesResponse)
+async def get_dataset_sources(dataset_name: str):
+    """List the sources a dataset was built from, with its analysis history."""
+    try:
+        return get_dataset_sources_view(dataset_name)
+    except LangfuseUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error fetching sources for {dataset_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -10,7 +10,8 @@ import json
 import logging
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from langfuse import get_client
 
@@ -20,6 +21,7 @@ from server.services.langfuse import (
     delete_dataset_item,
     get_dataset_items,
     is_langfuse_available,
+    list_dataset_runs,
     list_datasets,
 )
 
@@ -54,6 +56,16 @@ def _parse_dt(value: Any) -> datetime:
         except ValueError:
             pass
     return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Make a datetime comparable: naive values are read as UTC.
+
+    Langfuse timestamps come back as ISO strings that may or may not carry an
+    offset, and comparing an aware datetime to a naive one raises TypeError —
+    which would blow up the min/max aggregation in :func:`get_dataset_sources_view`.
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 def _item_fields(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -181,6 +193,125 @@ def delete_dataset(dataset_name: str) -> Dict[str, Any]:
         ),
         "dataset_id": dataset_name,
         "records_deleted": deleted,
+    }
+
+
+# --- sources & analysis history ----------------------------------------------
+
+
+def _source_label_kind(source_url: str) -> Tuple[str, str]:
+    """``(label, kind)`` for a source URL.
+
+    The pipelines record where a pair came from in the item's
+    ``input.source_url``: the crawled page URL for the web path, ``file://<name>``
+    for an upload, ``github://<user>`` for a GitHub account. The kind drives the
+    icon in the UI; the label is the readable form (scheme stripped).
+    """
+    if not source_url:
+        return "Unknown source", "unknown"
+    if source_url.startswith("file://"):
+        return source_url[len("file://") :] or source_url, "file"
+    if source_url.startswith("github://"):
+        return source_url[len("github://") :] or source_url, "github"
+    if source_url.startswith(("http://", "https://")):
+        parsed = urlparse(source_url)
+        return (parsed.netloc + parsed.path).rstrip("/") or source_url, "web"
+    return source_url, "unknown"
+
+
+def _to_analysis_view(run: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a Langfuse run summary to one entry of the analysis history.
+
+    A run is one generation: the seed source that was analysed (the site root
+    for a crawl, not the individual pages) plus the stats recorded with it.
+    """
+    metadata = run.get("metadata") or {}
+    source_url = run.get("source_url") or ""
+    label, kind = _source_label_kind(source_url)
+    exact = metadata.get("exact_duplicates")
+    similar = metadata.get("similar_duplicates")
+    duplicates = (
+        (exact or 0) + (similar or 0)
+        if exact is not None or similar is not None
+        else None
+    )
+    return {
+        "run_name": run.get("run_name"),
+        "version": run.get("version"),
+        "source_url": source_url or None,
+        "kind": kind,
+        "label": label,
+        "item_count": run.get("item_count"),
+        "pages_analyzed": metadata.get("pages_crawled"),
+        "new_pairs": metadata.get("total"),
+        "duplicates_skipped": duplicates,
+        "created_at": run.get("created_at"),
+    }
+
+
+def get_dataset_sources_view(dataset_name: str) -> Dict[str, Any]:
+    """The sources a dataset was built from, plus its analysis history.
+
+    ``sources`` aggregates the dataset's active items by ``input.source_url`` —
+    what actually produced Q/A pairs, one entry per crawled page/file/account.
+    ``history`` is the run history (one entry per generation), which records the
+    *seed* that was analysed and the pairs it yielded. Both come from Langfuse,
+    the only persistence layer. Raises ValueError when the dataset doesn't exist.
+    """
+    _require_langfuse()
+    if get_dataset_view(dataset_name) is None:
+        raise ValueError(f"Dataset '{dataset_name}' not found")
+
+    grouped: Dict[str, Dict[str, Any]] = {}
+    total_qa = 0
+    for item in _active_items(dataset_name):
+        fields = _item_fields(item)
+        total_qa += 1
+        url = fields["source_url"] or ""
+        seen_at = _as_utc(fields["created_at"])
+        entry = grouped.get(url)
+        if entry is None:
+            label, kind = _source_label_kind(url)
+            grouped[url] = {
+                "url": url or None,
+                "kind": kind,
+                "label": label,
+                "qa_count": 1,
+                "first_seen_at": seen_at,
+                "last_seen_at": seen_at,
+            }
+        else:
+            entry["qa_count"] += 1
+            entry["first_seen_at"] = min(entry["first_seen_at"], seen_at)
+            entry["last_seen_at"] = max(entry["last_seen_at"], seen_at)
+
+    sources = sorted(
+        grouped.values(), key=lambda s: (-s["qa_count"], s["label"].lower())
+    )
+    for source in sources:
+        source["first_seen_at"] = source["first_seen_at"].isoformat()
+        source["last_seen_at"] = source["last_seen_at"].isoformat()
+
+    # A dataset with items but no readable runs is normal (runs are best-effort,
+    # see sync_qa_to_langfuse) — show the sources rather than failing the view.
+    try:
+        runs = list_dataset_runs(dataset_name)
+    except LangfuseUnavailableError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — history is best-effort
+        logger.warning("Could not read runs for dataset '%s': %s", dataset_name, exc)
+        runs = []
+
+    history = [_to_analysis_view(run) for run in runs]
+
+    return {
+        "dataset_id": dataset_name,
+        "dataset_name": dataset_name,
+        "total_sources": len(sources),
+        "total_qa": total_qa,
+        "sources": sources,
+        "total_analyses": len(history),
+        "history": history,
     }
 
 
