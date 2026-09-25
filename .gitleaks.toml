@@ -1,0 +1,10 @@
+title = "Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Example env file — variable names only, values are always blank/placeholder, never real secrets"
+paths = [
+  '''(^|/)\.env\.example$''',
+]
