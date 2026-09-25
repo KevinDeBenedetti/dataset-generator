@@ -100,8 +100,6 @@ jobs:
       issues: write
     uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@v0.13.0
     with:
-      config-file: release/release-please-config-release.json
-      manifest-file: release/.release-please-manifest.json
-      app-client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-    secrets:
-      APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      config-file: .github/release/release-please-config-release.json
+      manifest-file: .github/release/.release-please-manifest.json
+    secrets: inherit
