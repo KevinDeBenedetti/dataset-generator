@@ -2,19 +2,19 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from server.services.datasets import get_dataset_pairs
 from server.services.dedup import QAEntry, classify_duplicate, compute_hash_from_content
-from server.services.langfuse import get_dataset_items
 from server.services.quality_rules import rejection_reason
 
 
 class QAService:
-    """Deduplicates generated QA pairs against a dataset's existing items.
+    """Deduplicates generated QA pairs against a dataset's existing pairs.
 
-    The dedup pool is the target dataset's *existing Langfuse items*, loaded
-    once (lazily) per pipeline run — scoped to this one dataset, not global,
-    since Langfuse has no cheap "every item across every dataset" read. Grown
-    in place after each :meth:`process_qa_pairs` call so a later call (e.g.
-    the next crawled page) sees this call's additions.
+    The dedup pool is the target dataset's *stored pairs*, loaded once (lazily)
+    per pipeline run — scoped to this one dataset rather than global, so a run
+    reads one dataset's rows instead of the whole table. Grown in place after
+    each :meth:`process_qa_pairs` call so a later call (e.g. the next crawled
+    page) sees this call's additions.
 
     When ``quality_rules`` is provided (see
     ``server.services.quality_rules.get_quality_rules``) and its
@@ -22,8 +22,8 @@ class QAService:
     short, confidence too low) are rejected before deduplication.
 
     This service only classifies and shapes QA pairs; it writes nothing
-    anywhere — the caller is responsible for syncing the returned items to
-    Langfuse (see ``DatasetPipeline._sync_to_langfuse``).
+    anywhere — the caller is responsible for persisting the returned items
+    (see ``DatasetPipeline._persist``).
     """
 
     def __init__(
@@ -36,18 +36,22 @@ class QAService:
     def _load_existing_entries(self) -> List[QAEntry]:
         if self._existing_entries is None:
             try:
-                items = get_dataset_items(self.dataset_name)
-            except Exception:  # noqa: BLE001 — new dataset, or Langfuse unreachable
-                items = []
+                pairs = get_dataset_pairs(self.dataset_name)
+            except Exception:  # noqa: BLE001 — DB unreachable: dedup within this run only
+                logging.warning(
+                    "Could not read existing pairs of '%s' — deduplicating "
+                    "against this run only.",
+                    self.dataset_name,
+                )
+                pairs = []
             self._existing_entries = [
                 QAEntry(
-                    hash=item.get("id", ""),
-                    question=(item.get("input") or {}).get("question", ""),
-                    context=(item.get("input") or {}).get("context", ""),
-                    source_url=(item.get("input") or {}).get("source_url", ""),
+                    hash=pair.get("id", ""),
+                    question=pair.get("question", ""),
+                    context=pair.get("context", ""),
+                    source_url=pair.get("source_url", ""),
                 )
-                for item in items
-                if (item.get("status") or "ACTIVE") == "ACTIVE"
+                for pair in pairs
             ]
         return self._existing_entries
 
@@ -64,7 +68,7 @@ class QAService:
         Candidates are checked only against the pool as it stood at the start
         of this call — not against siblings added earlier in the same
         ``qa_list``, matching the previous DB-backed behaviour. Returns the
-        surviving (non-duplicate) items in Langfuse dataset-item shape,
+        surviving (non-duplicate) items in the shape the store expects,
         alongside per-call stats.
         """
         existing = self._load_existing_entries()
@@ -121,15 +125,11 @@ class QAService:
                 new_items.append(
                     {
                         "id": item_hash,
-                        "input": {
-                            "question": question,
-                            "context": cleaned_text,
-                            "source_url": url,
-                        },
-                        "expected_output": {
-                            "answer": answer,
-                            "confidence": float(confidence),
-                        },
+                        "question": question,
+                        "answer": answer,
+                        "context": cleaned_text,
+                        "source_url": url,
+                        "confidence": float(confidence),
                         "metadata": {
                             "model": model,
                             "generation_timestamp": datetime.now(

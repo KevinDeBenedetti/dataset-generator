@@ -7,10 +7,10 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from server.services.langfuse import LangfuseUnavailableError
-
-# Datasets are now created/read/deleted in Langfuse (the source of truth), so
-# these tests mock the Langfuse-backed view functions.
+# The handlers are thin wrappers over server.services.datasets, so these tests
+# mock the view functions and assert the HTTP contract (status + shape).
+# The service itself is exercised against a real database in
+# tests/services/test_datasets.py.
 
 
 def test_create_dataset_success(client: TestClient):
@@ -69,7 +69,7 @@ def _ds_view(name, **extra):
 
 
 def test_get_all_datasets_empty(client: TestClient):
-    """Test getting all datasets when Langfuse has none."""
+    """Test getting all datasets when there are none."""
     with patch("server.api.dataset.list_datasets_view", return_value=[]):
         response = client.get("/dataset")
     assert response.status_code == 200
@@ -77,7 +77,7 @@ def test_get_all_datasets_empty(client: TestClient):
 
 
 def test_get_all_datasets(client: TestClient):
-    """Test getting all datasets from Langfuse."""
+    """Test getting all datasets."""
     views = [_ds_view("dataset1"), _ds_view("dataset2"), _ds_view("dataset3")]
     with patch("server.api.dataset.list_datasets_view", return_value=views):
         response = client.get("/dataset")
@@ -107,7 +107,7 @@ def test_get_dataset_by_name_not_found(client: TestClient):
 
 
 def test_delete_dataset(client: TestClient):
-    """Test deleting a dataset (Langfuse items + Qdrant cascade)."""
+    """Test deleting a dataset (pairs + Qdrant cascade)."""
     result = {
         "message": "Deleted 2 item(s) from 'my_dataset'.",
         "dataset_id": "my_dataset",
@@ -296,7 +296,7 @@ def test_resolve_pair_record_not_found(client: TestClient):
 
 def test_resolve_pair_ambiguous_id(client: TestClient):
     """Test resolving a pair with a prefix that matches more than one record."""
-    from server.services.dataset_reads import AmbiguousRecordError
+    from server.services.datasets import AmbiguousRecordError
 
     with patch(
         "server.api.dataset.resolve_similarity_pair",
@@ -308,11 +308,10 @@ def test_resolve_pair_ambiguous_id(client: TestClient):
     assert response.status_code == 409
 
 
-# Every handler funnels service errors through the same mapping:
-# LangfuseUnavailableError -> 503, ValueError -> 404 (400 on create), and
-# anything unexpected -> 500. The success and ValueError branches are covered
-# case by case above; the two tables below cover the 503 and 500 branches for
-# *every* endpoint, so an endpoint added without them shows up as a coverage
+# Every handler funnels service errors through the same mapping: ValueError ->
+# 404 (400 on create), anything unexpected -> 500. The success and ValueError
+# branches are covered case by case above; the table below covers the 500 branch
+# for *every* endpoint, so an endpoint added without it shows up as a coverage
 # drop instead of silently returning a raw 500 traceback to the client.
 _ENDPOINTS = [
     ("create_dataset_view", lambda c: c.post("/dataset", params={"name": "d"})),
@@ -326,22 +325,11 @@ _ENDPOINTS = [
         lambda c: c.post("/dataset/d/resolve-pair", json={"remove_id": "aaaa1111"}),
     ),
     ("delete_dataset_view", lambda c: c.delete("/dataset/d")),
+    ("list_dataset_versions", lambda c: c.get("/dataset/d/versions")),
+    ("duplicate_dataset_view", lambda c: c.post("/dataset/d/duplicate")),
 ]
 
 _ENDPOINT_IDS = [view for view, _ in _ENDPOINTS]
-
-
-@pytest.mark.parametrize("view,call", _ENDPOINTS, ids=_ENDPOINT_IDS)
-def test_langfuse_unavailable_returns_503(client: TestClient, view, call):
-    """Langfuse is the sole source of truth, so "it's down" must not read as 500."""
-    with patch(
-        f"server.api.dataset.{view}",
-        side_effect=LangfuseUnavailableError("Langfuse is not configured."),
-    ):
-        response = call(client)
-
-    assert response.status_code == 503
-    assert "Langfuse is not configured." in response.json()["detail"]
 
 
 @pytest.mark.parametrize("view,call", _ENDPOINTS, ids=_ENDPOINT_IDS)
@@ -351,3 +339,65 @@ def test_unexpected_service_error_returns_500(client: TestClient, view, call):
 
     assert response.status_code == 500
     assert "boom" in response.json()["detail"]
+
+
+# --- Hugging Face export -----------------------------------------------------
+
+
+def test_export_to_huggingface_success(client: TestClient):
+    fake = {
+        "dataset_name": "my_dataset",
+        "repo_id": "kevin/my_dataset",
+        "url": "https://huggingface.co/datasets/kevin/my_dataset",
+        "private": True,
+        "pairs_exported": 12,
+    }
+    with patch("server.api.dataset.export_dataset_to_hub", return_value=fake):
+        response = client.post("/dataset/my_dataset/export/huggingface")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["repo_id"] == "kevin/my_dataset"
+    assert body["private"] is True
+
+
+def test_export_to_huggingface_without_token_returns_503(client: TestClient):
+    from server.services.huggingface import HuggingFaceNotConfiguredError
+
+    with patch(
+        "server.api.dataset.export_dataset_to_hub",
+        side_effect=HuggingFaceNotConfiguredError("Set HF_TOKEN"),
+    ):
+        response = client.post("/dataset/d/export/huggingface")
+    assert response.status_code == 503
+
+
+def test_export_to_huggingface_public_repo_returns_409(client: TestClient):
+    """Refusing to publish is a conflict the user must resolve, not a 500."""
+    from server.services.huggingface import HuggingFaceRepoPublicError
+
+    with patch(
+        "server.api.dataset.export_dataset_to_hub",
+        side_effect=HuggingFaceRepoPublicError("repo 'kevin/d' is public"),
+    ):
+        response = client.post("/dataset/d/export/huggingface")
+    assert response.status_code == 409
+    assert "public" in response.json()["detail"]
+
+
+def test_export_to_huggingface_unknown_dataset_returns_404(client: TestClient):
+    with patch(
+        "server.api.dataset.export_dataset_to_hub",
+        side_effect=ValueError("Dataset 'nope' not found"),
+    ):
+        response = client.post("/dataset/nope/export/huggingface")
+    assert response.status_code == 404
+
+
+def test_export_to_huggingface_hub_failure_returns_502(client: TestClient):
+    """A Hub outage is an upstream failure, not our bug."""
+    with patch(
+        "server.api.dataset.export_dataset_to_hub",
+        side_effect=RuntimeError("503 Service Unavailable"),
+    ):
+        response = client.post("/dataset/d/export/huggingface")
+    assert response.status_code == 502

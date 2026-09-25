@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-# The Q&A list now comes from Langfuse (keyed by dataset name), so these tests
+# The Q&A list comes from the dataset service (keyed by dataset name), so these tests
 # mock get_qa_view.
 
 

@@ -2,7 +2,6 @@ from typing import Any, cast
 from contextlib import asynccontextmanager
 import logging
 import asyncio
-from importlib import import_module
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +20,6 @@ from server.api import (
     prompts,
     quality_rules,
 )
-from server.services import langfuse
 from server.services.auth import get_current_user
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal
@@ -147,23 +145,6 @@ if config.debug_logs:
 
     app.include_router(debug_api.router)
     logger.info("DEBUG_LOGS enabled — streaming server logs at /debug/logs")
-
-# Always mount the Langfuse routes: each endpoint guards itself with a clear
-# 503 when Langfuse isn't configured/reachable. Mounting them conditionally on
-# startup availability meant a missing/invalid config produced a confusing 404
-# and required a server restart once the config was fixed.
-try:
-    langfuse_mod = import_module("server.api.langfuse")
-    app.include_router(langfuse_mod.router, dependencies=auth_required)
-    if langfuse.is_langfuse_available():
-        logging.info("Langfuse routes enabled (Langfuse reachable)")
-    else:
-        logging.info(
-            "Langfuse routes enabled, but Langfuse is not configured/reachable; "
-            "endpoints will return 503 until LANGFUSE_* env vars are set."
-        )
-except Exception as e:
-    logging.warning(f"Failed to load Langfuse routes: {e}")
 
 
 @app.get("/")

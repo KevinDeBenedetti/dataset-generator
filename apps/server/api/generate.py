@@ -1,15 +1,11 @@
-import asyncio
-import json
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import StreamingResponse
 
 from server.schemas.dataset import TargetLanguage
 from server.schemas.generate import (
-    DatasetGenerationRequest,
     DatasetGenerationResponse,
     ErrorResponse,
     GitHubGenerationRequest,
@@ -54,15 +50,6 @@ def _resolve_models(
         )
 
     return model_cleaning, TargetLanguage(target_language), model_qa
-
-
-def _validate_and_resolve(
-    request: DatasetGenerationRequest,
-) -> Tuple[str, TargetLanguage, str]:
-    """Resolve/validate models for a URL generation request."""
-    return _resolve_models(
-        request.model_cleaning, request.target_language, request.model_qa
-    )
 
 
 def _build_response(
@@ -110,78 +97,8 @@ def _build_response(
         processing_time=processing_time,
         steps=steps,
         scraped_content=result.get("scraped_content"),
-        langfuse=result.get("langfuse"),
+        persisted=result.get("persisted"),
     )
-
-
-@router.post(
-    "/generate",
-    response_model=DatasetGenerationResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Generate a dataset from a URL",
-    description="Create a new dataset by processing the content of a given URL. "
-    "The process includes text cleaning and question-answer generation.",
-    responses={
-        201: {
-            "model": DatasetGenerationResponse,
-            "description": "Dataset created successfully",
-        },
-        400: {
-            "model": ErrorResponse,
-            "description": "Invalid parameters (model not available, unsupported language, etc.)",
-        },
-        500: {"model": ErrorResponse, "description": "Internal server error"},
-    },
-)
-async def create_dataset_for_url(
-    request: DatasetGenerationRequest,
-) -> DatasetGenerationResponse:
-    """
-    Create a new dataset by processing the content of a given URL.
-
-    This endpoint extracts text from the provided URL, cleans it, and generates
-    question-answer pairs using the specified language model.
-    """
-    start_time = time.time()
-
-    try:
-        model_cleaning, target_language_enum, model_qa = _validate_and_resolve(request)
-
-        pipeline = DatasetPipeline()
-        result = await pipeline.process_url(
-            url=str(request.url),
-            dataset_name=request.dataset_name,
-            model_cleaning=model_cleaning,
-            target_language=target_language_enum,
-            model_qa=model_qa,
-            similarity_threshold=request.similarity_threshold,
-            crawl=request.crawl,
-            max_depth=request.max_depth,
-            max_pages=request.max_pages,
-            crawl_delay_seconds=request.crawl_delay_seconds,
-            max_pages_per_domain=request.max_pages_per_domain,
-            sync_langfuse=request.sync_langfuse,
-        )
-
-        processing_time = time.time() - start_time
-        return _build_response(
-            result,
-            request.dataset_name,
-            request.similarity_threshold,
-            model_cleaning,
-            target_language_enum,
-            model_qa,
-            processing_time,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Unexpected error in create_dataset_for_url: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while processing your request.",
-        )
 
 
 def _resolve_file_models(
@@ -248,7 +165,7 @@ async def create_dataset_for_file(
     model_qa: Optional[str] = Form(None),
     model_vlm: Optional[str] = Form(None),
     similarity_threshold: float = Form(0.9, ge=0.0, le=1.0),
-    sync_langfuse: bool = Form(True),
+    persist: bool = Form(True),
 ) -> DatasetGenerationResponse:
     """Create a dataset from an uploaded PDF/image via the vision model."""
     start_time = time.time()
@@ -274,7 +191,7 @@ async def create_dataset_for_file(
             model_qa=model_qa_r,
             model_vlm=model_vlm_r,
             similarity_threshold=similarity_threshold,
-            sync_langfuse=sync_langfuse,
+            persist=persist,
         )
 
         processing_time = time.time() - start_time
@@ -342,7 +259,7 @@ async def create_dataset_for_github(
             model_qa=model_qa,
             max_repos=request.max_repos,
             similarity_threshold=request.similarity_threshold,
-            sync_langfuse=request.sync_langfuse,
+            persist=request.persist,
         )
 
         processing_time = time.time() - start_time
@@ -367,98 +284,3 @@ async def create_dataset_for_github(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
         )
-
-
-@router.post(
-    "/generate/stream",
-    summary="Generate a dataset from a URL (streaming progress)",
-    description="Same as POST /dataset/generate, but streams pipeline progress "
-    "as Server-Sent Events: a `step` event per pipeline stage, a `page` event "
-    "per crawled page, then a final `result` (or `error`) event.",
-)
-async def stream_dataset_for_url(
-    request: DatasetGenerationRequest,
-) -> StreamingResponse:
-    """Stream the generation pipeline's progress to the client over SSE.
-
-    Each event is a JSON object with a ``type`` field: ``step`` (a pipeline
-    stage finished), ``page`` (a page was crawled), ``result`` (the final
-    response payload) or ``error``.
-    """
-    # Validate up front so bad input returns a normal 400 (not a streamed error).
-    model_cleaning, target_language_enum, model_qa = _validate_and_resolve(request)
-
-    queue: asyncio.Queue = asyncio.Queue()
-    start_time = time.time()
-
-    def on_progress(event: Dict[str, Any]) -> None:
-        # Called synchronously from the pipeline (same event loop) — safe.
-        queue.put_nowait(event)
-
-    pipeline = DatasetPipeline()
-
-    async def run() -> None:
-        try:
-            result = await pipeline.process_url(
-                url=str(request.url),
-                dataset_name=request.dataset_name,
-                model_cleaning=model_cleaning,
-                target_language=target_language_enum,
-                model_qa=model_qa,
-                similarity_threshold=request.similarity_threshold,
-                crawl=request.crawl,
-                max_depth=request.max_depth,
-                max_pages=request.max_pages,
-                crawl_delay_seconds=request.crawl_delay_seconds,
-                max_pages_per_domain=request.max_pages_per_domain,
-                sync_langfuse=request.sync_langfuse,
-                on_progress=on_progress,
-            )
-            processing_time = time.time() - start_time
-            response = _build_response(
-                result,
-                request.dataset_name,
-                request.similarity_threshold,
-                model_cleaning,
-                target_language_enum,
-                model_qa,
-                processing_time,
-            )
-            queue.put_nowait(
-                {"type": "result", "data": response.model_dump(mode="json")}
-            )
-        except HTTPException as e:
-            queue.put_nowait({"type": "error", "detail": e.detail})
-        except Exception as e:
-            logging.error(f"Unexpected error in stream_dataset_for_url: {str(e)}")
-            queue.put_nowait(
-                {
-                    "type": "error",
-                    "detail": "An unexpected error occurred while processing your request.",
-                }
-            )
-        finally:
-            queue.put_nowait(None)  # sentinel: stream complete
-
-    task = asyncio.create_task(run())
-
-    async def event_generator():
-        try:
-            while True:
-                event = await queue.get()
-                if event is None:
-                    break
-                yield f"data: {json.dumps(event)}\n\n"
-        finally:
-            if not task.done():
-                task.cancel()
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )

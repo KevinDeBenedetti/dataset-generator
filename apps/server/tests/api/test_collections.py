@@ -1,19 +1,17 @@
-"""Tests for the /collections API endpoints (Langfuse-backed)."""
+"""Tests for the /collections API endpoints."""
 
 from unittest.mock import patch
 
 import pytest
 
-from server.services.qdrant import LangfuseUnavailableError
 
-
-def test_get_collections_lists_langfuse_datasets(client):
+def test_get_collections_lists_datasets(client):
     fake = {
         "qdrant_configured": False,
         "total": 1,
         "collections": [
             {
-                "id": "lf-1",
+                "id": "ds-1",
                 "name": "Gamma",
                 "description": "d",
                 "target_language": None,
@@ -33,15 +31,6 @@ def test_get_collections_lists_langfuse_datasets(client):
     assert body["total"] == 1
     assert body["collections"][0]["name"] == "Gamma"
     assert body["collections"][0]["collection_name"] == "dataset_gamma"
-
-
-def test_get_collections_503_when_langfuse_unavailable(client):
-    with patch(
-        "server.api.collections.list_collections",
-        side_effect=LangfuseUnavailableError("Langfuse is not configured."),
-    ):
-        response = client.get("/collections")
-    assert response.status_code == 503
 
 
 def test_push_to_qdrant_returns_503_when_qdrant_unconfigured(client):
@@ -78,17 +67,6 @@ def test_push_to_qdrant_success(client):
 
     assert response.status_code == 200
     assert response.json() == fake_result
-
-
-def test_push_to_qdrant_returns_503_when_langfuse_unavailable(client):
-    """Qdrant may be up while the dataset's source of truth is not."""
-    with patch(
-        "server.api.collections.sync_dataset_to_qdrant",
-        side_effect=LangfuseUnavailableError("Langfuse is not configured."),
-    ):
-        response = client.post("/collections/Gamma/qdrant")
-
-    assert response.status_code == 503
 
 
 def test_search_returns_matching_pairs(client):

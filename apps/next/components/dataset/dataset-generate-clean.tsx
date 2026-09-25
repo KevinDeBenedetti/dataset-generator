@@ -14,7 +14,7 @@ export function DatasetGenerateClean() {
 
   const cleanMutation = useCleanDataset()
 
-  // Keyed by the Langfuse dataset name (the source of truth). The store value
+  // Keyed by the dataset name. The store value
   // is a generation result (dataset_name) or a dataset row (name).
   const datasetId = dataset ? ('dataset_name' in dataset ? dataset.dataset_name : dataset.name) : ''
 

@@ -72,6 +72,8 @@ class DatasetResponse(BaseModel):
     description: Optional[str] = None
     target_language: Optional[str] = None
     qa_sources_count: Optional[int] = None
+    # Latest recorded version (None until a generation has been stored).
+    version: Optional[int] = None
     created_at: Optional[str] = None
     message: Optional[str] = None
 
@@ -118,6 +120,34 @@ class DatasetSourcesResponse(BaseModel):
     sources: List[DatasetSource]
     total_analyses: int
     history: List[DatasetAnalysis]
+
+
+class DatasetVersionsResponse(BaseModel):
+    """A dataset's recorded generations, newest first."""
+
+    dataset_name: str
+    total: int
+    versions: List[DatasetAnalysis]
+
+
+class HuggingFaceExportResponse(BaseModel):
+    """Result of an export to the Hugging Face Hub."""
+
+    dataset_name: str
+    repo_id: str = Field(..., description="Full 'namespace/name' on the Hub")
+    url: str
+    private: bool = Field(
+        True, description="Always true — exported dataset repos are private"
+    )
+    pairs_exported: int
+
+
+class DuplicateDatasetResponse(BaseModel):
+    message: str
+    dataset_name: str
+    target_dataset_name: str
+    total_items: int
+    created_count: int
 
 
 class SimilarityPair(BaseModel):

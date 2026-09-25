@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetData, AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetErrors, AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponses, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostData, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses, CreateDatasetDatasetPostData, CreateDatasetDatasetPostErrors, CreateDatasetDatasetPostResponses, CreateDatasetForFileDatasetGenerateFilePostData, CreateDatasetForFileDatasetGenerateFilePostErrors, CreateDatasetForFileDatasetGenerateFilePostResponses, CreateDatasetForGithubDatasetGenerateGithubPostData, CreateDatasetForGithubDatasetGenerateGithubPostErrors, CreateDatasetForGithubDatasetGenerateGithubPostResponses, CreateDatasetForUrlDatasetGeneratePostData, CreateDatasetForUrlDatasetGeneratePostErrors, CreateDatasetForUrlDatasetGeneratePostResponses, DeleteDatasetDatasetDatasetNameDeleteData, DeleteDatasetDatasetDatasetNameDeleteErrors, DeleteDatasetDatasetDatasetNameDeleteResponses, ExportDatasetLangfuseExportPostData, ExportDatasetLangfuseExportPostErrors, ExportDatasetLangfuseExportPostResponses, GetAllDatasetsDatasetGetData, GetAllDatasetsDatasetGetErrors, GetAllDatasetsDatasetGetResponses, GetCollectionsCollectionsGetData, GetCollectionsCollectionsGetResponses, GetDatasetSourcesDatasetDatasetNameSourcesGetData, GetDatasetSourcesDatasetDatasetNameSourcesGetErrors, GetDatasetSourcesDatasetDatasetNameSourcesGetResponses, GetQaByDatasetQaDatasetNameGetData, GetQaByDatasetQaDatasetNameGetErrors, GetQaByDatasetQaDatasetNameGetResponses, GetQaStatsQaDatasetNameStatsGetData, GetQaStatsQaDatasetNameStatsGetErrors, GetQaStatsQaDatasetNameStatsGetResponses, HealthHealthGetData, HealthHealthGetResponses, ListDatasetVersionsLangfuseVersionsDatasetGetData, ListDatasetVersionsLangfuseVersionsDatasetGetErrors, ListDatasetVersionsLangfuseVersionsDatasetGetResponses, ListLangfuseDatasetsLangfuseDatasetsGetData, ListLangfuseDatasetsLangfuseDatasetsGetResponses, ListOpenaiModelsOpenaiModelsGetData, ListOpenaiModelsOpenaiModelsGetResponses, ListPromptsPromptsGetData, ListPromptsPromptsGetResponses, LoginAuthLoginPostData, LoginAuthLoginPostErrors, LoginAuthLoginPostResponses, LogoutAuthLogoutPostData, LogoutAuthLogoutPostResponses, MeAuthMeGetData, MeAuthMeGetResponses, OidcCallbackAuthOidcCallbackGetData, OidcCallbackAuthOidcCallbackGetResponses, OidcLoginAuthOidcLoginGetData, OidcLoginAuthOidcLoginGetResponses, PreviewDatasetTransformationLangfusePreviewGetData, PreviewDatasetTransformationLangfusePreviewGetErrors, PreviewDatasetTransformationLangfusePreviewGetResponses, PushCollectionToQdrantCollectionsDatasetNameQdrantPostData, PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors, PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses, PutQualityRulesQualityRulesPutData, PutQualityRulesQualityRulesPutErrors, PutQualityRulesQualityRulesPutResponses, QaAgentTestAgentQaTestPostData, QaAgentTestAgentQaTestPostErrors, QaAgentTestAgentQaTestPostResponses, ReadQualityRulesQualityRulesGetData, ReadQualityRulesQualityRulesGetResponses, RefreshAuthRefreshPostData, RefreshAuthRefreshPostResponses, ResolvePairDatasetDatasetNameResolvePairPostData, ResolvePairDatasetDatasetNameResolvePairPostErrors, ResolvePairDatasetDatasetNameResolvePairPostResponses, RootGetData, RootGetResponses, SearchCollectionEndpointCollectionsDatasetNameSearchPostData, SearchCollectionEndpointCollectionsDatasetNameSearchPostErrors, SearchCollectionEndpointCollectionsDatasetNameSearchPostResponses, StreamDatasetForUrlDatasetGenerateStreamPostData, StreamDatasetForUrlDatasetGenerateStreamPostErrors, StreamDatasetForUrlDatasetGenerateStreamPostResponses } from './types.gen';
+import type { AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetData, AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetErrors, AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetResponses, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostData, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses, CreateDatasetDatasetPostData, CreateDatasetDatasetPostErrors, CreateDatasetDatasetPostResponses, CreateDatasetForFileDatasetGenerateFilePostData, CreateDatasetForFileDatasetGenerateFilePostErrors, CreateDatasetForFileDatasetGenerateFilePostResponses, CreateDatasetForGithubDatasetGenerateGithubPostData, CreateDatasetForGithubDatasetGenerateGithubPostErrors, CreateDatasetForGithubDatasetGenerateGithubPostResponses, DeleteDatasetDatasetDatasetNameDeleteData, DeleteDatasetDatasetDatasetNameDeleteErrors, DeleteDatasetDatasetDatasetNameDeleteResponses, DuplicateDatasetDatasetDatasetNameDuplicatePostData, DuplicateDatasetDatasetDatasetNameDuplicatePostErrors, DuplicateDatasetDatasetDatasetNameDuplicatePostResponses, ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostData, ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors, ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses, GetAllDatasetsDatasetGetData, GetAllDatasetsDatasetGetErrors, GetAllDatasetsDatasetGetResponses, GetCollectionsCollectionsGetData, GetCollectionsCollectionsGetResponses, GetDatasetSourcesDatasetDatasetNameSourcesGetData, GetDatasetSourcesDatasetDatasetNameSourcesGetErrors, GetDatasetSourcesDatasetDatasetNameSourcesGetResponses, GetDatasetVersionsDatasetDatasetNameVersionsGetData, GetDatasetVersionsDatasetDatasetNameVersionsGetErrors, GetDatasetVersionsDatasetDatasetNameVersionsGetResponses, GetQaByDatasetQaDatasetNameGetData, GetQaByDatasetQaDatasetNameGetErrors, GetQaByDatasetQaDatasetNameGetResponses, GetQaStatsQaDatasetNameStatsGetData, GetQaStatsQaDatasetNameStatsGetErrors, GetQaStatsQaDatasetNameStatsGetResponses, HealthHealthGetData, HealthHealthGetResponses, ListOpenaiModelsOpenaiModelsGetData, ListOpenaiModelsOpenaiModelsGetResponses, ListPromptsPromptsGetData, ListPromptsPromptsGetResponses, LoginAuthLoginPostData, LoginAuthLoginPostErrors, LoginAuthLoginPostResponses, LogoutAuthLogoutPostData, LogoutAuthLogoutPostResponses, MeAuthMeGetData, MeAuthMeGetResponses, OidcCallbackAuthOidcCallbackGetData, OidcCallbackAuthOidcCallbackGetResponses, OidcLoginAuthOidcLoginGetData, OidcLoginAuthOidcLoginGetResponses, PushCollectionToQdrantCollectionsDatasetNameQdrantPostData, PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors, PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses, PutQualityRulesQualityRulesPutData, PutQualityRulesQualityRulesPutErrors, PutQualityRulesQualityRulesPutResponses, QaAgentTestAgentQaTestPostData, QaAgentTestAgentQaTestPostErrors, QaAgentTestAgentQaTestPostResponses, ReadQualityRulesQualityRulesGetData, ReadQualityRulesQualityRulesGetResponses, RefreshAuthRefreshPostData, RefreshAuthRefreshPostResponses, ResolvePairDatasetDatasetNameResolvePairPostData, ResolvePairDatasetDatasetNameResolvePairPostErrors, ResolvePairDatasetDatasetNameResolvePairPostResponses, RootGetData, RootGetResponses, SearchCollectionEndpointCollectionsDatasetNameSearchPostData, SearchCollectionEndpointCollectionsDatasetNameSearchPostErrors, SearchCollectionEndpointCollectionsDatasetNameSearchPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -76,20 +76,6 @@ export const oidcLoginAuthOidcLoginGet = <ThrowOnError extends boolean = false>(
 export const oidcCallbackAuthOidcCallbackGet = <ThrowOnError extends boolean = false>(options?: Options<OidcCallbackAuthOidcCallbackGetData, ThrowOnError>): RequestResult<OidcCallbackAuthOidcCallbackGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<OidcCallbackAuthOidcCallbackGetResponses, unknown, ThrowOnError>({ url: '/auth/oidc/callback', ...options });
 
 /**
- * Generate a dataset from a URL
- *
- * Create a new dataset by processing the content of a given URL. The process includes text cleaning and question-answer generation.
- */
-export const createDatasetForUrlDatasetGeneratePost = <ThrowOnError extends boolean = false>(options: Options<CreateDatasetForUrlDatasetGeneratePostData, ThrowOnError>): RequestResult<CreateDatasetForUrlDatasetGeneratePostResponses, CreateDatasetForUrlDatasetGeneratePostErrors, ThrowOnError> => (options.client ?? client).post<CreateDatasetForUrlDatasetGeneratePostResponses, CreateDatasetForUrlDatasetGeneratePostErrors, ThrowOnError>({
-    url: '/dataset/generate',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
  * Generate a dataset from an uploaded file (PDF or image)
  *
  * Create a new dataset from an uploaded PDF or image. Each page is transcribed with the configured vision model (OPENAI_VLM_MODEL), then mined for question-answer pairs.
@@ -119,30 +105,16 @@ export const createDatasetForGithubDatasetGenerateGithubPost = <ThrowOnError ext
 });
 
 /**
- * Generate a dataset from a URL (streaming progress)
- *
- * Same as POST /dataset/generate, but streams pipeline progress as Server-Sent Events: a `step` event per pipeline stage, a `page` event per crawled page, then a final `result` (or `error`) event.
- */
-export const streamDatasetForUrlDatasetGenerateStreamPost = <ThrowOnError extends boolean = false>(options: Options<StreamDatasetForUrlDatasetGenerateStreamPostData, ThrowOnError>): RequestResult<StreamDatasetForUrlDatasetGenerateStreamPostResponses, StreamDatasetForUrlDatasetGenerateStreamPostErrors, ThrowOnError> => (options.client ?? client).post<StreamDatasetForUrlDatasetGenerateStreamPostResponses, StreamDatasetForUrlDatasetGenerateStreamPostErrors, ThrowOnError>({
-    url: '/dataset/generate/stream',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
  * Get All Datasets
  *
- * Retrieve all datasets from Langfuse, or a specific one (by name).
+ * Retrieve all datasets, or a specific one (by name).
  */
 export const getAllDatasetsDatasetGet = <ThrowOnError extends boolean = false>(options?: Options<GetAllDatasetsDatasetGetData, ThrowOnError>): RequestResult<GetAllDatasetsDatasetGetResponses, GetAllDatasetsDatasetGetErrors, ThrowOnError> => (options?.client ?? client).get<GetAllDatasetsDatasetGetResponses, GetAllDatasetsDatasetGetErrors, ThrowOnError>({ url: '/dataset', ...options });
 
 /**
  * Create Dataset
  *
- * Create a new (empty) dataset in Langfuse.
+ * Create a new (empty) dataset.
  */
 export const createDatasetDatasetPost = <ThrowOnError extends boolean = false>(options: Options<CreateDatasetDatasetPostData, ThrowOnError>): RequestResult<CreateDatasetDatasetPostResponses, CreateDatasetDatasetPostErrors, ThrowOnError> => (options.client ?? client).post<CreateDatasetDatasetPostResponses, CreateDatasetDatasetPostErrors, ThrowOnError>({ url: '/dataset', ...options });
 
@@ -154,6 +126,27 @@ export const createDatasetDatasetPost = <ThrowOnError extends boolean = false>(o
 export const getDatasetSourcesDatasetDatasetNameSourcesGet = <ThrowOnError extends boolean = false>(options: Options<GetDatasetSourcesDatasetDatasetNameSourcesGetData, ThrowOnError>): RequestResult<GetDatasetSourcesDatasetDatasetNameSourcesGetResponses, GetDatasetSourcesDatasetDatasetNameSourcesGetErrors, ThrowOnError> => (options.client ?? client).get<GetDatasetSourcesDatasetDatasetNameSourcesGetResponses, GetDatasetSourcesDatasetDatasetNameSourcesGetErrors, ThrowOnError>({ url: '/dataset/{dataset_name}/sources', ...options });
 
 /**
+ * Get Dataset Versions
+ *
+ * The dataset's version history (one entry per recorded generation).
+ */
+export const getDatasetVersionsDatasetDatasetNameVersionsGet = <ThrowOnError extends boolean = false>(options: Options<GetDatasetVersionsDatasetDatasetNameVersionsGetData, ThrowOnError>): RequestResult<GetDatasetVersionsDatasetDatasetNameVersionsGetResponses, GetDatasetVersionsDatasetDatasetNameVersionsGetErrors, ThrowOnError> => (options.client ?? client).get<GetDatasetVersionsDatasetDatasetNameVersionsGetResponses, GetDatasetVersionsDatasetDatasetNameVersionsGetErrors, ThrowOnError>({ url: '/dataset/{dataset_name}/versions', ...options });
+
+/**
+ * Export To Huggingface
+ *
+ * Export a dataset to the Hugging Face Hub as a **private** dataset repo.
+ */
+export const exportToHuggingfaceDatasetDatasetNameExportHuggingfacePost = <ThrowOnError extends boolean = false>(options: Options<ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostData, ThrowOnError>): RequestResult<ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses, ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors, ThrowOnError> => (options.client ?? client).post<ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses, ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors, ThrowOnError>({ url: '/dataset/{dataset_name}/export/huggingface', ...options });
+
+/**
+ * Duplicate Dataset
+ *
+ * Copy a dataset's Q/A pairs into another dataset.
+ */
+export const duplicateDatasetDatasetDatasetNameDuplicatePost = <ThrowOnError extends boolean = false>(options: Options<DuplicateDatasetDatasetDatasetNameDuplicatePostData, ThrowOnError>): RequestResult<DuplicateDatasetDatasetDatasetNameDuplicatePostResponses, DuplicateDatasetDatasetDatasetNameDuplicatePostErrors, ThrowOnError> => (options.client ?? client).post<DuplicateDatasetDatasetDatasetNameDuplicatePostResponses, DuplicateDatasetDatasetDatasetNameDuplicatePostErrors, ThrowOnError>({ url: '/dataset/{dataset_name}/duplicate', ...options });
+
+/**
  * Analyze Similarities
  *
  * Analyze near-duplicate questions in a dataset (read-only).
@@ -163,7 +156,7 @@ export const analyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGet = <Thro
 /**
  * Clean Similarities
  *
- * Remove near-duplicate questions from a dataset (deletes Langfuse items).
+ * Remove near-duplicate questions from a dataset (deletes stored pairs).
  */
 export const cleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPost = <ThrowOnError extends boolean = false>(options: Options<CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostData, ThrowOnError>): RequestResult<CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors, ThrowOnError> => (options.client ?? client).post<CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostResponses, CleanSimilaritiesDatasetDatasetNameCleanSimilaritiesPostErrors, ThrowOnError>({ url: '/dataset/{dataset_name}/clean-similarities', ...options });
 
@@ -187,9 +180,7 @@ export const resolvePairDatasetDatasetNameResolvePairPost = <ThrowOnError extend
 /**
  * Delete Dataset
  *
- * Delete a dataset's Q/A items from Langfuse and drop its Qdrant collection.
- *
- * Langfuse has no delete-dataset API, so the empty dataset shell remains.
+ * Delete a dataset, its Q/A pairs and its Qdrant collection.
  */
 export const deleteDatasetDatasetDatasetNameDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteDatasetDatasetDatasetNameDeleteData, ThrowOnError>): RequestResult<DeleteDatasetDatasetDatasetNameDeleteResponses, DeleteDatasetDatasetDatasetNameDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DeleteDatasetDatasetDatasetNameDeleteResponses, DeleteDatasetDatasetDatasetNameDeleteErrors, ThrowOnError>({ url: '/dataset/{dataset_name}', ...options });
 
@@ -206,7 +197,7 @@ export const getQaStatsQADatasetNameStatsGet = <ThrowOnError extends boolean = f
 /**
  * Get Qa By Dataset
  *
- * Retrieve a dataset's Q&A items from Langfuse (keyed by dataset name).
+ * Retrieve a dataset's Q&A pairs (keyed by dataset name).
  */
 export const getQaByDatasetQADatasetNameGet = <ThrowOnError extends boolean = false>(options: Options<GetQaByDatasetQaDatasetNameGetData, ThrowOnError>): RequestResult<GetQaByDatasetQaDatasetNameGetResponses, GetQaByDatasetQaDatasetNameGetErrors, ThrowOnError> => (options.client ?? client).get<GetQaByDatasetQaDatasetNameGetResponses, GetQaByDatasetQaDatasetNameGetErrors, ThrowOnError>({ url: '/q_a/{dataset_name}', ...options });
 
@@ -232,14 +223,14 @@ export const qaAgentTestAgentQaTestPost = <ThrowOnError extends boolean = false>
 /**
  * Get Collections
  *
- * List Langfuse datasets as collections, annotated with their Qdrant status.
+ * List the stored datasets as collections, annotated with their Qdrant status.
  */
 export const getCollectionsCollectionsGet = <ThrowOnError extends boolean = false>(options?: Options<GetCollectionsCollectionsGetData, ThrowOnError>): RequestResult<GetCollectionsCollectionsGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetCollectionsCollectionsGetResponses, unknown, ThrowOnError>({ url: '/collections', ...options });
 
 /**
  * Push Collection To Qdrant
  *
- * Embed a Langfuse dataset's Q/A items and upsert them into Qdrant.
+ * Embed a dataset's Q/A pairs and upsert them into Qdrant.
  */
 export const pushCollectionToQdrantCollectionsDatasetNameQdrantPost = <ThrowOnError extends boolean = false>(options: Options<PushCollectionToQdrantCollectionsDatasetNameQdrantPostData, ThrowOnError>): RequestResult<PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses, PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors, ThrowOnError> => (options.client ?? client).post<PushCollectionToQdrantCollectionsDatasetNameQdrantPostResponses, PushCollectionToQdrantCollectionsDatasetNameQdrantPostErrors, ThrowOnError>({ url: '/collections/{dataset_name}/qdrant', ...options });
 
@@ -285,40 +276,6 @@ export const putQualityRulesQualityRulesPut = <ThrowOnError extends boolean = fa
  * Every LLM prompt shipped with the app, with where/how it is used.
  */
 export const listPromptsPromptsGet = <ThrowOnError extends boolean = false>(options?: Options<ListPromptsPromptsGetData, ThrowOnError>): RequestResult<ListPromptsPromptsGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListPromptsPromptsGetResponses, unknown, ThrowOnError>({ url: '/prompts', ...options });
-
-/**
- * Preview Dataset Transformation
- *
- * Preview the dataset transformation for Langfuse without sending it
- */
-export const previewDatasetTransformationLangfusePreviewGet = <ThrowOnError extends boolean = false>(options: Options<PreviewDatasetTransformationLangfusePreviewGetData, ThrowOnError>): RequestResult<PreviewDatasetTransformationLangfusePreviewGetResponses, PreviewDatasetTransformationLangfusePreviewGetErrors, ThrowOnError> => (options.client ?? client).get<PreviewDatasetTransformationLangfusePreviewGetResponses, PreviewDatasetTransformationLangfusePreviewGetErrors, ThrowOnError>({ url: '/langfuse/preview', ...options });
-
-/**
- * List Langfuse Datasets
- *
- * List every dataset present in Langfuse (newest first).
- *
- * Powers the /datasets page so it reflects what actually lives in Langfuse,
- * rather than only the local database.
- */
-export const listLangfuseDatasetsLangfuseDatasetsGet = <ThrowOnError extends boolean = false>(options?: Options<ListLangfuseDatasetsLangfuseDatasetsGetData, ThrowOnError>): RequestResult<ListLangfuseDatasetsLangfuseDatasetsGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListLangfuseDatasetsLangfuseDatasetsGetResponses, unknown, ThrowOnError>({ url: '/langfuse/datasets', ...options });
-
-/**
- * List Dataset Versions
- *
- * List the version/run history (newest first) of a dataset in Langfuse.
- *
- * Each generation records a versioned run (``v1``, ``v2``, …). This exposes
- * that DVC-like history so the UI can show how a dataset evolved.
- */
-export const listDatasetVersionsLangfuseVersionsDatasetGet = <ThrowOnError extends boolean = false>(options: Options<ListDatasetVersionsLangfuseVersionsDatasetGetData, ThrowOnError>): RequestResult<ListDatasetVersionsLangfuseVersionsDatasetGetResponses, ListDatasetVersionsLangfuseVersionsDatasetGetErrors, ThrowOnError> => (options.client ?? client).get<ListDatasetVersionsLangfuseVersionsDatasetGetResponses, ListDatasetVersionsLangfuseVersionsDatasetGetErrors, ThrowOnError>({ url: '/langfuse/versions/{dataset}', ...options });
-
-/**
- * Export Dataset
- *
- * Duplicate a Langfuse dataset's items into a new (or renamed) Langfuse dataset.
- */
-export const exportDatasetLangfuseExportPost = <ThrowOnError extends boolean = false>(options: Options<ExportDatasetLangfuseExportPostData, ThrowOnError>): RequestResult<ExportDatasetLangfuseExportPostResponses, ExportDatasetLangfuseExportPostErrors, ThrowOnError> => (options.client ?? client).post<ExportDatasetLangfuseExportPostResponses, ExportDatasetLangfuseExportPostErrors, ThrowOnError>({ url: '/langfuse/export', ...options });
 
 /**
  * Root

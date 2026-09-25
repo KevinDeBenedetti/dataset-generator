@@ -35,9 +35,9 @@ export type BodyCreateDatasetForFileDatasetGenerateFilePost = {
      */
     similarity_threshold?: number;
     /**
-     * Sync Langfuse
+     * Persist
      */
-    sync_langfuse?: boolean;
+    persist?: boolean;
 };
 
 /**
@@ -310,86 +310,6 @@ export type DatasetAnalysis = {
 };
 
 /**
- * DatasetGenerationRequest
- *
- * Model for dataset generation request
- */
-export type DatasetGenerationRequest = {
-    /**
-     * Url
-     *
-     * URL to process to generate the dataset
-     */
-    url: string;
-    /**
-     * Dataset Name
-     *
-     * Name of the dataset to create
-     */
-    dataset_name: string;
-    /**
-     * Model Cleaning
-     *
-     * Model to use for text cleaning
-     */
-    model_cleaning?: string | null;
-    /**
-     * Target Language
-     *
-     * Target language for QA generation
-     */
-    target_language?: string | null;
-    /**
-     * Model Qa
-     *
-     * Model to use for QA generation
-     */
-    model_qa?: string | null;
-    /**
-     * Similarity Threshold
-     *
-     * Similarity threshold to detect duplicates (0.0-1.0)
-     */
-    similarity_threshold?: number;
-    /**
-     * Crawl
-     *
-     * Explore the whole site (follow same-domain internal links) instead of scraping only the seed URL
-     */
-    crawl?: boolean;
-    /**
-     * Max Depth
-     *
-     * Max link-following depth when crawling (defaults to config)
-     */
-    max_depth?: number | null;
-    /**
-     * Max Pages
-     *
-     * Max number of pages to crawl (defaults to config)
-     */
-    max_pages?: number | null;
-    /**
-     * Crawl Delay Seconds
-     *
-     * Throttle: seconds to pause between page fetches while crawling (0 = no throttle; defaults to config)
-     */
-    crawl_delay_seconds?: number | null;
-    /**
-     * Max Pages Per Domain
-     *
-     * Per-domain page budget while crawling (0 = unlimited; defaults to config)
-     */
-    max_pages_per_domain?: number | null;
-    /**
-     * Sync Langfuse
-     *
-     * Create/version the dataset in Langfuse at generation time
-     */
-    sync_langfuse?: boolean;
-};
-
-/**
  * DatasetGenerationResponse
  *
  * Model for dataset generation response
@@ -468,11 +388,11 @@ export type DatasetGenerationResponse = {
      */
     scraped_content?: string | null;
     /**
-     * Langfuse
+     * Persisted
      *
-     * Langfuse versioning summary (dataset name, version, run) when synced at generation time
+     * Summary of the stored version (dataset name, version, run) when the pairs were saved at generation time
      */
-    langfuse?: {
+    persisted?: {
         [key: string]: unknown;
     } | null;
 };
@@ -501,6 +421,10 @@ export type DatasetResponse = {
      * Qa Sources Count
      */
     qa_sources_count?: number | null;
+    /**
+     * Version
+     */
+    version?: number | null;
     /**
      * Created At
      */
@@ -586,6 +510,26 @@ export type DatasetSourcesResponse = {
 };
 
 /**
+ * DatasetVersionsResponse
+ *
+ * A dataset's recorded generations, newest first.
+ */
+export type DatasetVersionsResponse = {
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Versions
+     */
+    versions: Array<DatasetAnalysis>;
+};
+
+/**
  * DeleteDatasetResponse
  */
 export type DeleteDatasetResponse = {
@@ -601,6 +545,32 @@ export type DeleteDatasetResponse = {
      * Records Deleted
      */
     records_deleted: number;
+};
+
+/**
+ * DuplicateDatasetResponse
+ */
+export type DuplicateDatasetResponse = {
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Target Dataset Name
+     */
+    target_dataset_name: string;
+    /**
+     * Total Items
+     */
+    total_items: number;
+    /**
+     * Created Count
+     */
+    created_count: number;
 };
 
 /**
@@ -678,11 +648,11 @@ export type GitHubGenerationRequest = {
      */
     max_repos?: number | null;
     /**
-     * Sync Langfuse
+     * Persist
      *
-     * Create/version the dataset in Langfuse at generation time
+     * Store the generated pairs and record a version at generation time
      */
-    sync_langfuse?: boolean;
+    persist?: boolean;
 };
 
 /**
@@ -693,6 +663,38 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * HuggingFaceExportResponse
+ *
+ * Result of an export to the Hugging Face Hub.
+ */
+export type HuggingFaceExportResponse = {
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Repo Id
+     *
+     * Full 'namespace/name' on the Hub
+     */
+    repo_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Private
+     *
+     * Always true — exported dataset repos are private
+     */
+    private?: boolean;
+    /**
+     * Pairs Exported
+     */
+    pairs_exported: number;
 };
 
 /**
@@ -1431,39 +1433,6 @@ export type OidcCallbackAuthOidcCallbackGetResponses = {
     200: unknown;
 };
 
-export type CreateDatasetForUrlDatasetGeneratePostData = {
-    body: DatasetGenerationRequest;
-    path?: never;
-    query?: never;
-    url: '/dataset/generate';
-};
-
-export type CreateDatasetForUrlDatasetGeneratePostErrors = {
-    /**
-     * Invalid parameters (model not available, unsupported language, etc.)
-     */
-    400: ErrorResponse;
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-    /**
-     * Internal server error
-     */
-    500: ErrorResponse;
-};
-
-export type CreateDatasetForUrlDatasetGeneratePostError = CreateDatasetForUrlDatasetGeneratePostErrors[keyof CreateDatasetForUrlDatasetGeneratePostErrors];
-
-export type CreateDatasetForUrlDatasetGeneratePostResponses = {
-    /**
-     * Dataset created successfully
-     */
-    201: DatasetGenerationResponse;
-};
-
-export type CreateDatasetForUrlDatasetGeneratePostResponse = CreateDatasetForUrlDatasetGeneratePostResponses[keyof CreateDatasetForUrlDatasetGeneratePostResponses];
-
 export type CreateDatasetForFileDatasetGenerateFilePostData = {
     body: BodyCreateDatasetForFileDatasetGenerateFilePost;
     path?: never;
@@ -1529,29 +1498,6 @@ export type CreateDatasetForGithubDatasetGenerateGithubPostResponses = {
 };
 
 export type CreateDatasetForGithubDatasetGenerateGithubPostResponse = CreateDatasetForGithubDatasetGenerateGithubPostResponses[keyof CreateDatasetForGithubDatasetGenerateGithubPostResponses];
-
-export type StreamDatasetForUrlDatasetGenerateStreamPostData = {
-    body: DatasetGenerationRequest;
-    path?: never;
-    query?: never;
-    url: '/dataset/generate/stream';
-};
-
-export type StreamDatasetForUrlDatasetGenerateStreamPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamDatasetForUrlDatasetGenerateStreamPostError = StreamDatasetForUrlDatasetGenerateStreamPostErrors[keyof StreamDatasetForUrlDatasetGenerateStreamPostErrors];
-
-export type StreamDatasetForUrlDatasetGenerateStreamPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 
 export type GetAllDatasetsDatasetGetData = {
     body?: never;
@@ -1654,6 +1600,110 @@ export type GetDatasetSourcesDatasetDatasetNameSourcesGetResponses = {
 };
 
 export type GetDatasetSourcesDatasetDatasetNameSourcesGetResponse = GetDatasetSourcesDatasetDatasetNameSourcesGetResponses[keyof GetDatasetSourcesDatasetDatasetNameSourcesGetResponses];
+
+export type GetDatasetVersionsDatasetDatasetNameVersionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: never;
+    url: '/dataset/{dataset_name}/versions';
+};
+
+export type GetDatasetVersionsDatasetDatasetNameVersionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetDatasetVersionsDatasetDatasetNameVersionsGetError = GetDatasetVersionsDatasetDatasetNameVersionsGetErrors[keyof GetDatasetVersionsDatasetDatasetNameVersionsGetErrors];
+
+export type GetDatasetVersionsDatasetDatasetNameVersionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatasetVersionsResponse;
+};
+
+export type GetDatasetVersionsDatasetDatasetNameVersionsGetResponse = GetDatasetVersionsDatasetDatasetNameVersionsGetResponses[keyof GetDatasetVersionsDatasetDatasetNameVersionsGetResponses];
+
+export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: {
+        /**
+         * Repo Id
+         *
+         * Target repo as 'namespace/name' (defaults to the configured namespace and the dataset's slug)
+         */
+        repo_id?: string;
+    };
+    url: '/dataset/{dataset_name}/export/huggingface';
+};
+
+export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostError = ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors[keyof ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostErrors];
+
+export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HuggingFaceExportResponse;
+};
+
+export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponse = ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses[keyof ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostResponses];
+
+export type DuplicateDatasetDatasetDatasetNameDuplicatePostData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Name
+         */
+        dataset_name: string;
+    };
+    query?: {
+        /**
+         * Target Name
+         *
+         * Name of the copy (defaults to '<name>-copy')
+         */
+        target_name?: string;
+    };
+    url: '/dataset/{dataset_name}/duplicate';
+};
+
+export type DuplicateDatasetDatasetDatasetNameDuplicatePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DuplicateDatasetDatasetDatasetNameDuplicatePostError = DuplicateDatasetDatasetDatasetNameDuplicatePostErrors[keyof DuplicateDatasetDatasetDatasetNameDuplicatePostErrors];
+
+export type DuplicateDatasetDatasetDatasetNameDuplicatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: DuplicateDatasetResponse;
+};
+
+export type DuplicateDatasetDatasetDatasetNameDuplicatePostResponse = DuplicateDatasetDatasetDatasetNameDuplicatePostResponses[keyof DuplicateDatasetDatasetDatasetNameDuplicatePostResponses];
 
 export type AnalyzeSimilaritiesDatasetDatasetNameAnalyzeSimilaritiesGetData = {
     body?: never;
@@ -2040,114 +2090,6 @@ export type ListPromptsPromptsGetResponses = {
 };
 
 export type ListPromptsPromptsGetResponse = ListPromptsPromptsGetResponses[keyof ListPromptsPromptsGetResponses];
-
-export type PreviewDatasetTransformationLangfusePreviewGetData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Dataset Name
-         *
-         * Dataset name in Langfuse
-         */
-        dataset_name: string;
-    };
-    url: '/langfuse/preview';
-};
-
-export type PreviewDatasetTransformationLangfusePreviewGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PreviewDatasetTransformationLangfusePreviewGetError = PreviewDatasetTransformationLangfusePreviewGetErrors[keyof PreviewDatasetTransformationLangfusePreviewGetErrors];
-
-export type PreviewDatasetTransformationLangfusePreviewGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type ListLangfuseDatasetsLangfuseDatasetsGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/langfuse/datasets';
-};
-
-export type ListLangfuseDatasetsLangfuseDatasetsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type ListDatasetVersionsLangfuseVersionsDatasetGetData = {
-    body?: never;
-    path: {
-        /**
-         * Dataset
-         */
-        dataset: string;
-    };
-    query?: never;
-    url: '/langfuse/versions/{dataset}';
-};
-
-export type ListDatasetVersionsLangfuseVersionsDatasetGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListDatasetVersionsLangfuseVersionsDatasetGetError = ListDatasetVersionsLangfuseVersionsDatasetGetErrors[keyof ListDatasetVersionsLangfuseVersionsDatasetGetErrors];
-
-export type ListDatasetVersionsLangfuseVersionsDatasetGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type ExportDatasetLangfuseExportPostData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Dataset Name
-         *
-         * Dataset name in Langfuse
-         */
-        dataset_name: string;
-        /**
-         * Langfuse Dataset Name
-         *
-         * Custom name for the dataset in Langfuse
-         */
-        langfuse_dataset_name?: string | null;
-    };
-    url: '/langfuse/export';
-};
-
-export type ExportDatasetLangfuseExportPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ExportDatasetLangfuseExportPostError = ExportDatasetLangfuseExportPostErrors[keyof ExportDatasetLangfuseExportPostErrors];
-
-export type ExportDatasetLangfuseExportPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 
 export type RootGetData = {
     body?: never;

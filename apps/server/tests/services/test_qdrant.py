@@ -1,6 +1,6 @@
-"""Tests for the Qdrant collections service (Langfuse-backed).
+"""Tests for the Qdrant collections service.
 
-Datasets/items are read from Langfuse; here those reads are stubbed and a fake
+Datasets/pairs are read from Postgres; here those reads are stubbed and a fake
 in-memory Qdrant client records upserts, so the whole path runs offline.
 """
 
@@ -13,7 +13,6 @@ import pytest
 from server.core.config import config
 from server.services import qdrant as qdrant_service
 from server.services.qdrant import (
-    LangfuseUnavailableError,
     QdrantNotConfiguredError,
     collection_name_for,
     is_qdrant_configured,
@@ -77,17 +76,15 @@ class FakeLLM:
         return [[0.1, 0.2, 0.3] for _ in texts]
 
 
-def _item(item_id: str, i: int, status: str = "ACTIVE") -> dict:
-    """A Langfuse dataset item in the shape get_dataset_items returns."""
+def _item(item_id: str, i: int) -> dict:
+    """A stored Q/A pair in the shape get_dataset_pairs returns."""
     return {
         "id": item_id,
-        "status": status,
-        "input": {
-            "question": f"Question {i}?",
-            "context": f"Context for item {i}.",
-            "source_url": f"https://example.com/{i}",
-        },
-        "expected_output": {"answer": f"Answer {i}.", "confidence": 0.9},
+        "question": f"Question {i}?",
+        "answer": f"Answer {i}.",
+        "context": f"Context for item {i}.",
+        "source_url": f"https://example.com/{i}",
+        "confidence": 0.9,
         "metadata": {},
         "dataset_name": "My Dataset",
     }
@@ -158,22 +155,21 @@ def test_sync_is_idempotent_on_item_id():
     assert len(fake_client.collections[second["collection_name"]]["points"]) == 2
 
 
-def test_sync_reads_active_items_from_langfuse():
-    """When items aren't injected, they're read from Langfuse (archived dropped)."""
+def test_sync_reads_pairs_from_the_store():
+    """When items aren't injected, they're read from the dataset service."""
     fake_client = FakeQdrantClient()
     fake_llm = FakeLLM()
-    langfuse_items = [_item("h0", 0), _item("h1", 1, status="ARCHIVED")]
+    stored = [_item("h0", 0), _item("h1", 1)]
 
     with patch(
-        "server.services.qdrant.get_dataset_items", return_value=langfuse_items
+        "server.services.qdrant.get_dataset_pairs", return_value=stored
     ) as mock_get:
         result = sync_dataset_to_qdrant(
             "My Dataset", llm_service=fake_llm, client=fake_client
         )
 
     mock_get.assert_called_once_with("My Dataset")
-    # Only the ACTIVE item is synced.
-    assert result["points_upserted"] == 1
+    assert result["points_upserted"] == 2
 
 
 def test_sync_empty_dataset_raises_value_error():
@@ -258,27 +254,20 @@ def test_search_honours_limit():
 # --- listing -----------------------------------------------------------------
 
 
-def test_list_collections_raises_when_langfuse_unavailable():
-    with patch("server.services.qdrant.is_langfuse_available", return_value=False):
-        with pytest.raises(LangfuseUnavailableError):
-            list_collections()
-
-
 def test_list_collections_unconfigured_qdrant(monkeypatch):
-    monkeypatch.setattr(config, "qdrant_url", "")  # Qdrant off, Langfuse on
+    monkeypatch.setattr(config, "qdrant_url", "")  # Qdrant off
     datasets = [
         {
-            "id": "lf-1",
+            "id": "ds-1",
             "name": "Alpha",
             "description": "d",
-            "item_count": 3,
+            "qa_sources_count": 3,
+            "target_language": None,
             "created_at": "2026-01-01",
-            "metadata": {},
         },
     ]
-    with patch("server.services.qdrant.is_langfuse_available", return_value=True):
-        with patch("server.services.qdrant.list_datasets", return_value=datasets):
-            result = list_collections()
+    with patch("server.services.qdrant.list_datasets_view", return_value=datasets):
+        result = list_collections()
 
     assert result["qdrant_configured"] is False
     assert result["total"] == 1
@@ -295,12 +284,12 @@ def test_list_collections_reports_qdrant_status(monkeypatch):
     monkeypatch.setattr(config, "qdrant_url", "http://localhost:6333")
     datasets = [
         {
-            "id": "lf-2",
+            "id": "ds-2",
             "name": "Beta",
             "description": "d",
-            "item_count": 2,
+            "qa_sources_count": 2,
+            "target_language": None,
             "created_at": "2026-01-02",
-            "metadata": {},
         },
     ]
     fake_client = FakeQdrantClient()
@@ -308,12 +297,11 @@ def test_list_collections_reports_qdrant_status(monkeypatch):
     fake_client.create_collection(name, vectors_config=None)
     fake_client.collections[name]["points"]["x"] = object()
 
-    with patch("server.services.qdrant.is_langfuse_available", return_value=True):
-        with patch("server.services.qdrant.list_datasets", return_value=datasets):
-            with patch(
-                "server.services.qdrant.get_qdrant_client", return_value=fake_client
-            ):
-                result = list_collections()
+    with patch("server.services.qdrant.list_datasets_view", return_value=datasets):
+        with patch(
+            "server.services.qdrant.get_qdrant_client", return_value=fake_client
+        ):
+            result = list_collections()
 
     assert result["qdrant_configured"] is True
     entry = result["collections"][0]

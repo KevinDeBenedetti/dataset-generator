@@ -49,15 +49,10 @@ def _main_with_debug_logs(enabled: bool):
     patching the singleton would silently stop reaching the code under test.
     (Env-to-flag parsing is covered separately, against ``Config`` directly.)
 
-    Langfuse availability is stubbed because importing main otherwise performs a
-    real ``auth_check`` round-trip.
     """
 
     def _reload_main():
-        with patch(
-            "server.services.langfuse.is_langfuse_available", return_value=False
-        ):
-            return importlib.reload(importlib.import_module("server.main"))
+        return importlib.reload(importlib.import_module("server.main"))
 
     try:
         with patch.object(config, "debug_logs", enabled):

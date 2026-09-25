@@ -55,8 +55,6 @@ services:
   server:
     container_name: server-fastapi
     depends_on:
-      crawl4ai:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       qdrant:
@@ -65,11 +63,7 @@ services:
         condition: service_healthy
     env_file:
       - .env
-    # The scraper talks to the crawl4ai service over HTTP instead of running
-    # crawl4ai (and its browser stack) in-process. Default points at the
-    # compose service; override CRAWL4AI_BASE_URL in .env to use a remote one.
     environment:
-      CRAWL4AI_BASE_URL: ${CRAWL4AI_BASE_URL:-http://crawl4ai:11235}
       # Postgres, reached in-network (the host mapping below is for psql/GUI
       # clients only). Built from the same POSTGRES_* vars the database service
       # uses, so overriding the credentials in .env keeps both sides in sync.
@@ -114,26 +108,6 @@ services:
           path: ./pyproject.toml
         - action: rebuild
           path: ./uv.lock
-
-  # Headless crawl4ai service: runs the browser stack and exposes a REST API.
-  # Keeping it in its own container isolates crawl4ai's dependencies (notably
-  # its `unclecode-litellm` fork) from the server, which uses the real litellm.
-  crawl4ai:
-    container_name: crawl4ai
-    image: ${CRAWL4AI_IMAGE:-unclecode/crawl4ai:0.8.9}
-    restart: always
-    # Chromium needs a larger /dev/shm than Docker's 64MB default.
-    shm_size: "1gb"
-    # Reachable from the server over the compose network; not published to the
-    # host by default. Map a host port here if you want the /playground UI.
-    expose:
-      - "11235"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   # Postgres: the application database (users, refresh tokens, quality rules).
   # The server reaches it in-network at postgres:5432; it is also published to

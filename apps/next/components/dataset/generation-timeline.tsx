@@ -83,7 +83,7 @@ export function GenerationTimeline({ steps, scrapedContent }: GenerationTimeline
               onClick={() => setShowContent((value) => !value)}
             >
               <FileText className="w-3.5 h-3.5" />
-              {showContent ? 'Hide' : 'View'} scraped content
+              {showContent ? 'Hide' : 'View'} extracted content
               <ChevronDown
                 className={cn('w-3.5 h-3.5 transition-transform', showContent && 'rotate-180')}
               />

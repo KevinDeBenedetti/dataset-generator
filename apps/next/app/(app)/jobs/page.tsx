@@ -29,9 +29,6 @@ export default function JobsPage() {
       : dataset.name
     : null
 
-  const notConfigured =
-    runsQuery.error instanceof Error && /not configured/i.test(runsQuery.error.message)
-
   return (
     <div className="jobs-page">
       <div className="page-head">
@@ -111,9 +108,7 @@ export default function JobsPage() {
         <div className="card-head">
           <div>
             <div className="card-title">Generation history</div>
-            <div className="card-desc">
-              Versioned runs recorded in Langfuse — one row per generation.
-            </div>
+            <div className="card-desc">Recorded runs — one row per generation.</div>
           </div>
         </div>
         {runsQuery.isPending && (
@@ -121,15 +116,7 @@ export default function JobsPage() {
             <p className="muted">Loading runs…</p>
           </div>
         )}
-        {!runsQuery.isPending && notConfigured && (
-          <div className="card-body">
-            <p className="muted">
-              Langfuse is not configured — set <code>LANGFUSE_*</code> in your <code>.env</code> to
-              record and list generation runs.
-            </p>
-          </div>
-        )}
-        {!runsQuery.isPending && runsQuery.error && !notConfigured && (
+        {!runsQuery.isPending && runsQuery.error && (
           <div className="card-body">
             <p className="hint" style={{ color: 'var(--destructive)' }}>
               {runsQuery.error instanceof Error

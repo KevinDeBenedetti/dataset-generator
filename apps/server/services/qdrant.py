@@ -1,32 +1,23 @@
 """Push a dataset's Q/A pairs into a Qdrant collection as embeddings.
 
-A "collection" in the UI is a Langfuse dataset projected into Qdrant: each Q/A
-item becomes a point whose vector is the embedding of its question + answer +
+A "collection" in the UI is a stored dataset projected into Qdrant: each Q/A
+pair becomes a point whose vector is the embedding of its question + answer +
 context, with the original fields kept in the payload for retrieval.
 
-Datasets are read from Langfuse (the source of truth); Qdrant is the optional
-vector store. Both degrade to a clear 503 when not configured/reachable.
+Datasets are read from Postgres (the source of truth); Qdrant is the optional
+vector store, which degrades to a clear 503 when not configured/reachable.
 """
 
-import json
 import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Protocol
 
 from server.core.config import config
+from server.services.datasets import get_dataset_pairs, list_datasets_view
 from server.services.llm import LLMService
-from server.services.langfuse import (
-    LangfuseUnavailableError,
-    get_dataset_items,
-    is_langfuse_available,
-    list_datasets,
-)
 
 logger = logging.getLogger(__name__)
-
-# Re-exported for callers that import it from this module.
-__all__ = ["LangfuseUnavailableError"]
 
 # Q/A pairs are embedded in batches rather than one `embeddings.create` call
 # for the whole dataset — a large dataset could otherwise exceed the
@@ -97,35 +88,16 @@ def _point_id(qa_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, qa_id))
 
 
-def _as_dict(value: Any) -> Dict[str, Any]:
-    """Coerce a Langfuse item field to a dict (it may arrive as a JSON string)."""
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-            return parsed if isinstance(parsed, dict) else {}
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
 def _item_fields(item: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract the Q/A fields from a Langfuse dataset item.
-
-    Items are stored as ``input={question, context, source_url}`` and
-    ``expected_output={answer, confidence}`` (see ``QAService.process_qa_pairs``).
-    """
-    inp = _as_dict(item.get("input"))
-    out = _as_dict(item.get("expected_output"))
+    """Normalise a stored Q/A pair into the fields kept in the point payload."""
     return {
         "qa_id": item.get("id"),
         "dataset_name": item.get("dataset_name"),
-        "question": inp.get("question", ""),
-        "answer": out.get("answer", ""),
-        "context": inp.get("context", ""),
-        "source_url": inp.get("source_url", ""),
-        "confidence": out.get("confidence", 1.0),
+        "question": item.get("question", ""),
+        "answer": item.get("answer", ""),
+        "context": item.get("context", ""),
+        "source_url": item.get("source_url", ""),
+        "confidence": item.get("confidence", 1.0),
     }
 
 
@@ -191,9 +163,9 @@ def sync_dataset_to_qdrant(
     client: Any = None,
     items: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Embed every active Q/A item of a Langfuse dataset and upsert into Qdrant.
+    """Embed every Q/A pair of a dataset and upsert them into Qdrant.
 
-    Reads the items from Langfuse (unless ``items`` is injected for testing),
+    Reads the pairs from Postgres (unless ``items`` is injected for testing),
     creates the collection (sized from the first embedding) if needed, then
     upserts one point per item keyed by a deterministic UUID of the item id so
     re-syncing is idempotent. ``llm_service``/``client`` are injectable too.
@@ -204,11 +176,7 @@ def sync_dataset_to_qdrant(
     from qdrant_client import models as qmodels
 
     if items is None:
-        items = [
-            it
-            for it in get_dataset_items(dataset_name)
-            if (it.get("status") or "ACTIVE") == "ACTIVE"
-        ]
+        items = get_dataset_pairs(dataset_name)
     if not items:
         raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs to sync")
 
@@ -325,22 +293,13 @@ def search_collection(
 
 
 def list_collections() -> Dict[str, Any]:
-    """List Langfuse datasets as collections, annotated with their Qdrant status.
+    """List the stored datasets as collections, annotated with their Qdrant status.
 
-    Datasets come from Langfuse (source of truth). ``qdrant_configured`` tells
-    the UI whether the "Add to Qdrant" action is available; when configured,
-    each dataset is annotated with ``in_qdrant`` and ``points_count``
-    (best-effort; left null if Qdrant can't be reached).
-
-    Raises LangfuseUnavailableError when Langfuse isn't configured/reachable.
+    ``qdrant_configured`` tells the UI whether the "Add to Qdrant" action is
+    available; when configured, each dataset is annotated with ``in_qdrant``
+    and ``points_count`` (best-effort; left null if Qdrant can't be reached).
     """
-    if not is_langfuse_available():
-        raise LangfuseUnavailableError(
-            "Langfuse is not configured or reachable. Set LANGFUSE_* to list "
-            "collections."
-        )
-
-    datasets = list_datasets()
+    datasets = list_datasets_view()
     qdrant_configured = is_qdrant_configured()
 
     client = None
@@ -355,7 +314,6 @@ def list_collections() -> Dict[str, Any]:
     for dataset in datasets:
         name = dataset["name"]
         collection_name = collection_name_for(name)
-        metadata = dataset.get("metadata") or {}
         in_qdrant: Optional[bool] = None
         points_count: Optional[int] = None
         if client is not None:
@@ -368,8 +326,8 @@ def list_collections() -> Dict[str, Any]:
                 "id": dataset.get("id"),
                 "name": name,
                 "description": dataset.get("description"),
-                "target_language": metadata.get("target_language"),
-                "qa_sources_count": dataset.get("item_count"),
+                "target_language": dataset.get("target_language"),
+                "qa_sources_count": dataset.get("qa_sources_count"),
                 "created_at": dataset.get("created_at"),
                 "collection_name": collection_name,
                 "in_qdrant": in_qdrant,

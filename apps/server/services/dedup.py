@@ -2,8 +2,8 @@
 
 The comparison logic lives here, free of any database or ORM dependency, so it
 can be unit-tested directly and reused as the QA storage layer evolves.
-``server.services.qa.QAService`` loads the target dataset's existing Langfuse
-items into :class:`QAEntry` values once per pipeline run and delegates every
+``server.services.qa.QAService`` loads the target dataset's stored pairs
+into :class:`QAEntry` values once per pipeline run and delegates every
 comparison to :func:`classify_duplicate` against that in-memory pool — no
 network call is repeated per QA pair.
 

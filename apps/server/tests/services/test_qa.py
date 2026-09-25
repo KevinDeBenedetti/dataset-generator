@@ -7,12 +7,13 @@ from server.services.dedup import DuplicateVerdict, compute_hash_from_content
 
 
 def _existing_item(question: str, answer: str, context: str, source_url: str) -> dict:
-    """A Langfuse dataset item shaped like `get_dataset_items` returns."""
+    """A stored pair shaped like `get_dataset_pairs` returns."""
     return {
         "id": compute_hash_from_content(question, answer, context, source_url),
-        "status": "ACTIVE",
-        "input": {"question": question, "context": context, "source_url": source_url},
-        "expected_output": {"answer": answer},
+        "question": question,
+        "answer": answer,
+        "context": context,
+        "source_url": source_url,
         "metadata": {},
     }
 
@@ -22,7 +23,7 @@ class TestQAService:
 
     def test_process_qa_pairs_new_items(self):
         """New QA pairs (no existing items) are all kept."""
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
 
             mock_qa1 = Mock()
@@ -47,7 +48,7 @@ class TestQAService:
         assert result["exact_duplicates"] == 0
         assert result["similar_duplicates"] == 0
         assert len(result["items"]) == 2
-        assert {i["input"]["question"] for i in result["items"]} == {
+        assert {i["question"] for i in result["items"]} == {
             "What is Docker?",
             "What is Kubernetes?",
         }
@@ -60,7 +61,7 @@ class TestQAService:
             context="Python is a high-level programming language.",
             source_url="https://example.com",
         )
-        with patch("server.services.qa.get_dataset_items", return_value=[existing]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
             qa_service = QAService("test_dataset")
 
             mock_qa = Mock()
@@ -85,7 +86,7 @@ class TestQAService:
         mock_classify.return_value = DuplicateVerdict(
             type="similar", duplicate_hash="similar-id", similarity_score=0.92
         )
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
 
             mock_qa = Mock()
@@ -105,7 +106,7 @@ class TestQAService:
 
     def test_process_qa_pairs_without_confidence(self):
         """Missing `confidence` attribute defaults to 1.0."""
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
 
             mock_qa = Mock(spec=["question", "answer"])  # No confidence attribute
@@ -121,7 +122,7 @@ class TestQAService:
             )
 
         assert result["total"] == 1
-        assert result["items"][0]["expected_output"]["confidence"] == 1.0
+        assert result["items"][0]["confidence"] == 1.0
 
     def test_process_qa_pairs_mixed_results(self):
         """A mix of new and exact-duplicate candidates in one call."""
@@ -131,7 +132,7 @@ class TestQAService:
             context="ctx",
             source_url="https://example.com",
         )
-        with patch("server.services.qa.get_dataset_items", return_value=[existing]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
             qa_service = QAService("test_dataset")
 
             mock_qa1 = Mock()
@@ -162,7 +163,7 @@ class TestQAService:
 
     def test_process_qa_pairs_empty_list(self):
         """Empty input yields empty output, no calls needed."""
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
             result = qa_service.process_qa_pairs(
                 qa_list=[],
@@ -180,9 +181,9 @@ class TestQAService:
     def test_process_qa_pairs_dedups_across_calls_without_requery(self):
         """A duplicate introduced across two process_qa_pairs calls (e.g. two
         pages in the same pipeline run) is caught by the in-memory pool, with
-        no extra Langfuse fetch between calls."""
+        no extra database read between calls."""
         with patch(
-            "server.services.qa.get_dataset_items", return_value=[]
+            "server.services.qa.get_dataset_pairs", return_value=[]
         ) as mock_fetch:
             qa_service = QAService("test_dataset")
 
@@ -218,8 +219,8 @@ class TestQAService:
 
     def test_process_qa_pairs_reuses_the_same_in_memory_pool(self):
         """The existing-entries pool is loaded once (lazily) and reused across
-        calls — not reloaded from Langfuse every time."""
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        calls — not reloaded from the database every time."""
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
             assert qa_service._existing_entries is None
 
@@ -256,7 +257,7 @@ class TestQAService:
     def test_process_qa_pairs_scoped_to_this_dataset_only(self):
         """`get_dataset_items` is called with this dataset's name, not globally."""
         with patch(
-            "server.services.qa.get_dataset_items", return_value=[]
+            "server.services.qa.get_dataset_pairs", return_value=[]
         ) as mock_fetch:
             qa_service = QAService("my-dataset")
             mock_qa = Mock()
@@ -272,11 +273,11 @@ class TestQAService:
             )
         mock_fetch.assert_called_once_with("my-dataset")
 
-    def test_process_qa_pairs_langfuse_unreachable_falls_back_to_empty_pool(self):
-        """If the Langfuse fetch errors (e.g. unreachable), dedup proceeds
-        against an empty pool rather than failing generation."""
+    def test_process_qa_pairs_db_unreachable_falls_back_to_empty_pool(self):
+        """If reading the stored pairs errors (e.g. the DB is down), dedup
+        proceeds against an empty pool rather than failing generation."""
         with patch(
-            "server.services.qa.get_dataset_items",
+            "server.services.qa.get_dataset_pairs",
             side_effect=RuntimeError("unreachable"),
         ):
             qa_service = QAService("test_dataset")
@@ -302,7 +303,7 @@ class TestQAService:
             "min_answer_words": 3,
             "reject_below_confidence": 0.7,
         }
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset", quality_rules=rules)
 
             too_short = Mock()
@@ -330,11 +331,11 @@ class TestQAService:
 
         assert result["quality_rejected"] == 2
         assert result["total"] == 1
-        assert result["items"][0]["input"]["question"] == "Q3?"
+        assert result["items"][0]["question"] == "Q3?"
 
     def test_process_qa_pairs_quality_rules_disabled_by_default(self):
         """No rules passed → nothing is rejected (backwards compatible)."""
-        with patch("server.services.qa.get_dataset_items", return_value=[]):
+        with patch("server.services.qa.get_dataset_pairs", return_value=[]):
             qa_service = QAService("test_dataset")
             mock_qa = Mock()
             mock_qa.question = "Q?"

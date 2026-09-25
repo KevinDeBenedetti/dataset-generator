@@ -18,8 +18,7 @@ WORKDIR /app
 
 # =============================================================================
 # Stage: dependencies
-# Python packages only. The browser stack lives in the separate crawl4ai
-# service, so no Chromium/Playwright is installed here.
+# Python packages only — no Chromium/Playwright or other browser stack needed.
 # =============================================================================
 FROM base AS dependencies
 

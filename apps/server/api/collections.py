@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from server.services.auth import require_admin
 from server.services.qdrant import (
-    LangfuseUnavailableError,
     QdrantNotConfiguredError,
     list_collections,
     search_collection,
@@ -22,11 +21,9 @@ router = APIRouter(prefix="/collections", tags=["collections"])
 
 @router.get("", response_model=CollectionsResponse)
 async def get_collections():
-    """List Langfuse datasets as collections, annotated with their Qdrant status."""
+    """List the stored datasets as collections, annotated with their Qdrant status."""
     try:
         return list_collections()
-    except LangfuseUnavailableError as e:
-        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logging.error(f"Error listing collections: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -39,12 +36,10 @@ async def get_collections():
     dependencies=[Depends(require_admin)],
 )
 async def push_collection_to_qdrant(dataset_name: str):
-    """Embed a Langfuse dataset's Q/A items and upsert them into Qdrant."""
+    """Embed a dataset's Q/A pairs and upsert them into Qdrant."""
     try:
         return sync_dataset_to_qdrant(dataset_name)
     except QdrantNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except LangfuseUnavailableError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

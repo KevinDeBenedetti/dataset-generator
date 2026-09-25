@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useCollections, useLangfuseDatasets } from '@/hooks'
+import { useCollections, useDatasets } from '@/hooks'
 import { useCurrentUser, useLogout } from '@/hooks/use-auth'
 import { cn, initialsFor } from '@/lib/utils'
 
@@ -55,12 +55,12 @@ export function AppSidebar() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   // Real dataset count for the Datasets nav badge. Uses the same source as the
-  // /datasets page (Langfuse) so the badge matches what's listed there; the
+  // /datasets page so the badge matches what's listed there; the
   // shared react-query cache means no extra request.
-  const { data: langfuse } = useLangfuseDatasets()
-  const datasetCount = langfuse?.total ?? langfuse?.datasets.length
+  const { data: datasets } = useDatasets()
+  const datasetCount = datasets?.length
 
-  // Number of collections actually synced into Qdrant (not just Langfuse
+  // Number of collections actually synced into Qdrant (not just stored
   // datasets projected as collections) for the Collections nav badge.
   const { data: collections } = useCollections()
   const qdrantCollectionCount = collections?.collections.filter((c) => c.in_qdrant).length

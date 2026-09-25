@@ -3,11 +3,11 @@
 [![CI](https://github.com/KevinDeBenedetti/dataset-generator/workflows/CI/badge.svg)](https://github.com/KevinDeBenedetti/dataset-generator/actions)
 [![codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator/graph/badge.svg)](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
 
-Web scraping and automatic dataset generation tool for question-answer datasets with advanced export capabilities and LLM integration.
+Automatic dataset generation tool for question-answer datasets with advanced export capabilities and LLM integration.
 
 ## 🎯 Objective
 
-Create quality datasets for training AI models by automatically scraping reliable sources and generating contextualized question-answer pairs. Export datasets to multiple formats including Langfuse for training data management.
+Create quality datasets for training AI models by mining uploaded files and GitHub repositories, generating contextualized question-answer pairs. Datasets are stored in PostgreSQL and can be exported to multiple formats.
 
 ## ⚡ Quick Start
 
@@ -24,19 +24,17 @@ make dev
 
 This project is designed with a modular architecture that separates concerns into distinct components:
 
-- **Scraper**: Retrieval of web content from specified URLs
 - **LLM Client**: Interaction with language models to generate question-answer pairs
 - **Data Manager**: Data management and dataset storage with multiple export formats
 - **Pipeline**: Orchestration of the complete dataset generation process
-- **Export Module**: Advanced dataset export to various platforms (Langfuse, JSON, CSV, etc.)
+- **Export Module**: Advanced dataset export to various formats (JSON, JSONL, CSV) and dataset copies
 
 ## ✨ Key Features
 
-- **Multi-source Scraping**: Support for various web sources and content types
-- **Whole-site Crawling**: Breadth-first crawl of the seed URL's same-domain internal links (configurable depth/page limits) to maximise the dataset from a single starting point
+- **Multi-source Ingestion**: File uploads (PDF/image, via a vision model) and GitHub account docs
 - **AI-Powered QA Generation**: Leverage state-of-the-art LLMs for intelligent question-answer pair creation
 - **Multi-language Support**: Generate datasets in French, English, Spanish, and German
-- **Langfuse Integration**: Datasets are created/updated in Langfuse at generation time, with DVC-like versioning — each run is recorded as an immutable, numbered dataset run (`v1`, `v2`, …) and items are idempotent by content hash
+- **Versioned storage**: datasets are created/updated in PostgreSQL at generation time, with DVC-like versioning — each generation is recorded as a numbered run (`v1`, `v2`, …) and pairs are idempotent by content hash
 - **Multiple Export Formats**: JSON, CSV, JSONL, and platform-specific formats
 - **Quality Control**: Automated validation and filtering of generated content
 - **Batch Processing**: Efficient handling of large-scale data generation
@@ -44,16 +42,17 @@ This project is designed with a modular architecture that separates concerns int
 
 ## 🔄 Workflow
 
-1. **Scraping / Crawling**: Retrieving raw web data — a single page, or a breadth-first crawl of the whole site (same-domain internal links, bounded by depth/page limits)
+1. **Ingestion**: Reading raw content from an uploaded file (transcribed page-by-page via a vision model) or a GitHub account's public docs
 2. **Cleaning**: Processing and normalizing text to extract relevant content (per page)
 3. **QA Generation**: Creating high-quality question-answer pairs via LLMs with configurable prompts
 4. **Quality Assurance**: Automated validation and cross-page deduplication of generated datasets
-5. **Versioning & Export**: Automatic Langfuse sync at generation time (versioned dataset runs), plus multi-format export
+5. **Versioning & Export**: Automatic save at generation time (versioned runs), plus multi-format export
 6. **Storage**: Persistent storage with metadata tracking and version control
 
 ## 📊 Export Options
 
-- **Langfuse**: Direct integration for training data management
+- **Hugging Face Hub**: Push a dataset to your account as a **private** dataset repo
+- **Qdrant**: Optional vector store for semantic search over a dataset
 - **JSON/JSONL**: Standard formats for data interchange
 - **CSV**: Tabular format for analysis and review
 - **Custom Formats**: Extensible export system for specific requirements
@@ -68,27 +67,22 @@ The tool supports extensive configuration options for:
 - Batch processing settings
 - API rate limiting and retry policies
 
-### Crawling & Versioning
+### Versioning
 
-The deep crawl and Langfuse versioning are controlled by these environment variables (with sensible defaults — add them to your `.env` to override):
+Dataset versioning is controlled by this environment variable (sensible default — add it to your `.env` to override):
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CRAWL_MAX_DEPTH` | `2` | Max link-following depth from the seed URL when crawling |
-| `CRAWL_MAX_PAGES` | `50` | Max number of pages fetched per crawl (cost ceiling) |
-| `CRAWL_SAME_DOMAIN` | `true` | Only follow links on the seed URL's host |
-| `LANGFUSE_AUTO_SYNC` | `true` | Create/version the dataset in Langfuse at generation time (requires `LANGFUSE_*` keys) |
+| `PERSIST_DATASETS` | `true` | Store the generated pairs and record a version at generation time |
 
-These can also be overridden per request: the `POST /dataset/generate` body accepts `crawl`, `max_depth`, `max_pages` and `sync_langfuse`, and the **Generate** page exposes them as form controls. Langfuse sync additionally requires `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_HOST` (the spelling `LANGFUSE_BASE_URL` is also accepted as an alias for the host).
-
-> 📖 For a full walkthrough of how crawling works (BFS traversal, env vars, the crawl4ai service, per-request overrides and tuning), see [docs/crawling.md](docs/crawling.md).
+This can also be overridden per request: the `POST /dataset/generate/file` and `POST /dataset/generate/github` bodies accept `persist`, and the **Generate** page exposes it as a form control.
 
 ### Database (PostgreSQL)
 
 The application database is **PostgreSQL** — it is the only supported backend,
 and `DATABASE_URL` is rejected at startup if it isn't a PostgreSQL URL. It holds
-the operational tables only (`users`, `refresh_tokens`, `quality_rules`);
-datasets and Q&A pairs live in Langfuse (see below).
+everything: the operational tables (`users`, `refresh_tokens`, `quality_rules`)
+and the datasets themselves (`datasets`, `qa_pairs`, `dataset_runs` — see below).
 
 `make dev` starts a `postgres` service and the server connects to it in-network
 at `postgres:5432`. It is also published on the host at `5452` (this project's
@@ -109,13 +103,36 @@ Running the server outside Docker (`make dev-local`) needs no extra setup: with
 `DATABASE_URL` unset it targets the compose Postgres through the published host
 port, using the same `POSTGRES_*` credentials.
 
-### Langfuse is a hard dependency
+### How datasets are stored
 
-There is no local database fallback for datasets — Langfuse is the sole source of truth, not an optional export target:
+Three tables hold everything the dataset pages show, all in the same Postgres:
 
-- **Reads**: `GET /dataset`, `/langfuse/preview` and `/langfuse/export` read directly from Langfuse. Every dataset/Q&A read endpoint returns `503` when `LANGFUSE_SECRET_KEY`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_HOST` aren't set or Langfuse is unreachable.
-- **Writes**: generation only durably stores Q&A pairs by syncing to Langfuse at the end of the pipeline (see `LANGFUSE_AUTO_SYNC`/`sync_langfuse` above). If that step is skipped or fails, the generated pairs are still returned in the API response but nothing is persisted server-side for later retrieval — there's no local table to fall back to or re-sync from afterwards.
-- **Deletion**: `DELETE /dataset/{name}` removes every item via the Langfuse API, but the empty dataset "shell" remains — Langfuse has no delete-dataset endpoint.
+- `datasets` — one row per named dataset. The **name** is the identifier every route and the front-end use; ids stay internal.
+- `qa_pairs` — the generated pairs, with `question`/`answer`/`context`/`source_url`/`confidence` as real columns (so the Q/A list paginates, the stats aggregate and the sources view groups in SQL). The primary key is a content hash, which makes re-running a generation idempotent.
+- `dataset_runs` — one row per generation: the seed that was analysed, the version (`v1`, `v2`, …) and the counters behind the history view.
+
+- **Writes**: generation stores its pairs and records a run at the end of the pipeline (see `PERSIST_DATASETS`/`persist` above). Turning that off makes generation a pass-through: the pairs come back in the API response and nothing is stored.
+- **Deletion**: `DELETE /dataset/{name}` drops the dataset, its pairs and its runs (`ON DELETE CASCADE`), then its Qdrant collection.
+
+### Hugging Face export
+
+`POST /dataset/{name}/export/huggingface` (admin only) pushes a dataset to the
+Hub as a **private** dataset repo, and the Datasets detail page has a button for
+it. Two files are written: `data/train.jsonl` (one Q/A pair per line) and a
+`README.md` dataset card whose front matter points the Hub viewer at that file.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `HF_TOKEN` | _(none — required for the export)_ | Hugging Face token with **write** access ([settings/tokens](https://huggingface.co/settings/tokens)). Without it the endpoint answers `503` |
+| `HF_NAMESPACE` | _(the token's own account)_ | User or organization the repo is created under |
+
+The repo id defaults to `<namespace>/<dataset-name-slug>`; pass `repo_id` to
+override it. There is deliberately **no public option**: generated datasets carry
+source text pulled from the input file/repo, so the repo is always created with
+`private=True`. Because
+the Hub ignores `private` when the repo already exists, an export into a repo
+that is already public is refused with a `409` rather than publishing the data —
+make that repo private on the Hub, or export to a different id.
 
 ### File uploads (PDF/image)
 
