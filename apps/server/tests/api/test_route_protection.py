@@ -58,7 +58,7 @@ def test_protected_routes_allow_authenticated(test_db):
     client = TestClient(app)
 
     # The dataset list now passes the auth gate and returns 200. The list comes
-    # from Langfuse (mocked here) — the point of this test is the auth gate.
+    # from the store (mocked here) — the point of this test is the auth gate.
     with patch("server.api.dataset.list_datasets_view", return_value=[]):
         response = client.get("/dataset")
     assert response.status_code == 200
@@ -96,7 +96,7 @@ def test_admin_routes_allow_admin(test_db):
 
     client = TestClient(app)
     # Past the admin gate the handlers run; mock their service layer so we assert
-    # the gate (200), not the Langfuse/Qdrant side effects.
+    # the gate (200), not the store/Qdrant side effects.
     with patch(
         "server.api.dataset.delete_dataset_view",
         return_value={

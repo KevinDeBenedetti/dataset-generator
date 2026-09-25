@@ -34,7 +34,7 @@ const QA: Qa[] = [
   },
   {
     q: 'Which formats can a dataset be exported to?',
-    a: 'Datasets can be exported to Langfuse, JSON, JSONL and CSV. The export system is extensible for custom formats.',
+    a: 'Datasets can be exported to JSON, JSONL and CSV, or copied into a new dataset. The export system is extensible for custom formats.',
     source: 'docs.example.com/export',
     score: 0.95,
     duplicate: false,
@@ -257,7 +257,7 @@ export default function DatasetDetailPage() {
                   </span>
                 </div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                  +47 pairs from Langfuse · 3 duplicates removed · quality 94%
+                  +47 pairs · 3 duplicates removed · quality 94%
                 </div>
               </div>
             </div>

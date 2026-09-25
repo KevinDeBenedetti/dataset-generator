@@ -45,7 +45,11 @@ class TestEnvBlankHandling:
 
     @pytest.mark.parametrize(
         "name",
-        ["CRAWL_MAX_DEPTH", "CRAWL_MAX_PAGES", "CRAWL_DELAY_SECONDS"],
+        [
+            "AUTH_TOKEN_TTL_SECONDS",
+            "AUTH_LOGIN_MAX_ATTEMPTS",
+            "AUTH_LOGIN_WINDOW_SECONDS",
+        ],
     )
     def test_blank_numeric_keys_do_not_crash_at_construction(self, monkeypatch, name):
         """`int("")` / `float("")` would raise before the app could even start."""
@@ -53,7 +57,7 @@ class TestEnvBlankHandling:
 
         cfg = Config()  # must not raise
 
-        assert cfg.crawl_max_depth >= 0
+        assert cfg.auth_token_ttl_seconds >= 0
 
 
 def test_cors_allow_origins_defaults_to_frontend_url():

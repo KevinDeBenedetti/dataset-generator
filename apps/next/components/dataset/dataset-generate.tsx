@@ -26,10 +26,9 @@ const availableLanguages = [
   { value: 'de', label: 'German' },
 ]
 
-type SourceKind = 'url' | 'file' | 'github'
+type SourceKind = 'file' | 'github'
 
 const sourceOptions: { value: SourceKind; label: string }[] = [
-  { value: 'url', label: 'URL' },
   { value: 'file', label: 'File' },
   { value: 'github', label: 'GitHub' },
 ]
@@ -41,8 +40,7 @@ interface DatasetGenerateProps {
 }
 
 export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProps) {
-  const [source, setSource] = useState<SourceKind>('url')
-  const [url, setUrl] = useState('')
+  const [source, setSource] = useState<SourceKind>('file')
   const [file, setFile] = useState<File | null>(null)
   const [githubUsername, setGithubUsername] = useState('')
   const [githubToken, setGithubToken] = useState('')
@@ -51,12 +49,7 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null)
   const [targetLanguage, setTargetLanguage] = useState<string>('fr')
   const [similarityThreshold, setSimilarityThreshold] = useState([0.9])
-  const [crawl, setCrawl] = useState(true)
-  const [maxDepth, setMaxDepth] = useState('2')
-  const [maxPages, setMaxPages] = useState('50')
-  const [crawlDelaySeconds, setCrawlDelaySeconds] = useState('')
-  const [maxPagesPerDomain, setMaxPagesPerDomain] = useState('')
-  const [syncLangfuse, setSyncLangfuse] = useState(true)
+  const [persist, setPersist] = useState(true)
 
   const { data: datasets = [] } = useDatasets()
   const generateMutation = useGenerateDataset()
@@ -88,10 +81,9 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
 
   // Whether the current source has the input it needs to run.
   const hasSource = useMemo(() => {
-    if (source === 'url') return !!url
     if (source === 'file') return !!file
     return !!githubUsername
-  }, [source, url, file, githubUsername])
+  }, [source, file, githubUsername])
 
   const handleGenerate = async () => {
     if (!hasSource || !datasetName) {
@@ -109,36 +101,22 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
               name: datasetName,
               targetLanguage,
               similarityThreshold: threshold,
-              syncLangfuse,
+              persist,
             }
-          : source === 'github'
-            ? {
-                source: 'github',
-                githubUsername,
-                githubToken: githubToken || null,
-                name: datasetName,
-                targetLanguage,
-                similarityThreshold: threshold,
-                maxRepos: Number(maxRepos) || null,
-                syncLangfuse,
-              }
-            : {
-                source: 'url',
-                url,
-                name: datasetName,
-                targetLanguage,
-                similarityThreshold: threshold,
-                crawl,
-                maxDepth: crawl ? Number(maxDepth) || null : null,
-                maxPages: crawl ? Number(maxPages) || null : null,
-                crawlDelaySeconds: crawl ? Number(crawlDelaySeconds) || null : null,
-                maxPagesPerDomain: crawl ? Number(maxPagesPerDomain) || null : null,
-                syncLangfuse,
-              },
+          : {
+              source: 'github',
+              githubUsername,
+              githubToken: githubToken || null,
+              name: datasetName,
+              targetLanguage,
+              similarityThreshold: threshold,
+              maxRepos: Number(maxRepos) || null,
+              persist,
+            },
       )
 
-      // Analyze/clean are keyed by the Langfuse dataset name (the source of
-      // truth). datasetName is already the selected/entered name.
+      // Analyze/clean are keyed by the dataset name; datasetName is already
+      // the selected/entered name.
       const name = datasetName || result?.dataset_name
       if (name) {
         await analyzeMutation.mutateAsync({ datasetId: name })
@@ -189,8 +167,8 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
           disabled={isAnyProcessing}
         />
 
-        {/* Source picker: URL / File / GitHub */}
-        <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1">
+        {/* Source picker: File / GitHub */}
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
           {sourceOptions.map((opt) => (
             <button
               key={opt.value}
@@ -207,15 +185,6 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
             </button>
           ))}
         </div>
-
-        {source === 'url' && (
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="URL"
-            disabled={isAnyProcessing}
-          />
-        )}
 
         {source === 'file' && (
           <div className="flex flex-col gap-1">
@@ -294,83 +263,6 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
               />
             </div>
 
-            {/* Crawl the whole site (URL source only) */}
-            {source === 'url' && (
-              <div className="flex flex-col gap-2 border-t pt-3">
-                <label className="flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
-                    checked={crawl}
-                    onChange={(e) => setCrawl(e.target.checked)}
-                    disabled={isAnyProcessing}
-                  />
-                  <span className="font-medium">Crawl entire site</span>
-                  <span className="text-gray-400">(follow same-domain links)</span>
-                </label>
-
-                {crawl && (
-                  <div className="grid grid-cols-2 gap-2 pl-6">
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="crawl-max-depth" className="text-xs text-gray-500">
-                        Max depth
-                      </label>
-                      <Input
-                        id="crawl-max-depth"
-                        type="number"
-                        min={0}
-                        value={maxDepth}
-                        onChange={(e) => setMaxDepth(e.target.value)}
-                        disabled={isAnyProcessing}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="crawl-max-pages" className="text-xs text-gray-500">
-                        Max pages
-                      </label>
-                      <Input
-                        id="crawl-max-pages"
-                        type="number"
-                        min={1}
-                        value={maxPages}
-                        onChange={(e) => setMaxPages(e.target.value)}
-                        disabled={isAnyProcessing}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="crawl-delay" className="text-xs text-gray-500">
-                        Crawl delay (s)
-                      </label>
-                      <Input
-                        id="crawl-delay"
-                        type="number"
-                        min={0}
-                        step={0.1}
-                        value={crawlDelaySeconds}
-                        onChange={(e) => setCrawlDelaySeconds(e.target.value)}
-                        placeholder="default"
-                        disabled={isAnyProcessing}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="crawl-max-pages-per-domain" className="text-xs text-gray-500">
-                        Max pages/domain
-                      </label>
-                      <Input
-                        id="crawl-max-pages-per-domain"
-                        type="number"
-                        min={0}
-                        value={maxPagesPerDomain}
-                        onChange={(e) => setMaxPagesPerDomain(e.target.value)}
-                        placeholder="unlimited"
-                        disabled={isAnyProcessing}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Max repos (GitHub source only) */}
             {source === 'github' && (
               <div className="flex flex-col gap-1 border-t pt-3">
@@ -389,18 +281,18 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
               </div>
             )}
 
-            {/* Langfuse versioning */}
+            {/* Persistence */}
             <div className="flex flex-col gap-1 border-t pt-3">
               <label className="flex items-center gap-2 text-xs text-gray-700">
                 <input
                   type="checkbox"
                   className="size-4 accent-primary"
-                  checked={syncLangfuse}
-                  onChange={(e) => setSyncLangfuse(e.target.checked)}
+                  checked={persist}
+                  onChange={(e) => setPersist(e.target.checked)}
                   disabled={isAnyProcessing}
                 />
-                <span className="font-medium">Version to Langfuse</span>
-                <span className="text-gray-400">(create & version dataset)</span>
+                <span className="font-medium">Save the dataset</span>
+                <span className="text-gray-400">(store the pairs & record a version)</span>
               </label>
             </div>
           </div>

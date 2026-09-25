@@ -3,8 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 import logging
 from typing import Optional
 
-from server.services.dataset_reads import get_qa_stats_view, get_qa_view
-from server.services.langfuse import LangfuseUnavailableError
+from server.services.datasets import get_qa_stats_view, get_qa_view
 from server.schemas.q_a import QAListResponse, QAStatsResponse
 
 router = APIRouter(
@@ -29,8 +28,6 @@ async def get_qa_stats(
         return QAStatsResponse(
             **get_qa_stats_view(dataset_name, score_threshold=score_threshold)
         )
-    except LangfuseUnavailableError as e:
-        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -46,13 +43,11 @@ async def get_qa_by_dataset(
     ),
     offset: Optional[int] = Query(0, ge=0, description="Pagination offset"),
 ) -> QAListResponse:
-    """Retrieve a dataset's Q&A items from Langfuse (keyed by dataset name)."""
+    """Retrieve a dataset's Q&A pairs (keyed by dataset name)."""
     try:
         return QAListResponse(
             **get_qa_view(dataset_name, limit=limit, offset=offset or 0)
         )
-    except LangfuseUnavailableError as e:
-        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

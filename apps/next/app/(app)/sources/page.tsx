@@ -3,73 +3,77 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/app/icon'
-import { useLangfuseDatasets } from '@/hooks'
+import { useAllDatasetSources, type DatasetSourceRow } from '@/hooks'
 import { relativeTime } from '@/lib/utils'
-import type { LangfuseDataset } from '@/api/sdk'
 
 type SourceGroup = {
   key: string
   label: string
   icon: string
-  datasetCount: number
+  datasets: Set<string>
+  qaCount: number
   lastGeneratedAt: string | null
 }
 
-// Datasets don't have a first-class "source" of their own — a source is
-// derived from the host (or scheme, for file:// / github:// origins) of the
-// datasets generated from it. Grouping client-side keeps this in sync with
-// the same data the Dashboard/Datasets pages already show, with no new
-// backend concept to maintain.
-function sourceKeyLabelIcon(sourceUrl: string | null | undefined) {
-  if (!sourceUrl) return { key: 'unknown', label: 'Unknown source', icon: 'globe' }
-  try {
-    const u = new URL(sourceUrl)
-    if (u.protocol === 'http:' || u.protocol === 'https:') {
-      return { key: u.host, label: u.host, icon: 'globe' }
-    }
-    if (u.protocol === 'github:') {
-      return { key: sourceUrl, label: sourceUrl.replace('github://', ''), icon: 'github' }
-    }
-    if (u.protocol === 'file:') {
-      return { key: sourceUrl, label: sourceUrl.replace('file://', ''), icon: 'fileText' }
-    }
-    return { key: sourceUrl, label: sourceUrl, icon: 'globe' }
-  } catch {
-    return { key: sourceUrl, label: sourceUrl, icon: 'globe' }
-  }
+const KIND_ICON: Record<string, string> = {
+  web: 'globe',
+  file: 'fileText',
+  github: 'github',
+  unknown: 'help',
 }
 
-function groupBySource(datasets: LangfuseDataset[]): SourceGroup[] {
+// Sources are recorded per page/file/account, so a crawl of 50 pages yields 50
+// rows. Grouping them by origin (the host, for web sources) is what makes the
+// list readable: one row per site, file or account, whatever the number of
+// pages behind it.
+function groupKey(source: DatasetSourceRow): { key: string; label: string } {
+  if (source.kind === 'web' && source.url) {
+    try {
+      const { host } = new URL(source.url)
+      return { key: host, label: host }
+    } catch {
+      return { key: source.label, label: source.label }
+    }
+  }
+  return { key: source.label, label: source.label }
+}
+
+function groupBySource(sources: DatasetSourceRow[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>()
-  for (const d of datasets) {
-    const { key, label, icon } = sourceKeyLabelIcon(d.source_url)
+  for (const source of sources) {
+    const { key, label } = groupKey(source)
     const existing = groups.get(key)
     if (existing) {
-      existing.datasetCount += 1
-      if (d.created_at && (!existing.lastGeneratedAt || d.created_at > existing.lastGeneratedAt)) {
-        existing.lastGeneratedAt = d.created_at
+      existing.datasets.add(source.dataset)
+      existing.qaCount += source.qa_count
+      if (
+        source.last_seen_at &&
+        (!existing.lastGeneratedAt || source.last_seen_at > existing.lastGeneratedAt)
+      ) {
+        existing.lastGeneratedAt = source.last_seen_at
       }
     } else {
       groups.set(key, {
         key,
         label,
-        icon,
-        datasetCount: 1,
-        lastGeneratedAt: d.created_at ?? null,
+        icon: KIND_ICON[source.kind] ?? 'globe',
+        datasets: new Set([source.dataset]),
+        qaCount: source.qa_count,
+        lastGeneratedAt: source.last_seen_at ?? null,
       })
     }
   }
   return [...groups.values()].toSorted(
-    (a, b) => b.datasetCount - a.datasetCount || a.label.localeCompare(b.label),
+    (a, b) => b.qaCount - a.qaCount || a.label.localeCompare(b.label),
   )
 }
 
 export default function SourcesPage() {
-  const { data, isPending, error } = useLangfuseDatasets()
+  const { data, isPending, error } = useAllDatasetSources()
   const [filter, setFilter] = useState('')
   const now = Date.now()
 
-  const sources = useMemo(() => groupBySource(data?.datasets ?? []), [data])
+  const sources = useMemo(() => groupBySource(data ?? []), [data])
   const filtered = filter.trim()
     ? sources.filter((s) => s.label.toLowerCase().includes(filter.trim().toLowerCase()))
     : sources
@@ -127,6 +131,7 @@ export default function SourcesPage() {
             <thead>
               <tr>
                 <th>Source</th>
+                <th>Q/A pairs</th>
                 <th>Linked datasets</th>
                 <th>Last generated</th>
               </tr>
@@ -146,7 +151,8 @@ export default function SourcesPage() {
                       <div className="cell-title">{s.label}</div>
                     </div>
                   </td>
-                  <td className="mono">{s.datasetCount}</td>
+                  <td className="mono">{s.qaCount}</td>
+                  <td className="mono">{s.datasets.size}</td>
                   <td className="muted">{relativeTime(s.lastGeneratedAt, now)}</td>
                 </tr>
               ))}

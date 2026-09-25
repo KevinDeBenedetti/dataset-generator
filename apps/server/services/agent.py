@@ -1,9 +1,13 @@
 """QA generation agent.
 
-Calls the configured OpenAI-compatible endpoint directly (same client family as
-``LLMService``), instructing the model to emit a JSON list of QA pairs which we
-parse tolerantly. No agent framework / LiteLLM layer is involved, so provider
-params (e.g. ``reasoning_effort`` for gpt-oss models) are forwarded verbatim.
+Runs as a single-node LangGraph graph wrapping a LangChain ``ChatOpenAI`` model
+pointed at the configured OpenAI-compatible endpoint. The model is instructed
+to emit a JSON list of QA pairs, which we parse tolerantly ourselves (see
+``_parse_qa_list``) rather than relying on LangChain structured output —
+reasoning-heavy / gpt-oss-style models can still truncate or wrap the JSON,
+and the diagnostic endpoint needs the raw text regardless of whether it parses.
+The graph is a placeholder for now (one node, no branching) but gives the
+agent room to grow into multi-step behaviour (retries, validation) later.
 """
 
 import functools
@@ -11,9 +15,9 @@ import json
 import logging
 import re
 from collections import Counter
-from typing import List, Optional
+from typing import Any, List, Optional, TypedDict
 
-import openai
+from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ValidationError
 
 from server.core.config import config
@@ -200,39 +204,69 @@ def _parse_qa_list(text: str) -> List[QA]:
     return []
 
 
-class QAAgentService:
-    """Generate QA pairs by calling the configured model over the OpenAI SDK."""
+class _AgentState(TypedDict):
+    text: str
+    target_language: str
+    model: str
+    raw_response: str
 
-    @functools.cached_property
-    def client(self) -> openai.AsyncOpenAI:
-        # Lazy for the same reason as LLMService.client: building the real
-        # client touches SSL/certifi at construction time.
-        return openai.AsyncOpenAI(
+
+class QAAgentService:
+    """Generate QA pairs via a single-node LangGraph graph over ChatOpenAI."""
+
+    def _build_chat_model(self, model: str) -> Any:
+        # Imported lazily: langchain_openai builds a module-level SSL context
+        # (via certifi) at import time, which some sandboxes block — same
+        # reason LLMService/QAAgentService keep their openai clients lazy.
+        from langchain_openai import ChatOpenAI
+
+        # Built per call (not cached) since the model id varies per request;
+        # construction itself is cheap and does no I/O.
+        kwargs: dict = dict(
+            model=model,
             api_key=config.openai_api_key,
             base_url=config.openai_base_url or None,
-        )
-
-    async def _run(self, text: str, target_language: str, model: str) -> str:
-        """Call the model once and return its raw response text."""
-        # reasoning_effort goes through extra_body so it reaches the endpoint
-        # verbatim. "low" keeps gpt-oss-style models from spending their whole
-        # budget reasoning and never emitting the final JSON.
-        extra_body = {}
-        if config.openai_reasoning_effort:
-            extra_body["reasoning_effort"] = config.openai_reasoning_effort
-
-        prompt = f"Target language: {target_language}\n\nSource text:\n{text}"
-        response = await self.client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": QA_AGENT_INSTRUCTION},
-                {"role": "user", "content": prompt},
-            ],
             max_tokens=config.max_tokens_qa,
             temperature=config.temperature,
-            extra_body=extra_body or None,
         )
-        return (response.choices[0].message.content or "").strip()
+        # "low" keeps gpt-oss-style models from spending their whole budget
+        # reasoning and never emitting the final JSON.
+        if config.openai_reasoning_effort:
+            kwargs["reasoning_effort"] = config.openai_reasoning_effort
+        return ChatOpenAI(**kwargs)
+
+    async def _generate_node(self, state: _AgentState) -> dict:
+        chat_model = self._build_chat_model(state["model"])
+        prompt = (
+            f"Target language: {state['target_language']}\n\n"
+            f"Source text:\n{state['text']}"
+        )
+        response = await chat_model.ainvoke(
+            [
+                {"role": "system", "content": QA_AGENT_INSTRUCTION},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        content = response.content if isinstance(response.content, str) else ""
+        return {"raw_response": content.strip()}
+
+    @functools.cached_property
+    def _graph(self):
+        # ty (unlike pyright/mypy) doesn't accept a TypedDict class against
+        # StateGraph's StateT bound here; this is the documented langgraph
+        # usage (see langgraph.graph.StateGraph docs).
+        graph = StateGraph(_AgentState)  # ty: ignore[invalid-argument-type]
+        graph.add_node("generate", self._generate_node)
+        graph.add_edge(START, "generate")
+        graph.add_edge("generate", END)
+        return graph.compile()
+
+    async def _run(self, text: str, target_language: str, model: str) -> str:
+        """Run the graph once and return the model's raw response text."""
+        result = await self._graph.ainvoke(
+            {"text": text, "target_language": target_language, "model": model}
+        )
+        return result["raw_response"]
 
     async def generate_qa(
         self,

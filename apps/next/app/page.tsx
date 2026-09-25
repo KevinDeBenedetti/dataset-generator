@@ -7,13 +7,13 @@ import {
   FileJson,
   FilterX,
   GitBranch,
-  Globe,
   Languages,
   LayoutDashboard,
   Layers,
   ShieldCheck,
   Sparkles,
   Table,
+  Upload,
   Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,10 +23,9 @@ const GITHUB_URL = 'https://github.com/KevinDeBenedetti/dataset-generator'
 
 const features = [
   {
-    icon: Globe,
-    title: 'Multi-source scraping',
-    description:
-      'URL, sitemap, RSS feed or file upload. Automatic content fetching and normalization.',
+    icon: Upload,
+    title: 'Multi-source ingestion',
+    description: "File upload (PDF/image via a vision model) or a GitHub account's public docs.",
   },
   {
     icon: Sparkles,
@@ -57,7 +56,7 @@ const features = [
 ]
 
 const steps = [
-  { num: '01', icon: Globe, title: 'Scraping', description: 'Fetch raw web data.' },
+  { num: '01', icon: Upload, title: 'Ingestion', description: 'Read a file or fetch GitHub docs.' },
   {
     num: '02',
     icon: FilterX,
@@ -80,7 +79,7 @@ const steps = [
     num: '05',
     icon: Download,
     title: 'Export',
-    description: 'Langfuse, JSON, CSV, JSONL.',
+    description: 'JSON, CSV, JSONL, dataset copies.',
   },
   {
     num: '06',
@@ -91,7 +90,7 @@ const steps = [
 ]
 
 const formats = [
-  { icon: Zap, name: 'Langfuse', description: 'Training-data management' },
+  { icon: Zap, name: 'Qdrant', description: 'Vector search over your datasets' },
   { icon: FileJson, name: 'JSON / JSONL', description: 'Standard data interchange' },
   { icon: Table, name: 'CSV', description: 'Tabular analysis and review' },
   { icon: Command, name: 'REST API', description: 'Extensible custom formats' },
@@ -159,15 +158,15 @@ export default function HomePage() {
               <span className="size-1.5 rounded-full bg-current" />
               v0.7.7
             </span>
-            Scraping → LLM → dataset pipeline, open-source
+            File / GitHub → LLM → dataset pipeline, open-source
           </div>
           <h1 className="mt-[22px] max-w-[16ch] text-[38px] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-[52px]">
             Clean Q/A datasets,{' '}
-            <span className="text-muted-foreground">straight from the web.</span>
+            <span className="text-muted-foreground">straight from your files and repos.</span>
           </h1>
           <p className="mt-5 max-w-[56ch] text-[17px] leading-[1.55] text-muted-foreground">
-            Scrape reliable sources, generate context-aware question-answer pairs with an LLM, catch
-            duplicates, and export to Langfuse, JSONL or CSV — all from a single interface.
+            Mine files and GitHub repos, generate context-aware question-answer pairs with an LLM,
+            catch duplicates, and export to JSONL or CSV — all from a single interface.
           </p>
           <div className="mt-[30px] flex flex-wrap gap-[11px]">
             <Button asChild size="lg">
@@ -211,11 +210,11 @@ export default function HomePage() {
             <span className="text-muted-foreground"># Run the pipeline on a source</span>
             {'\n'}
             <span className="text-success">$</span> <span className="text-info">datasetgen</span>{' '}
-            generate <span className="text-warning">--url</span> https://docs.example.com{' '}
+            generate <span className="text-warning">--github</span> octocat{' '}
             <span className="text-warning">--lang</span> en{' '}
             <span className="text-warning">--n</span> 50{'\n'}
-            <span className="text-muted-foreground">→ scraping </span>{' '}
-            <span className="text-success">12 pages · 48,320 tokens</span>
+            <span className="text-muted-foreground">→ ingestion </span>{' '}
+            <span className="text-success">12 docs · 48,320 tokens</span>
             {'\n'}
             <span className="text-muted-foreground">→ cleaning </span>{' '}
             <span className="text-success">normalized · 9,540 tokens kept</span>
@@ -227,7 +226,7 @@ export default function HomePage() {
             <span className="text-success">3 duplicates removed (cosine ≥ 0.92)</span>
             {'\n'}
             <span className="text-muted-foreground">→ export </span>{' '}
-            <span className="text-success">langfuse · dataset &quot;docs-en&quot; #v4</span>
+            <span className="text-success">saved · dataset &quot;docs-en&quot; #v4</span>
             {'\n'}
             <span className="text-success">✓</span> dataset ready —{' '}
             <span className="text-info">47 pairs</span> · quality{' '}
@@ -244,8 +243,8 @@ export default function HomePage() {
             The whole pipeline, without gluing scripts together.
           </h2>
           <p className="mt-3 max-w-[58ch] text-[15px] text-muted-foreground">
-            Each step is a module: scraper, LLM client, data manager, export. Compose them from the
-            UI or the REST API.
+            Each step is a module: ingestion, LLM client, data manager, export. Compose them from
+            the UI or the REST API.
           </p>
           <div className="mt-[34px] grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, description }) => (
@@ -343,8 +342,8 @@ export default function HomePage() {
                 <Brand />
               </Link>
               <p className="mt-3 text-[13px] leading-[1.6] text-muted-foreground">
-                Automated question-answer dataset generation via web scraping and LLMs. Duplicate
-                detection and Langfuse export.
+                Automated question-answer dataset generation from files and repos, via LLMs.
+                Duplicate detection and exports.
               </p>
             </div>
             <FooterCol

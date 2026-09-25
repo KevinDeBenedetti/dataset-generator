@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 
 
@@ -19,70 +19,6 @@ class PipelineStep(BaseModel):
     )
     duration_ms: int = Field(..., description="Step duration in milliseconds")
     detail: str = Field("", description="Log line summarising what happened")
-
-
-class DatasetGenerationRequest(BaseModel):
-    """Model for dataset generation request"""
-
-    url: HttpUrl = Field(..., description="URL to process to generate the dataset")
-    dataset_name: str = Field(..., description="Name of the dataset to create")
-    model_cleaning: Optional[str] = Field(
-        None, description="Model to use for text cleaning"
-    )
-    target_language: Optional[str] = Field(
-        None, description="Target language for QA generation"
-    )
-    model_qa: Optional[str] = Field(None, description="Model to use for QA generation")
-    similarity_threshold: float = Field(
-        default=0.9,
-        ge=0.0,
-        le=1.0,
-        description="Similarity threshold to detect duplicates (0.0-1.0)",
-    )
-    crawl: bool = Field(
-        default=True,
-        description="Explore the whole site (follow same-domain internal links) "
-        "instead of scraping only the seed URL",
-    )
-    max_depth: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Max link-following depth when crawling (defaults to config)",
-    )
-    max_pages: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Max number of pages to crawl (defaults to config)",
-    )
-    crawl_delay_seconds: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        description="Throttle: seconds to pause between page fetches while "
-        "crawling (0 = no throttle; defaults to config)",
-    )
-    max_pages_per_domain: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Per-domain page budget while crawling (0 = unlimited; "
-        "defaults to config)",
-    )
-    sync_langfuse: bool = Field(
-        default=True,
-        description="Create/version the dataset in Langfuse at generation time",
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "url": "https://example.com/document.pdf",
-                "dataset_name": "my_dataset",
-                "model_cleaning": "gpt-3.5-turbo",
-                "target_language": "en",
-                "model_qa": "gpt-4",
-                "similarity_threshold": 0.9,
-            }
-        }
-    )
 
 
 class GitHubGenerationRequest(BaseModel):
@@ -115,9 +51,9 @@ class GitHubGenerationRequest(BaseModel):
         ge=1,
         description="Cap on the number of public repos to mine (default: all)",
     )
-    sync_langfuse: bool = Field(
+    persist: bool = Field(
         default=True,
-        description="Create/version the dataset in Langfuse at generation time",
+        description="Store the generated pairs and record a version at generation time",
     )
 
 
@@ -144,10 +80,10 @@ class DatasetGenerationResponse(BaseModel):
     scraped_content: Optional[str] = Field(
         None, description="Raw markdown scraped from the source URL(s)"
     )
-    langfuse: Optional[dict] = Field(
+    persisted: Optional[dict] = Field(
         None,
-        description="Langfuse versioning summary (dataset name, version, run) "
-        "when synced at generation time",
+        description="Summary of the stored version (dataset name, version, run) "
+        "when the pairs were saved at generation time",
     )
 
     model_config = ConfigDict(

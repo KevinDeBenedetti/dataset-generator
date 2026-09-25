@@ -73,7 +73,7 @@ client.interceptors.response.use(async (response, request, options) => {
 import type {
   DatasetResponse,
   DatasetSourcesResponse,
-  DatasetGenerationRequest,
+  HuggingFaceExportResponse,
   DatasetGenerationResponse,
   SimilarityAnalysisResponse,
   CleanSimilarityResponse,
@@ -81,7 +81,6 @@ import type {
   QaListResponse,
   QaAgentTestRequest,
   QaAgentTestResponse,
-  PipelineStep,
   ValidationError,
 } from './types.gen'
 
@@ -131,22 +130,6 @@ export async function getDatasets(): Promise<DatasetResponse[]> {
   return Array.isArray(data) ? data : data ? [data] : []
 }
 
-export async function generateDataset(
-  body: DatasetGenerationRequest,
-): Promise<DatasetGenerationResponse> {
-  const response = await client.post<DatasetGenerationResponse>({
-    url: '/dataset/generate',
-    body,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to generate dataset'))
-  }
-  return response.data as unknown as DatasetGenerationResponse
-}
-
 // Generate a dataset from an uploaded file (PDF or image). Multipart upload, so
 // this uses a hand-rolled fetch (FormData) rather than the JSON client. The
 // `/dataset/generate/file` endpoint isn't in the generated client yet (regenerate
@@ -158,7 +141,7 @@ export interface GenerateFromFileParams {
   modelQa?: string | null
   modelVlm?: string | null
   similarityThreshold?: number
-  syncLangfuse?: boolean
+  persist?: boolean
 }
 
 export async function generateDatasetFromFile(
@@ -174,8 +157,8 @@ export async function generateDatasetFromFile(
   if (params.similarityThreshold != null) {
     form.append('similarity_threshold', String(params.similarityThreshold))
   }
-  if (params.syncLangfuse != null) {
-    form.append('sync_langfuse', String(params.syncLangfuse))
+  if (params.persist != null) {
+    form.append('persist', String(params.persist))
   }
 
   // No Content-Type header: the browser sets the multipart boundary itself.
@@ -208,7 +191,7 @@ export interface GenerateFromGitHubParams {
   model_qa?: string | null
   similarity_threshold?: number
   max_repos?: number | null
-  sync_langfuse?: boolean
+  persist?: boolean
 }
 
 export async function generateDatasetFromGitHub(
@@ -225,102 +208,7 @@ export async function generateDatasetFromGitHub(
   return response.data as unknown as DatasetGenerationResponse
 }
 
-// SSE event shapes emitted by POST /dataset/generate/stream.
-type StreamEvent =
-  | { type: 'step'; step: PipelineStep }
-  | { type: 'page'; [key: string]: unknown }
-  | { type: 'result'; data: DatasetGenerationResponse }
-  | { type: 'error'; detail?: unknown }
-
-interface GenerateStreamHandlers {
-  onStep?: (step: PipelineStep) => void
-  onPage?: (page: Record<string, unknown>) => void
-}
-
-// Generate a dataset while streaming pipeline progress over Server-Sent Events.
-// Resolves with the final `result` payload; rejects on an `error` event.
-export async function generateDatasetStream(
-  body: DatasetGenerationRequest,
-  handlers: GenerateStreamHandlers = {},
-): Promise<DatasetGenerationResponse> {
-  const baseUrl = client.getConfig().baseUrl ?? ''
-  const response = await fetch(`${baseUrl}/dataset/generate/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    // The endpoint is auth-protected; send the httpOnly auth cookie like the
-    // generated client does (the hand-rolled fetch doesn't inherit its config).
-    credentials: 'include',
-  })
-
-  if (!response.ok || !response.body) {
-    let message = 'Failed to generate dataset'
-    try {
-      const error = await response.json()
-      message = getErrorMessage(error, message)
-    } catch {
-      // Non-JSON error body — keep the fallback message.
-    }
-    throw new Error(message)
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let result: DatasetGenerationResponse | null = null
-
-  const handleEvent = (event: StreamEvent) => {
-    switch (event.type) {
-      case 'step':
-        handlers.onStep?.(event.step)
-        break
-      case 'page':
-        handlers.onPage?.(event)
-        break
-      case 'result':
-        result = event.data
-        break
-      case 'error':
-        throw new Error(getErrorMessage(event, 'Failed to generate dataset'))
-    }
-  }
-
-  // SSE frames are separated by a blank line; each carries one `data:` line.
-  const flushFrame = (frame: string) => {
-    const dataLine = frame.split('\n').find((line) => line.startsWith('data:'))
-    if (!dataLine) return
-    const payload = dataLine.slice('data:'.length).trim()
-    if (!payload) return
-    handleEvent(JSON.parse(payload) as StreamEvent)
-  }
-
-  while (true) {
-    // Each read() depends on the stream's current cursor and can't be known
-    // ahead of time, so there's nothing here to parallelize with Promise.all.
-    // oxlint-disable-next-line eslint/no-await-in-loop
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    let separator = buffer.indexOf('\n\n')
-    while (separator !== -1) {
-      flushFrame(buffer.slice(0, separator))
-      buffer = buffer.slice(separator + 2)
-      separator = buffer.indexOf('\n\n')
-    }
-  }
-  // Flush any trailing frame not terminated by a blank line.
-  if (buffer.trim()) {
-    flushFrame(buffer)
-  }
-
-  if (!result) {
-    throw new Error('Stream ended without a result')
-  }
-  return result
-}
-
-// Datasets are keyed by their Langfuse name (the source of truth).
+// Datasets are keyed by their name (the identifier the API takes).
 export async function deleteDataset(datasetName: string): Promise<DeleteDatasetResponse> {
   const response = await client.delete<DeleteDatasetResponse>({
     url: `/dataset/${encodeURIComponent(datasetName)}`,
@@ -333,7 +221,7 @@ export async function deleteDataset(datasetName: string): Promise<DeleteDatasetR
 
 // The origins a dataset was built from (one row per crawled page/file/account)
 // plus the history of the analyses that fed it. Datasets are keyed by their
-// Langfuse name (the source of truth).
+// name (the identifier the API takes).
 export async function getDatasetSources(datasetName: string): Promise<DatasetSourcesResponse> {
   const response = await client.get<DatasetSourcesResponse>({
     url: `/dataset/${encodeURIComponent(datasetName)}/sources`,
@@ -451,7 +339,7 @@ export async function getPrompts(): Promise<PromptsResponse> {
   return response.data as unknown as PromptsResponse
 }
 
-// Agent (ADK) diagnostics
+// QA agent diagnostics
 
 export async function testQaAgent(body: QaAgentTestRequest): Promise<QaAgentTestResponse> {
   const response = await client.post<QaAgentTestResponse>({
@@ -559,75 +447,76 @@ export async function getQAStats(datasetId: string, scoreThreshold?: number): Pr
   return response.data as unknown as QAStats
 }
 
-// Langfuse endpoints
+// Dataset versions & copies
 
-export interface LangfuseDataset {
-  id: string
-  name: string
-  description?: string | null
-  item_count?: number | null
-  version?: number | null
-  source_url?: string | null
-  created_at?: string | null
-  updated_at?: string | null
-}
-
-export interface LangfuseDatasetsResponse {
-  total: number
-  datasets: LangfuseDataset[]
-}
-
-export async function getLangfuseDatasets(): Promise<LangfuseDatasetsResponse> {
-  const response = await client.get<LangfuseDatasetsResponse>({
-    url: '/langfuse/datasets',
-  })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch Langfuse datasets'))
-  }
-  return response.data as unknown as LangfuseDatasetsResponse
-}
-
-export interface LangfuseVersion {
+export interface DatasetVersion {
   run_name?: string | null
   version?: number | null
   item_count?: number | null
+  pages_analyzed?: number | null
+  new_pairs?: number | null
+  duplicates_skipped?: number | null
   created_at?: string | null
   source_url?: string | null
-  description?: string | null
-  [key: string]: unknown
+  label?: string
+  kind?: string
 }
 
-export interface LangfuseVersionsResponse {
+export interface DatasetVersionsResponse {
   dataset_name: string
   total: number
-  versions: LangfuseVersion[]
+  versions: DatasetVersion[]
 }
 
-export async function getLangfuseVersions(dataset: string): Promise<LangfuseVersionsResponse> {
-  const response = await client.get<LangfuseVersionsResponse>({
-    url: `/langfuse/versions/${encodeURIComponent(dataset)}`,
+// The dataset's recorded generations, newest first.
+export async function getDatasetVersions(datasetName: string): Promise<DatasetVersionsResponse> {
+  const response = await client.get<DatasetVersionsResponse>({
+    url: `/dataset/${encodeURIComponent(datasetName)}/versions`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch Langfuse versions'))
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch the dataset versions'))
   }
-  return response.data as unknown as LangfuseVersionsResponse
+  return response.data as unknown as DatasetVersionsResponse
 }
 
-export async function exportToLangfuse(
+// Export a dataset to the Hugging Face Hub. The repo is always created
+// private — the server refuses to upload into an existing public repo rather
+// than publishing generated data (409).
+export async function exportDatasetToHuggingFace(
   datasetName: string,
-  langfuseDatasetName?: string | null,
-): Promise<unknown> {
-  const params = new URLSearchParams()
-  params.set('dataset_name', datasetName)
-  if (langfuseDatasetName) params.set('langfuse_dataset_name', langfuseDatasetName)
-
-  const response = await client.post<unknown>({
-    url: `/langfuse/export?${params.toString()}`,
+  repoId?: string | null,
+): Promise<HuggingFaceExportResponse> {
+  const params = repoId ? `?repo_id=${encodeURIComponent(repoId)}` : ''
+  const response = await client.post<HuggingFaceExportResponse>({
+    url: `/dataset/${encodeURIComponent(datasetName)}/export/huggingface${params}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to export to Langfuse'))
+    throw new Error(getErrorMessage(response.error, 'Failed to export to Hugging Face'))
   }
-  return response.data
+  return response.data as unknown as HuggingFaceExportResponse
+}
+
+export interface DuplicateDatasetResponse {
+  message: string
+  dataset_name: string
+  target_dataset_name: string
+  total_items: number
+  created_count: number
+}
+
+// Copy a dataset's pairs into another dataset (the export flow).
+export async function duplicateDataset(
+  datasetName: string,
+  targetName?: string | null,
+): Promise<DuplicateDatasetResponse> {
+  const params = targetName ? `?target_name=${encodeURIComponent(targetName)}` : ''
+  const response = await client.post<DuplicateDatasetResponse>({
+    url: `/dataset/${encodeURIComponent(datasetName)}/duplicate${params}`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to copy the dataset'))
+  }
+  return response.data as unknown as DuplicateDatasetResponse
 }
 
 // Collections (datasets projected into a Qdrant vector store)
@@ -666,7 +555,7 @@ export interface QdrantSyncResponse {
   vector_size: number
 }
 
-// Datasets are keyed by their Langfuse name (the source of truth).
+// Datasets are keyed by their name (the identifier the API takes).
 export async function syncCollectionToQdrant(datasetName: string): Promise<QdrantSyncResponse> {
   const response = await client.post<QdrantSyncResponse>({
     url: `/collections/${encodeURIComponent(datasetName)}/qdrant`,
@@ -696,7 +585,7 @@ export interface CollectionSearchResponse {
 }
 
 // Semantic search over a dataset's Qdrant collection. Datasets are keyed by
-// their Langfuse name (the source of truth).
+// their name (the identifier the API takes).
 export async function searchCollection(
   datasetName: string,
   query: string,

@@ -115,7 +115,7 @@ export default function SettingsPage() {
               </div>
               <div className="row">
                 <div>
-                  <div className="label">Automatic Langfuse export</div>
+                  <div className="label">Save generated datasets</div>
                 </div>
                 <span className="switch" />
               </div>

@@ -8,8 +8,7 @@ export default function ApiKeysPage() {
         <div>
           <h1 className="page-title">API keys &amp; integrations</h1>
           <p className="page-sub">
-            Connect your LLM providers and Langfuse, and manage access keys for the DatasetGen REST
-            API.
+            Connect your LLM providers and manage access keys for the DatasetGen REST API.
           </p>
         </div>
       </div>
@@ -44,19 +43,6 @@ export default function ApiKeysPage() {
                 <div style={{ flex: 1 }}>
                   <h4>Anthropic</h4>
                   <p>claude-3.5-sonnet · active key</p>
-                </div>
-                <span className="badge badge-success">
-                  <span className="dot" />
-                  Connected
-                </span>
-              </div>
-              <div className="integ">
-                <span className="ii">
-                  <Icon name="zap" className="ic-lg" />
-                </span>
-                <div style={{ flex: 1 }}>
-                  <h4>Langfuse</h4>
-                  <p>Export of training datasets</p>
                 </div>
                 <span className="badge badge-success">
                   <span className="dot" />

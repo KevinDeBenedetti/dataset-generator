@@ -2,40 +2,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDatasets,
   getDatasetSources,
-  generateDatasetStream,
   generateDatasetFromFile,
   generateDatasetFromGitHub,
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
   resolvePair,
+  exportDatasetToHuggingFace,
 } from '@/api/sdk'
-import type { DatasetGenerationRequest } from '@/api/types'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
 
-// The /generate form can mine three kinds of source; the mutation branches on it.
+// The /generate form can mine two kinds of source; the mutation branches on it.
 export type GenerateParams =
-  | {
-      source: 'url'
-      url: string
-      name: string
-      targetLanguage: string | null
-      similarityThreshold: number
-      crawl?: boolean
-      maxDepth?: number | null
-      maxPages?: number | null
-      crawlDelaySeconds?: number | null
-      maxPagesPerDomain?: number | null
-      syncLangfuse?: boolean
-    }
   | {
       source: 'file'
       file: File
       name: string
       targetLanguage: string | null
       similarityThreshold: number
-      syncLangfuse?: boolean
+      persist?: boolean
     }
   | {
       source: 'github'
@@ -45,7 +31,7 @@ export type GenerateParams =
       targetLanguage: string | null
       similarityThreshold: number
       maxRepos?: number | null
-      syncLangfuse?: boolean
+      persist?: boolean
     }
 
 export const DATASETS_QUERY_KEY = ['datasets']
@@ -66,7 +52,7 @@ export function useDatasets() {
 export const DATASET_SOURCES_QUERY_KEY = 'dataset-sources'
 
 // The sources a dataset was built from + the history of the analyses that fed
-// it. Both live in Langfuse, which may be unconfigured (503) — don't retry.
+// it. A 404 (unknown dataset) is a definitive answer — don't retry.
 export function useDatasetSources(datasetName: string | null | undefined) {
   return useQuery({
     queryKey: [DATASET_SOURCES_QUERY_KEY, datasetName],
@@ -76,10 +62,52 @@ export function useDatasetSources(datasetName: string | null | undefined) {
   })
 }
 
+export const ALL_DATASET_SOURCES_QUERY_KEY = 'all-dataset-sources'
+
+export interface DatasetSourceRow {
+  url: string | null
+  kind: string
+  label: string
+  qa_count: number
+  last_seen_at?: string | null
+  dataset: string
+}
+
+// Every source of every dataset, flattened — powers the global /sources page.
+// One request per dataset (same fan-out as useAllDatasetRuns): there is no
+// cross-dataset sources endpoint, and the shared query cache keeps it cheap.
+export function useAllDatasetSources() {
+  return useQuery({
+    queryKey: [ALL_DATASET_SOURCES_QUERY_KEY],
+    queryFn: async (): Promise<DatasetSourceRow[]> => {
+      const datasets = await getDatasets()
+      const perDataset = await Promise.all(
+        datasets.map(async (d) => {
+          try {
+            const { sources } = await getDatasetSources(d.name)
+            return sources.map((s) => ({
+              url: s.url ?? null,
+              kind: s.kind,
+              label: s.label,
+              qa_count: s.qa_count,
+              last_seen_at: s.last_seen_at,
+              dataset: d.name,
+            }))
+          } catch {
+            // One unreadable dataset shouldn't sink the whole view.
+            return []
+          }
+        }),
+      )
+      return perDataset.flat() as DatasetSourceRow[]
+    },
+    retry: false,
+  })
+}
+
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
-  const { setDataset, setGenerationStatus, setError, setLiveSteps, appendLiveStep } =
-    useGenerateStore()
+  const { setDataset, setGenerationStatus, setError, setLiveSteps } = useGenerateStore()
 
   return useMutation({
     mutationFn: async (params: GenerateParams) => {
@@ -90,37 +118,18 @@ export function useGenerateDataset() {
           datasetName: params.name,
           targetLanguage: params.targetLanguage,
           similarityThreshold: params.similarityThreshold,
-          syncLangfuse: params.syncLangfuse,
+          persist: params.persist,
         })
       }
 
-      if (params.source === 'github') {
-        return generateDatasetFromGitHub({
-          github_username: params.githubUsername,
-          github_token: params.githubToken,
-          dataset_name: params.name,
-          target_language: params.targetLanguage,
-          similarity_threshold: params.similarityThreshold,
-          max_repos: params.maxRepos,
-          sync_langfuse: params.syncLangfuse,
-        })
-      }
-
-      const body: DatasetGenerationRequest = {
-        url: params.url,
+      return generateDatasetFromGitHub({
+        github_username: params.githubUsername,
+        github_token: params.githubToken,
         dataset_name: params.name,
         target_language: params.targetLanguage,
         similarity_threshold: params.similarityThreshold,
-        crawl: params.crawl,
-        max_depth: params.maxDepth,
-        max_pages: params.maxPages,
-        crawl_delay_seconds: params.crawlDelaySeconds,
-        max_pages_per_domain: params.maxPagesPerDomain,
-        sync_langfuse: params.syncLangfuse,
-      }
-      // Stream pipeline progress so the timeline fills in live.
-      return generateDatasetStream(body, {
-        onStep: (step) => appendLiveStep(step),
+        max_repos: params.maxRepos,
+        persist: params.persist,
       })
     },
     onMutate: () => {
@@ -140,6 +149,14 @@ export function useGenerateDataset() {
       setError(error instanceof Error ? error.message : 'Failed to generate dataset')
       setGenerationStatus('error')
     },
+  })
+}
+
+// Push a dataset to the Hugging Face Hub (always a private dataset repo).
+export function useExportToHuggingFace() {
+  return useMutation({
+    mutationFn: ({ datasetName, repoId }: { datasetName: string; repoId?: string | null }) =>
+      exportDatasetToHuggingFace(datasetName, repoId),
   })
 }
 

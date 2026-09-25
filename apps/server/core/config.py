@@ -1,10 +1,13 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
+import logging
 import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -12,7 +15,7 @@ def _env(name: str, default: str = "") -> str:
 
     ``os.getenv`` only falls back to its default when the variable is *absent*:
     a key present but blank wins with "". `.env.example` ships several keys that
-    way (``AUTH_REFRESH_COOKIE_NAME=``, ``CRAWL_MAX_DEPTH=``, ...) and `make env`
+    way (``AUTH_REFRESH_COOKIE_NAME=``, ``AUTH_TOKEN_TTL_SECONDS=``, ...) and `make env`
     copies it verbatim, so those blanks reach the app. The damage was silent and
     varied: an empty cookie name made ``set_cookie(key="")`` raise
     ``CookieError``, turning every *successful* login into a 500 (a wrong
@@ -46,37 +49,6 @@ class Config:
         default_factory=lambda: _env("OPENAI_EMBEDDING_MODEL", "")
     )
     openai_vlm_model: str = field(default_factory=lambda: _env("OPENAI_VLM_MODEL", ""))
-
-    # Scraping
-    max_retries: int = 3
-    timeout: int = 10
-    scrape_delay: float = 0.2
-
-    # Deep crawl: when enabled, the scraper follows internal links from the seed
-    # URL (breadth-first) to cover the whole site and maximise the dataset.
-    # Each discovered page triggers a clean + QA generation, so the limits below
-    # bound the cost. Same-domain only by default.
-    crawl_max_depth: int = field(
-        default_factory=lambda: int(_env("CRAWL_MAX_DEPTH", "2"))
-    )
-    crawl_max_pages: int = field(
-        default_factory=lambda: int(_env("CRAWL_MAX_PAGES", "50"))
-    )
-    crawl_same_domain: bool = field(
-        default_factory=lambda: (
-            _env("CRAWL_SAME_DOMAIN", "true").lower() not in ("0", "false", "no")
-        )
-    )
-    # Cost controls. crawl_delay_seconds throttles the crawler by pausing between
-    # page fetches (0 = no throttle). crawl_max_pages_per_domain caps pages taken
-    # from any single host (0 = unlimited) — a budget that matters most when
-    # crawl_same_domain is off and the crawl can span several domains.
-    crawl_delay_seconds: float = field(
-        default_factory=lambda: float(_env("CRAWL_DELAY_SECONDS", "0"))
-    )
-    crawl_max_pages_per_domain: int = field(
-        default_factory=lambda: int(_env("CRAWL_MAX_PAGES_PER_DOMAIN", "0"))
-    )
 
     # Dev log console: when true, the server exposes /debug/logs (SSE) so the
     # Next.js dev UI can stream server logs into an in-browser terminal. Toggle
@@ -186,37 +158,31 @@ class Config:
         default_factory=lambda: _env("CORS_ALLOW_ORIGINS", "")
     )
 
-    # When true (and Langfuse is configured), every generation also creates/updates
-    # the dataset in Langfuse and records a versioned dataset run (DVC-like commit).
-    langfuse_auto_sync: bool = field(
+    # When true, every generation writes its pairs to Postgres and records a
+    # versioned run (DVC-like commit). Turning it off makes generation a
+    # pass-through: the pairs come back in the response and nothing is stored.
+    persist_datasets: bool = field(
         default_factory=lambda: (
-            _env("LANGFUSE_AUTO_SYNC", "true").lower() not in ("0", "false", "no")
+            _env("PERSIST_DATASETS", "true").lower() not in ("0", "false", "no")
         )
     )
 
+    # Hugging Face Hub export. Only enabled when a write token is set; the
+    # endpoint answers 503 otherwise. Exported repos are always private (see
+    # services/huggingface.py). hf_namespace (user or organization) is optional
+    # — the token's own account is used when it's blank.
+    hf_token: str = field(default_factory=lambda: _env("HF_TOKEN", ""))
+    hf_namespace: str = field(default_factory=lambda: _env("HF_NAMESPACE", ""))
+
     # Qdrant vector store. Pushing a dataset's Q/A pairs as embeddings into a
     # Qdrant collection is enabled only when qdrant_url is set; every endpoint
-    # guards itself with a clear 503 otherwise (mirrors the Langfuse handling).
+    # guards itself with a clear 503 otherwise.
     # qdrant_api_key is optional (Qdrant Cloud / secured instances).
     qdrant_url: str = field(default_factory=lambda: _env("QDRANT_URL", ""))
     qdrant_api_key: str = field(default_factory=lambda: _env("QDRANT_API_KEY", ""))
     # Collection names are derived as f"{prefix}{sanitized_dataset_name}".
     qdrant_collection_prefix: str = field(
         default_factory=lambda: _env("QDRANT_COLLECTION_PREFIX", "dataset_")
-    )
-
-    # crawl4ai service (Docker). The scraper calls this REST API instead of
-    # running crawl4ai in-process, keeping the browser stack out of this image.
-    crawl4ai_base_url: str = field(
-        default_factory=lambda: _env("CRAWL4AI_BASE_URL", "http://crawl4ai:11235")
-    )
-    crawl4ai_api_token: str = field(
-        default_factory=lambda: _env("CRAWL4AI_API_TOKEN", "")
-    )
-    # Upper bound (seconds) for a single /md request: the service renders the
-    # page in a browser, so this must comfortably exceed the page timeout.
-    crawl4ai_timeout: int = field(
-        default_factory=lambda: int(_env("CRAWL4AI_TIMEOUT", "120"))
     )
 
     # LLM
@@ -233,7 +199,6 @@ class Config:
 
     # Output
     output_formats: List[str] = field(default_factory=lambda: ["json", "jsonl", "csv"])
-    scrapes_dir: str = "scrapes"
     datasets_dir: str = "datasets"
 
     # Available models, derived from the configured provider models
@@ -272,7 +237,13 @@ class Config:
     # Validation
     def __post_init__(self):
         if not self.openai_api_key:
-            raise EnvironmentError("OPENAI_API_KEY missing in .env")
+            # Logged rather than raised: the API-dependent routes fail on their
+            # own 503/401 when this is missing, and letting the process crash
+            # at import time takes down every other route (health checks,
+            # auth, etc.) along with it.
+            logger.error(
+                "OPENAI_API_KEY missing in .env — OpenAI-backed features are disabled"
+            )
 
         # Build the available-models list from every configured model,
         # de-duplicated and preserving order.

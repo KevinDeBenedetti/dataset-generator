@@ -59,7 +59,7 @@ async def qa_agent_test(request: QAAgentTestRequest) -> QAAgentTestResponse:
             model=request.model,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        logging.exception("ADK agent test failed")
+        logging.exception("QA agent test failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Agent run failed: {exc}",

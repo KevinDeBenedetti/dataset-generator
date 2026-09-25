@@ -44,10 +44,10 @@ export function Result({ result }: ResultProps) {
             {result.pages_crawled != null && (
               <Badge variant="secondary">Pages crawled: {result.pages_crawled}</Badge>
             )}
-            {result.langfuse && (
+            {result.persisted && (
               <Badge variant="secondary">
-                Langfuse: {String(result.langfuse.run_name ?? '')} (
-                {String(result.langfuse.total_items ?? 0)} items)
+                Saved: {String(result.persisted.run_name ?? '')} (
+                {String(result.persisted.created_count ?? 0)} pairs)
               </Badge>
             )}
           </div>

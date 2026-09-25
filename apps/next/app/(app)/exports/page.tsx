@@ -12,11 +12,11 @@ type Format = {
 
 const FORMATS: Format[] = [
   {
-    id: 'langfuse',
-    icon: 'zap',
-    name: 'Langfuse',
+    id: 'copy',
+    icon: 'copy',
+    name: 'Dataset copy',
     ext: 'API',
-    desc: 'Push the dataset directly into a Langfuse project for training management.',
+    desc: 'Duplicate the dataset\u2019s pairs into another dataset, kept in the app.',
     selected: true,
   },
   {
@@ -54,7 +54,7 @@ type ExportRow = {
 const RECENT: ExportRow[] = [
   {
     dataset: 'docs-fr',
-    format: 'langfuse',
+    format: 'copy',
     pairs: '1,190',
     date: '12 min ago',
     status: 'Succeeded',
@@ -78,7 +78,7 @@ const RECENT: ExportRow[] = [
   },
   {
     dataset: 'faq-produit-de',
-    format: 'langfuse',
+    format: 'copy',
     pairs: '—',
     date: '3d ago',
     status: 'Auth failed',
@@ -93,7 +93,8 @@ export default function ExportsPage() {
         <div>
           <h1 className="page-title">Exports</h1>
           <p className="page-sub">
-            Ship your datasets to Langfuse, JSON, CSV or JSONL. Configure then export in one click.
+            Ship your datasets to JSON, CSV or JSONL, or copy them. Configure then export in one
+            click.
           </p>
         </div>
       </div>
@@ -153,17 +154,15 @@ export default function ExportsPage() {
               style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}
             >
               <div className="field">
-                <label htmlFor="export-langfuse-project" className="label">
-                  Langfuse project
+                <label htmlFor="export-target-dataset" className="label">
+                  Target dataset
                 </label>
-                <select
-                  id="export-langfuse-project"
-                  className="select"
-                  defaultValue="prod · training-data"
-                >
-                  <option>prod · training-data</option>
-                  <option>staging · eval</option>
-                </select>
+                <input
+                  id="export-target-dataset"
+                  className="input"
+                  defaultValue="docs-fr-copy"
+                  placeholder="docs-fr-copy"
+                />
               </div>
               <div
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
@@ -199,7 +198,7 @@ export default function ExportsPage() {
               <div style={{ flex: 1 }} />
               <button className="btn btn-primary">
                 <Icon name="upload" />
-                Export to Langfuse
+                Export the copy
               </button>
             </div>
           </div>
@@ -211,7 +210,7 @@ export default function ExportsPage() {
             <div className="card-head">
               <div>
                 <div className="card-title">Output preview</div>
-                <div className="card-desc">langfuse · push payload</div>
+                <div className="card-desc">dataset copy · payload</div>
               </div>
               <button className="btn btn-ghost btn-sm">
                 <Icon name="copy" />

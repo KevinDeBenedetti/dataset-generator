@@ -12,6 +12,7 @@ os.environ["OPENAI_VLM_MODEL"] = "mistral-small-3.1-24b-instruct-2503"
 os.environ["OPENAI_EMBEDDING_MODEL"] = "text-embedding-3-small"
 
 import pytest
+from contextlib import contextmanager
 from typing import Generator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -105,7 +106,30 @@ def test_db(test_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture(scope="function")
-def client(test_db: Session) -> Generator[TestClient, None, None]:
+def datasets_db(monkeypatch, test_engine):
+    """Point the dataset service at the per-test database.
+
+    ``services.datasets`` opens its own sessions through ``get_scoped_db``
+    (it is called from the pipeline too, outside any request), so overriding
+    the ``get_db`` dependency isn't enough to keep it off the developer's real
+    database — this rebinds the scoped session itself.
+    """
+    TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+    @contextmanager
+    def scoped():
+        session = TestingSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    monkeypatch.setattr("server.services.datasets.get_scoped_db", scoped)
+    return scoped
+
+
+@pytest.fixture(scope="function")
+def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
     """Create a test client with overridden database dependency."""
     from fastapi.middleware.cors import CORSMiddleware
     from server.api import (
@@ -115,7 +139,6 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
         generate,
         q_a,
         openai,
-        langfuse,
         prompts,
         quality_rules,
     )
@@ -140,7 +163,6 @@ def client(test_db: Session) -> Generator[TestClient, None, None]:
     test_app.include_router(dataset.router)
     test_app.include_router(q_a.router)
     test_app.include_router(openai.router)
-    test_app.include_router(langfuse.router)
     test_app.include_router(collections.router)
     test_app.include_router(quality_rules.router)
     test_app.include_router(prompts.router)

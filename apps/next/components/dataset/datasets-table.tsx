@@ -10,10 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { LangfuseDataset } from '@/api/sdk'
+import type { DatasetResponse } from '@/api/types'
 
-interface LangfuseDatasetTableProps {
-  datasets: LangfuseDataset[]
+interface DatasetsTableProps {
+  datasets: DatasetResponse[]
 }
 
 function formatDate(value?: string | null): string {
@@ -22,11 +22,11 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
 }
 
-export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
+export function DatasetsTable({ datasets }: DatasetsTableProps) {
   return (
     <div className="border rounded-lg overflow-x-auto">
       <Table className="w-full">
-        <TableCaption>{datasets.length} dataset(s) in Langfuse</TableCaption>
+        <TableCaption>{datasets.length} dataset(s)</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
@@ -40,8 +40,8 @@ export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
               <TableCell className="font-medium">
-                {/* Datasets are keyed by their Langfuse name — the detail route
-                    takes that name, URL-encoded. */}
+                {/* Datasets are keyed by name — the detail route takes that
+                    name, URL-encoded. */}
                 <Link
                   href={`/datasets/${encodeURIComponent(dataset.name)}`}
                   className="hover:underline"
@@ -50,7 +50,7 @@ export function LangfuseDatasetTable({ datasets }: LangfuseDatasetTableProps) {
                 </Link>
               </TableCell>
               <TableCell className="text-muted-foreground">{dataset.description || '—'}</TableCell>
-              <TableCell className="text-center">{dataset.item_count ?? '—'}</TableCell>
+              <TableCell className="text-center">{dataset.qa_sources_count ?? '—'}</TableCell>
               <TableCell className="text-center">
                 {dataset.version != null ? `v${dataset.version}` : '—'}
               </TableCell>

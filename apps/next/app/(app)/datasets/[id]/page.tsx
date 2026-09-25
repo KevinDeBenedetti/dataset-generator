@@ -6,10 +6,12 @@ import { useParams } from 'next/navigation'
 // The design's detail-page styles (.qa, .ver, .tabpane) live with the static
 // mockup; this is the real, data-backed page wearing the same skin.
 import '../../dataset-detail/dataset-detail.css'
+import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { QAList, PaginationWrapper } from '@/components/dataset'
-import { useDatasets, useDatasetSources } from '@/hooks'
+import { useDatasets, useDatasetSources, useExportToHuggingFace } from '@/hooks'
 import { useQAByDataset } from '@/hooks/use-qa'
+import { useIsAdmin } from '@/hooks/use-auth'
 import { relativeTime } from '@/lib/utils'
 import type { DatasetAnalysis, DatasetSource } from '@/api/types'
 
@@ -78,7 +80,7 @@ function analysisDetail(analysis: DatasetAnalysis): string {
 
 export default function DatasetDetailPage() {
   const params = useParams()
-  // Datasets are keyed by their Langfuse name (URL-encoded in the route).
+  // Datasets are keyed by their name (URL-encoded in the route).
   const datasetName = decodeURIComponent(params.id as string)
 
   const [tab, setTab] = useState<TabKey>('pairs')
@@ -103,12 +105,28 @@ export default function DatasetDetailPage() {
   const totalPages = Math.ceil((qaResponse?.total_count ?? 0) / (qaResponse?.limit || PAGE_SIZE))
   const now = Date.now()
 
-  // Langfuse may not be configured at all (503) — that reads differently from
-  // a real upstream failure, here as on /datasets.
-  const sourcesNotConfigured =
-    sourcesQuery.error instanceof Error && /not configured/i.test(sourcesQuery.error.message)
-
   const addSourceHref = `/generate?dataset=${encodeURIComponent(datasetName)}`
+
+  // The export endpoint is admin-only (it publishes outside the app), so the
+  // action is hidden rather than left to fail with a 403.
+  const isAdmin = useIsAdmin()
+  const hfExport = useExportToHuggingFace()
+  const handleExportToHub = async () => {
+    try {
+      const result = await hfExport.mutateAsync({ datasetName })
+      toast.success(`Exported ${result.pairs_exported} pair(s) to ${result.repo_id}`, {
+        description: 'The dataset repo is private.',
+        action: {
+          label: 'Open',
+          onClick: () => window.open(result.url, '_blank', 'noopener,noreferrer'),
+        },
+      })
+    } catch (err) {
+      // The server refuses to upload into an existing public repo (409) — that
+      // message tells the user how to proceed, so surface it as-is.
+      toast.error(err instanceof Error ? err.message : 'Export to Hugging Face failed')
+    }
+  }
 
   const latestVersion = history[0]?.version ?? null
 
@@ -152,6 +170,18 @@ export default function DatasetDetailPage() {
             <Icon name="refresh" className={sourcesQuery.isFetching ? 'animate-spin' : undefined} />
             Refresh
           </button>
+          {isAdmin && (
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={handleExportToHub}
+              disabled={hfExport.isPending}
+              title="Export to the Hugging Face Hub as a private dataset repo"
+            >
+              <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
+              {hfExport.isPending ? 'Exporting…' : 'Export to Hugging Face'}
+            </button>
+          )}
           <Link className="btn btn-primary" href={addSourceHref}>
             <Icon name="plus" />
             Add a source
@@ -244,15 +274,7 @@ export default function DatasetDetailPage() {
                 <p className="muted">Loading sources…</p>
               </div>
             )}
-            {!sourcesQuery.isPending && sourcesNotConfigured && (
-              <div className="card-body">
-                <p className="muted">
-                  Langfuse is not configured — set <code>LANGFUSE_*</code> in your <code>.env</code>{' '}
-                  to read a dataset&apos;s sources.
-                </p>
-              </div>
-            )}
-            {!sourcesQuery.isPending && sourcesQuery.error && !sourcesNotConfigured && (
+            {!sourcesQuery.isPending && sourcesQuery.error && (
               <div className="card-body">
                 <p className="hint" style={{ color: 'var(--destructive)' }}>
                   {sourcesQuery.error instanceof Error
@@ -318,12 +340,9 @@ export default function DatasetDetailPage() {
             </div>
             <div className="card-body" style={{ paddingTop: 20 }}>
               {sourcesQuery.isPending && <p className="muted">Loading history…</p>}
-              {!sourcesQuery.isPending && sourcesNotConfigured && (
-                <p className="muted">Langfuse is not configured — analyses are recorded there.</p>
-              )}
-              {!sourcesQuery.isPending && !sourcesNotConfigured && history.length === 0 && (
+              {!sourcesQuery.isPending && history.length === 0 && (
                 <p className="muted">
-                  No analysis recorded yet. Runs are written when a generation syncs to Langfuse.
+                  No analysis recorded yet. A run is recorded each time a generation is saved.
                 </p>
               )}
               {history.map((analysis, index) => (
