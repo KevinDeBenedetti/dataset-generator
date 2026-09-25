@@ -102,4 +102,6 @@ jobs:
     with:
       config-file: .github/release/release-please-config-release.json
       manifest-file: .github/release/.release-please-manifest.json
-    secrets: inherit
+      app-client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
