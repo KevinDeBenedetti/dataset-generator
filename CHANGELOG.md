@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.9.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.8.0...v0.9.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Update TODO.md to correct language and clarify deployment scope
+* cap openai version and pin ruff lint rules
+* cleanup TODO and remove unused API client barrel
+* Add OpenAPI schema sync workflow and CORS configuration
+* **server, docs:** The login process now issues two cookies (access_token and refresh_token). Existing refresh tokens are invalid after rotation.
+
+### docs
+
+* Update TODO.md to correct language and clarify deployment scope ([e52e115](https://github.com/KevinDeBenedetti/dataset-generator/commit/e52e115e7b9026576c2ab4f04210636e0d767056))
+
+
+### deps
+
+* cap openai version and pin ruff lint rules ([ed7fb91](https://github.com/KevinDeBenedetti/dataset-generator/commit/ed7fb91eb7cba1e141a953ef8704007e683e05e0))
+
+
+### Features
+
+* add authentication, Langfuse dataset listing, and app shell ([648f5a6](https://github.com/KevinDeBenedetti/dataset-generator/commit/648f5a602ccb7503268e5b341eea77671b3d1061))
+* add google adk & delete litellm ([a614830](https://github.com/KevinDeBenedetti/dataset-generator/commit/a6148303fb10301aba238ada56575ea4d47f1bcf))
+* **api:** migrate dataset storage from Langfuse to PostgreSQL and add Hugging Face export ([4b59f78](https://github.com/KevinDeBenedetti/dataset-generator/commit/4b59f78dc622042ac2220b4300da8d2d60a6816d))
+* **apps/next, apps/server:** add new endpoints for dataset generation and update documentation ([92b391a](https://github.com/KevinDeBenedetti/dataset-generator/commit/92b391a1e5ae6fca61b212059ea123774bf467fe))
+* **apps/next:** add collection search functionality ([d48fe54](https://github.com/KevinDeBenedetti/dataset-generator/commit/d48fe54a6e79a0258db757746815a8e641fd2868))
+* dashboard, live crawl SSE, langfuse versioning & dataset stats ([97af48c](https://github.com/KevinDeBenedetti/dataset-generator/commit/97af48c3435f9849674b0b5ec77b1b69a3a193ac))
+* langfuse & layout & fixes ([0db7ceb](https://github.com/KevinDeBenedetti/dataset-generator/commit/0db7ceb19bf49b6f6003d415b2947331d8b3032d))
+* **logs:** add DEBUG_LOGS dev log console ([37e8c2b](https://github.com/KevinDeBenedetti/dataset-generator/commit/37e8c2bca0e59a0ddc0ced003db115909ae6c7c8))
+* **README.md, TODO.md:** document and update dependencies ([4111ce8](https://github.com/KevinDeBenedetti/dataset-generator/commit/4111ce8fa9218e1db790ff40504da4db4f885018))
+* **server, docs:** add refresh token support and update auth documentation ([2e834a7](https://github.com/KevinDeBenedetti/dataset-generator/commit/2e834a7b01921a1f877d6b8020b2ec000d5924b8))
+
+
+### Bug Fixes
+
+* **api:** remove unnecessary whitespace and simplify code ([438730a](https://github.com/KevinDeBenedetti/dataset-generator/commit/438730a2400926393450ba81e7579cb9ba4959ad))
+* **apps/next:** update environment variables and improve accessibility ([699428c](https://github.com/KevinDeBenedetti/dataset-generator/commit/699428ce588294efed48ec2bc5e747896e9db8d7))
+* **apps/next:** update linting and formatting tools ([92a31be](https://github.com/KevinDeBenedetti/dataset-generator/commit/92a31be606c1a0c25205c23868eae36946b51624))
+* **apps/server/services/dataset_reads.py:** ensure consistent formatting and remove unnecessary whitespace ([57448b1](https://github.com/KevinDeBenedetti/dataset-generator/commit/57448b134a115a6a068188c0128cbdd112f78b42))
+* **apps/server/services/files.py, apps/server/services/qa.py:** update method calls and handle potential `None` values ([a4f9cf1](https://github.com/KevinDeBenedetti/dataset-generator/commit/a4f9cf11185ffd393868eb00ef7ae1e0996910f4))
+* linting error ([d398214](https://github.com/KevinDeBenedetti/dataset-generator/commit/d3982141dc06deb9f3fef87255e3b464c7fc05c7))
+* **release:** keep breaking-change commits on a minor bump pre-1.0 ([a920476](https://github.com/KevinDeBenedetti/dataset-generator/commit/a9204767ce83c17d5a1eb9d2b0611c6e05824019))
+* **server:** update `/langfuse/export` and `/langfuse/preview` to use Langfuse directly ([b4ad06b](https://github.com/KevinDeBenedetti/dataset-generator/commit/b4ad06b6d8650c694c8e45a83877ba011f6efff8))
+
+
+### Chores
+
+* add Gitleaks configuration with example env allowlist ([c32afa7](https://github.com/KevinDeBenedetti/dataset-generator/commit/c32afa7132efc59e9d6661b9296d83cd01efc6b8))
+* Add OpenAPI schema sync workflow and CORS configuration ([2ad5e7c](https://github.com/KevinDeBenedetti/dataset-generator/commit/2ad5e7c034d3a90aa3731ab97b21112f9283327f))
+* **ci:** move release-please config and manifest to .github/release ([00f025d](https://github.com/KevinDeBenedetti/dataset-generator/commit/00f025d5bfb6bd8edfdb4eb4c3801369d1fd241b))
+* **ci:** remove docs dispatch job from CI workflow ([fb971ad](https://github.com/KevinDeBenedetti/dataset-generator/commit/fb971ad50e3bbba37f9ac927653929cc6cbca4d6))
+* cleanup TODO and remove unused API client barrel ([20ff0e2](https://github.com/KevinDeBenedetti/dataset-generator/commit/20ff0e27429c1cafa1029cfafad958d54482e836))
+* **next:** refactor theme toggle and improve log console ([435e660](https://github.com/KevinDeBenedetti/dataset-generator/commit/435e6602c656d41066b70e1d8df1201606841fec))
+* **pre-commit:** migrate from prek to standard pre-commit and add new hooks ([d88d7b0](https://github.com/KevinDeBenedetti/dataset-generator/commit/d88d7b0f1b0697f38edbc8c7618d61f0b4c92a20))
+* **rate_limit:** update FastAPI dependency to version 0.138.2 ([4ec7f41](https://github.com/KevinDeBenedetti/dataset-generator/commit/4ec7f41aacf3048cc3078f040ee9351881f006ec))
+* **server:** add PostgreSQL support, rate limiting, tests, and cleanup snapshots ([8307abd](https://github.com/KevinDeBenedetti/dataset-generator/commit/8307abd35b1b3db57cb136bf36d4c036a79be580))
+
+
+### Code Refactoring
+
+* **auth:** update rate-limiter to Redis and simplify auth routes ([6a6af74](https://github.com/KevinDeBenedetti/dataset-generator/commit/6a6af74cec6e714406a068de47fb28015e7f57d7))
+
 ## [0.8.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.7.7...v0.8.0) (2026-06-15)
 
 
