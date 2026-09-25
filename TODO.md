@@ -1,10 +1,9 @@
 # TODO
 
 ## Features
-- Hug de Datasets provenant d'Hugging
-- Afficher les datasets stockés dans HF
-- Désactiver les fonctionnalités de scraping pour l'instant (prochaine feature)
-- Déploiement => Superviseur + déclencheur de génération de datasets par la ci pour utiliser les token de l'abonnement claude
+- Datasets hub sourced from Hugging Face
+- Display datasets stored on HF
+- Deployment => Supervisor + CI-triggered dataset generation, to use the Claude subscription's tokens
 
 ## 🔴 En cours
 
