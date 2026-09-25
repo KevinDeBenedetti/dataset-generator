@@ -41,8 +41,8 @@ def test_protected_routes_reject_anonymous(test_db):
     assert client.get("/collections").status_code == 401
     assert (
         client.post(
-            "/dataset/generate",
-            json={"url": "https://example.com", "dataset_name": "x"},
+            "/dataset/generate/github",
+            json={"github_username": "octocat", "dataset_name": "x"},
         ).status_code
         == 401
     )
