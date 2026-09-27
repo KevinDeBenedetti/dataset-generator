@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation'
 import '../../dataset-detail/dataset-detail.css'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
-import { QAList, PaginationWrapper } from '@/components/dataset'
+import { QAList, PaginationWrapper, DatasetSearch } from '@/components/dataset'
 import { useDatasets, useDatasetSources, useExportToHuggingFace } from '@/hooks'
 import { useQAByDataset } from '@/hooks/use-qa'
 import { useIsAdmin } from '@/hooks/use-auth'
@@ -17,7 +17,7 @@ import type { DatasetAnalysis, DatasetSource } from '@/api/types'
 
 const PAGE_SIZE = 10
 
-type TabKey = 'pairs' | 'sources' | 'history'
+type TabKey = 'pairs' | 'sources' | 'history' | 'search'
 
 // Sources are recorded as a URL whose scheme says where they came from (see
 // _source_label_kind server-side); the icon follows that kind. `kind` is a
@@ -222,6 +222,13 @@ export default function DatasetDetailPage() {
         >
           History <span className="mono muted">{history.length}</span>
         </button>
+        <button
+          type="button"
+          className={`tab${tab === 'search' ? ' active' : ''}`}
+          onClick={() => setTab('search')}
+        >
+          Search
+        </button>
       </div>
 
       {tab === 'pairs' && (
@@ -380,6 +387,12 @@ export default function DatasetDetailPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {tab === 'search' && (
+        <div className="tabpane active">
+          <DatasetSearch datasetName={datasetName} />
         </div>
       )}
     </div>

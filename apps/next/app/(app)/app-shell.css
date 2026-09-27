@@ -576,6 +576,12 @@ kbd {
   border-radius: 99px;
   font-family: var(--font-mono), ui-monospace, monospace;
 }
+/* Integration status pill (e.g. Hugging Face) — same shape as .count, colored
+   to say "connected" without a separate badge component. */
+.sb-link .count.count-success {
+  color: var(--success);
+  background: color-mix(in oklch, var(--success) 16%, var(--background));
+}
 .sb-foot {
   border-top: 1px solid var(--sidebar-border);
   padding: 10px 12px;

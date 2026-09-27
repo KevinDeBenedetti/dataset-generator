@@ -11,9 +11,13 @@ from server.core.database import Base, default_database_url, normalize_database_
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
+# Only configure logging when alembic runs from its own CLI. When the app runs
+# migrations at startup (db_utils sets configure_logger=False), fileConfig would
+# raise the root logger to WARNING, swap its handlers and disable every logger
+# already created — silencing all of the app's INFO logs for the process's life.
+if config.config_file_name is not None and config.attributes.get(
+    "configure_logger", True
+):
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here

@@ -21,13 +21,17 @@ from server.services.huggingface import (
     HuggingFaceNotConfiguredError,
     HuggingFaceRepoPublicError,
     export_dataset_to_hub,
+    import_dataset_from_hub,
+    list_user_datasets,
 )
 from server.schemas.dataset import (
     DatasetResponse,
     DatasetSourcesResponse,
     DatasetVersionsResponse,
     DuplicateDatasetResponse,
+    HuggingFaceDatasetsResponse,
     HuggingFaceExportResponse,
+    HuggingFaceImportResponse,
     SimilarityAnalysisResponse,
     CleanSimilarityResponse,
     DeleteDatasetResponse,
@@ -101,6 +105,39 @@ async def get_dataset_versions(dataset_name: str):
     except Exception as e:
         logging.error(f"Error fetching versions for {dataset_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dataset/huggingface", response_model=HuggingFaceDatasetsResponse)
+async def get_huggingface_datasets():
+    """List the Hugging Face Hub dataset repos owned by the configured account."""
+    try:
+        return list_user_datasets()
+    except HuggingFaceNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error listing Hugging Face datasets: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Hugging Face lookup failed: {e}")
+
+
+@router.post("/dataset/huggingface/import", response_model=HuggingFaceImportResponse)
+async def import_huggingface_dataset(
+    repo_id: str = Query(..., description="Full 'namespace/name' Hub repo id to import"),
+    dataset_name: str = Query(
+        None,
+        description="Local dataset name to import into (defaults to the repo's name segment)",
+    ),
+):
+    """Pull a Hugging Face dataset repo's Q/A pairs into a local dataset, so it
+    can be analyzed like any other dataset (duplicates, score stats, rules)."""
+    try:
+        return import_dataset_from_hub(repo_id, dataset_name)
+    except HuggingFaceNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error importing Hugging Face dataset {repo_id}: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Hugging Face import failed: {e}")
 
 
 @router.post(

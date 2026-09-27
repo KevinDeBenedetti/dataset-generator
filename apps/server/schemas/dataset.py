@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
+from typing import Any, List, Optional
 from enum import Enum
 from server.core.config import config
 
@@ -128,6 +128,52 @@ class DatasetVersionsResponse(BaseModel):
     dataset_name: str
     total: int
     versions: List[DatasetAnalysis]
+
+
+class HuggingFaceDataset(BaseModel):
+    """One dataset repo owned by the configured Hugging Face account.
+
+    Mirrors ``huggingface_hub.DatasetInfo`` (fetched with ``full=True``), plus
+    the handful of dataset-card fields (``pretty_name``, ``language``,
+    ``license``, ``size_category``) worth surfacing without asking the caller
+    to parse the card's YAML front matter themselves.
+    """
+
+    id: str = Field(..., description="Full 'namespace/name' repo id on the Hub")
+    url: str
+    author: Optional[str] = None
+    private: bool
+    gated: Any = Field(None, description="False, or the gating mode ('auto'/'manual')")
+    disabled: bool = False
+    downloads: Optional[int] = Field(None, description="Downloads in the last 30 days")
+    downloads_all_time: Optional[int] = None
+    likes: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+    description: Optional[str] = None
+    pretty_name: Optional[str] = Field(None, description="From the dataset card, if set")
+    language: Optional[List[str]] = None
+    license: Optional[str] = None
+    size_category: Optional[str] = None
+    file_count: Optional[int] = Field(None, description="Files in the repo (any revision)")
+    used_storage: Optional[int] = Field(None, description="Repo size in bytes")
+    sha: Optional[str] = Field(None, description="Current commit hash on the default branch")
+    created_at: Optional[str] = None
+    last_modified: Optional[str] = None
+
+
+class HuggingFaceDatasetsResponse(BaseModel):
+    namespace: str
+    total: int
+    datasets: List[HuggingFaceDataset]
+
+
+class HuggingFaceImportResponse(BaseModel):
+    """Result of pulling a Hub dataset repo's Q/A pairs into local storage."""
+
+    dataset_name: str
+    repo_id: str
+    pairs_imported: int
+    version: int
 
 
 class HuggingFaceExportResponse(BaseModel):

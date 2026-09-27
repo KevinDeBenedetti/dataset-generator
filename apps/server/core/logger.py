@@ -7,10 +7,14 @@ _STREAM_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
 def setup_logging(level: int = logging.INFO):
+    # force=True: if anything imported earlier already called basicConfig()
+    # (default WARNING level and format), ours would otherwise be a silent
+    # no-op — every module logger then inherits WARNING and drops its INFO.
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(pathname)s:%(lineno)d",
         handlers=[logging.StreamHandler(), logging.FileHandler("scraper.log")],
+        force=True,
     )
 
     # Mirror every record into the in-memory broadcaster so the dev log console

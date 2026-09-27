@@ -10,9 +10,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useCollections, useDatasets } from '@/hooks'
+import { useDatasets, useHuggingFaceDatasets } from '@/hooks'
 import { useCurrentUser, useLogout } from '@/hooks/use-auth'
 import { cn, initialsFor } from '@/lib/utils'
+import pkg from '@/package.json'
 
 type NavItem = {
   icon: string
@@ -27,9 +28,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
       { icon: 'database', label: 'Datasets', href: '/datasets' },
-      { icon: 'boxes', label: 'Collections', href: '/collections' },
       { icon: 'sparkles', label: 'Generation', href: '/generate' },
-      { icon: 'globe', label: 'Sources', href: '/sources' },
     ],
   },
   {
@@ -60,15 +59,17 @@ export function AppSidebar() {
   const { data: datasets } = useDatasets()
   const datasetCount = datasets?.length
 
-  // Number of collections actually synced into Qdrant (not just stored
-  // datasets projected as collections) for the Collections nav badge.
-  const { data: collections } = useCollections()
-  const qdrantCollectionCount = collections?.collections.filter((c) => c.in_qdrant).length
-
   const counts: Record<string, string | undefined> = {
     '/datasets': datasetCount != null ? String(datasetCount) : undefined,
-    '/collections': qdrantCollectionCount != null ? String(qdrantCollectionCount) : undefined,
   }
+
+  // Real Hugging Face connection status for the "Delivery" group — same query
+  // (and cache) the /datasets page and dashboard already use. No HF_TOKEN
+  // configured surfaces as an error there, which here reads as "Off" rather
+  // than being hidden, since this is a status row, not a data listing.
+  const { data: hfData, isPending: hfPending, error: hfError } = useHuggingFaceDatasets()
+  const hfConnected = !hfPending && !hfError
+  const hfStatusLabel = hfPending ? '…' : hfConnected ? `${hfData?.total ?? 0} synced` : 'Off'
 
   const { data: user } = useCurrentUser()
   const logoutMutation = useLogout()
@@ -83,7 +84,7 @@ export function AppSidebar() {
           <div className="sb-name">
             Dataset<span style={{ opacity: 0.5 }}>Gen</span>
           </div>
-          <div className="sb-ver">v0.7.7</div>
+          <div className="sb-ver">v{pkg.version}</div>
         </div>
       </div>
       <nav className="sb-scroll">
@@ -104,6 +105,27 @@ export function AppSidebar() {
                 </Link>
               )
             })}
+            {/* Real Hugging Face connection status, not a nav destination —
+                links out to the account's Hub profile once connected. */}
+            {group.label === 'Delivery' &&
+              (hfConnected && hfData?.namespace ? (
+                <a
+                  href={`https://huggingface.co/${hfData.namespace}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sb-link"
+                >
+                  <Icon name="link" />
+                  <span>Hugging Face</span>
+                  <span className="count count-success">{hfStatusLabel}</span>
+                </a>
+              ) : (
+                <div className="sb-link" style={{ cursor: 'default', opacity: 0.7 }}>
+                  <Icon name="link" />
+                  <span>Hugging Face</span>
+                  <span className="count">{hfStatusLabel}</span>
+                </div>
+              ))}
           </div>
         ))}
         <div className="sb-group">
