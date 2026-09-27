@@ -149,6 +149,7 @@ async def log_requests(request: Request, call_next):
     )
     return response
 
+
 # Required by Authlib's OIDC client to hold the OAuth state/nonce between the
 # /auth/oidc/login redirect and the /auth/oidc/callback.
 app.add_middleware(

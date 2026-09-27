@@ -150,13 +150,19 @@ class HuggingFaceDataset(BaseModel):
     likes: Optional[int] = None
     tags: List[str] = Field(default_factory=list)
     description: Optional[str] = None
-    pretty_name: Optional[str] = Field(None, description="From the dataset card, if set")
+    pretty_name: Optional[str] = Field(
+        None, description="From the dataset card, if set"
+    )
     language: Optional[List[str]] = None
     license: Optional[str] = None
     size_category: Optional[str] = None
-    file_count: Optional[int] = Field(None, description="Files in the repo (any revision)")
+    file_count: Optional[int] = Field(
+        None, description="Files in the repo (any revision)"
+    )
     used_storage: Optional[int] = Field(None, description="Repo size in bytes")
-    sha: Optional[str] = Field(None, description="Current commit hash on the default branch")
+    sha: Optional[str] = Field(
+        None, description="Current commit hash on the default branch"
+    )
     created_at: Optional[str] = None
     last_modified: Optional[str] = None
 

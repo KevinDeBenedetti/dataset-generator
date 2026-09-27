@@ -413,7 +413,9 @@ def test_import_from_huggingface_success(client: TestClient):
         "pairs_imported": 12,
         "version": 1,
     }
-    with patch("server.api.dataset.import_dataset_from_hub", return_value=fake) as mocked:
+    with patch(
+        "server.api.dataset.import_dataset_from_hub", return_value=fake
+    ) as mocked:
         response = client.post(
             "/dataset/huggingface/import", params={"repo_id": "kevin/my_dataset"}
         )

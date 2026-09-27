@@ -121,7 +121,9 @@ async def get_huggingface_datasets():
 
 @router.post("/dataset/huggingface/import", response_model=HuggingFaceImportResponse)
 async def import_huggingface_dataset(
-    repo_id: str = Query(..., description="Full 'namespace/name' Hub repo id to import"),
+    repo_id: str = Query(
+        ..., description="Full 'namespace/name' Hub repo id to import"
+    ),
     dataset_name: str = Query(
         None,
         description="Local dataset name to import into (defaults to the repo's name segment)",

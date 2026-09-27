@@ -75,10 +75,7 @@ export default function QualityPage() {
   // since analysis (duplicates, stats, rules) only ever runs over local Q/A.
   const { data: hfDatasetsData, isPending: hfDatasetsPending } = useHuggingFaceDatasets()
   const importHfMutation = useImportHuggingFaceDataset()
-  const localDatasetNames = useMemo(
-    () => new Set(datasets?.map((d) => d.name)),
-    [datasets],
-  )
+  const localDatasetNames = useMemo(() => new Set(datasets?.map((d) => d.name)), [datasets])
   const importableHfDatasets = useMemo(
     () =>
       !mounted
@@ -268,7 +265,10 @@ export default function QualityPage() {
         </p>
       )}
       {importHfMutation.isError && (
-        <p className="hint" style={{ marginTop: -8, marginBottom: 12, color: 'var(--destructive)' }}>
+        <p
+          className="hint"
+          style={{ marginTop: -8, marginBottom: 12, color: 'var(--destructive)' }}
+        >
           {importHfMutation.error instanceof Error
             ? importHfMutation.error.message
             : 'Failed to import the Hugging Face dataset'}
@@ -348,9 +348,9 @@ export default function QualityPage() {
               scoreStats.total === 0 &&
               (stats?.total_count ? (
                 <p className="muted">
-                  None of the {stats.total_count} pairs has a confidence score — datasets
-                  imported from Hugging Face usually don&apos;t carry one, so there is nothing to
-                  distribute or validate.
+                  None of the {stats.total_count} pairs has a confidence score — datasets imported
+                  from Hugging Face usually don&apos;t carry one, so there is nothing to distribute
+                  or validate.
                 </p>
               ) : (
                 <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
