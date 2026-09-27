@@ -2,8 +2,9 @@ from typing import Any, cast
 from contextlib import asynccontextmanager
 import logging
 import asyncio
+import time
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -114,6 +115,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info("CORS allowed origins: %s", config.cors_allow_origins or "(none)")
+
+
+# Every request, with its outcome — the API had no access log at all
+# (uvicorn's own is not configured), so a 401 from an expired session or a
+# request that never reaches a route handler was invisible in `docker compose
+# logs`. This runs before route-level auth, so it also catches auth failures.
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000
+        logger.exception(
+            "%s %s -> unhandled exception (%.1fms)",
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
+    duration_ms = (time.perf_counter() - started) * 1000
+    # The container healthcheck polls /health every few seconds — only log it
+    # when it fails, or it drowns everything else.
+    if request.url.path == "/health" and response.status_code < 400:
+        return response
+    logger.info(
+        "%s %s -> %d (%.1fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
 
 # Required by Authlib's OIDC client to hold the OAuth state/nonce between the
 # /auth/oidc/login redirect and the /auth/oidc/callback.

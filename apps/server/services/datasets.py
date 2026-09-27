@@ -518,12 +518,25 @@ def get_dataset_sources_view(dataset_name: str) -> Dict[str, Any]:
 # --- similarity analyse / clean ----------------------------------------------
 
 
+# A near-identical question alone is not a duplicate: templated questions
+# ("What is the purpose of the X repository?") differ by one entity and score
+# 0.9+ while being about different things. Their answers give it away (~0.2–0.4
+# on real data), whereas a genuine repeat restates the same answer. Same idea
+# as the context floor dedup applies at generation time (services.dedup).
+ANSWER_SIMILARITY_FLOOR = 0.5
+
+
 def _similar_pairs(pairs: List[Dict[str, Any]], threshold: float):
-    """Yield (i, j, ratio) for question pairs at or above the threshold."""
+    """Yield (i, j, ratio) for pairs whose questions reach the threshold and
+    whose answers reach :data:`ANSWER_SIMILARITY_FLOOR`."""
     for i, a in enumerate(pairs):
         for j in range(i + 1, len(pairs)):
-            ratio = SequenceMatcher(None, a["question"], pairs[j]["question"]).ratio()
-            if ratio >= threshold:
+            b = pairs[j]
+            ratio = SequenceMatcher(None, a["question"], b["question"]).ratio()
+            if ratio < threshold:
+                continue
+            answer_ratio = SequenceMatcher(None, a["answer"], b["answer"]).ratio()
+            if answer_ratio >= ANSWER_SIMILARITY_FLOOR:
                 yield i, j, ratio
 
 
@@ -533,6 +546,7 @@ def _pair_dicts(db: Session, dataset: Dataset) -> List[Dict[str, Any]]:
         {
             "id": p.id,
             "question": p.question,
+            "answer": p.answer or "",
             "confidence": p.confidence or 0.0,
             "created_at": p.created_at,
         }
@@ -544,6 +558,11 @@ def analyze_similarities_view(
     dataset_name: str, threshold: float = 0.8
 ) -> Dict[str, Any]:
     """Find near-duplicate questions in a dataset (no mutation)."""
+    logger.info(
+        "analyze-similarities: dataset=%r threshold=%.2f — starting",
+        dataset_name,
+        threshold,
+    )
     with get_scoped_db() as db:
         dataset = _require_dataset(db, dataset_name)
         pairs = _pair_dicts(db, dataset)
@@ -560,6 +579,13 @@ def analyze_similarities_view(
                 "question2": (q2[:100] + "...") if len(q2) > 100 else q2,
             }
         )
+
+    logger.info(
+        "analyze-similarities: dataset=%r — %d record(s), %d similar pair(s) found",
+        dataset_name,
+        len(pairs),
+        len(similarities),
+    )
 
     return {
         "dataset_id": dataset_name,
@@ -634,6 +660,11 @@ def clean_similarities_view(
     For each similar pair, keeps the higher-confidence record (ties broken by
     the older creation date) and deletes the other.
     """
+    logger.info(
+        "clean-similarities: dataset=%r threshold=%.2f — starting",
+        dataset_name,
+        threshold,
+    )
     with get_scoped_db() as db:
         dataset = _require_dataset(db, dataset_name)
         pairs = _pair_dicts(db, dataset)
@@ -689,6 +720,13 @@ def clean_similarities_view(
         if removed_ids:
             db.execute(delete(QAPair).where(QAPair.id.in_(removed_ids)))
             db.commit()
+
+    logger.info(
+        "clean-similarities: dataset=%r — %d of %d record(s) removed",
+        dataset_name,
+        len(removed_ids),
+        len(pairs),
+    )
 
     return {
         "dataset_id": dataset_name,

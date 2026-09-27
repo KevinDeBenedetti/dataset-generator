@@ -12,12 +12,15 @@ import pytest
 
 from server.core.config import config
 from server.services import huggingface as hf
+from server.services.dedup import compute_hash_from_content
 from server.services.huggingface import (
     DATA_PATH_IN_REPO,
     HuggingFaceNotConfiguredError,
     HuggingFaceRepoPublicError,
     export_dataset_to_hub,
+    import_dataset_from_hub,
     is_huggingface_configured,
+    list_user_datasets,
     resolve_repo_id,
     slugify,
 )
@@ -28,19 +31,78 @@ class FakeRepoInfo:
         self.private = private
 
 
+class FakeCardData:
+    def __init__(self, **fields):
+        self._fields = fields
+
+    def to_dict(self):
+        return dict(self._fields)
+
+
+class FakeSibling:
+    def __init__(self, rfilename):
+        self.rfilename = rfilename
+
+
+class FakeDatasetInfo:
+    def __init__(
+        self,
+        id,
+        private=False,
+        downloads=0,
+        likes=0,
+        last_modified=None,
+        author=None,
+        gated=False,
+        disabled=False,
+        downloads_all_time=None,
+        tags=None,
+        description=None,
+        siblings=None,
+        used_storage=None,
+        sha=None,
+        created_at=None,
+        card_data=None,
+    ):
+        self.id = id
+        self.private = private
+        self.downloads = downloads
+        self.likes = likes
+        self.last_modified = last_modified
+        self.author = author
+        self.gated = gated
+        self.disabled = disabled
+        self.downloads_all_time = downloads_all_time
+        self.tags = tags
+        self.description = description
+        self.siblings = siblings
+        self.used_storage = used_storage
+        self.sha = sha
+        self.created_at = created_at
+        self.card_data = card_data
+
+
 class FakeHfApi:
     """Stand-in for HfApi: records calls, never touches the network."""
 
-    def __init__(self, *, existing_private=None, whoami_name="kevin"):
+    def __init__(
+        self, *, existing_private=None, whoami_name="kevin", datasets=None
+    ):
         # None → the repo doesn't exist yet; True/False → it does, with that
         # visibility (what create_repo(exist_ok=True) silently leaves alone).
         self.existing_private = existing_private
         self.whoami_name = whoami_name
         self.created: list[dict] = []
         self.uploads: list[dict] = []
+        self._datasets = datasets if datasets is not None else []
+        self.list_datasets_calls: list[dict] = []
 
     def whoami(self):
         return {"name": self.whoami_name}
+
+    def list_datasets(self, **kwargs):
+        self.list_datasets_calls.append(kwargs)
+        return iter(self._datasets)
 
     def create_repo(self, repo_id, **kwargs):
         self.created.append({"repo_id": repo_id, **kwargs})
@@ -229,6 +291,112 @@ def test_uploaded_jsonl_keeps_non_ascii_readable(token, api):
     assert "Où est la gare ?" in body
 
 
+# --- listing -------------------------------------------------------------
+
+
+def test_list_user_datasets_not_configured_without_a_token(monkeypatch):
+    monkeypatch.setattr(config, "hf_token", "")
+    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_TOKEN"):
+        list_user_datasets()
+
+
+def test_list_user_datasets_uses_the_token_account(token, monkeypatch):
+    fake = FakeHfApi(
+        datasets=[FakeDatasetInfo("kevin/ds-a"), FakeDatasetInfo("kevin/ds-b", private=True)]
+    )
+    monkeypatch.setattr(hf, "_api", lambda: fake)
+
+    result = list_user_datasets()
+
+    assert result["namespace"] == "kevin"
+    assert result["total"] == 2
+    assert [d["id"] for d in result["datasets"]] == ["kevin/ds-a", "kevin/ds-b"]
+    assert result["datasets"][0]["url"] == "https://huggingface.co/datasets/kevin/ds-a"
+    assert result["datasets"][1]["private"] is True
+    assert fake.list_datasets_calls[0]["author"] == "kevin"
+    # Asks for everything the Hub knows, not just the default summary fields.
+    assert fake.list_datasets_calls[0]["full"] is True
+
+
+def test_list_user_datasets_surfaces_full_metadata(token, monkeypatch):
+    from datetime import datetime, timezone
+
+    created = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    modified = datetime(2026, 2, 3, tzinfo=timezone.utc)
+    fake = FakeHfApi(
+        datasets=[
+            FakeDatasetInfo(
+                "kevin/ds-a",
+                author="kevin",
+                downloads=42,
+                downloads_all_time=1000,
+                likes=7,
+                gated="auto",
+                tags=["synthetic", "question-answering"],
+                description="Q/A pairs scraped from docs.",
+                siblings=[FakeSibling("README.md"), FakeSibling("data/train.jsonl")],
+                used_storage=123456,
+                sha="abc123",
+                created_at=created,
+                last_modified=modified,
+                card_data=FakeCardData(
+                    pretty_name="Docs QA",
+                    language=["fr"],
+                    license="mit",
+                    size_categories=["1K<n<10K"],
+                ),
+            )
+        ]
+    )
+    monkeypatch.setattr(hf, "_api", lambda: fake)
+
+    row = list_user_datasets()["datasets"][0]
+
+    assert row["author"] == "kevin"
+    assert row["downloads"] == 42
+    assert row["downloads_all_time"] == 1000
+    assert row["likes"] == 7
+    assert row["gated"] == "auto"
+    assert row["tags"] == ["synthetic", "question-answering"]
+    assert row["description"] == "Q/A pairs scraped from docs."
+    assert row["file_count"] == 2
+    assert row["used_storage"] == 123456
+    assert row["sha"] == "abc123"
+    assert row["created_at"] == created.isoformat()
+    assert row["last_modified"] == modified.isoformat()
+    assert row["pretty_name"] == "Docs QA"
+    assert row["language"] == ["fr"]
+    assert row["license"] == "mit"
+    assert row["size_category"] == "1K<n<10K"
+
+
+def test_list_user_datasets_handles_no_card(token, monkeypatch):
+    fake = FakeHfApi(datasets=[FakeDatasetInfo("kevin/ds-a", card_data=None, siblings=None)])
+    monkeypatch.setattr(hf, "_api", lambda: fake)
+
+    row = list_user_datasets()["datasets"][0]
+
+    assert row["pretty_name"] is None
+    assert row["language"] is None
+    assert row["license"] is None
+    assert row["size_category"] is None
+    assert row["file_count"] is None
+    assert row["tags"] == []
+    assert row["gated"] is False
+
+
+def test_list_user_datasets_uses_the_configured_namespace(token, monkeypatch):
+    monkeypatch.setattr(config, "hf_namespace", "my-org")
+    fake = FakeHfApi(datasets=[])
+    monkeypatch.setattr(hf, "_api", lambda: fake)
+
+    result = list_user_datasets()
+
+    assert result["namespace"] == "my-org"
+    assert result["total"] == 0
+    assert fake.list_datasets_calls[0]["author"] == "my-org"
+
+
 def test_dataset_card_points_the_viewer_at_the_data_file(token, api):
     view, pairs = _stub_dataset([_pair("a", "Q1?")], target_language="fr")
     with view, pairs:
@@ -240,3 +408,144 @@ def test_dataset_card_points_the_viewer_at_the_data_file(token, api):
     assert "This dataset is **private**." in card
     # The sources actually used are listed.
     assert "https://example.com/a" in card
+
+
+# --- import --------------------------------------------------------------
+
+SHA_A = "a" * 64
+SHA_B = "b" * 64
+
+
+def _jsonl(*rows) -> bytes:
+    return ("\n".join(json.dumps(r) for r in rows) + "\n").encode("utf-8")
+
+
+def _hub(files):
+    """Patch the Hub reads: ``files`` maps repo paths to their bytes."""
+    return (
+        patch.object(hf, "_list_repo_files", return_value=list(files)),
+        patch.object(hf, "_download_file", side_effect=lambda _repo, name: files[name]),
+    )
+
+
+def _saved(files, repo="kevin/my-ds", **kwargs):
+    """Run the import against fake repo ``files``; return (result, items, save)."""
+    listing, download = _hub(files)
+    with listing, download, patch.object(
+        hf, "save_generation", return_value={"created_count": 1, "version": 1}
+    ) as save:
+        result = import_dataset_from_hub(repo, **kwargs)
+    return result, save.call_args.args[1], save
+
+
+def test_import_not_configured_without_a_token(monkeypatch):
+    monkeypatch.setattr(config, "hf_token", "")
+    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_TOKEN"):
+        import_dataset_from_hub("kevin/ds")
+
+
+def test_import_reads_the_apps_own_export_and_keeps_its_ids(token):
+    raw = _jsonl(
+        {"id": SHA_A, "question": "Q1?", "answer": "A1", "context": "C1", "source_url": "https://x/a", "confidence": 0.9},
+        {"id": SHA_B, "question": "Q2?", "answer": "A2", "context": "C2", "source_url": None},
+    )
+    result, items, save = _saved({"README.md": b"# card", DATA_PATH_IN_REPO: raw})
+
+    assert result["dataset_name"] == "my-ds"
+    assert save.call_args.kwargs["source_url"] == "huggingface://kevin/my-ds"
+    assert [i["id"] for i in items] == [SHA_A, SHA_B]
+    assert items[0]["confidence"] == 0.9
+    assert items[0]["metadata"] == {"imported_from": "kevin/my-ds", "file": DATA_PATH_IN_REPO}
+    # A row without a source falls back to the repo, not to None.
+    assert items[1]["source_url"] == "huggingface://kevin/my-ds"
+
+
+def test_import_finds_a_data_file_outside_data_dir(token):
+    """The real-world case: a repo not written by this app's exporter keeps
+    its file at the root, not at data/train.jsonl."""
+    raw = _jsonl({"question": "Q1?", "answer": "A1"})
+    _, items, _ = _saved({".gitattributes": b"", "train.jsonl": raw})
+    assert [i["question"] for i in items] == ["Q1?"]
+
+
+def test_import_uses_the_explicit_local_dataset_name(token):
+    result, _, save = _saved(
+        {"train.jsonl": _jsonl({"question": "Q1?", "answer": "A1"})}, dataset_name="renamed"
+    )
+    assert result["dataset_name"] == "renamed"
+    assert save.call_args.args[0] == "renamed"
+
+
+def test_import_replaces_foreign_ids_with_a_content_hash(token):
+    """Pair ids are global primary keys — a foreign "0" would collide."""
+    raw = _jsonl({"id": 0, "question": "Q1?", "answer": "A1", "context": "C1"})
+    _, items, _ = _saved({"train.jsonl": raw})
+    assert items[0]["id"] == compute_hash_from_content(
+        "Q1?", "A1", "C1", "huggingface://kevin/my-ds"
+    )
+
+
+def test_import_maps_instruction_tuning_rows(token):
+    raw = _jsonl({"instruction": "Summarize this.", "input": "Long text.", "output": "Short."})
+    _, items, _ = _saved({"train.jsonl": raw})
+    assert items[0]["question"] == "Summarize this."
+    assert items[0]["answer"] == "Short."
+    assert items[0]["context"] == "Long text."
+
+
+def test_import_maps_chat_transcripts(token):
+    raw = _jsonl(
+        {
+            "messages": [
+                {"role": "system", "content": "Be brief."},
+                {"role": "user", "content": "Capital of France?"},
+                {"role": "assistant", "content": "Paris."},
+            ]
+        }
+    )
+    _, items, _ = _saved({"train.jsonl": raw})
+    assert (items[0]["question"], items[0]["answer"]) == ("Capital of France?", "Paris.")
+
+
+def test_import_reads_csv_and_json_arrays(token):
+    _, items, _ = _saved({"data.csv": b"prompt,response\nQ1?,A1\n"})
+    assert (items[0]["question"], items[0]["answer"]) == ("Q1?", "A1")
+
+    raw = json.dumps({"data": [{"question": "Q2?", "answer": "A2"}]}).encode()
+    _, items, _ = _saved({"data.json": raw})
+    assert items[0]["question"] == "Q2?"
+
+
+def test_import_reads_every_split_and_merges_duplicates(token):
+    row = {"question": "Q1?", "answer": "A1"}
+    _, items, _ = _saved(
+        {
+            "data/train.jsonl": _jsonl(row, {"question": "Q2?", "answer": "A2"}),
+            "data/test.jsonl": _jsonl(row),
+        }
+    )
+    assert sorted(i["question"] for i in items) == ["Q1?", "Q2?"]
+
+
+def test_import_without_a_readable_file_lists_the_repo(token, monkeypatch):
+    monkeypatch.setattr(hf, "_parquet_available", lambda: False)
+    listing, download = _hub({"README.md": b"", "data/train-00000.parquet": b""})
+    with listing, download:
+        with pytest.raises(ValueError, match="pyarrow") as exc:
+            import_dataset_from_hub("kevin/my-ds")
+    assert "data/train-00000.parquet" in str(exc.value)
+
+
+def test_import_with_no_mappable_row_lists_the_columns(token):
+    listing, download = _hub({"train.jsonl": _jsonl({"text": "free-form"})})
+    with listing, download:
+        with pytest.raises(ValueError, match="columns found: text"):
+            import_dataset_from_hub("kevin/my-ds")
+
+
+def test_import_propagates_a_missing_repo(token):
+    with patch.object(
+        hf, "_list_repo_files", side_effect=ValueError("Hugging Face dataset repo 'kevin/nope' not found")
+    ):
+        with pytest.raises(ValueError, match="not found"):
+            import_dataset_from_hub("kevin/nope")

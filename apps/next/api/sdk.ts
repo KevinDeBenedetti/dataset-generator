@@ -496,6 +496,75 @@ export async function exportDatasetToHuggingFace(
   return response.data as unknown as HuggingFaceExportResponse
 }
 
+export interface HuggingFaceDataset {
+  id: string
+  url: string
+  author: string | null
+  private: boolean
+  /** false, or the gating mode ('auto' | 'manual') */
+  gated: boolean | string
+  disabled: boolean
+  /** Downloads in the last 30 days */
+  downloads: number | null
+  downloads_all_time: number | null
+  likes: number | null
+  tags: string[]
+  description: string | null
+  pretty_name: string | null
+  language: string[] | null
+  license: string | null
+  size_category: string | null
+  file_count: number | null
+  /** Repo size in bytes */
+  used_storage: number | null
+  sha: string | null
+  created_at: string | null
+  last_modified: string | null
+}
+
+export interface HuggingFaceDatasetsResponse {
+  namespace: string
+  total: number
+  datasets: HuggingFaceDataset[]
+}
+
+// List the Hugging Face Hub dataset repos owned by the configured account
+// (same namespace `exportDatasetToHuggingFace` writes to).
+export async function getHuggingFaceDatasets(): Promise<HuggingFaceDatasetsResponse> {
+  const response = await client.get<HuggingFaceDatasetsResponse>({
+    url: '/dataset/huggingface',
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch Hugging Face datasets'))
+  }
+  return response.data as unknown as HuggingFaceDatasetsResponse
+}
+
+export interface HuggingFaceImportResponse {
+  dataset_name: string
+  repo_id: string
+  pairs_imported: number
+  version: number
+}
+
+// Pull a Hub dataset repo's Q/A pairs into a local dataset (by content-hash
+// id, so re-importing is idempotent), so it can be analyzed like any other
+// dataset — quality control's duplicate detection, score stats and rules.
+export async function importHuggingFaceDataset(
+  repoId: string,
+  datasetName?: string | null,
+): Promise<HuggingFaceImportResponse> {
+  const params = new URLSearchParams({ repo_id: repoId })
+  if (datasetName) params.set('dataset_name', datasetName)
+  const response = await client.post<HuggingFaceImportResponse>({
+    url: `/dataset/huggingface/import?${params.toString()}`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to import the Hugging Face dataset'))
+  }
+  return response.data as unknown as HuggingFaceImportResponse
+}
+
 export interface DuplicateDatasetResponse {
   message: string
   dataset_name: string

@@ -7,6 +7,8 @@ import {
   useAnalyzeDataset,
   useCleanDataset,
   useDatasets,
+  useHuggingFaceDatasets,
+  useImportHuggingFaceDataset,
   useQAStats,
   useQualityRules,
   useResolvePair,
@@ -19,6 +21,12 @@ const DUPLICATES_PAGE_SIZE = 5
 
 export default function QualityPage() {
   const { data: datasets, isPending: datasetsPending } = useDatasets()
+  // The Hugging Face list only ever resolves client-side (no SSR hydration
+  // boundary for it) — gating everything it feeds on `mounted` keeps the
+  // first render identical on the server and the client, so hydration has
+  // nothing to mismatch on. It flips on right after that first paint.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const [selectedDataset, setSelectedDataset] = useState('')
   const [threshold, setThreshold] = useState(DEFAULT_SIMILARITY_THRESHOLD)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -61,6 +69,37 @@ export default function QualityPage() {
   const analyzeMutation = useAnalyzeDataset()
   const cleanMutation = useCleanDataset()
   const resolvePairMutation = useResolvePair()
+
+  // Datasets that only exist on the Hub so far (not already analyzable
+  // locally) — offered in the selector as an "import, then analyze" action,
+  // since analysis (duplicates, stats, rules) only ever runs over local Q/A.
+  const { data: hfDatasetsData, isPending: hfDatasetsPending } = useHuggingFaceDatasets()
+  const importHfMutation = useImportHuggingFaceDataset()
+  const localDatasetNames = useMemo(
+    () => new Set(datasets?.map((d) => d.name)),
+    [datasets],
+  )
+  const importableHfDatasets = useMemo(
+    () =>
+      !mounted
+        ? []
+        : (hfDatasetsData?.datasets ?? []).filter(
+            (d) => !localDatasetNames.has(d.id.split('/').pop() || d.id),
+          ),
+    [mounted, hfDatasetsData, localDatasetNames],
+  )
+
+  const handleSelectDataset = (value: string) => {
+    if (value.startsWith('hf:')) {
+      const repoId = value.slice(3)
+      importHfMutation.mutate(
+        { repoId },
+        { onSuccess: (result) => setSelectedDataset(result.dataset_name) },
+      )
+      return
+    }
+    setSelectedDataset(value)
+  }
 
   const handleResolvePair = (removeId: string, question: string) => {
     if (!selectedDataset) return
@@ -138,7 +177,13 @@ export default function QualityPage() {
     ? visibleDuplicates
     : visibleDuplicates.slice(0, DUPLICATES_PAGE_SIZE)
 
-  if (!datasetsPending && (!datasets || datasets.length === 0)) {
+  const hasAnyDataset = (datasets && datasets.length > 0) || importableHfDatasets.length > 0
+
+  // `mounted` first: this branch swaps the whole page for an empty-state
+  // card, so it must never fire during SSR or the client's pre-hydration
+  // pass — a full-subtree mismatch there is far more disruptive than a
+  // single mismatched attribute.
+  if (mounted && !datasetsPending && !hfDatasetsPending && !hasAnyDataset) {
     return (
       <div className="quality-page">
         <div className="page-head">
@@ -173,14 +218,36 @@ export default function QualityPage() {
             style={{ width: 'auto' }}
             aria-label="Dataset"
             value={selectedDataset}
-            onChange={(e) => setSelectedDataset(e.target.value)}
-            disabled={datasetsPending || !datasets?.length}
+            onChange={(e) => handleSelectDataset(e.target.value)}
+            disabled={
+              !mounted ||
+              datasetsPending ||
+              importHfMutation.isPending ||
+              (!datasets?.length && importableHfDatasets.length === 0)
+            }
           >
-            {datasets?.map((dataset) => (
-              <option key={dataset.id} value={dataset.name}>
-                {dataset.name}
-              </option>
-            ))}
+            {/* Matches the initial "" value. Without it the browser shows the
+                first option as if selected while React's value stays "" — so
+                picking that option (e.g. the only Hugging Face repo) is not a
+                change, onChange never fires and nothing gets imported. */}
+            <option value="" disabled>
+              Select a dataset…
+            </option>
+            {mounted &&
+              datasets?.map((dataset) => (
+                <option key={dataset.id} value={dataset.name}>
+                  {dataset.name}
+                </option>
+              ))}
+            {importableHfDatasets.length > 0 && (
+              <optgroup label="Hugging Face (import to analyze)">
+                {importableHfDatasets.map((hfDataset) => (
+                  <option key={hfDataset.id} value={`hf:${hfDataset.id}`}>
+                    {hfDataset.id}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <button
             className="btn btn-primary"
@@ -195,6 +262,18 @@ export default function QualityPage() {
           </button>
         </div>
       </div>
+      {importHfMutation.isPending && (
+        <p className="hint" style={{ marginTop: -8, marginBottom: 12 }}>
+          Importing from Hugging Face…
+        </p>
+      )}
+      {importHfMutation.isError && (
+        <p className="hint" style={{ marginTop: -8, marginBottom: 12, color: 'var(--destructive)' }}>
+          {importHfMutation.error instanceof Error
+            ? importHfMutation.error.message
+            : 'Failed to import the Hugging Face dataset'}
+        </p>
+      )}
 
       <div className="stat-grid" style={{ marginBottom: 18 }}>
         <div className="card stat">
@@ -228,11 +307,12 @@ export default function QualityPage() {
               <Icon name="alert" />
             </span>
           </div>
-          <div className="stat-val">{scoreStats.below}</div>
+          {/* With nothing scored, "0 below" would read as "all good". */}
+          <div className="stat-val">{scoreStats.total ? scoreStats.below : '—'}</div>
           <div className="stat-delta muted">
             {scoreStats.total
               ? `${((scoreStats.below / scoreStats.total) * 100).toFixed(1)}% of the dataset`
-              : '—'}
+              : 'No scores'}
           </div>
         </div>
         <div className="card stat">
@@ -242,11 +322,11 @@ export default function QualityPage() {
               <Icon name="check" />
             </span>
           </div>
-          <div className="stat-val">{scoreStats.validated}</div>
+          <div className="stat-val">{scoreStats.total ? scoreStats.validated : '—'}</div>
           <div className="stat-delta muted">
             {scoreStats.total
               ? `${((scoreStats.validated / scoreStats.total) * 100).toFixed(1)}%`
-              : '—'}
+              : 'No scores'}
           </div>
         </div>
       </div>
@@ -264,9 +344,17 @@ export default function QualityPage() {
                 gated on selectedDataset: while none is picked the query is
                 disabled, and a disabled query stays `pending` forever. */}
             {selectedDataset && statsQuery.isPending && <p className="muted">Loading scores…</p>}
-            {!(selectedDataset && statsQuery.isPending) && scoreStats.total === 0 && (
-              <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
-            )}
+            {!(selectedDataset && statsQuery.isPending) &&
+              scoreStats.total === 0 &&
+              (stats?.total_count ? (
+                <p className="muted">
+                  None of the {stats.total_count} pairs has a confidence score — datasets
+                  imported from Hugging Face usually don&apos;t carry one, so there is nothing to
+                  distribute or validate.
+                </p>
+              ) : (
+                <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
+              ))}
             {scoreStats.buckets.map((bucket, i) => (
               <div className="bar-row" key={bucket.label}>
                 <span className="bl">{bucket.label}</span>

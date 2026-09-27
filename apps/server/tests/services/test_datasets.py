@@ -265,6 +265,26 @@ def test_analyze_similarities_finds_near_duplicates():
     assert result["similar_pairs_found"] == 1
 
 
+def test_analyze_similarities_ignores_templated_questions_with_different_answers():
+    _seed(
+        items=[
+            _item(
+                "a",
+                "What is the purpose of the 'tools' repository?",
+                answer="A CLI toolbox wrapping gh, docker and kubectl helpers.",
+            ),
+            _item(
+                "b",
+                "What is the purpose of the 'notes' repository?",
+                answer="Personal markdown notes, synced to an Obsidian vault.",
+            ),
+        ]
+    )
+    result = analyze_similarities_view("ds", threshold=0.8)
+
+    assert result["similar_pairs_found"] == 0
+
+
 def test_clean_similarities_keeps_the_higher_confidence_record():
     _seed(
         items=[

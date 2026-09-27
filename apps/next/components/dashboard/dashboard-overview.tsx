@@ -13,10 +13,14 @@ import {
   FolderOpen,
   BadgeCheck,
   Languages,
+  Cloud,
+  Download,
+  Heart,
+  Lock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDatasets } from '@/hooks'
+import { useDatasets, useHuggingFaceDatasets } from '@/hooks'
 import { Sparkline } from './sparkline'
 import { cn, relativeTime } from '@/lib/utils'
 
@@ -59,6 +63,9 @@ function StatTile({
 
 export function DashboardOverview() {
   const { data: datasets, isLoading, error } = useDatasets()
+  // Independent query: HF isn't always configured (no HF_TOKEN), and its own
+  // loading/error state shouldn't block the rest of the dashboard.
+  const { data: hfData, isPending: hfPending, error: hfError } = useHuggingFaceDatasets()
   // Capture a single render-stable "now" so derived times stay deterministic.
   const [now] = useState(() => Date.now())
 
@@ -98,6 +105,24 @@ export function DashboardOverview() {
 
     return { total, totalPairs, avg, recent, buckets, bucketLabels, languages }
   }, [datasets, now])
+
+  const hfStats = useMemo(() => {
+    const list = hfData?.datasets ?? []
+    const total = list.length
+    const totalDownloads = list.reduce((sum, d) => sum + (d.downloads ?? 0), 0)
+    const totalLikes = list.reduce((sum, d) => sum + (d.likes ?? 0), 0)
+    const recent = list
+      .toSorted(
+        (a, b) =>
+          new Date(b.last_modified ?? 0).getTime() - new Date(a.last_modified ?? 0).getTime(),
+      )
+      .slice(0, 5)
+    return { total, totalDownloads, totalLikes, recent }
+  }, [hfData])
+
+  // No HF_TOKEN configured is a normal, silent state — the section just
+  // doesn't render rather than surfacing the 503 as a dashboard error.
+  const showHuggingFace = !hfError && (hfPending || hfStats.total > 0)
 
   if (error) {
     return (
@@ -255,6 +280,79 @@ export function DashboardOverview() {
           </div>
         )}
       </Tile>
+
+      {/* Hugging Face — only rendered once the account is confirmed configured
+          (hfPending shows placeholders; a 503/not-configured error hides it). */}
+      {showHuggingFace && (
+        <>
+          {hfPending ? (
+            <>
+              <Skeleton className="h-32 rounded-2xl" />
+              <Skeleton className="h-32 rounded-2xl" />
+              <Skeleton className="h-32 rounded-2xl" />
+              <Skeleton className="h-64 rounded-2xl sm:col-span-2" />
+            </>
+          ) : (
+            <>
+              <StatTile
+                icon={Cloud}
+                label="On Hugging Face"
+                value={hfStats.total}
+                hint={hfData?.namespace}
+              />
+              <StatTile
+                icon={Download}
+                label="HF downloads"
+                value={hfStats.totalDownloads}
+                hint="last 30 days"
+              />
+              <StatTile icon={Heart} label="HF likes" value={hfStats.totalLikes} />
+
+              <Tile className="sm:col-span-2">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="size-4 text-muted-foreground" />
+                    <h2 className="font-semibold">Recent on Hugging Face</h2>
+                  </div>
+                  {hfData?.namespace && (
+                    <a
+                      href={`https://huggingface.co/${hfData.namespace}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      View profile
+                    </a>
+                  )}
+                </div>
+                <ul className="flex flex-col divide-y">
+                  {hfStats.recent.map((d) => (
+                    <li key={d.id}>
+                      <a
+                        href={d.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center justify-between gap-3 py-3 transition-colors hover:bg-accent/40 -mx-2 px-2 rounded-md"
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium inline-flex items-center gap-1.5">
+                          {d.private && <Lock className="size-3 shrink-0 text-muted-foreground" />}
+                          <span className="truncate">{d.id}</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-sm text-muted-foreground">
+                          {d.downloads ?? 0} dl
+                        </span>
+                        <span className="w-16 shrink-0 text-right text-xs text-muted-foreground/70">
+                          {relativeTime(d.last_modified, now)}
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Tile>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }

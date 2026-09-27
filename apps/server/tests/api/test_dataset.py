@@ -401,3 +401,59 @@ def test_export_to_huggingface_hub_failure_returns_502(client: TestClient):
     ):
         response = client.post("/dataset/d/export/huggingface")
     assert response.status_code == 502
+
+
+# --- Hugging Face import ------------------------------------------------------
+
+
+def test_import_from_huggingface_success(client: TestClient):
+    fake = {
+        "dataset_name": "my_dataset",
+        "repo_id": "kevin/my_dataset",
+        "pairs_imported": 12,
+        "version": 1,
+    }
+    with patch("server.api.dataset.import_dataset_from_hub", return_value=fake) as mocked:
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/my_dataset"}
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_name"] == "my_dataset"
+    assert body["pairs_imported"] == 12
+    mocked.assert_called_once_with("kevin/my_dataset", None)
+
+
+def test_import_from_huggingface_without_token_returns_503(client: TestClient):
+    from server.services.huggingface import HuggingFaceNotConfiguredError
+
+    with patch(
+        "server.api.dataset.import_dataset_from_hub",
+        side_effect=HuggingFaceNotConfiguredError("Set HF_TOKEN"),
+    ):
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/d"}
+        )
+    assert response.status_code == 503
+
+
+def test_import_from_huggingface_missing_repo_returns_404(client: TestClient):
+    with patch(
+        "server.api.dataset.import_dataset_from_hub",
+        side_effect=ValueError("Hugging Face dataset repo 'kevin/nope' not found"),
+    ):
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/nope"}
+        )
+    assert response.status_code == 404
+
+
+def test_import_from_huggingface_hub_failure_returns_502(client: TestClient):
+    with patch(
+        "server.api.dataset.import_dataset_from_hub",
+        side_effect=RuntimeError("503 Service Unavailable"),
+    ):
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/d"}
+        )
+    assert response.status_code == 502

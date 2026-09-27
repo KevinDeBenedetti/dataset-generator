@@ -9,6 +9,8 @@ import {
   cleanSimilarities,
   resolvePair,
   exportDatasetToHuggingFace,
+  getHuggingFaceDatasets,
+  importHuggingFaceDataset,
 } from '@/api/sdk'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
@@ -62,49 +64,6 @@ export function useDatasetSources(datasetName: string | null | undefined) {
   })
 }
 
-export const ALL_DATASET_SOURCES_QUERY_KEY = 'all-dataset-sources'
-
-export interface DatasetSourceRow {
-  url: string | null
-  kind: string
-  label: string
-  qa_count: number
-  last_seen_at?: string | null
-  dataset: string
-}
-
-// Every source of every dataset, flattened — powers the global /sources page.
-// One request per dataset (same fan-out as useAllDatasetRuns): there is no
-// cross-dataset sources endpoint, and the shared query cache keeps it cheap.
-export function useAllDatasetSources() {
-  return useQuery({
-    queryKey: [ALL_DATASET_SOURCES_QUERY_KEY],
-    queryFn: async (): Promise<DatasetSourceRow[]> => {
-      const datasets = await getDatasets()
-      const perDataset = await Promise.all(
-        datasets.map(async (d) => {
-          try {
-            const { sources } = await getDatasetSources(d.name)
-            return sources.map((s) => ({
-              url: s.url ?? null,
-              kind: s.kind,
-              label: s.label,
-              qa_count: s.qa_count,
-              last_seen_at: s.last_seen_at,
-              dataset: d.name,
-            }))
-          } catch {
-            // One unreadable dataset shouldn't sink the whole view.
-            return []
-          }
-        }),
-      )
-      return perDataset.flat() as DatasetSourceRow[]
-    },
-    retry: false,
-  })
-}
-
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
   const { setDataset, setGenerationStatus, setError, setLiveSteps } = useGenerateStore()
@@ -152,11 +111,45 @@ export function useGenerateDataset() {
   })
 }
 
+export const HUGGINGFACE_DATASETS_QUERY_KEY = ['huggingface-datasets']
+
+// The dataset repos already on the Hub for the configured account — shown
+// alongside the app's own datasets so a user can see what's already exported.
+// Not configured (no HF_TOKEN) is a normal, expected state, so don't retry it.
+export function useHuggingFaceDatasets() {
+  return useQuery({
+    queryKey: HUGGINGFACE_DATASETS_QUERY_KEY,
+    queryFn: getHuggingFaceDatasets,
+    retry: false,
+  })
+}
+
 // Push a dataset to the Hugging Face Hub (always a private dataset repo).
 export function useExportToHuggingFace() {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: ({ datasetName, repoId }: { datasetName: string; repoId?: string | null }) =>
       exportDatasetToHuggingFace(datasetName, repoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HUGGINGFACE_DATASETS_QUERY_KEY })
+    },
+  })
+}
+
+// Pull a Hub dataset repo's Q/A pairs into a local dataset — lets quality
+// control (and everything else) analyze a dataset that so far only exists on
+// the Hub. Invalidates the app's own dataset list, since a successful import
+// creates or updates one.
+export function useImportHuggingFaceDataset() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ repoId, datasetName }: { repoId: string; datasetName?: string | null }) =>
+      importHuggingFaceDataset(repoId, datasetName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
+    },
   })
 }
 

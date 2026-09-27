@@ -18,11 +18,11 @@ dependencies = [
     "pytest>=9.1.1",
     "sqlmodel>=0.0.47",
     "alembic>=1.20.0",
-    "uvicorn[standard]>=0.53.0",
+    "uvicorn[standard]>=0.54.0",
     "bcrypt>=5.0.0",
-    "authlib>=1.7.2",
+    "authlib>=1.8.0",
     "itsdangerous>=2.2.0",
-    "qdrant-client>=1.19.0",
+    "qdrant-client>=1.19.1",
     "redis>=8.1.0",
     # Redis' own FastAPI integration — backs the login rate limiter
     # (services/rate_limit.py). Alpha (0.x): pinned to a minor range so a

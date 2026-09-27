@@ -22,6 +22,8 @@ def get_alembic_config(db_url: str | None = None, path: Path = DEFAULT_PATH) -> 
         raise FileNotFoundError(f"Alembic config file not found at {path}")
     cfg_path = str(path)
     alembic_cfg = Config(cfg_path)
+    # Keep the app's logging setup (see migrations/env.py).
+    alembic_cfg.attributes["configure_logger"] = False
 
     alembic_cfg.set_main_option("script_location", "migrations")
 
@@ -84,6 +86,7 @@ def upgrade_db(db_url: str, revision: str = "head") -> None:
 
     logger.debug(f"Using Alembic config file at {config_path}")
     cfg = Config(str(config_path))
+    cfg.attributes["configure_logger"] = False
     cfg.set_main_option("sqlalchemy.url", db_url)
     logger.debug(f"Upgrading database to revision {revision}")
     logger.debug(f"Database URL: {db_url}")

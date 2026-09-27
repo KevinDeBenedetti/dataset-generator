@@ -1,6 +1,6 @@
 'use client'
 
-import { DatasetsTable, LoadingState, EmptyState } from '@/components/dataset'
+import { DatasetsTable, HuggingFaceDatasets, LoadingState, EmptyState } from '@/components/dataset'
 import { useDatasets } from '@/hooks'
 
 export default function DatasetsPage() {
@@ -23,6 +23,8 @@ export default function DatasetsPage() {
       {!isPending && !error && datasets.length > 0 && <DatasetsTable datasets={datasets} />}
 
       {!isPending && !error && datasets.length === 0 && <EmptyState />}
+
+      <HuggingFaceDatasets />
     </section>
   )
 }
