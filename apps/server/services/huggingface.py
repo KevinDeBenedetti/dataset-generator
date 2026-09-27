@@ -24,7 +24,11 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from server.core.config import config
-from server.services.datasets import get_dataset_pairs, get_dataset_view, save_generation
+from server.services.datasets import (
+    get_dataset_pairs,
+    get_dataset_view,
+    save_generation,
+)
 from server.services.dedup import compute_hash_from_content
 
 logger = logging.getLogger(__name__)
@@ -81,16 +85,25 @@ def _card_metadata(card_data: Any) -> Dict[str, Any]:
     matter yet.
     """
     if card_data is None:
-        return {"pretty_name": None, "language": None, "license": None, "size_category": None}
+        return {
+            "pretty_name": None,
+            "language": None,
+            "license": None,
+            "size_category": None,
+        }
     as_dict = card_data.to_dict() if hasattr(card_data, "to_dict") else dict(card_data)
     language = as_dict.get("language")
     size_categories = as_dict.get("size_categories")
     return {
         "pretty_name": as_dict.get("pretty_name"),
-        "language": language if isinstance(language, list) else ([language] if language else None),
+        "language": language
+        if isinstance(language, list)
+        else ([language] if language else None),
         "license": as_dict.get("license"),
         "size_category": (
-            size_categories[0] if isinstance(size_categories, list) and size_categories else size_categories
+            size_categories[0]
+            if isinstance(size_categories, list) and size_categories
+            else size_categories
         ),
     }
 
@@ -185,7 +198,7 @@ def _download_file(repo_id: str, filename: str) -> bytes:
 
 def _parquet_available() -> bool:
     try:
-        import pyarrow.parquet  # noqa: F401
+        import pyarrow.parquet  # ty: ignore[unresolved-import]  # noqa: F401
     except ImportError:
         return False
     return True
@@ -213,7 +226,7 @@ def _parse_rows(filename: str, raw: bytes) -> List[Dict[str, Any]]:
     if lower.endswith(".parquet"):
         import io
 
-        import pyarrow.parquet as pq
+        import pyarrow.parquet as pq  # ty: ignore[unresolved-import]
 
         return pq.read_table(io.BytesIO(raw)).to_pylist()
 
@@ -349,9 +362,7 @@ def import_dataset_from_hub(
     skipped = 0
     for filename in data_files:
         rows = _parse_rows(filename, _download_file(repo_id, filename))
-        logger.info(
-            "HF import %s: %s → %d row(s)", repo_id, filename, len(rows)
-        )
+        logger.info("HF import %s: %s → %d row(s)", repo_id, filename, len(rows))
         for row in rows:
             columns.update(row.keys())
             pair = _row_to_pair(row)
@@ -372,9 +383,7 @@ def import_dataset_from_hub(
                     "id": row_id,
                     **pair,
                     "source_url": source_url,
-                    "confidence": _confidence(
-                        row.get("confidence", row.get("score"))
-                    ),
+                    "confidence": _confidence(row.get("confidence", row.get("score"))),
                     "metadata": {"imported_from": repo_id, "file": filename},
                 }
             )

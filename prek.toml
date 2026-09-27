@@ -127,4 +127,11 @@ hooks = [
   { id = "pytest", name = "🧪 Run tests", entry = "uv run pytest -s -v apps/server/tests/ --cov", language = "system", files = '''^apps/server/.*\.py$''', pass_filenames = false, stages = [
     "pre-push",
   ] },
+  # The TypeScript client in apps/next/api is generated from the server's
+  # OpenAPI schema and committed — same check CI runs (api-client-drift), just
+  # earlier. Pre-push only: it installs the isolated openapi-codegen toolchain
+  # (network) on first run, too slow for every commit.
+  { id = "api-client-drift", name = "🔌 API client drift", entry = "make api-check", language = "system", files = '''^(apps/server/(api|schemas)/.*\.py|apps/next/api/.*)$''', pass_filenames = false, stages = [
+    "pre-push",
+  ] },
 ]

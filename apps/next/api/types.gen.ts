@@ -666,6 +666,131 @@ export type HttpValidationError = {
 };
 
 /**
+ * HuggingFaceDataset
+ *
+ * One dataset repo owned by the configured Hugging Face account.
+ *
+ * Mirrors ``huggingface_hub.DatasetInfo`` (fetched with ``full=True``), plus
+ * the handful of dataset-card fields (``pretty_name``, ``language``,
+ * ``license``, ``size_category``) worth surfacing without asking the caller
+ * to parse the card's YAML front matter themselves.
+ */
+export type HuggingFaceDataset = {
+    /**
+     * Id
+     *
+     * Full 'namespace/name' repo id on the Hub
+     */
+    id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Author
+     */
+    author?: string | null;
+    /**
+     * Private
+     */
+    private: boolean;
+    /**
+     * Gated
+     *
+     * False, or the gating mode ('auto'/'manual')
+     */
+    gated?: unknown;
+    /**
+     * Disabled
+     */
+    disabled?: boolean;
+    /**
+     * Downloads
+     *
+     * Downloads in the last 30 days
+     */
+    downloads?: number | null;
+    /**
+     * Downloads All Time
+     */
+    downloads_all_time?: number | null;
+    /**
+     * Likes
+     */
+    likes?: number | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Pretty Name
+     *
+     * From the dataset card, if set
+     */
+    pretty_name?: string | null;
+    /**
+     * Language
+     */
+    language?: Array<string> | null;
+    /**
+     * License
+     */
+    license?: string | null;
+    /**
+     * Size Category
+     */
+    size_category?: string | null;
+    /**
+     * File Count
+     *
+     * Files in the repo (any revision)
+     */
+    file_count?: number | null;
+    /**
+     * Used Storage
+     *
+     * Repo size in bytes
+     */
+    used_storage?: number | null;
+    /**
+     * Sha
+     *
+     * Current commit hash on the default branch
+     */
+    sha?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Last Modified
+     */
+    last_modified?: string | null;
+};
+
+/**
+ * HuggingFaceDatasetsResponse
+ */
+export type HuggingFaceDatasetsResponse = {
+    /**
+     * Namespace
+     */
+    namespace: string;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Datasets
+     */
+    datasets: Array<HuggingFaceDataset>;
+};
+
+/**
  * HuggingFaceExportResponse
  *
  * Result of an export to the Hugging Face Hub.
@@ -695,6 +820,30 @@ export type HuggingFaceExportResponse = {
      * Pairs Exported
      */
     pairs_exported: number;
+};
+
+/**
+ * HuggingFaceImportResponse
+ *
+ * Result of pulling a Hub dataset repo's Q/A pairs into local storage.
+ */
+export type HuggingFaceImportResponse = {
+    /**
+     * Dataset Name
+     */
+    dataset_name: string;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Pairs Imported
+     */
+    pairs_imported: number;
+    /**
+     * Version
+     */
+    version: number;
 };
 
 /**
@@ -1630,6 +1779,60 @@ export type GetDatasetVersionsDatasetDatasetNameVersionsGetResponses = {
 };
 
 export type GetDatasetVersionsDatasetDatasetNameVersionsGetResponse = GetDatasetVersionsDatasetDatasetNameVersionsGetResponses[keyof GetDatasetVersionsDatasetDatasetNameVersionsGetResponses];
+
+export type GetHuggingfaceDatasetsDatasetHuggingfaceGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/dataset/huggingface';
+};
+
+export type GetHuggingfaceDatasetsDatasetHuggingfaceGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: HuggingFaceDatasetsResponse;
+};
+
+export type GetHuggingfaceDatasetsDatasetHuggingfaceGetResponse = GetHuggingfaceDatasetsDatasetHuggingfaceGetResponses[keyof GetHuggingfaceDatasetsDatasetHuggingfaceGetResponses];
+
+export type ImportHuggingfaceDatasetDatasetHuggingfaceImportPostData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Repo Id
+         *
+         * Full 'namespace/name' Hub repo id to import
+         */
+        repo_id: string;
+        /**
+         * Dataset Name
+         *
+         * Local dataset name to import into (defaults to the repo's name segment)
+         */
+        dataset_name?: string;
+    };
+    url: '/dataset/huggingface/import';
+};
+
+export type ImportHuggingfaceDatasetDatasetHuggingfaceImportPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ImportHuggingfaceDatasetDatasetHuggingfaceImportPostError = ImportHuggingfaceDatasetDatasetHuggingfaceImportPostErrors[keyof ImportHuggingfaceDatasetDatasetHuggingfaceImportPostErrors];
+
+export type ImportHuggingfaceDatasetDatasetHuggingfaceImportPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HuggingFaceImportResponse;
+};
+
+export type ImportHuggingfaceDatasetDatasetHuggingfaceImportPostResponse = ImportHuggingfaceDatasetDatasetHuggingfaceImportPostResponses[keyof ImportHuggingfaceDatasetDatasetHuggingfaceImportPostResponses];
 
 export type ExportToHuggingfaceDatasetDatasetNameExportHuggingfacePostData = {
     body?: never;
