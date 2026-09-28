@@ -496,6 +496,27 @@ def resolve_repo_id(dataset_name: str, repo_id: Optional[str] = None) -> str:
     return f"{namespace}/{slugify(dataset_name)}"
 
 
+def ensure_private_dataset_repo(api: Any, repo_id: str) -> None:
+    """Create the dataset repo private, or confirm an existing one already is.
+
+    ``private=True`` is ignored when the repo exists, so this check is the only
+    thing standing between a re-export and a public upload.
+    """
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    api.create_repo(repo_id, repo_type="dataset", private=True, exist_ok=True)
+    try:
+        info = api.repo_info(repo_id, repo_type="dataset")
+    except RepositoryNotFoundError:  # pragma: no cover — just created above
+        info = None
+    if info is not None and getattr(info, "private", None) is False:
+        raise HuggingFaceRepoPublicError(
+            f"The Hugging Face repo '{repo_id}' already exists and is public. "
+            "Exporting would publish this dataset — make the repo private on "
+            "the Hub, or export to a different repo id."
+        )
+
+
 def _json_safe(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -606,23 +627,7 @@ def export_dataset_to_hub(
 
     api = _api()
     target = resolve_repo_id(dataset_name, repo_id)
-
-    # Create it private, or confirm an existing one already is. `private=True`
-    # is ignored when the repo exists, so this check is the only thing standing
-    # between a re-export and a public upload.
-    from huggingface_hub.errors import RepositoryNotFoundError
-
-    api.create_repo(target, repo_type="dataset", private=True, exist_ok=True)
-    try:
-        info = api.repo_info(target, repo_type="dataset")
-    except RepositoryNotFoundError:  # pragma: no cover — just created above
-        info = None
-    if info is not None and getattr(info, "private", None) is False:
-        raise HuggingFaceRepoPublicError(
-            f"The Hugging Face repo '{target}' already exists and is public. "
-            "Exporting would publish this dataset — make the repo private on "
-            "the Hub, or export to a different repo id."
-        )
+    ensure_private_dataset_repo(api, target)
 
     source_labels = sorted({str(p["source_url"]) for p in pairs if p.get("source_url")})
     api.upload_file(
