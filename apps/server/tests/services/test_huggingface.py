@@ -12,7 +12,6 @@ import pytest
 
 from server.core.config import config
 from server.services import huggingface as hf
-from server.services.dedup import compute_hash_from_content
 from server.services.huggingface import (
     DATA_PATH_IN_REPO,
     HuggingFaceNotConfiguredError,
@@ -388,6 +387,28 @@ def test_list_user_datasets_handles_no_card(token, monkeypatch):
     assert row["gated"] is False
 
 
+def test_list_user_datasets_normalizes_a_multi_value_license(token, monkeypatch):
+    """A list-valued `license` (a real, documented card pattern for datasets
+    combining sources) must come back as a plain string: the schema types
+    `HuggingFaceDataset.license` as `Optional[str]`, and a raw list there would
+    fail response-model validation for the *whole* listing endpoint — after
+    list_user_datasets() already succeeded — taking every dataset down with it."""
+    fake = FakeHfApi(
+        datasets=[
+            FakeDatasetInfo(
+                "kevin/ds-a",
+                card_data=FakeCardData(license=["mit", "cc-by-4.0"]),
+            )
+        ]
+    )
+    monkeypatch.setattr(hf, "_api", lambda: fake)
+
+    row = list_user_datasets()["datasets"][0]
+
+    assert row["license"] == "mit, cc-by-4.0"
+    assert isinstance(row["license"], str)
+
+
 def test_list_user_datasets_uses_the_configured_namespace(token, monkeypatch):
     monkeypatch.setattr(config, "hf_namespace", "my-org")
     fake = FakeHfApi(datasets=[])
@@ -491,6 +512,40 @@ def test_import_finds_a_data_file_outside_data_dir(token):
     assert [i["question"] for i in items] == ["Q1?"]
 
 
+def test_import_ignores_dataset_metadata_files(token, monkeypatch):
+    """`dataset_infos.json` ranks as `.json`, which outranks `.parquet` in the
+    extension-priority pick — without excluding known metadata filenames it
+    would be picked instead of the real data shard, and the import would fail
+    with "no row maps onto a Q/A pair" even though the repo is fine."""
+    monkeypatch.setattr(hf, "_parquet_available", lambda: True)
+    files = {
+        "dataset_infos.json": b'{"default": {"description": "not data"}}',
+        "data/train-00000-of-00001.parquet": b"parquet-bytes",
+    }
+    with patch.object(
+        hf,
+        "_parse_rows",
+        side_effect=lambda filename, raw: [{"question": "Q1?", "answer": "A1"}],
+    ) as parse_rows:
+        _, items, _ = _saved(files)
+
+    assert [i["question"] for i in items] == ["Q1?"]
+    parse_rows.assert_called_once_with(
+        "data/train-00000-of-00001.parquet", b"parquet-bytes"
+    )
+
+
+def test_pick_data_files_excludes_known_metadata_filenames(monkeypatch):
+    """Unit-level check on the picker itself, including a non-root path."""
+    monkeypatch.setattr(hf, "_parquet_available", lambda: True)
+    files = [
+        "dataset_infos.json",
+        "some/dir/dataset_dict.json",
+        "data/train-00000-of-00001.parquet",
+    ]
+    assert hf._pick_data_files(files) == ["data/train-00000-of-00001.parquet"]
+
+
 def test_import_uses_the_explicit_local_dataset_name(token):
     result, _, save = _saved(
         {"train.jsonl": _jsonl({"question": "Q1?", "answer": "A1"})},
@@ -504,9 +559,41 @@ def test_import_replaces_foreign_ids_with_a_content_hash(token):
     """Pair ids are global primary keys — a foreign "0" would collide."""
     raw = _jsonl({"id": 0, "question": "Q1?", "answer": "A1", "context": "C1"})
     _, items, _ = _saved({"train.jsonl": raw})
-    assert items[0]["id"] == compute_hash_from_content(
-        "Q1?", "A1", "C1", "huggingface://kevin/my-ds"
+    assert items[0]["id"] == hf._import_pair_id(
+        "my-ds", "Q1?", "A1", "C1", "huggingface://kevin/my-ds"
     )
+
+
+def test_import_keeps_rows_with_the_same_question_and_context_but_different_answers(
+    token,
+):
+    """The fallback id must hash the answer too — most Hub rows have no real
+    per-row source_url, so two such rows would otherwise collide on the same
+    fallback id (question+context+constant source) and one would silently
+    overwrite the other."""
+    raw = _jsonl(
+        {"question": "Q1?", "answer": "Answer A", "context": "C1"},
+        {"question": "Q1?", "answer": "Answer B", "context": "C1"},
+    )
+    _, items, _ = _saved({"train.jsonl": raw})
+
+    assert len(items) == 2
+    ids = {i["id"] for i in items}
+    assert len(ids) == 2
+    assert {i["answer"] for i in items} == {"Answer A", "Answer B"}
+
+
+def test_import_ids_differ_across_local_dataset_names_for_the_same_repo(token):
+    """Importing the same repo under two different local dataset names must
+    not produce the same fallback ids — otherwise save_generation's global
+    (dataset-unscoped) id lookup would move the second import's pairs onto the
+    first dataset instead of copying them."""
+    raw = _jsonl({"question": "Q1?", "answer": "A1", "context": "C1"})
+
+    _, items_a, _ = _saved({"train.jsonl": raw}, dataset_name="dataset-a")
+    _, items_b, _ = _saved({"train.jsonl": raw}, dataset_name="dataset-b")
+
+    assert items_a[0]["id"] != items_b[0]["id"]
 
 
 def test_import_maps_instruction_tuning_rows(token):

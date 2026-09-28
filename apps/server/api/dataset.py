@@ -2,6 +2,7 @@ import logging
 from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.concurrency import run_in_threadpool
 
 from server.services.auth import require_admin
 from server.services.datasets import (
@@ -111,7 +112,11 @@ async def get_dataset_versions(dataset_name: str):
 async def get_huggingface_datasets():
     """List the Hugging Face Hub dataset repos owned by the configured account."""
     try:
-        return list_user_datasets()
+        # list_user_datasets is a fully synchronous, blocking call (Hub HTTP
+        # request) — run it off the event loop thread so one slow Hub lookup
+        # doesn't stall every other concurrent request on the single uvicorn
+        # worker.
+        return await run_in_threadpool(list_user_datasets)
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -132,7 +137,10 @@ async def import_huggingface_dataset(
     """Pull a Hugging Face dataset repo's Q/A pairs into a local dataset, so it
     can be analyzed like any other dataset (duplicates, score stats, rules)."""
     try:
-        return import_dataset_from_hub(repo_id, dataset_name)
+        # Same reasoning as the listing route: this does blocking downloads,
+        # synchronous parsing over every row, and a blocking DB write, with no
+        # size cap — keep it off the event loop thread.
+        return await run_in_threadpool(import_dataset_from_hub, repo_id, dataset_name)
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:

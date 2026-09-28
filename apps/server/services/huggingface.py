@@ -17,6 +17,7 @@ already public makes the export fail (:class:`HuggingFaceRepoPublicError`)
 instead of uploading into it.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -29,7 +30,6 @@ from server.services.datasets import (
     get_dataset_view,
     save_generation,
 )
-from server.services.dedup import compute_hash_from_content
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +93,22 @@ def _card_metadata(card_data: Any) -> Dict[str, Any]:
         }
     as_dict = card_data.to_dict() if hasattr(card_data, "to_dict") else dict(card_data)
     language = as_dict.get("language")
+    license_value = as_dict.get("license")
     size_categories = as_dict.get("size_categories")
     return {
         "pretty_name": as_dict.get("pretty_name"),
         "language": language
         if isinstance(language, list)
         else ([language] if language else None),
-        "license": as_dict.get("license"),
+        # The schema types this as a plain str, but the card metadata allows a
+        # list (e.g. a dataset combining sources under several licenses) — a
+        # list here would otherwise fail response-model validation for the
+        # *entire* listing endpoint, taking every dataset down with it.
+        "license": (
+            ", ".join(str(v) for v in license_value)
+            if isinstance(license_value, list) and license_value
+            else (None if isinstance(license_value, list) else license_value)
+        ),
         "size_category": (
             size_categories[0]
             if isinstance(size_categories, list) and size_categories
@@ -172,6 +181,17 @@ _CONTEXT_KEYS = ("context", "source_text", "passage")
 
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
+# Standard artifacts from `datasets.push_to_hub()` / `save_to_disk()` — metadata
+# about the data, never the data itself. Excluded by basename (any directory)
+# before the extension-priority pick, so a repo that ships one of these next to
+# its real parquet/JSONL shards doesn't get the metadata file picked instead.
+_NON_DATA_FILENAMES = {
+    "dataset_infos.json",
+    "dataset_dict.json",
+    "state.json",
+    "dataset_info.json",
+}
+
 
 def _list_repo_files(repo_id: str) -> List[str]:
     """Every file path in the dataset repo. ValueError if the repo is unknown."""
@@ -208,13 +228,19 @@ def _pick_data_files(files: List[str]) -> List[str]:
     """The data files to import: every file of the best readable format.
 
     All files of that format are kept (train/validation/test splits alike) —
-    quality control wants the whole dataset, not one split.
+    quality control wants the whole dataset, not one split. Known
+    ``datasets``-library metadata files (see :data:`_NON_DATA_FILENAMES`) are
+    excluded first, whatever directory they live in, so they never outrank the
+    actual data shards.
     """
+    candidates = [
+        f for f in files if f.rsplit("/", 1)[-1].lower() not in _NON_DATA_FILENAMES
+    ]
     readable = [
         ext for ext in _DATA_EXTENSIONS if ext != ".parquet" or _parquet_available()
     ]
     for ext in readable:
-        picked = sorted(f for f in files if f.lower().endswith(ext))
+        picked = sorted(f for f in candidates if f.lower().endswith(ext))
         if picked:
             return picked
     return []
@@ -326,6 +352,33 @@ def _confidence(value: Any) -> Optional[float]:
         return None
 
 
+def _import_pair_id(
+    local_name: str, question: str, answer: str, context: str, source_url: str
+) -> str:
+    """Content-hash id for one imported row, scoped to the local dataset.
+
+    Deliberately a separate helper from :func:`compute_hash_from_content`
+    (``services.dedup``), not a reuse of it, because the two need different
+    semantics:
+
+    * that shared hash intentionally *ignores the answer* (so a regeneration
+      that only tweaks wording updates the same row in place) and is not
+      scoped to a dataset name — both are exactly right for generation-time
+      dedup and ``save_generation``'s idempotent upsert, and exactly wrong
+      here;
+    * an import must hash the answer too (most Hub datasets have no genuine
+      per-row ``source_url``, so two rows sharing a question+context but
+      differing only in their answer would otherwise collide on the same
+      fallback id and one would silently overwrite the other), and must fold
+      in the *local* dataset name (otherwise re-importing the same repo under
+      a different local dataset name produces identical ids both times, and
+      ``save_generation``'s global, dataset-unscoped id lookup would move the
+      pairs from the first dataset to the second instead of copying them).
+    """
+    content = f"{local_name}|{question}|{answer}|{context}|{source_url}"
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def import_dataset_from_hub(
     repo_id: str, dataset_name: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -375,8 +428,12 @@ def import_dataset_from_hub(
             # app export); a foreign dataset's "0", "1"… restart in every split
             # file, so they would merge unrelated rows.
             if not (isinstance(row_id, str) and _SHA256_HEX.match(row_id)):
-                row_id = compute_hash_from_content(
-                    pair["question"], pair["answer"], pair["context"], source_url
+                row_id = _import_pair_id(
+                    local_name,
+                    pair["question"],
+                    pair["answer"],
+                    pair["context"],
+                    source_url,
                 )
             items.append(
                 {
