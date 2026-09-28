@@ -1,0 +1,119 @@
+name: Dataset sync
+
+# Weekly refresh of the portfolio knowledge base (moved here from portfolio-next).
+#
+#   export  → build the chunked corpus from the GitHub API (no Qdrant, no DB)
+#   push    → commit it to a private Hugging Face dataset (one commit = one snapshot)
+#   reindex → tell the portfolio to embed that snapshot into Qdrant
+#
+# Every run is pinned to a Hub commit SHA, so a bad week can be rolled back by
+# re-running the portfolio's reindex against an earlier revision.
+#
+# `on: schedule` only fires on the default branch: merge to main to arm the cron.
+
+on:
+  schedule:
+    # Mondays at 04:00 UTC.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "Comma-separated sources to export"
+        required: false
+        default: "profile,github,github_code,github_docs"
+      skip-reindex:
+        description: "Publish to Hugging Face without reindexing Qdrant"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: dataset-sync
+  # Never interrupt a run mid-publish: a cancel between export and push would
+  # leave the Hub holding a partial commit.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ${{ vars.DATASET_SYNC_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Build corpus
+        env:
+          # GitHub forbids secret/variable names starting with GITHUB_.
+          GITHUB_USERNAME: ${{ vars.DATASET_GITHUB_USERNAME || github.repository_owner }}
+          # A PAT with public repo read access: the built-in GITHUB_TOKEN is
+          # scoped to this repository and cannot list the account's other repos.
+          GITHUB_TOKEN: ${{ secrets.DATASET_GITHUB_TOKEN }}
+          HF_DATASET_REPO: ${{ secrets.HF_DATASET_REPO }}
+          # Via env, never interpolated into the script: a dispatch input is
+          # user-controlled and would otherwise be a shell-injection vector.
+          SOURCES: ${{ inputs.sources || 'profile,github,github_code,github_docs' }}
+        run: uv run --no-sync python -m server.jobs.corpus export --out "$RUNNER_TEMP/dataset" --sources "$SOURCES"
+
+      - name: Summarise corpus
+        run: |
+          {
+            echo '### Corpus'
+            echo '```json'
+            cat "$RUNNER_TEMP/dataset/manifest.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept 14 days so a surprising diff on the Hub can be traced back to the
+      # exact bytes this run produced.
+      - name: Upload corpus artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dataset-${{ github.run_id }}
+          path: ${{ runner.temp }}/dataset
+          retention-days: 14
+
+      - name: Publish to Hugging Face
+        env:
+          # Needs repo WRITE + CREATE.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_DATASET_REPO: ${{ secrets.HF_DATASET_REPO }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: uv run --no-sync python -m server.jobs.corpus push --dir "$RUNNER_TEMP/dataset"
+
+      - name: Reindex Qdrant from the new snapshot
+        if: ${{ !inputs.skip-reindex && vars.SITE_URL != '' }}
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+        run: |
+          set -euo pipefail
+          response=$(mktemp)
+          status=$(curl -sS -o "$response" -w '%{http_code}' \
+            -X POST "$SITE_URL/api/collections/hf/sync" \
+            -H "Authorization: Bearer $WORKER_SECRET" \
+            -H 'Content-Type: application/json' \
+            --max-time 900)
+          cat "$response"
+          echo
+          if [ "$status" != "200" ]; then
+            echo "::error::reindex failed with HTTP $status"
+            exit 1
+          fi
+          {
+            echo '### Reindex'
+            echo '```json'
+            cat "$response"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
