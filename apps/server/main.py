@@ -21,7 +21,7 @@ from server.api import (
     prompts,
     quality_rules,
 )
-from server.services.auth import get_current_user
+from server.services.auth import ensure_secret_is_safe, get_current_user
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal
 from server.core.config import config
@@ -58,6 +58,8 @@ def _purge_expired_refresh_tokens() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    ensure_secret_is_safe()
+
     # Bind the running loop so log records emitted from worker threads can be
     # delivered to live /debug/logs subscribers.
     broadcaster.bind_loop(asyncio.get_running_loop())
@@ -175,11 +177,15 @@ app.include_router(collections.router, dependencies=auth_required)
 app.include_router(quality_rules.router, dependencies=auth_required)
 app.include_router(prompts.router, dependencies=auth_required)
 
-if config.debug_logs:
+# The stream is unauthenticated and carries raw log lines, so it only ever
+# exists in an explicitly-declared development environment.
+if config.debug_logs and config.is_development:
     from server.api import debug as debug_api
 
     app.include_router(debug_api.router)
     logger.info("DEBUG_LOGS enabled — streaming server logs at /debug/logs")
+elif config.debug_logs:
+    logger.warning("DEBUG_LOGS ignored: /debug/logs is only mounted in development")
 
 
 @app.get("/")

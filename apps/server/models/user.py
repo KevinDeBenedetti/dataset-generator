@@ -46,7 +46,7 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
     )
 
     @property
@@ -78,7 +78,7 @@ class RefreshToken(Base):
     family_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
     )
     # Set when the token is consumed by a rotation, a logout, or a family-wide
     # revocation. Null = still usable (subject to expires_at).

@@ -105,6 +105,16 @@ def test_save_generation_is_idempotent_on_the_same_content():
     assert list_dataset_versions("ds")["total"] == 2
 
 
+def test_same_content_in_two_datasets_stays_in_both():
+    """Content-hash ids are not dataset-aware: the key must be, or the second
+    generation re-parents the first dataset's row and empties it."""
+    _seed("first", items=[_item("h1", "Q one?")])
+    _seed("second", items=[_item("h1", "Q one?")])
+
+    assert [p["id"] for p in get_dataset_pairs("first")] == ["h1"]
+    assert [p["id"] for p in get_dataset_pairs("second")] == ["h1"]
+
+
 def test_versions_increment_per_dataset():
     assert next_version("ds") == 1
     _seed()
@@ -297,6 +307,19 @@ def test_clean_similarities_keeps_the_higher_confidence_record():
     assert result["removed_records"] == 1
     remaining = get_dataset_pairs("ds")
     assert [p["id"] for p in remaining] == ["bbbb2222"]
+
+
+def test_clean_similarities_leaves_other_datasets_alone():
+    items = [
+        _item("aaaa1111", "What is Python?", confidence=0.7),
+        _item("bbbb2222", "What is Python used for?", confidence=0.95),
+    ]
+    _seed("ds", items=items)
+    _seed("other", items=items)
+
+    clean_similarities_view("ds", threshold=0.7)
+
+    assert len(get_dataset_pairs("other")) == 2
 
 
 def test_clean_similarities_on_empty_dataset_raises():

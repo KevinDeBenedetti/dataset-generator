@@ -28,14 +28,13 @@ from joserfc.jwt import JWTClaimsRegistry
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from server.core.config import config
+from server.core.config import DEV_AUTH_SECRET, config
 from server.core.database import get_db
 from server.core.security import verify_password
 from server.models.user import RefreshToken, User, UserRole
 from server.services.users import get_user_by_email
 
 _ALGORITHM = "HS256"
-_DEV_SECRET = "dev-insecure-secret-change-me"
 
 
 # The signing key and claims registry are derived from a secret that doesn't
@@ -53,8 +52,21 @@ def _signing_key() -> OctKey:
     return _signing_key_for(config.auth_secret_key)
 
 
+def ensure_secret_is_safe() -> None:
+    """Refuse the public dev secret outside development.
+
+    Anyone holding it can forge access tokens and the OIDC session cookie, so a
+    deployment that forgot AUTH_SECRET_KEY must not start at all.
+    """
+    if config.auth_secret_key == DEV_AUTH_SECRET and not config.is_development:
+        raise RuntimeError(
+            "AUTH_SECRET_KEY is the public dev default. Set it to a long random "
+            "value, or set ENVIRONMENT=development for local dev."
+        )
+
+
 def _warn_if_dev_secret() -> None:
-    if config.auth_secret_key == _DEV_SECRET:
+    if config.auth_secret_key == DEV_AUTH_SECRET:
         logging.warning(
             "AUTH_SECRET_KEY is the insecure dev default — set a strong value "
             "via the AUTH_SECRET_KEY env var before deploying."

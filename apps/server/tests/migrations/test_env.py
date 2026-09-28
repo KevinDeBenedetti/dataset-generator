@@ -67,3 +67,49 @@ def test_upgrade_honours_env_when_no_explicit_url(make_database, monkeypatch):
     command.upgrade(cfg, "head")
 
     assert "users" in _table_names(env_url)
+
+
+def test_migrations_match_the_models(make_database):
+    """`alembic check` through env.py: no diff between the migrated schema and
+    the models. An env.py that forgets to import the models sees an empty
+    metadata and reports every table as one to drop."""
+    from alembic import command
+    from alembic.config import Config
+
+    url = make_database("migrations_check")
+    upgrade_db(url)
+
+    cfg = Config(str(_APPS_DIR / "server" / "alembic.ini"))
+    cfg.attributes["configure_logger"] = False
+    cfg.set_main_option("sqlalchemy.url", url)
+    command.check(cfg)
+
+
+def test_qa_pairs_key_is_scoped_to_the_dataset(make_database):
+    """Autogenerate does not compare primary keys, so check this one directly."""
+    url = make_database("migrations_qa_pk")
+    upgrade_db(url)
+
+    engine = create_engine(url)
+    try:
+        pk = inspect(engine).get_pk_constraint("qa_pairs")
+    finally:
+        engine.dispose()
+    assert pk["constrained_columns"] == ["dataset_id", "id"]
+
+
+def test_upgrade_never_logs_the_database_url(make_database, caplog):
+    """The URL carries the database password; it must not reach any handler."""
+    import logging
+
+    from sqlalchemy import make_url
+
+    url = make_database("migrations_no_url_log")
+    caplog.set_level(logging.DEBUG)
+
+    upgrade_db(url)
+
+    assert url not in caplog.text
+    password = make_url(url).password
+    if password:
+        assert password not in caplog.text

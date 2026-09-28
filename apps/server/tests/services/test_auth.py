@@ -4,12 +4,13 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from server.core.config import config
+from server.core.config import DEV_AUTH_SECRET, config
 from server.services.auth import (
     _hash_refresh_token,
     authenticate_user,
     create_access_token,
     decode_access_token,
+    ensure_secret_is_safe,
     get_current_user,
     issue_refresh_token,
     purge_expired_refresh_tokens,
@@ -30,6 +31,24 @@ def _request_with(cookies: dict | None = None, headers: dict | None = None) -> R
     for k, v in (headers or {}).items():
         raw_headers.append((k.lower().encode(), v.encode()))
     return Request({"type": "http", "headers": raw_headers})
+
+
+class TestSecretGuard:
+    def test_dev_secret_is_refused_outside_development(self, monkeypatch):
+        monkeypatch.setattr(config, "auth_secret_key", DEV_AUTH_SECRET)
+        monkeypatch.setattr(config, "environment", "production")
+        with pytest.raises(RuntimeError, match="AUTH_SECRET_KEY"):
+            ensure_secret_is_safe()
+
+    def test_dev_secret_is_allowed_in_development(self, monkeypatch):
+        monkeypatch.setattr(config, "auth_secret_key", DEV_AUTH_SECRET)
+        monkeypatch.setattr(config, "environment", "development")
+        ensure_secret_is_safe()
+
+    def test_real_secret_is_allowed_in_production(self, monkeypatch):
+        monkeypatch.setattr(config, "auth_secret_key", "a-real-long-random-secret")
+        monkeypatch.setattr(config, "environment", "production")
+        ensure_secret_is_safe()
 
 
 class TestToken:

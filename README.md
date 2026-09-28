@@ -108,7 +108,7 @@ port, using the same `POSTGRES_*` credentials.
 Three tables hold everything the dataset pages show, all in the same Postgres:
 
 - `datasets` — one row per named dataset. The **name** is the identifier every route and the front-end use; ids stay internal.
-- `qa_pairs` — the generated pairs, with `question`/`answer`/`context`/`source_url`/`confidence` as real columns (so the Q/A list paginates, the stats aggregate and the sources view groups in SQL). The primary key is a content hash, which makes re-running a generation idempotent.
+- `qa_pairs` — the generated pairs, with `question`/`answer`/`context`/`source_url`/`confidence` as real columns (so the Q/A list paginates, the stats aggregate and the sources view groups in SQL). The primary key is `(dataset_id, content hash)`, which makes re-running a generation idempotent while keeping the same content in two datasets as two independent rows.
 - `dataset_runs` — one row per generation: the seed that was analysed, the version (`v1`, `v2`, …) and the counters behind the history view.
 
 - **Writes**: generation stores its pairs and records a run at the end of the pipeline (see `PERSIST_DATASETS`/`persist` above). Turning that off makes generation a pass-through: the pairs come back in the API response and nothing is stored.
@@ -179,7 +179,8 @@ Auth is configured via these env vars:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `AUTH_SECRET_KEY` | _(insecure dev default)_ | HS256 signing key for the session JWT — **set a strong random value** outside local dev |
+| `AUTH_SECRET_KEY` | _(insecure dev default)_ | HS256 signing key for the session JWT — **required** outside `ENVIRONMENT=development`: the server refuses to start with the dev default |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1,::1` | Uvicorn setting: proxies whose `X-Forwarded-For` is trusted. Set it to the reverse proxy's address, or the login rate limit sees the proxy's IP for every client |
 | `AUTH_TOKEN_TTL_SECONDS` | `900` | Access-token (JWT) lifetime — kept short; the session is renewed by the refresh token below |
 | `AUTH_REFRESH_TOKEN_TTL_SECONDS` | `1209600` | Refresh-token lifetime (max idle time before a fresh login is required) |
 | `AUTH_COOKIE_NAME` | `access_token` | Name of the httpOnly access-token cookie |

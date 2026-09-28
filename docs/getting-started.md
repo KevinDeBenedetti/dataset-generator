@@ -21,6 +21,8 @@ response and nothing is stored).
 # 1. Configure environment variables
 cp .env.example .env
 # Edit .env with your API keys (OPENAI_*, …)
+# An older .env needs ENVIRONMENT=development added: without it (or a real
+# AUTH_SECRET_KEY) the API refuses to start.
 
 # 2. Build and start the stack
 make dev     # builds if needed, starts, and streams logs (Ctrl-C stops it)

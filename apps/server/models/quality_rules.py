@@ -29,5 +29,5 @@ class QualityRules(Base):
         Boolean, nullable=False, default=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
     )

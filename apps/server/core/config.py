@@ -9,6 +9,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Public (it is in this file), so it may only ever sign tokens in development.
+DEV_AUTH_SECRET = "dev-insecure-secret-change-me"
+
 
 def _env(name: str, default: str = "") -> str:
     """Read an env var, treating an empty/whitespace value as unset.
@@ -30,6 +33,11 @@ def _env(name: str, default: str = "") -> str:
     return value
 
 
+def _reasoning_effort() -> str:
+    value = _env("OPENAI_REASONING_EFFORT", "low").strip().lower()
+    return "" if value in ("off", "false", "0", "no", "disabled") else value
+
+
 @dataclass
 class Config:
     # API Configuration (single OpenAI-compatible provider)
@@ -38,10 +46,10 @@ class Config:
 
     # Reasoning models (e.g. gpt-oss) emit a chain-of-thought before the answer.
     # "low" keeps that short so the agent reliably reaches the final JSON.
-    # Set OPENAI_REASONING_EFFORT="" to disable for models that reject the param.
-    openai_reasoning_effort: str = field(
-        default_factory=lambda: _env("OPENAI_REASONING_EFFORT", "low")
-    )
+    # Set OPENAI_REASONING_EFFORT=off to not send the param at all, for models
+    # that reject it (gpt-4o, gpt-4o-mini…). A blank value means the default,
+    # like every other key, so it cannot be the off switch.
+    openai_reasoning_effort: str = field(default_factory=lambda: _reasoning_effort())
 
     # Models (one per role, from the configured provider)
     openai_llm_model: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
@@ -62,9 +70,9 @@ class Config:
     # Authentication. The JWT is signed with HS256 using auth_secret_key and
     # delivered to the browser as an httpOnly cookie. Set AUTH_SECRET_KEY to a
     # long random value in any shared environment — the dev default is insecure
-    # and only meant for local use (a warning is logged when it's in effect).
+    # and the server refuses to start with it outside development.
     auth_secret_key: str = field(
-        default_factory=lambda: _env("AUTH_SECRET_KEY", "dev-insecure-secret-change-me")
+        default_factory=lambda: _env("AUTH_SECRET_KEY", DEV_AUTH_SECRET)
     )
     # Access tokens are short-lived; sessions are kept alive by the refresh
     # token below (rotated on every use), so expiry here only bounds how long a
@@ -196,10 +204,6 @@ class Config:
     )
     model_cleaning: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
     model_qa: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
-
-    # Output
-    output_formats: List[str] = field(default_factory=lambda: ["json", "jsonl", "csv"])
-    datasets_dir: str = "datasets"
 
     # Available models, derived from the configured provider models
     available_models: List[str] = field(default_factory=list)

@@ -9,7 +9,6 @@ import os
 from sqlalchemy import create_engine
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 DEFAULT_PATH = Path(__file__).parent.parent.parent / "alembic.ini"
 
@@ -88,16 +87,9 @@ def upgrade_db(db_url: str, revision: str = "head") -> None:
     cfg = Config(str(config_path))
     cfg.attributes["configure_logger"] = False
     cfg.set_main_option("sqlalchemy.url", db_url)
-    logger.debug(f"Upgrading database to revision {revision}")
-    logger.debug(f"Database URL: {db_url}")
-    try:
-        command.upgrade(cfg, revision)
-        logger.info(f"Database migrated to {revision}")
-    except Exception as e:
-        logger.warning(
-            "Alembic execution failed, fallback: creating tables via SQLAlchemy"
-        )
-        raise e
+    logger.debug("Upgrading database to revision %s", revision)
+    command.upgrade(cfg, revision)
+    logger.info("Database migrated to %s", revision)
 
 
 def downgrade_db(db_url: str | None = None, revision: str = "base"):

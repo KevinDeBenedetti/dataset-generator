@@ -168,6 +168,22 @@ class TestLoginRateLimit:
         good = {"email": "alice@example.com", "password": "secret"}
         assert client.post("/auth/login", json=good).status_code == 429
 
+    def test_spoofed_forwarded_for_does_not_reset_the_budget(
+        self, client, test_db, small_limit
+    ):
+        """A new X-Forwarded-For per attempt must not count as a new client."""
+        _seed_user(test_db, email="alice@example.com", password="secret")
+        bad = {"email": "alice@example.com", "password": "wrong"}
+
+        for i in range(3):
+            headers = {"X-Forwarded-For": f"203.0.113.{i}"}
+            assert (
+                client.post("/auth/login", json=bad, headers=headers).status_code == 401
+            )
+
+        headers = {"X-Forwarded-For": "203.0.113.99"}
+        assert client.post("/auth/login", json=bad, headers=headers).status_code == 429
+
     def test_successful_login_resets_counter(self, client, test_db, small_limit):
         _seed_user(test_db, email="alice@example.com", password="secret")
         bad = {"email": "alice@example.com", "password": "wrong"}
