@@ -2,7 +2,7 @@
 Tests for dataset API endpoints.
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -459,3 +459,65 @@ def test_import_from_huggingface_hub_failure_returns_502(client: TestClient):
             "/dataset/huggingface/import", params={"repo_id": "kevin/d"}
         )
     assert response.status_code == 502
+
+
+# --- Hugging Face routes run off the event loop ------------------------------
+#
+# Both routes wrap fully synchronous, blocking work (Hub HTTP downloads, row
+# parsing, a DB write) with no size/row cap, and the server runs a single
+# uvicorn worker — calling them directly inside the async handler would block
+# every other concurrent request for the whole duration. These tests assert
+# the offload actually happens (`run_in_threadpool` is called with the service
+# function), not just that the route still returns 200.
+
+
+async def _run_on_calling_thread(fn, *args, **kwargs):
+    """Stand-in for starlette's run_in_threadpool that skips the real thread
+    hop — the tests only need to prove the route *asked* to offload the call,
+    with the right function and arguments."""
+    return fn(*args, **kwargs)
+
+
+def test_get_huggingface_datasets_offloads_to_a_threadpool(client: TestClient):
+    fake = {"namespace": "kevin", "total": 0, "datasets": []}
+    with (
+        patch(
+            "server.api.dataset.run_in_threadpool",
+            new=AsyncMock(side_effect=_run_on_calling_thread),
+        ) as run_in_threadpool_mock,
+        patch(
+            "server.api.dataset.list_user_datasets", return_value=fake
+        ) as list_user_datasets_mock,
+    ):
+        response = client.get("/dataset/huggingface")
+
+    assert response.status_code == 200
+    assert response.json() == fake
+    run_in_threadpool_mock.assert_called_once_with(list_user_datasets_mock)
+
+
+def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient):
+    fake = {
+        "dataset_name": "my_dataset",
+        "repo_id": "kevin/my_dataset",
+        "pairs_imported": 12,
+        "version": 1,
+    }
+    with (
+        patch(
+            "server.api.dataset.run_in_threadpool",
+            new=AsyncMock(side_effect=_run_on_calling_thread),
+        ) as run_in_threadpool_mock,
+        patch(
+            "server.api.dataset.import_dataset_from_hub", return_value=fake
+        ) as import_dataset_from_hub_mock,
+    ):
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/my_dataset"}
+        )
+
+    assert response.status_code == 200
+    assert response.json() == fake
+    run_in_threadpool_mock.assert_called_once_with(
+        import_dataset_from_hub_mock, "kevin/my_dataset", None
+    )
