@@ -20,10 +20,10 @@ if config.config_file_name is not None and config.attributes.get(
 ):
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
+# Registers every model on Base.metadata. Without it, a bare `alembic` CLI run
+# sees an empty metadata and autogenerate emits a drop for every table.
+import server.models  # noqa: E402, F401
+
 target_metadata = Base.metadata
 
 

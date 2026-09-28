@@ -31,14 +31,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _client_ip(request: Request) -> str:
-    """Best-effort client IP for rate-limiting.
+    """Client IP for rate-limiting.
 
-    Honours the first ``X-Forwarded-For`` hop when present (the app typically
-    runs behind a reverse proxy), else falls back to the socket peer.
+    Never read ``X-Forwarded-For`` here: any caller can set it, so a fresh value
+    per attempt would bypass the limiter. Uvicorn already rewrites
+    ``request.client`` from that header, but only when the direct peer is listed
+    in ``FORWARDED_ALLOW_IPS`` — set that to the reverse proxy's address.
     """
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 

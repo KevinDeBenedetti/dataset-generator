@@ -38,7 +38,7 @@ from server.core.log_stream import LogBroadcaster
 
 
 @contextmanager
-def _main_with_debug_logs(enabled: bool):
+def _main_with_debug_logs(enabled: bool, environment: str = "development"):
     """Re-import ``server.main`` with ``config.debug_logs`` forced to ``enabled``.
 
     The flag is read once, at import time, so the mount can only be re-evaluated
@@ -55,7 +55,10 @@ def _main_with_debug_logs(enabled: bool):
         return importlib.reload(importlib.import_module("server.main"))
 
     try:
-        with patch.object(config, "debug_logs", enabled):
+        with (
+            patch.object(config, "debug_logs", enabled),
+            patch.object(config, "environment", environment),
+        ):
             yield _reload_main()
     finally:
         # Leave the module holding an app built from the real flag again.
@@ -87,6 +90,15 @@ def test_debug_router_is_mounted_when_the_flag_is_on():
         paths = _route_paths(main_module)
 
     assert "/debug/logs" in paths
+
+
+def test_debug_router_is_not_mounted_outside_development():
+    """The stream is unauthenticated: a DEBUG_LOGS that leaks into a deployed
+    environment must not expose it."""
+    with _main_with_debug_logs(True, environment="production") as main_module:
+        paths = _route_paths(main_module)
+
+    assert not [p for p in paths if p.startswith("/debug")]
 
 
 def test_health_route_is_unaffected_by_the_debug_flag():

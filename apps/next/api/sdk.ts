@@ -721,6 +721,6 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
 // Absolute URL the browser navigates to in order to start the OIDC flow.
 export function oidcLoginUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000'
   return `${base}/auth/oidc/login`
 }

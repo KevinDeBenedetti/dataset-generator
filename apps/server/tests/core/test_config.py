@@ -112,3 +112,29 @@ def test_cors_allow_origin_regex_matches_any_localhost_port_in_development():
     # slip through (the pattern is anchored at the end).
     assert not re.match(pattern, "http://localhost.evil.com")
     assert not re.match(pattern, "https://evil.com")
+
+
+class TestReasoningEffort:
+    """`off` is the switch for models that reject the param; blank is the default."""
+
+    @pytest.mark.parametrize("value", ["off", "OFF", "false", "0", "no", "disabled"])
+    def test_off_values_disable_the_param(self, monkeypatch, value):
+        monkeypatch.setenv("OPENAI_REASONING_EFFORT", value)
+        assert Config().openai_reasoning_effort == ""
+
+    def test_blank_means_the_default(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_REASONING_EFFORT", "")
+        assert Config().openai_reasoning_effort == "low"
+
+    def test_explicit_level_is_kept(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_REASONING_EFFORT", "High")
+        assert Config().openai_reasoning_effort == "high"
+
+
+def test_agent_omits_reasoning_effort_when_off(monkeypatch):
+    from server.services.agent import QAAgentService
+
+    monkeypatch.setattr(config, "openai_reasoning_effort", "")
+    chat_model = QAAgentService()._build_chat_model("gpt-4o-mini")
+
+    assert "reasoning_effort" not in chat_model._default_params

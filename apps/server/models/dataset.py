@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -49,8 +50,10 @@ class Dataset(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     target_language: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=True, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=True, default=_now, onupdate=_now
+    )
 
     # Deleting a dataset drops its pairs and its history with it — the cascade is
     # declared on both sides so it holds whether the delete goes through the ORM
@@ -67,10 +70,13 @@ class QAPair(Base):
     """One question/answer pair generated from a source."""
 
     __tablename__ = "qa_pairs"
+    # The content hash is not dataset-aware, so the key must be: the same pair
+    # generated into two datasets is two rows, not one row that moves between them.
+    __table_args__ = (PrimaryKeyConstraint("dataset_id", "id", name="qa_pairs_pkey"),)
 
     # Content hash (see services.dedup.compute_hash_from_content), so re-running a
     # generation over unchanged content upserts instead of duplicating.
-    id: Mapped[str] = mapped_column(String, primary_key=True)
+    id: Mapped[str] = mapped_column(String)
     dataset_id: Mapped[str] = mapped_column(
         String,
         ForeignKey("datasets.id", ondelete="CASCADE"),
@@ -91,7 +97,9 @@ class QAPair(Base):
     qa_metadata: Mapped[Dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=True, default=_now, index=True
+    )
 
     dataset: Mapped[Dataset] = relationship(back_populates="pairs")
 
@@ -121,7 +129,9 @@ class DatasetRun(Base):
     pages_analyzed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     new_pairs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     duplicates_skipped: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=True, default=_now, index=True
+    )
 
     dataset: Mapped[Dataset] = relationship(back_populates="runs")
 

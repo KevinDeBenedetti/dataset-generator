@@ -229,7 +229,7 @@ def save_generation(
             if not item_id:
                 continue
             fields = _pair_fields(item, dataset.id, version)
-            existing = db.get(QAPair, item_id)
+            existing = db.get(QAPair, {"dataset_id": dataset.id, "id": item_id})
             if existing is None:
                 db.add(QAPair(id=item_id, **fields))
             else:
@@ -718,7 +718,11 @@ def clean_similarities_view(
             )
 
         if removed_ids:
-            db.execute(delete(QAPair).where(QAPair.id.in_(removed_ids)))
+            db.execute(
+                delete(QAPair).where(
+                    QAPair.dataset_id == dataset.id, QAPair.id.in_(removed_ids)
+                )
+            )
             db.commit()
 
     logger.info(
@@ -768,11 +772,10 @@ def duplicate_dataset(
 ) -> Dict[str, Any]:
     """Copy a dataset's pairs into another dataset (the export flow).
 
-    Pair ids are content hashes and the primary key is global, so a copy can't
-    reuse the source's id: each copied pair gets a stable id derived from the
-    source id and the target dataset. That derivation is deterministic, which
-    makes re-running the copy idempotent — the second run refreshes the same
-    rows instead of failing on a duplicate key.
+    Each copied pair gets a stable id derived from the source id and the target
+    dataset. That derivation is deterministic, which makes re-running the copy
+    idempotent — the second run refreshes the same rows instead of adding new
+    ones, including into copies made while pair ids were still global keys.
 
     Raises ValueError when the source doesn't exist or has no pairs.
     """
@@ -809,7 +812,7 @@ def duplicate_dataset(
                 "version": pair.version,
                 "qa_metadata": pair.qa_metadata,
             }
-            existing = db.get(QAPair, copy_id)
+            existing = db.get(QAPair, {"dataset_id": target.id, "id": copy_id})
             if existing is None:
                 db.add(QAPair(id=copy_id, **fields))
             else:

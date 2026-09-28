@@ -3,8 +3,8 @@ import type { NextRequest } from 'next/server'
 
 // Names of the httpOnly auth cookies set by the API (see AUTH_COOKIE_NAME and
 // AUTH_REFRESH_COOKIE_NAME).
-const AUTH_COOKIE = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ?? 'access_token'
-const REFRESH_COOKIE = process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? 'refresh_token'
+const AUTH_COOKIE = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME || 'access_token'
+const REFRESH_COOKIE = process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME || 'refresh_token'
 
 // Routes reachable without authentication. Everything else (the whole `(app)`
 // shell: /dashboard, /datasets, /generate, /jobs, /quality, /sources, …) is

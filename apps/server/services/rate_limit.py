@@ -36,6 +36,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from typing import Any, Callable, Deque, Dict, Optional, Protocol
+from urllib.parse import urlsplit
 
 
 class RateLimiter(Protocol):
@@ -262,7 +263,10 @@ def _build_login_limiter() -> RateLimiter:
         )
         return in_process
 
-    logging.info("Login rate limiter backed by Redis at %s", config.redis_url)
+    # Host only: REDIS_URL may carry a password.
+    logging.info(
+        "Login rate limiter backed by Redis at %s", urlsplit(config.redis_url).hostname
+    )
     return RedisRateLimiter(
         max_attempts=config.auth_login_max_attempts,
         window_seconds=config.auth_login_window_seconds,

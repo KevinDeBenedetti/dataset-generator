@@ -86,7 +86,7 @@ check-ports:
 
 ## Run the FastAPI server locally with hot-reload (no Docker).
 dev-local: env
-	uv run uvicorn --host 0.0.0.0 $(SERVER_DIR).main:app --reload
+	cd apps && uv run uvicorn --host 0.0.0.0 server.main:app --reload --reload-dir server
 
 ## Stop and remove all containers (no-op if the Docker daemon is not running).
 down:

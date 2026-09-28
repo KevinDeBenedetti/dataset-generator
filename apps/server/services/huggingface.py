@@ -372,8 +372,8 @@ def import_dataset_from_hub(
             source_url = row.get("source_url") or source_fallback
             row_id = row.get("id")
             # Keep the id only when it is one of our own content hashes (an
-            # app export); a foreign dataset's "0", "1"… would collide across
-            # datasets, since pair ids are global primary keys.
+            # app export); a foreign dataset's "0", "1"… restart in every split
+            # file, so they would merge unrelated rows.
             if not (isinstance(row_id, str) and _SHA256_HEX.match(row_id)):
                 row_id = compute_hash_from_content(
                     pair["question"], pair["answer"], pair["context"], source_url
