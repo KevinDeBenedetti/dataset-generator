@@ -11,7 +11,9 @@ class QAItem(BaseModel):
     answer: str = Field(..., description="Answer")
     context: str = Field(..., description="Source context")
     source_url: Optional[str] = Field(None, description="Source URL")
-    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence level")
+    confidence: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Confidence level (null when unscored)"
+    )
     created_at: datetime = Field(..., description="Creation date")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
@@ -70,3 +72,13 @@ class QAStatsResponse(BaseModel):
     distribution: List[QAScoreBucket] = Field(
         ..., description="Score distribution buckets, highest range first"
     )
+
+
+class QAScoreResponse(BaseModel):
+    """Result of scoring a dataset's pairs with the LLM judge"""
+
+    dataset_name: str = Field(..., description="Dataset name")
+    model: str = Field(..., description="Model used as the judge")
+    requested: int = Field(..., description="Pairs sent to the judge")
+    scored: int = Field(..., description="Pairs that received a score")
+    failed: int = Field(..., description="Pairs left unscored (judge error/omission)")

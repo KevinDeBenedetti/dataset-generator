@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import { getQAByDataset, getQAStats } from '@/api/sdk'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { getQAByDataset, getQAStats, scoreQA } from '@/api/sdk'
 import { useQAStore } from '@/stores/qa'
 
 export function useQAByDataset(
@@ -43,5 +43,19 @@ export function useQAStats(
     queryKey: ['qa-stats', datasetId, options?.scoreThreshold],
     queryFn: () => getQAStats(datasetId, options?.scoreThreshold),
     enabled: options?.enabled !== false && !!datasetId,
+  })
+}
+
+// Scores the dataset's unscored pairs with the LLM judge, then refreshes
+// every view built on those scores (stats, pair lists).
+export function useScoreQA() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (datasetId: string) => scoreQA(datasetId),
+    onSuccess: (_result, datasetId) => {
+      queryClient.invalidateQueries({ queryKey: ['qa-stats', datasetId] })
+      queryClient.invalidateQueries({ queryKey: ['qa', datasetId] })
+    },
   })
 }

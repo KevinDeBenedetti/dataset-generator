@@ -28,7 +28,7 @@ import sys
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from server.core.config import _env
 from server.jobs.github_snapshot import (
@@ -63,7 +63,9 @@ ANSWER_STYLE = (
 JSON_FORMAT_INSTRUCTION = (
     "Respond ONLY with a compact JSON array (no extra whitespace, indentation, or "
     "line breaks), no surrounding text, in the format "
-    '[{"question":"...","answer":"..."}].'
+    '[{"question":"...","answer":"...","confidence":0.9}], where "confidence" is a '
+    "score between 0 and 1 reflecting how well the given context supports the "
+    "answer."
 )
 
 CATEGORIES = ("profile", "overview", "docs")
@@ -82,10 +84,11 @@ class QAPair:
     model: Optional[str] = None
     id: Optional[str] = None
     source: str = "github"
+    confidence: Optional[float] = None
 
     def to_record(self) -> dict:
         # Key order matches the TS exporter's records, keeping the Hub diff clean.
-        rec: Dict[str, str] = {
+        rec: Dict[str, Any] = {
             "question": self.question,
             "answer": self.answer,
             "source": self.source,
@@ -95,6 +98,8 @@ class QAPair:
             rec["repo"] = self.repo
         if self.model:
             rec["model"] = self.model
+        if self.confidence is not None:
+            rec["confidence"] = self.confidence
         if self.id:
             rec["id"] = self.id
         return rec
@@ -156,8 +161,11 @@ def profile_pairs(profile: Optional[GitHubProfile], repo_count: int) -> List[QAP
         return []
     who = profile.name or profile.login
 
+    # Exact API facts, not model output — nothing to be unsure about.
     def pair(question: str, answer: str) -> QAPair:
-        return QAPair(question=question, answer=answer, category="profile")
+        return QAPair(
+            question=question, answer=answer, category="profile", confidence=1.0
+        )
 
     pairs = [
         pair(f"What is {who}'s GitHub username?", f"@{profile.login}"),
@@ -242,7 +250,19 @@ def _to_pair(obj, repo: str, category: str, model: str) -> Optional[QAPair]:
         category=category,
         repo=repo,
         model=model,
+        confidence=_confidence(obj.get("confidence")),
     )
+
+
+def _confidence(value: Any) -> Optional[float]:
+    """A model-reported score clamped to [0, 1]; None when absent or not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        score = float(value)
+    except ValueError:
+        return None
+    return round(min(1.0, max(0.0, score)), 3)
 
 
 def parse_pairs(raw: str, repo: str, category: str, model: str) -> List[QAPair]:
@@ -573,6 +593,7 @@ Each line of `train.jsonl` is one record:
 | `category` | string | `profile`, `overview` (repo description/README), or `docs` (repo `docs/` folder) |
 | `repo` | string | Repository name the pair was derived from — absent for `profile` pairs |
 | `model` | string | LLM that generated the pair — absent for `profile` pairs (deterministic, no LLM) |
+| `confidence` | number | 0–1: how well the source supports the answer, as reported by the LLM; 1.0 for `profile` pairs — absent when the model gave none |
 
 ## Composition
 

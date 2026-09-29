@@ -27,7 +27,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
           </div>
 
           <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-            {qa.confidence && (
+            {qa.confidence != null && (
               <span className="bg-blue-100 px-2 py-1 rounded">
                 Confidence: {(qa.confidence * 100).toFixed(1)}%
               </span>

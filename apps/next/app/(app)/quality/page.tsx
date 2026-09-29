@@ -12,6 +12,7 @@ import {
   useQAStats,
   useQualityRules,
   useResolvePair,
+  useScoreQA,
   useUpdateQualityRules,
 } from '@/hooks'
 import { useIsAdmin } from '@/hooks/use-auth'
@@ -69,6 +70,7 @@ export default function QualityPage() {
   const analyzeMutation = useAnalyzeDataset()
   const cleanMutation = useCleanDataset()
   const resolvePairMutation = useResolvePair()
+  const scoreMutation = useScoreQA()
 
   // Datasets that only exist on the Hub so far (not already analyzable
   // locally) — offered in the selector as an "import, then analyze" action,
@@ -349,12 +351,57 @@ export default function QualityPage() {
               (stats?.total_count ? (
                 <p className="muted">
                   None of the {stats.total_count} pairs has a confidence score — datasets imported
-                  from Hugging Face usually don&apos;t carry one, so there is nothing to distribute
-                  or validate.
+                  from Hugging Face usually don&apos;t carry one. Score them with the LLM to get a
+                  distribution.
                 </p>
               ) : (
                 <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
               ))}
+            {!(selectedDataset && statsQuery.isPending) &&
+              stats &&
+              stats.scored_count < stats.total_count && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    margin: '4px 0 12px',
+                  }}
+                >
+                  <button
+                    className="btn btn-outline btn-sm"
+                    type="button"
+                    disabled={!isAdmin || scoreMutation.isPending}
+                    onClick={() => scoreMutation.mutate(selectedDataset)}
+                  >
+                    <Icon
+                      name={scoreMutation.isPending ? 'loader' : 'sparkles'}
+                      className={scoreMutation.isPending ? 'animate-spin' : undefined}
+                    />
+                    {scoreMutation.isPending
+                      ? 'Scoring…'
+                      : `Score ${stats.total_count - stats.scored_count} unscored pair(s) with the LLM`}
+                  </button>
+                  {!isAdmin && <span className="hint">Only an admin can score pairs.</span>}
+                </div>
+              )}
+            {scoreMutation.isError && (
+              <p className="hint" style={{ color: 'var(--destructive)' }}>
+                {scoreMutation.error instanceof Error
+                  ? scoreMutation.error.message
+                  : 'Scoring failed'}
+              </p>
+            )}
+            {scoreMutation.data?.dataset_name === selectedDataset && !scoreMutation.isPending && (
+              <p className="hint">
+                Scored {scoreMutation.data.scored} of {scoreMutation.data.requested} pair(s) with{' '}
+                {scoreMutation.data.model}
+                {scoreMutation.data.failed > 0
+                  ? ` — ${scoreMutation.data.failed} left unscored, run it again to retry them.`
+                  : '.'}
+              </p>
+            )}
             {scoreStats.buckets.map((bucket, i) => (
               <div className="bar-row" key={bucket.label}>
                 <span className="bl">{bucket.label}</span>

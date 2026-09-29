@@ -916,6 +916,79 @@
         }
       }
     },
+    "/q_a/{dataset_name}/score": {
+      "post": {
+        "tags": [
+          "q_a"
+        ],
+        "summary": "Score Qa",
+        "description": "Score a dataset's pairs with an LLM judge and store the confidences.\n\nFor pairs that have no score yet — typically ones imported from the Hub.\nWith a context, the judge rates how well it supports the answer (the same\nmeasure generation reports); without one, the pair's own quality.",
+        "operationId": "score_qa_q_a__dataset_name__score_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "only_unscored",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Score only pairs without a confidence (false: rescore all)",
+              "default": true,
+              "title": "Only Unscored"
+            },
+            "description": "Score only pairs without a confidence (false: rescore all)"
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Judge model (defaults to the configured QA model)",
+              "title": "Model"
+            },
+            "description": "Judge model (defaults to the configured QA model)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAScoreResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/q_a/{dataset_name}": {
       "get": {
         "tags": [
@@ -3237,12 +3310,18 @@
             "description": "Source URL"
           },
           "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence",
-            "description": "Confidence level",
-            "default": 0.0
+            "description": "Confidence level (null when unscored)"
           },
           "created_at": {
             "type": "string",
@@ -3377,6 +3456,45 @@
         ],
         "title": "QAScoreBucket",
         "description": "One bucket of the confidence-score distribution"
+      },
+      "QAScoreResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Dataset name"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Model used as the judge"
+          },
+          "requested": {
+            "type": "integer",
+            "title": "Requested",
+            "description": "Pairs sent to the judge"
+          },
+          "scored": {
+            "type": "integer",
+            "title": "Scored",
+            "description": "Pairs that received a score"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "description": "Pairs left unscored (judge error/omission)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "model",
+          "requested",
+          "scored",
+          "failed"
+        ],
+        "title": "QAScoreResponse",
+        "description": "Result of scoring a dataset's pairs with the LLM judge"
       },
       "QAStatsResponse": {
         "properties": {

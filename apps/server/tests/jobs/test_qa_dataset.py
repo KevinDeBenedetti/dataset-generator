@@ -276,3 +276,35 @@ async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
             await qa_dataset.run(complete, max_repos=2, dry_run=False)
 
     assert build.call_args.args[-1] == 2
+
+
+def test_parse_pairs_reads_and_clamps_confidence():
+    raw = json.dumps(
+        [
+            {"question": "What is X?", "answer": "A tool.", "confidence": 0.87},
+            {"question": "Why use X?", "answer": "It is fast.", "confidence": 3},
+            {"question": "Who made X?", "answer": "Kevin.", "confidence": "n/a"},
+            {"question": "When was X made?", "answer": "In 2026."},
+        ]
+    )
+    pairs = parse_pairs(raw, "r", "overview", "m")
+    assert [p.confidence for p in pairs] == [0.87, 1.0, None, None]
+
+
+def test_profile_pairs_are_fully_confident(snapshot):
+    assert {p.confidence for p in profile_pairs(snapshot.profile, 1)} == {1.0}
+
+
+def test_to_record_includes_confidence_only_when_set():
+    scored = QAPair("Q one?", "A", "overview", repo="r", confidence=0.9, id="a")
+    unscored = QAPair("Q two?", "B", "overview", repo="r", id="b")
+    assert list(scored.to_record()) == [
+        "question",
+        "answer",
+        "source",
+        "category",
+        "repo",
+        "confidence",
+        "id",
+    ]
+    assert "confidence" not in unscored.to_record()
