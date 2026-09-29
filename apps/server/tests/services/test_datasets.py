@@ -17,6 +17,7 @@ from server.services.datasets import (
     get_dataset_pairs,
     get_dataset_sources_view,
     get_dataset_view,
+    get_pairs_to_score,
     get_qa_stats_view,
     get_qa_view,
     list_dataset_versions,
@@ -24,6 +25,7 @@ from server.services.datasets import (
     next_version,
     resolve_similarity_pair,
     save_generation,
+    set_pair_confidences,
 )
 
 # Every test in this module talks to the database.
@@ -201,6 +203,40 @@ def test_unscored_pairs_are_counted_but_not_averaged():
     assert stats["scored_count"] == 1
     assert stats["average_score"] == 0.9
     assert sum(b["count"] for b in stats["distribution"]) == 1
+
+
+def test_unscored_pair_is_served_as_null_not_zero():
+    _seed(items=[_item("a", "q1?", confidence=None)])
+    [pair] = get_qa_view("ds")["qa_data"]
+    assert pair["confidence"] is None
+
+
+def test_get_pairs_to_score_filters_unscored_by_default():
+    _seed(items=[_item("a", "q1?", confidence=0.9), _item("b", "q2?", confidence=None)])
+
+    assert [p["id"] for p in get_pairs_to_score("ds")] == ["b"]
+    assert [p["id"] for p in get_pairs_to_score("ds", only_unscored=False)] == [
+        "a",
+        "b",
+    ]
+    with pytest.raises(ValueError):
+        get_pairs_to_score("ghost")
+
+
+def test_set_pair_confidences_stores_score_and_method():
+    _seed(
+        items=[_item("a", "q1?", confidence=None), _item("b", "q2?", confidence=None)]
+    )
+
+    assert set_pair_confidences("ds", {"a": 0.8, "missing": 0.5}, "llm_judge:m") == 1
+
+    pairs = {p["id"]: p for p in get_qa_view("ds")["qa_data"]}
+    assert pairs["a"]["confidence"] == 0.8
+    assert pairs["a"]["metadata"]["confidence_method"] == "llm_judge:m"
+    # Existing metadata is kept alongside the new key.
+    assert pairs["a"]["metadata"]["model"] == "gpt-test"
+    assert pairs["b"]["confidence"] is None
+    assert set_pair_confidences("ds", {}, "llm_judge:m") == 0
 
 
 # --- sources & history -------------------------------------------------------

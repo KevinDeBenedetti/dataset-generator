@@ -290,7 +290,9 @@ def _to_qa_view(pair: QAPair) -> Dict[str, Any]:
         "answer": pair.answer,
         "context": pair.context,
         "source_url": pair.source_url or "",
-        "confidence": pair.confidence or 0.0,
+        # None, not 0.0: an unscored pair (e.g. imported from the Hub) is not a
+        # zero-scored one — the stats view already makes that distinction.
+        "confidence": pair.confidence,
         "created_at": pair.created_at,
         "metadata": pair.qa_metadata or {},
     }
@@ -389,6 +391,57 @@ def get_qa_stats_view(
                 for label, low, high in _SCORE_BUCKETS
             ],
         }
+
+
+def get_pairs_to_score(
+    dataset_name: str, only_unscored: bool = True
+) -> List[Dict[str, Any]]:
+    """The dataset's pairs as plain dicts for the LLM scorer.
+
+    Raises ValueError when the dataset doesn't exist.
+    """
+    with get_scoped_db() as db:
+        dataset = _require_dataset(db, dataset_name)
+        query = select(QAPair).where(QAPair.dataset_id == dataset.id)
+        if only_unscored:
+            query = query.where(QAPair.confidence.is_(None))
+        return [
+            {
+                "id": p.id,
+                "question": p.question,
+                "answer": p.answer,
+                "context": p.context or "",
+            }
+            for p in db.scalars(query.order_by(QAPair.id))
+        ]
+
+
+def set_pair_confidences(
+    dataset_name: str, scores: Dict[str, float], method: str
+) -> int:
+    """Store ``{pair id: confidence}`` and record how each score was produced.
+
+    Returns the number of pairs updated. Raises ValueError when the dataset
+    doesn't exist.
+    """
+    if not scores:
+        return 0
+    with get_scoped_db() as db:
+        dataset = _require_dataset(db, dataset_name)
+        pairs = db.scalars(
+            select(QAPair).where(
+                QAPair.dataset_id == dataset.id, QAPair.id.in_(list(scores))
+            )
+        )
+        updated = 0
+        for pair in pairs:
+            pair.confidence = scores[pair.id]
+            # Reassigned, not mutated in place: SQLAlchemy doesn't track
+            # in-place changes to a plain JSON column.
+            pair.qa_metadata = {**(pair.qa_metadata or {}), "confidence_method": method}
+            updated += 1
+        db.commit()
+    return updated
 
 
 # --- sources & analysis history ----------------------------------------------

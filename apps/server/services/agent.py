@@ -211,29 +211,34 @@ class _AgentState(TypedDict):
     raw_response: str
 
 
+def build_chat_model(model: str) -> Any:
+    """An async-capable ChatOpenAI on the configured OpenAI-compatible endpoint."""
+    # Imported lazily: langchain_openai builds a module-level SSL context
+    # (via certifi) at import time, which some sandboxes block — same
+    # reason LLMService/QAAgentService keep their openai clients lazy.
+    from langchain_openai import ChatOpenAI
+
+    # Built per call (not cached) since the model id varies per request;
+    # construction itself is cheap and does no I/O.
+    kwargs: dict = dict(
+        model=model,
+        api_key=config.openai_api_key,
+        base_url=config.openai_base_url or None,
+        max_tokens=config.max_tokens_qa,
+        temperature=config.temperature,
+    )
+    # "low" keeps gpt-oss-style models from spending their whole budget
+    # reasoning and never emitting the final JSON.
+    if config.openai_reasoning_effort:
+        kwargs["reasoning_effort"] = config.openai_reasoning_effort
+    return ChatOpenAI(**kwargs)
+
+
 class QAAgentService:
     """Generate QA pairs via a single-node LangGraph graph over ChatOpenAI."""
 
     def _build_chat_model(self, model: str) -> Any:
-        # Imported lazily: langchain_openai builds a module-level SSL context
-        # (via certifi) at import time, which some sandboxes block — same
-        # reason LLMService/QAAgentService keep their openai clients lazy.
-        from langchain_openai import ChatOpenAI
-
-        # Built per call (not cached) since the model id varies per request;
-        # construction itself is cheap and does no I/O.
-        kwargs: dict = dict(
-            model=model,
-            api_key=config.openai_api_key,
-            base_url=config.openai_base_url or None,
-            max_tokens=config.max_tokens_qa,
-            temperature=config.temperature,
-        )
-        # "low" keeps gpt-oss-style models from spending their whole budget
-        # reasoning and never emitting the final JSON.
-        if config.openai_reasoning_effort:
-            kwargs["reasoning_effort"] = config.openai_reasoning_effort
-        return ChatOpenAI(**kwargs)
+        return build_chat_model(model)
 
     async def _generate_node(self, state: _AgentState) -> dict:
         chat_model = self._build_chat_model(state["model"])

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import collections, dataset, generate, jobs, quality_rules
+from server.api import collections, dataset, generate, jobs, q_a, quality_rules
 from server.core.database import get_db
 from server.models.user import User, UserRole
 from server.services.auth import get_current_user
@@ -25,6 +25,7 @@ def _build_protected_app(test_db):
     app.include_router(collections.router, dependencies=auth_required)
     app.include_router(quality_rules.router, dependencies=auth_required)
     app.include_router(jobs.router, dependencies=auth_required)
+    app.include_router(q_a.router, dependencies=auth_required)
 
     def override_get_db():
         yield test_db
@@ -76,6 +77,7 @@ _ADMIN_ONLY_ROUTES = [
     ("put", "/quality-rules"),
     ("post", "/jobs/corpus-sync", {}),
     ("post", "/jobs/qa-dataset-sync", {}),
+    ("post", "/q_a/my_dataset/score"),
 ]
 
 

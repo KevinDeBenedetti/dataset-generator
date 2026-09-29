@@ -447,6 +447,30 @@ export async function getQAStats(datasetId: string, scoreThreshold?: number): Pr
   return response.data as unknown as QAStats
 }
 
+export interface QAScoreResult {
+  dataset_name: string
+  model: string
+  requested: number
+  scored: number
+  failed: number
+}
+
+// Scores a dataset's pairs with an LLM judge (admin only). By default only
+// pairs without a confidence — typically imported from Hugging Face.
+export async function scoreQA(
+  datasetId: string,
+  options?: { onlyUnscored?: boolean },
+): Promise<QAScoreResult> {
+  const onlyUnscored = options?.onlyUnscored ?? true
+  const response = await client.post<QAScoreResult>({
+    url: `/q_a/${encodeURIComponent(datasetId)}/score?only_unscored=${onlyUnscored}`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to score the Q&A pairs'))
+  }
+  return response.data as unknown as QAScoreResult
+}
+
 // Dataset versions & copies
 
 export interface DatasetVersion {

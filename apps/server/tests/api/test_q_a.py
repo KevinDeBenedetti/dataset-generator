@@ -2,7 +2,7 @@
 Tests for Q&A API endpoints.
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -163,3 +163,40 @@ def test_get_qa_stats_threshold_validation(client: TestClient):
         ).status_code
         == 422
     )
+
+
+def test_score_qa_returns_the_summary(client: TestClient):
+    summary = {
+        "dataset_name": "ds",
+        "model": "judge",
+        "requested": 3,
+        "scored": 3,
+        "failed": 0,
+    }
+    with patch(
+        "server.api.q_a.score_dataset", new=AsyncMock(return_value=summary)
+    ) as score:
+        response = client.post("/q_a/ds/score", params={"only_unscored": "false"})
+    assert response.status_code == 200
+    assert response.json() == summary
+    score.assert_awaited_once_with("ds", only_unscored=False, model=None)
+
+
+def test_score_qa_maps_errors(client: TestClient):
+    from server.services.scoring import ScoringNotConfiguredError
+
+    with patch(
+        "server.api.q_a.score_dataset",
+        new=AsyncMock(side_effect=ScoringNotConfiguredError("no LLM")),
+    ):
+        assert client.post("/q_a/ds/score").status_code == 503
+    with patch(
+        "server.api.q_a.score_dataset",
+        new=AsyncMock(side_effect=ValueError("Dataset 'ds' not found")),
+    ):
+        assert client.post("/q_a/ds/score").status_code == 404
+
+
+def test_score_qa_rejects_unknown_model(client: TestClient):
+    response = client.post("/q_a/ds/score", params={"model": "not-a-model"})
+    assert response.status_code == 400

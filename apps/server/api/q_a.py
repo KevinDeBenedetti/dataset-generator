@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 import logging
 from typing import Optional
 
+from server.core.config import config
+from server.services.auth import require_admin
 from server.services.datasets import get_qa_stats_view, get_qa_view
-from server.schemas.q_a import QAListResponse, QAStatsResponse
+from server.services.scoring import ScoringNotConfiguredError, score_dataset
+from server.schemas.q_a import QAListResponse, QAScoreResponse, QAStatsResponse
 
 router = APIRouter(
     prefix="/q_a",
@@ -32,6 +35,47 @@ async def get_qa_stats(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logging.error(f"Error computing Q&A stats for '{dataset_name}': {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/{dataset_name}/score",
+    response_model=QAScoreResponse,
+    # Spends LLM tokens and rewrites stored scores — admin only.
+    dependencies=[Depends(require_admin)],
+)
+async def score_qa(
+    dataset_name: str,
+    only_unscored: bool = Query(
+        True, description="Score only pairs without a confidence (false: rescore all)"
+    ),
+    model: Optional[str] = Query(
+        None, description="Judge model (defaults to the configured QA model)"
+    ),
+) -> QAScoreResponse:
+    """Score a dataset's pairs with an LLM judge and store the confidences.
+
+    For pairs that have no score yet — typically ones imported from the Hub.
+    With a context, the judge rates how well it supports the answer (the same
+    measure generation reports); without one, the pair's own quality.
+    """
+    if model and model not in config.available_models:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model}' not in available models: {config.available_models}",
+        )
+    try:
+        return QAScoreResponse(
+            **await score_dataset(
+                dataset_name, only_unscored=only_unscored, model=model
+            )
+        )
+    except ScoringNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error scoring Q&A for '{dataset_name}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
