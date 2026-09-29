@@ -165,9 +165,12 @@ export default function DatasetDetailPage() {
             className="btn btn-outline"
             type="button"
             onClick={() => sourcesQuery.refetch()}
-            disabled={sourcesQuery.isFetching}
+            disabled={sourcesQuery.isRefetching}
           >
-            <Icon name="refresh" className={sourcesQuery.isFetching ? 'animate-spin' : undefined} />
+            <Icon
+              name="refresh"
+              className={sourcesQuery.isRefetching ? 'animate-spin' : undefined}
+            />
             Refresh
           </button>
           {isAdmin && (

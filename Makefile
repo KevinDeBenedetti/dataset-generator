@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models api-client
+.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models api-schema api-client api-check
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -22,7 +22,7 @@ env:
 ## then install the git hook shims declared in prek.toml.
 setup:
 	uv venv --clear && uv sync
-	cd $(NEXT_DIR) && bun install
+	cd $(NEXT_DIR) && bun install && bun run api:generate
 	uv run prek install
 
 ## Start the full stack with Docker (FastAPI + Next.js), building images if needed.
@@ -151,33 +151,28 @@ test-ci:
 		--cov-report=term-missing \
 		--cov-fail-under=70
 
-## Dump the OpenAPI schema straight from the app (no server needed) to openapi.json.
+## Dump the OpenAPI schema straight from the app (no server needed) to
+## apps/next/openapi.json — the committed contract the front-end client is
+## generated from. Run it after changing an endpoint or schema, then commit it.
 api-schema:
-	@PYTHONPATH=$(PWD)/apps uv run python -m server.scripts.dump_openapi openapi.json
+	@PYTHONPATH=$(PWD)/apps uv run python -m server.scripts.dump_openapi $(NEXT_DIR)/openapi.json
 
-## Regenerate the Next.js OpenAPI client (apps/next/api/*.gen.ts).
-## Reads the schema dumped by `api-schema` — no running server needed, and the
-## exact same input `api-check` uses, so local and CI generation can't diverge.
-## The generator runs from an isolated install in apps/next/openapi-codegen:
-## @hey-api/openapi-ts needs the TypeScript 5 JS compiler API, which the
-## project's typescript@7 (native tsgo) no longer ships — so a pinned TS 5 lives
-## there, without downgrading the app.
+## Regenerate the schema, then the Next.js client (apps/next/api/gen, gitignored).
+## `bun run dev|build|typecheck|test` regenerate the client on their own; this
+## is for refreshing it right after an API change.
 api-client: api-schema
-	@printf '  \033[1;36m▶ Generating the API client from openapi.json\033[0m\n'
-	@cd $(NEXT_DIR) && bun install --cwd openapi-codegen && \
-	OPENAPI_INPUT="$(PWD)/openapi.json" ./openapi-codegen/node_modules/.bin/openapi-ts
-	@rm -f openapi.json
-	@printf '  \033[1;32m✓ Client regenerated in apps/next/api/\033[0m\n'
+	@cd $(NEXT_DIR) && bun run api:generate
+	@printf '  \033[1;32m✓ Client regenerated in apps/next/api/gen/\033[0m\n'
 
-## Fail if the committed API client has drifted from the server's OpenAPI schema.
-## Regenerates (same input as `api-client`) and diffs — this is what CI runs.
-api-check: api-client
-	@if ! git diff --exit-code -- $(NEXT_DIR)/api; then \
-		printf '\n  \033[1;31m✗ The committed API client is out of date.\033[0m\n'; \
-		printf '     Regenerate it and commit the result:  make api-client\n\n'; \
+## Fail if the committed OpenAPI schema has drifted from the server's code.
+## Dumps the schema and diffs it — this is what CI runs.
+api-check: api-schema
+	@if ! git diff --exit-code -- $(NEXT_DIR)/openapi.json; then \
+		printf '\n  \033[1;31m✗ apps/next/openapi.json is out of date.\033[0m\n'; \
+		printf '     Regenerate it and commit the result:  make api-schema\n\n'; \
 		exit 1; \
 	fi
-	@printf '  \033[1;32m✓ API client is in sync with the server schema.\033[0m\n'
+	@printf '  \033[1;32m✓ OpenAPI schema is in sync with the server.\033[0m\n'
 
 ## List models from the configured OpenAI-compatible provider (reads .env).
 models:

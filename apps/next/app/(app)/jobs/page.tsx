@@ -3,8 +3,12 @@
 import Link from 'next/link'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
-import { useAllDatasetRuns } from '@/hooks'
+import { useAllDatasetRuns, useDatasets, useGenerateDataset } from '@/hooks'
 import { useGenerateStore } from '@/stores/generate'
+
+const GITHUB_SOURCE = 'github://'
+// Same default as the /generate form — runs don't record their threshold.
+const DEFAULT_SIMILARITY_THRESHOLD = 0.9
 
 function formatDate(value?: string | null): string {
   if (!value) return '—'
@@ -12,22 +16,39 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
 }
 
+// Only GitHub runs can be replayed: the account is in the source URL, whereas
+// an uploaded file (`file://…`) is not kept after its generation.
+function githubUsernameOf(sourceUrl?: string | null): string | null {
+  if (!sourceUrl?.startsWith(GITHUB_SOURCE)) return null
+  return sourceUrl.slice(GITHUB_SOURCE.length) || null
+}
+
 export default function JobsPage() {
   const runsQuery = useAllDatasetRuns()
   const runs = runsQuery.data ?? []
+  const { data: datasets } = useDatasets()
+  const generateMutation = useGenerateDataset()
 
-  // The live generation (if any) streamed by the /generate page in this
-  // session. The backend runs pipelines synchronously per request — there is
-  // no server-side job queue to poll.
+  // The generation (if any) running in this session — started from /generate
+  // or re-run from the history below. The backend runs pipelines synchronously
+  // per request — there is no server-side job queue to poll.
   const generationStatus = useGenerateStore((state) => state.generationStatus)
+  const generationError = useGenerateStore((state) => state.error)
   const liveSteps = useGenerateStore((state) => state.liveSteps)
-  const dataset = useGenerateStore((state) => state.dataset)
+  const pendingName = useGenerateStore((state) => state.pendingName)
+  const isGenerating = generationStatus === 'pending'
 
-  const runningName = dataset
-    ? 'dataset_name' in dataset
-      ? dataset.dataset_name
-      : dataset.name
-    : null
+  const rerun = (datasetName: string, githubUsername: string) => {
+    const targetLanguage = datasets?.find((d) => d.name === datasetName)?.target_language ?? null
+    generateMutation.mutate({
+      source: 'github',
+      githubUsername,
+      name: datasetName,
+      targetLanguage,
+      similarityThreshold: DEFAULT_SIMILARITY_THRESHOLD,
+      persist: true,
+    })
+  }
 
   return (
     <div className="jobs-page">
@@ -42,10 +63,10 @@ export default function JobsPage() {
           <button
             className="btn btn-outline"
             onClick={() => runsQuery.refetch()}
-            disabled={runsQuery.isFetching}
+            disabled={runsQuery.isRefetching}
             type="button"
           >
-            <Icon name="refresh" className={runsQuery.isFetching ? 'animate-spin' : undefined} />
+            <Icon name="refresh" className={runsQuery.isRefetching ? 'animate-spin' : undefined} />
             Refresh
           </button>
           <Link className="btn btn-primary" href="/generate">
@@ -55,7 +76,13 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {generationStatus === 'pending' ? (
+      {generationStatus === 'error' && generationError && (
+        <p className="hint" style={{ color: 'var(--destructive)', marginBottom: 12 }}>
+          Last generation{pendingName ? ` of ${pendingName}` : ''} failed: {generationError}
+        </p>
+      )}
+
+      {isGenerating ? (
         <div className="job">
           <div className="job-top">
             <span className="job-ic">
@@ -63,7 +90,7 @@ export default function JobsPage() {
             </span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {runningName ?? 'Generation'} · pipeline{' '}
+                {pendingName ?? 'Generation'} · pipeline{' '}
                 <span className="badge badge-info">
                   <span className="dot" />
                   Running
@@ -140,51 +167,73 @@ export default function JobsPage() {
                 <th>Source</th>
                 <th>Started</th>
                 <th>Status</th>
+                <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {runs.map((run) => (
-                <tr key={`${run.dataset}-${run.run_name ?? run.version}`}>
-                  {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
+              {runs.map((run) => {
+                const githubUsername = githubUsernameOf(run.source_url)
+                const rerunningThis = isGenerating && pendingName === run.dataset
+                return (
+                  <tr key={`${run.dataset}-${run.run_name ?? run.version}`}>
+                    {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
                       false positive: static, non-interactive cell; the icon is
                       already aria-hidden (see Icon) and the cell has visible
                       accessible text (run.dataset). */}
-                  <td>
-                    <div className="cell-main">
-                      <span className="cell-ic">
-                        <Icon name="sparkles" />
+                    <td>
+                      <div className="cell-main">
+                        <span className="cell-ic">
+                          <Icon name="sparkles" />
+                        </span>
+                        <div className="cell-title">{run.dataset} · generation</div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="tag">
+                        {run.run_name ?? (run.version != null ? `v${run.version}` : '—')}
                       </span>
-                      <div className="cell-title">{run.dataset} · generation</div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="tag">
-                      {run.run_name ?? (run.version != null ? `v${run.version}` : '—')}
-                    </span>
-                  </td>
-                  <td className="muted">
-                    {run.item_count != null ? `${run.item_count} pairs` : '—'}
-                  </td>
-                  <td
-                    className="muted"
-                    style={{
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {run.source_url ?? '—'}
-                  </td>
-                  <td className="muted">{formatDate(run.created_at)}</td>
-                  <td>
-                    <span className="badge badge-success">
-                      <span className="dot" />
-                      Recorded
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="muted">
+                      {run.item_count != null ? `${run.item_count} pairs` : '—'}
+                    </td>
+                    <td
+                      className="muted"
+                      style={{
+                        maxWidth: 220,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {run.source_url ?? '—'}
+                    </td>
+                    <td className="muted">{formatDate(run.created_at)}</td>
+                    <td>
+                      <span className="badge badge-success">
+                        <span className="dot" />
+                        Recorded
+                      </span>
+                    </td>
+                    <td>
+                      {githubUsername && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          type="button"
+                          disabled={isGenerating}
+                          title={`Re-run generation for ${run.dataset} from github.com/${githubUsername}`}
+                          onClick={() => rerun(run.dataset, githubUsername)}
+                        >
+                          <Icon
+                            name={rerunningThis ? 'loader' : 'refresh'}
+                            className={rerunningThis ? 'animate-spin' : undefined}
+                          />
+                          {rerunningThis ? 'Running…' : 'Re-run'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

@@ -137,6 +137,7 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
         collections,
         dataset,
         generate,
+        jobs,
         q_a,
         openai,
         prompts,
@@ -166,6 +167,7 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
     test_app.include_router(collections.router)
     test_app.include_router(quality_rules.router)
     test_app.include_router(prompts.router)
+    test_app.include_router(jobs.router)
 
     @test_app.get("/")
     async def root():

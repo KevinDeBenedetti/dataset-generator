@@ -310,28 +310,34 @@ only) needs one too — the suite starts a throwaway Postgres.
 
 Current coverage threshold: **70%** minimum required for CI to pass
 
-### API client drift
+### API schema & client
 
-`apps/next/api/*.gen.ts` is generated from the server's OpenAPI schema and
-committed, so the front-end can drift from the API without anything failing to
-compile. CI guards it with an `API client drift` job that regenerates the client
-and fails on any diff:
+`apps/next/openapi.json` is the committed contract between the two apps. The
+TypeScript client is **generated from it, never committed**: `apps/next/api/gen/`
+is gitignored and rebuilt before every `bun run dev`, `build`, `typecheck` and
+`test` (`pre*` scripts), like a dependency. The hand-written wrappers the app
+actually imports (`api/sdk.ts`, `api/types.ts`) sit one level up.
 
 ```bash
-# Regenerate the client, then commit the result — no running server needed
+# After changing an endpoint or schema: dump the contract (no server needed),
+# regenerate the client, then commit openapi.json
 make api-client
 
-# Same generation, plus a diff that fails when the committed client is stale
+# What CI runs (`API schema drift` job): fails when openapi.json is stale
 make api-check
+
+# Optional, while working on the API: regenerate the client whenever the
+# running FastAPI server's schema changes (OPENAPI_INPUT overrides the URL)
+cd apps/next && bun run api:watch
 ```
 
-Both targets dump the schema from the app itself (`make api-schema`) and feed
-the generator that **same file**, so a client generated locally and one
-generated in CI are byte-identical. Two details make that hold:
+A few details keep generation deterministic:
 
 - The dump preserves the app's own key order rather than sorting it — the
-  generator emits operations in schema order, so sorting would produce a diff
-  that regenerating could never settle.
+  generator emits operations in schema order, so sorting would churn the diff.
+- The generator runs from an isolated install in `apps/next/openapi-codegen`:
+  it needs the TypeScript 5 compiler API, which the app's typescript@7 (native
+  tsgo) no longer ships.
 - `openapi-ts.config.ts` sets `baseUrl: false` on the client plugin, so no base
-  URL is baked into `client.gen.ts` from whatever input URL was used;
-  `api/sdk.ts` supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.
+  URL is baked into `client.gen.ts` from whatever input was used; `api/sdk.ts`
+  supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.

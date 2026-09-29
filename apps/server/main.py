@@ -16,6 +16,7 @@ from server.api import (
     collections,
     dataset,
     generate,
+    jobs,
     q_a,
     openai,
     prompts,
@@ -176,6 +177,7 @@ app.include_router(agent.router, dependencies=auth_required)
 app.include_router(collections.router, dependencies=auth_required)
 app.include_router(quality_rules.router, dependencies=auth_required)
 app.include_router(prompts.router, dependencies=auth_required)
+app.include_router(jobs.router, dependencies=auth_required)
 
 # The stream is unauthenticated and carries raw log lines, so it only ever
 # exists in an explicitly-declared development environment.

@@ -1,5 +1,7 @@
-# Dépendances
-node_modules
+# Dépendances (openapi-codegen has its own node_modules too)
+**/node_modules
+# Regenerated from openapi.json by `bun run dev`
+api/gen
 .next
 .cache
 .turbo

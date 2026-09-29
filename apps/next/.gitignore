@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# API client generated from openapi.json on every dev/build/typecheck/test
+/api/gen/

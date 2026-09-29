@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -224,3 +224,55 @@ async def test_run_requires_claude_credentials(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(JobError, match="CLAUDE_CODE_OAUTH_TOKEN"):
         await qa_dataset.run()
+
+
+async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
+    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
+    # No HF_TOKEN / HF_QA_DATASET_REPO at all — a dry run needs neither.
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HF_QA_DATASET_REPO", raising=False)
+    github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
+    github.json("/users/kevin/repos", [])
+
+    async def complete(_req):  # pragma: no cover — no repos to generate for
+        raise AssertionError("unexpected LLM call")
+
+    with patch(
+        "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
+    ):
+        result = await qa_dataset.run(complete, dry_run=True)
+
+    assert result["dry_run"] is True
+    assert result["url"] is None
+    # Deterministic profile pairs only (username, indexed-repo count, followers).
+    assert result["records"] == 3
+
+
+async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
+    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
+    monkeypatch.setenv("HF_TOKEN", "hf")
+    monkeypatch.setenv("HF_QA_DATASET_REPO", "ns/qa")
+    github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
+    github.json("/users/kevin/repos", [])
+    api = MagicMock()
+    api.whoami.return_value = {"name": "kevin"}
+
+    async def complete(_req):  # pragma: no cover
+        raise AssertionError("unexpected LLM call")
+
+    with (
+        patch(
+            "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
+        ),
+        patch("server.services.huggingface._api", return_value=api),
+        patch(
+            "server.jobs.qa_dataset.build_qa_dataset",
+            new=AsyncMock(return_value=QADataset([], 0, [])),
+        ) as build,
+    ):
+        with pytest.raises(JobError, match="0 pairs"):
+            await qa_dataset.run(complete, max_repos=2, dry_run=False)
+
+    assert build.call_args.args[-1] == 2

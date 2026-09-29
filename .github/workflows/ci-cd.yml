@@ -58,11 +58,12 @@ jobs:
       # next build needs no backend at build time; enable as a pre-merge gate on PRs.
       run-build: ${{ github.event_name == 'pull_request' }}
 
-  # The TypeScript client in apps/next/api is generated from the server's OpenAPI
-  # schema and committed. Regenerate it here and fail on any diff, so an endpoint
-  # or schema change can't silently leave the front-end client behind.
-  api-client-drift:
-    name: API client drift
+  # apps/next/openapi.json is the committed API contract; the front-end client
+  # is generated from it on every build (ci-node included). Dump it from the
+  # app here and fail on any diff, so an endpoint or schema change can't ship
+  # without the contract the front-end builds against.
+  api-schema-drift:
+    name: API schema drift
     needs: security
     runs-on: ubuntu-latest
     steps:
@@ -71,10 +72,9 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - run: uv sync
-      # Dumps the schema straight from the app (no server to boot), regenerates
-      # the client and diffs. Fix with `make api-client`, then commit.
+      # Dumps the schema straight from the app (no server to boot) and diffs.
+      # Fix with `make api-schema`, then commit.
       - run: make api-check
 
   # Central docs site (kevindebenedetti.github.io) polls this repo's docs/ on its
@@ -83,7 +83,7 @@ jobs:
   # Production pipeline: main → release-please
   release:
     name: Release
-    needs: [ci-python, ci-node, api-client-drift]
+    needs: [ci-python, ci-node, api-schema-drift]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write

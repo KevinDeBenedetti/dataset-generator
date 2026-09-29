@@ -14,6 +14,7 @@ import {
 } from '@/api/sdk'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
+import { DATASET_ALL_RUNS_QUERY_KEY } from './use-dataset-versions'
 
 // The /generate form can mine two kinds of source; the mutation branches on it.
 export type GenerateParams =
@@ -66,7 +67,8 @@ export function useDatasetSources(datasetName: string | null | undefined) {
 
 export function useGenerateDataset() {
   const queryClient = useQueryClient()
-  const { setDataset, setGenerationStatus, setError, setLiveSteps } = useGenerateStore()
+  const { setDataset, setGenerationStatus, setError, setLiveSteps, setPendingName } =
+    useGenerateStore()
 
   return useMutation({
     mutationFn: async (params: GenerateParams) => {
@@ -91,7 +93,8 @@ export function useGenerateDataset() {
         persist: params.persist,
       })
     },
-    onMutate: () => {
+    onMutate: (params) => {
+      setPendingName(params.name)
       setGenerationStatus('pending')
       setError(null)
       setLiveSteps([])
@@ -101,8 +104,9 @@ export function useGenerateDataset() {
       setGenerationStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
       // A generation adds pairs, sources and a run: the detail page's sources
-      // and history are stale as soon as it lands.
+      // and history, and the /jobs run history, are stale as soon as it lands.
       queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
+      queryClient.invalidateQueries({ queryKey: [DATASET_ALL_RUNS_QUERY_KEY] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to generate dataset')

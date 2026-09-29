@@ -1,0 +1,3781 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Datasets Generator API",
+    "description": "API to generate datasets from web scraping",
+    "version": "0.0.1"
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Validate credentials, set the httpOnly auth cookie, return the user.\n\nThrottled per client IP: too many failed attempts within the window yield a\n429 (anti-brute-force). A successful login clears the counter.",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "description": "Exchange the refresh cookie for a new access token + refresh token.\n\nRotation: the presented refresh token is revoked and replaced. A missing,\nexpired, or replayed token yields a 401 (replay additionally revokes the\nwhole token family — see ``rotate_refresh_token``).",
+        "operationId": "refresh_auth_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "Revoke the refresh-token family and clear both auth cookies.",
+        "operationId": "logout_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "description": "Return the currently authenticated user.",
+        "operationId": "me_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/oidc/login": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Oidc Login",
+        "description": "Redirect the browser to the Infomaniak authorization endpoint.",
+        "operationId": "oidc_login_auth_oidc_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/oidc/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Oidc Callback",
+        "description": "Handle the provider redirect: exchange the code, upsert the user, set\nthe auth cookie, then bounce back to the frontend.",
+        "operationId": "oidc_callback_auth_oidc_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/generate/file": {
+      "post": {
+        "tags": [
+          "generate"
+        ],
+        "summary": "Generate a dataset from an uploaded file (PDF or image)",
+        "description": "Create a new dataset from an uploaded PDF or image. Each page is transcribed with the configured vision model (OPENAI_VLM_MODEL), then mined for question-answer pairs.",
+        "operationId": "create_dataset_for_file_dataset_generate_file_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_dataset_for_file_dataset_generate_file_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Dataset created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters or unsupported/corrupt file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/generate/github": {
+      "post": {
+        "tags": [
+          "generate"
+        ],
+        "summary": "Generate a dataset from a GitHub account's public docs",
+        "description": "Create a new dataset from a GitHub account: each public repo's README and top-level docs are cleaned and mined for question-answer pairs. An optional token only raises the API rate limit (public data only).",
+        "operationId": "create_dataset_for_github_dataset_generate_github_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitHubGenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Dataset created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters or unknown GitHub user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Create Dataset",
+        "description": "Create a new (empty) dataset.",
+        "operationId": "create_dataset_dataset_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Name of the new dataset",
+              "title": "Name"
+            },
+            "description": "Name of the new dataset"
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Optional dataset description",
+              "title": "Description"
+            },
+            "description": "Optional dataset description"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Get All Datasets",
+        "description": "Retrieve all datasets, or a specific one (by name).",
+        "operationId": "get_all_datasets_dataset_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Optional dataset name to get a specific dataset's details",
+              "title": "Dataset Id"
+            },
+            "description": "Optional dataset name to get a specific dataset's details"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DatasetResponse"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DatasetResponse"
+                      }
+                    }
+                  ],
+                  "title": "Response Get All Datasets Dataset Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/sources": {
+      "get": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Get Dataset Sources",
+        "description": "List the sources a dataset was built from, with its analysis history.",
+        "operationId": "get_dataset_sources_dataset__dataset_name__sources_get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetSourcesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/versions": {
+      "get": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Get Dataset Versions",
+        "description": "The dataset's version history (one entry per recorded generation).",
+        "operationId": "get_dataset_versions_dataset__dataset_name__versions_get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetVersionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/huggingface": {
+      "get": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Get Huggingface Datasets",
+        "description": "List the Hugging Face Hub dataset repos owned by the configured account.",
+        "operationId": "get_huggingface_datasets_dataset_huggingface_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HuggingFaceDatasetsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/huggingface/import": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Import Huggingface Dataset",
+        "description": "Pull a Hugging Face dataset repo's Q/A pairs into a local dataset, so it\ncan be analyzed like any other dataset (duplicates, score stats, rules).",
+        "operationId": "import_huggingface_dataset_dataset_huggingface_import_post",
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Full 'namespace/name' Hub repo id to import",
+              "title": "Repo Id"
+            },
+            "description": "Full 'namespace/name' Hub repo id to import"
+          },
+          {
+            "name": "dataset_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Local dataset name to import into (defaults to the repo's name segment)",
+              "title": "Dataset Name"
+            },
+            "description": "Local dataset name to import into (defaults to the repo's name segment)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HuggingFaceImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/export/huggingface": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Export To Huggingface",
+        "description": "Export a dataset to the Hugging Face Hub as a **private** dataset repo.",
+        "operationId": "export_to_huggingface_dataset__dataset_name__export_huggingface_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "repo_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Target repo as 'namespace/name' (defaults to the configured namespace and the dataset's slug)",
+              "title": "Repo Id"
+            },
+            "description": "Target repo as 'namespace/name' (defaults to the configured namespace and the dataset's slug)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HuggingFaceExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/duplicate": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Duplicate Dataset",
+        "description": "Copy a dataset's Q/A pairs into another dataset.",
+        "operationId": "duplicate_dataset_dataset__dataset_name__duplicate_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "target_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Name of the copy (defaults to '<name>-copy')",
+              "title": "Target Name"
+            },
+            "description": "Name of the copy (defaults to '<name>-copy')"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateDatasetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/analyze-similarities": {
+      "get": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Analyze Similarities",
+        "description": "Analyze near-duplicate questions in a dataset (read-only).",
+        "operationId": "analyze_similarities_dataset__dataset_name__analyze_similarities_get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "description": "Similarity threshold",
+              "default": 0.8,
+              "title": "Threshold"
+            },
+            "description": "Similarity threshold"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarityAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/clean-similarities": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Clean Similarities",
+        "description": "Remove near-duplicate questions from a dataset (deletes stored pairs).",
+        "operationId": "clean_similarities_dataset__dataset_name__clean_similarities_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "description": "Similarity threshold to detect duplicates (0.0-1.0)",
+              "default": 0.8,
+              "title": "Threshold"
+            },
+            "description": "Similarity threshold to detect duplicates (0.0-1.0)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanSimilarityResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}/resolve-pair": {
+      "post": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Resolve Pair",
+        "description": "Arbitrate a single duplicate pair: delete the given record, keep the other.\n\nAccepts the full item id or the 8-char prefix returned by\nanalyze-similarities.",
+        "operationId": "resolve_pair_dataset__dataset_name__resolve_pair_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolvePairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvePairResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/{dataset_name}": {
+      "delete": {
+        "tags": [
+          "dataset"
+        ],
+        "summary": "Delete Dataset",
+        "description": "Delete a dataset, its Q/A pairs and its Qdrant collection.",
+        "operationId": "delete_dataset_dataset__dataset_name__delete",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteDatasetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/q_a/{dataset_name}/stats": {
+      "get": {
+        "tags": [
+          "q_a"
+        ],
+        "summary": "Get Qa Stats",
+        "description": "Aggregated confidence-score stats over the whole dataset (server-side).\n\nAvoids the client having to page through /q_a/{dataset_name} to compute\naverages and distributions — accurate even on large datasets.",
+        "operationId": "get_qa_stats_q_a__dataset_name__stats_get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "score_threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "description": "Validated/below split threshold",
+              "default": 0.8,
+              "title": "Score Threshold"
+            },
+            "description": "Validated/below split threshold"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAStatsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/q_a/{dataset_name}": {
+      "get": {
+        "tags": [
+          "q_a"
+        ],
+        "summary": "Get Qa By Dataset",
+        "description": "Retrieve a dataset's Q&A pairs (keyed by dataset name).",
+        "operationId": "get_qa_by_dataset_q_a__dataset_name__get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Limit number of results",
+              "default": 10,
+              "title": "Limit"
+            },
+            "description": "Limit number of results"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pagination offset",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Pagination offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openai/models": {
+      "get": {
+        "tags": [
+          "openai"
+        ],
+        "summary": "List Openai Models",
+        "description": "Returns the list of available models from the OpenAI API.",
+        "operationId": "list_openai_models_openai_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/qa-test": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Run the QA agent on a text and return raw + parsed output",
+        "operationId": "qa_agent_test_agent_qa_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QAAgentTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAAgentTestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Get Collections",
+        "description": "List the stored datasets as collections, annotated with their Qdrant status.",
+        "operationId": "get_collections_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{dataset_name}/qdrant": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Push Collection To Qdrant",
+        "description": "Embed a dataset's Q/A pairs and upsert them into Qdrant.",
+        "operationId": "push_collection_to_qdrant_collections__dataset_name__qdrant_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QdrantSyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{dataset_name}/search": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Search Collection Endpoint",
+        "description": "Embed the query and return the most similar Q/A pairs from the collection.",
+        "operationId": "search_collection_endpoint_collections__dataset_name__search_post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quality-rules": {
+      "get": {
+        "tags": [
+          "quality-rules"
+        ],
+        "summary": "Read Quality Rules",
+        "description": "The persisted generation-time quality rules (defaults when unset).",
+        "operationId": "read_quality_rules_quality_rules_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QualityRulesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "quality-rules"
+        ],
+        "summary": "Put Quality Rules",
+        "description": "Update the quality rules (admin only). Partial: omitted fields keep\ntheir current value.",
+        "operationId": "put_quality_rules_quality_rules_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualityRulesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QualityRulesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prompts": {
+      "get": {
+        "tags": [
+          "prompts"
+        ],
+        "summary": "List Prompts",
+        "description": "Every LLM prompt shipped with the app, with where/how it is used.",
+        "operationId": "list_prompts_prompts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/status": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Jobs Status",
+        "description": "Whether each scheduled job's required server env vars are set.",
+        "operationId": "get_jobs_status_jobs_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobsStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/corpus-sync": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Trigger Corpus Sync",
+        "description": "Run the weekly portfolio knowledge-corpus job on demand.\n\nBuilds every requested split from the GitHub API and, unless `dry_run`,\npublishes them to the configured private Hugging Face dataset in one\ncommit — the same job `dataset-sync.yml` runs on its Monday schedule.",
+        "operationId": "trigger_corpus_sync_jobs_corpus_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorpusSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorpusSyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/qa-dataset-sync": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Trigger Qa Dataset Sync",
+        "description": "Run the GitHub Q&A dataset job on demand.\n\nGenerates pairs via the Claude Agent SDK (billed against the configured\nClaude subscription) and, unless `dry_run`, publishes them to the\nconfigured private Hugging Face dataset — the same job\n`qa-dataset-sync.yml` runs on its Monday schedule. Set `max_repos` to a\nsmall number for a cheap test run.",
+        "operationId": "trigger_qa_dataset_sync_jobs_qa_dataset_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QADatasetSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QADatasetSyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_create_dataset_for_file_dataset_generate_file_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "PDF or image file to mine for Q&A"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language"
+          },
+          "model_qa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Qa"
+          },
+          "model_vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Vlm"
+          },
+          "similarity_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Similarity Threshold",
+            "default": 0.9
+          },
+          "persist": {
+            "type": "boolean",
+            "title": "Persist",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "dataset_name"
+        ],
+        "title": "Body_create_dataset_for_file_dataset_generate_file_post"
+      },
+      "CleanSimilarityPair": {
+        "properties": {
+          "keep_id": {
+            "type": "string",
+            "title": "Keep Id"
+          },
+          "remove_id": {
+            "type": "string",
+            "title": "Remove Id"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity"
+          },
+          "keep_question": {
+            "type": "string",
+            "title": "Keep Question"
+          },
+          "remove_question": {
+            "type": "string",
+            "title": "Remove Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keep_id",
+          "remove_id",
+          "similarity",
+          "keep_question",
+          "remove_question"
+        ],
+        "title": "CleanSimilarityPair"
+      },
+      "CleanSimilarityResponse": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "total_records": {
+            "type": "integer",
+            "title": "Total Records"
+          },
+          "removed_records": {
+            "type": "integer",
+            "title": "Removed Records"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/CleanSimilarityPair"
+            },
+            "type": "array",
+            "title": "Details"
+          },
+          "removed_items": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedRecord"
+            },
+            "type": "array",
+            "title": "Removed Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_name",
+          "threshold",
+          "total_records",
+          "removed_records",
+          "details",
+          "removed_items"
+        ],
+        "title": "CleanSimilarityResponse"
+      },
+      "Collection": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language"
+          },
+          "qa_sources_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Sources Count"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "collection_name": {
+            "type": "string",
+            "title": "Collection Name"
+          },
+          "in_qdrant": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Qdrant"
+          },
+          "points_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "collection_name"
+        ],
+        "title": "Collection",
+        "description": "A dataset projected as a vector collection.\n\nCarries the dataset fields plus its Qdrant status. ``in_qdrant`` /\n``points_count`` are null when Qdrant is unconfigured or unreachable."
+      },
+      "CollectionSearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Query",
+            "description": "Natural-language query"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "Max number of hits",
+            "default": 10
+          },
+          "score_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Threshold",
+            "description": "Minimum similarity score (0–1) to include a hit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "CollectionSearchRequest",
+        "description": "Semantic search over a dataset's Qdrant collection."
+      },
+      "CollectionSearchResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "collection_name": {
+            "type": "string",
+            "title": "Collection Name"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionSearchResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "collection_name",
+          "query",
+          "count",
+          "results"
+        ],
+        "title": "CollectionSearchResponse"
+      },
+      "CollectionSearchResult": {
+        "properties": {
+          "qa_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "context": {
+            "type": "string",
+            "title": "Context"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer",
+          "context"
+        ],
+        "title": "CollectionSearchResult"
+      },
+      "CollectionsResponse": {
+        "properties": {
+          "qdrant_configured": {
+            "type": "boolean",
+            "title": "Qdrant Configured"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/Collection"
+            },
+            "type": "array",
+            "title": "Collections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "qdrant_configured",
+          "total",
+          "collections"
+        ],
+        "title": "CollectionsResponse"
+      },
+      "CorpusJobStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "github_username": {
+            "type": "boolean",
+            "title": "Github Username"
+          },
+          "github_token": {
+            "type": "boolean",
+            "title": "Github Token"
+          },
+          "hf_token": {
+            "type": "boolean",
+            "title": "Hf Token"
+          },
+          "hf_dataset_repo": {
+            "type": "boolean",
+            "title": "Hf Dataset Repo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured",
+          "github_username",
+          "github_token",
+          "hf_token",
+          "hf_dataset_repo"
+        ],
+        "title": "CorpusJobStatus"
+      },
+      "CorpusSyncRequest": {
+        "properties": {
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "description": "Splits to build: profile, github, github_code, github_docs (default: all four)"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "description": "Build the corpus but skip publishing it to Hugging Face",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CorpusSyncRequest"
+      },
+      "CorpusSyncResponse": {
+        "properties": {
+          "manifest": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Manifest"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "Hub dataset URL, or null on a dry run"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "manifest",
+          "dry_run"
+        ],
+        "title": "CorpusSyncResponse"
+      },
+      "DatasetAnalysis": {
+        "properties": {
+          "run_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Name"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Seed analysed by this run (site root, file, account)"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "web | file | github | unknown"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "item_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Count"
+          },
+          "pages_analyzed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages Analyzed",
+            "description": "Pages/documents read during this run"
+          },
+          "new_pairs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Pairs",
+            "description": "Pairs kept by this run"
+          },
+          "duplicates_skipped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicates Skipped",
+            "description": "Exact + similar duplicates skipped by this run"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "DatasetAnalysis",
+        "description": "One recorded analysis (generation run) that fed the dataset."
+      },
+      "DatasetGenerationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "ID of the dataset"
+          },
+          "qa_pairs": {
+            "items": {
+              "$ref": "#/components/schemas/QAPair"
+            },
+            "type": "array",
+            "title": "Qa Pairs",
+            "description": "List of generated question-answer pairs"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Name of the dataset"
+          },
+          "model_cleaning": {
+            "type": "string",
+            "title": "Model Cleaning",
+            "description": "Model used for text cleaning"
+          },
+          "target_language": {
+            "type": "string",
+            "title": "Target Language",
+            "description": "Target language used"
+          },
+          "model_qa": {
+            "type": "string",
+            "title": "Model Qa",
+            "description": "Model used for QA generation"
+          },
+          "similarity_threshold": {
+            "type": "number",
+            "title": "Similarity Threshold",
+            "description": "Similarity threshold used"
+          },
+          "total_questions": {
+            "type": "integer",
+            "title": "Total Questions",
+            "description": "Total number of generated questions"
+          },
+          "pages_crawled": {
+            "type": "integer",
+            "title": "Pages Crawled",
+            "description": "Number of pages fetched and processed",
+            "default": 1
+          },
+          "processing_time": {
+            "type": "number",
+            "title": "Processing Time",
+            "description": "Processing time in seconds"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStep"
+            },
+            "type": "array",
+            "title": "Steps",
+            "description": "Timeline of the pipeline steps"
+          },
+          "scraped_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scraped Content",
+            "description": "Raw markdown scraped from the source URL(s)"
+          },
+          "persisted": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persisted",
+            "description": "Summary of the stored version (dataset name, version, run) when the pairs were saved at generation time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "qa_pairs",
+          "dataset_name",
+          "model_cleaning",
+          "target_language",
+          "model_qa",
+          "similarity_threshold",
+          "total_questions",
+          "processing_time"
+        ],
+        "title": "DatasetGenerationResponse",
+        "description": "Model for dataset generation response",
+        "example": {
+          "dataset_name": "my_dataset",
+          "id": "123e4567-e89b-12d3-a456-426614174000",
+          "model_cleaning": "gpt-3.5-turbo",
+          "model_qa": "gpt-4",
+          "processing_time": 45.2,
+          "qa_pairs": [
+            {
+              "answer": "The document discusses machine learning techniques.",
+              "question": "What is the main topic of this document?"
+            }
+          ],
+          "similarity_threshold": 0.9,
+          "target_language": "en",
+          "total_questions": 50
+        }
+      },
+      "DatasetResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language"
+          },
+          "qa_sources_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Sources Count"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DatasetResponse"
+      },
+      "DatasetSource": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "Source URL as recorded on the items (None if unknown)"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "web | file | github | unknown"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Readable form of the source (scheme stripped)"
+          },
+          "qa_count": {
+            "type": "integer",
+            "title": "Qa Count",
+            "description": "Q/A pairs generated from this source"
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen At"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "qa_count"
+        ],
+        "title": "DatasetSource",
+        "description": "One origin a dataset's Q/A pairs were generated from."
+      },
+      "DatasetSourcesResponse": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "total_sources": {
+            "type": "integer",
+            "title": "Total Sources"
+          },
+          "total_qa": {
+            "type": "integer",
+            "title": "Total Qa"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "total_analyses": {
+            "type": "integer",
+            "title": "Total Analyses"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetAnalysis"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_name",
+          "total_sources",
+          "total_qa",
+          "sources",
+          "total_analyses",
+          "history"
+        ],
+        "title": "DatasetSourcesResponse"
+      },
+      "DatasetVersionsResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetAnalysis"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "total",
+          "versions"
+        ],
+        "title": "DatasetVersionsResponse",
+        "description": "A dataset's recorded generations, newest first."
+      },
+      "DeleteDatasetResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "records_deleted": {
+            "type": "integer",
+            "title": "Records Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "dataset_id",
+          "records_deleted"
+        ],
+        "title": "DeleteDatasetResponse"
+      },
+      "DuplicateDatasetResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "target_dataset_name": {
+            "type": "string",
+            "title": "Target Dataset Name"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "created_count": {
+            "type": "integer",
+            "title": "Created Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "dataset_name",
+          "target_dataset_name",
+          "total_items",
+          "created_count"
+        ],
+        "title": "DuplicateDatasetResponse"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Detailed error description"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code",
+            "description": "Specific error code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Model for error responses",
+        "example": {
+          "detail": "Model 'invalid-model' not in available models: ['gpt-3.5-turbo', 'gpt-4']",
+          "error_code": "INVALID_MODEL"
+        }
+      },
+      "GitHubGenerationRequest": {
+        "properties": {
+          "github_username": {
+            "type": "string",
+            "title": "Github Username",
+            "description": "GitHub account whose public repos will be mined"
+          },
+          "github_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Token",
+            "description": "Optional token — only used to raise the API rate limit; only public information is read"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Name of the dataset to create"
+          },
+          "model_cleaning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Cleaning",
+            "description": "Model to use for text cleaning"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language",
+            "description": "Target language for QA generation"
+          },
+          "model_qa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Qa",
+            "description": "Model to use for QA generation"
+          },
+          "similarity_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Similarity Threshold",
+            "description": "Similarity threshold to detect duplicates (0.0-1.0)",
+            "default": 0.9
+          },
+          "max_repos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Repos",
+            "description": "Cap on the number of public repos to mine (default: all)"
+          },
+          "persist": {
+            "type": "boolean",
+            "title": "Persist",
+            "description": "Store the generated pairs and record a version at generation time",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "github_username",
+          "dataset_name"
+        ],
+        "title": "GitHubGenerationRequest",
+        "description": "Model for generating a dataset from a GitHub account's public docs."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HuggingFaceDataset": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Full 'namespace/name' repo id on the Hub"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private"
+          },
+          "gated": {
+            "title": "Gated",
+            "description": "False, or the gating mode ('auto'/'manual')"
+          },
+          "disabled": {
+            "type": "boolean",
+            "title": "Disabled",
+            "default": false
+          },
+          "downloads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloads",
+            "description": "Downloads in the last 30 days"
+          },
+          "downloads_all_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloads All Time"
+          },
+          "likes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Likes"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "pretty_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretty Name",
+            "description": "From the dataset card, if set"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "size_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Category"
+          },
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count",
+            "description": "Files in the repo (any revision)"
+          },
+          "used_storage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Storage",
+            "description": "Repo size in bytes"
+          },
+          "sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha",
+            "description": "Current commit hash on the default branch"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "private"
+        ],
+        "title": "HuggingFaceDataset",
+        "description": "One dataset repo owned by the configured Hugging Face account.\n\nMirrors ``huggingface_hub.DatasetInfo`` (fetched with ``full=True``), plus\nthe handful of dataset-card fields (``pretty_name``, ``language``,\n``license``, ``size_category``) worth surfacing without asking the caller\nto parse the card's YAML front matter themselves."
+      },
+      "HuggingFaceDatasetsResponse": {
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/HuggingFaceDataset"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "total",
+          "datasets"
+        ],
+        "title": "HuggingFaceDatasetsResponse"
+      },
+      "HuggingFaceExportResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id",
+            "description": "Full 'namespace/name' on the Hub"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "description": "Always true — exported dataset repos are private",
+            "default": true
+          },
+          "pairs_exported": {
+            "type": "integer",
+            "title": "Pairs Exported"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "repo_id",
+          "url",
+          "pairs_exported"
+        ],
+        "title": "HuggingFaceExportResponse",
+        "description": "Result of an export to the Hugging Face Hub."
+      },
+      "HuggingFaceImportResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "pairs_imported": {
+            "type": "integer",
+            "title": "Pairs Imported"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "repo_id",
+          "pairs_imported",
+          "version"
+        ],
+        "title": "HuggingFaceImportResponse",
+        "description": "Result of pulling a Hub dataset repo's Q/A pairs into local storage."
+      },
+      "JobsStatusResponse": {
+        "properties": {
+          "corpus": {
+            "$ref": "#/components/schemas/CorpusJobStatus"
+          },
+          "qa_dataset": {
+            "$ref": "#/components/schemas/QADatasetJobStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "corpus",
+          "qa_dataset"
+        ],
+        "title": "JobsStatusResponse"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Account email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password",
+            "description": "Account password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "PipelineStep": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Stable identifier of the step"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable step name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Outcome of the step: success, warning or error"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "Step duration in milliseconds"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Log line summarising what happened",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "status",
+          "duration_ms"
+        ],
+        "title": "PipelineStep",
+        "description": "One step of the generation pipeline, for the frontend timeline."
+      },
+      "PromptInfo": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Stable identifier"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Chat role the prompt is sent as"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Model (from config) the prompt targets"
+          },
+          "used_by": {
+            "type": "string",
+            "title": "Used By",
+            "description": "Where in the app the prompt is used"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "description": "False for legacy prompts kept in the codebase but unused"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "The prompt text (templates verbatim)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "role",
+          "model",
+          "used_by",
+          "active",
+          "content"
+        ],
+        "title": "PromptInfo",
+        "description": "One LLM prompt actually used (or shipped) by the application."
+      },
+      "PromptsResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "prompts": {
+            "items": {
+              "$ref": "#/components/schemas/PromptInfo"
+            },
+            "type": "array",
+            "title": "Prompts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "prompts"
+        ],
+        "title": "PromptsResponse"
+      },
+      "QAAgentTestRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text",
+            "description": "Source text to feed the agent"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language",
+            "description": "Target language (defaults to server config)"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Model id (defaults to server config)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "QAAgentTestRequest"
+      },
+      "QAAgentTestResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "description": "True if at least one QA pair was parsed"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "target_language": {
+            "type": "string",
+            "title": "Target Language"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "raw_length": {
+            "type": "integer",
+            "title": "Raw Length"
+          },
+          "raw_response": {
+            "type": "string",
+            "title": "Raw Response",
+            "description": "Exact text returned by the model"
+          },
+          "qa_pairs": {
+            "items": {},
+            "type": "array",
+            "title": "Qa Pairs"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "model",
+          "target_language",
+          "count",
+          "raw_length",
+          "raw_response"
+        ],
+        "title": "QAAgentTestResponse"
+      },
+      "QADatasetJobStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "github_username": {
+            "type": "boolean",
+            "title": "Github Username"
+          },
+          "github_token": {
+            "type": "boolean",
+            "title": "Github Token"
+          },
+          "claude_credentials": {
+            "type": "boolean",
+            "title": "Claude Credentials"
+          },
+          "hf_token": {
+            "type": "boolean",
+            "title": "Hf Token"
+          },
+          "hf_qa_dataset_repo": {
+            "type": "boolean",
+            "title": "Hf Qa Dataset Repo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured",
+          "github_username",
+          "github_token",
+          "claude_credentials",
+          "hf_token",
+          "hf_qa_dataset_repo"
+        ],
+        "title": "QADatasetJobStatus"
+      },
+      "QADatasetSyncRequest": {
+        "properties": {
+          "max_repos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Repos",
+            "description": "Cap on repos processed (default: 15) — lower this for a cheap test run"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "description": "Generate pairs but skip publishing them to Hugging Face",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "QADatasetSyncRequest"
+      },
+      "QADatasetSyncResponse": {
+        "properties": {
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "Hub dataset URL, or null on a dry run"
+          },
+          "records": {
+            "type": "integer",
+            "title": "Records"
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "default": []
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "records",
+          "dropped",
+          "dry_run"
+        ],
+        "title": "QADatasetSyncResponse"
+      },
+      "QAItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique ID of the question-answer"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question",
+            "description": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Answer"
+          },
+          "context": {
+            "type": "string",
+            "title": "Context",
+            "description": "Source context"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Source URL"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence level",
+            "default": 0.0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Creation date"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Additional metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "answer",
+          "context",
+          "created_at"
+        ],
+        "title": "QAItem",
+        "description": "Model for an individual Q&A item"
+      },
+      "QAListResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Dataset name"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id",
+            "description": "Dataset ID"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of items"
+          },
+          "returned_count": {
+            "type": "integer",
+            "title": "Returned Count",
+            "description": "Number of items returned"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "description": "Applied offset",
+            "default": 0
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit",
+            "description": "Applied limit"
+          },
+          "qa_data": {
+            "items": {
+              "$ref": "#/components/schemas/QAItem"
+            },
+            "type": "array",
+            "title": "Qa Data",
+            "description": "List of question-answers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "dataset_id",
+          "total_count",
+          "returned_count",
+          "qa_data"
+        ],
+        "title": "QAListResponse",
+        "description": "Response model for a dataset's Q&A list"
+      },
+      "QAPair": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question",
+            "description": "Generated question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Corresponding answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "QAPair",
+        "description": "Model for a question-answer pair"
+      },
+      "QAScoreBucket": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable bucket range, e.g. '0.9–1.0'"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count",
+            "description": "Number of scored items in the bucket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "QAScoreBucket",
+        "description": "One bucket of the confidence-score distribution"
+      },
+      "QAStatsResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Dataset name"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id",
+            "description": "Dataset ID"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of active items"
+          },
+          "scored_count": {
+            "type": "integer",
+            "title": "Scored Count",
+            "description": "Items carrying a confidence score (the stats basis)"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score",
+            "description": "Mean confidence of scored items (null when none)"
+          },
+          "score_threshold": {
+            "type": "number",
+            "title": "Score Threshold",
+            "description": "Threshold used for the split"
+          },
+          "below_threshold_count": {
+            "type": "integer",
+            "title": "Below Threshold Count",
+            "description": "Scored items strictly below the threshold"
+          },
+          "validated_count": {
+            "type": "integer",
+            "title": "Validated Count",
+            "description": "Scored items at or above the threshold"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/QAScoreBucket"
+            },
+            "type": "array",
+            "title": "Distribution",
+            "description": "Score distribution buckets, highest range first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "dataset_id",
+          "total_count",
+          "scored_count",
+          "score_threshold",
+          "below_threshold_count",
+          "validated_count",
+          "distribution"
+        ],
+        "title": "QAStatsResponse",
+        "description": "Aggregated confidence-score statistics over a whole dataset.\n\nComputed server-side over every active item so the quality page doesn't\nhave to sample a capped page of Q&A items client-side."
+      },
+      "QdrantSyncResponse": {
+        "properties": {
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "collection_name": {
+            "type": "string",
+            "title": "Collection Name"
+          },
+          "points_upserted": {
+            "type": "integer",
+            "title": "Points Upserted"
+          },
+          "vector_size": {
+            "type": "integer",
+            "title": "Vector Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_name",
+          "collection_name",
+          "points_upserted",
+          "vector_size"
+        ],
+        "title": "QdrantSyncResponse"
+      },
+      "QualityRulesResponse": {
+        "properties": {
+          "min_answer_words": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Min Answer Words",
+            "description": "Minimum answer length in words (0 = no minimum)"
+          },
+          "reject_below_confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Reject Below Confidence",
+            "description": "Confidence below which pairs are rejected"
+          },
+          "auto_reject_enabled": {
+            "type": "boolean",
+            "title": "Auto Reject Enabled",
+            "description": "Whether the rules are applied at generation"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last modification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_answer_words",
+          "reject_below_confidence",
+          "auto_reject_enabled"
+        ],
+        "title": "QualityRulesResponse",
+        "description": "The persisted generation-time quality rules."
+      },
+      "QualityRulesUpdate": {
+        "properties": {
+          "min_answer_words": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Answer Words"
+          },
+          "reject_below_confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Below Confidence"
+          },
+          "auto_reject_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Reject Enabled"
+          }
+        },
+        "type": "object",
+        "title": "QualityRulesUpdate",
+        "description": "Partial update — only the provided fields change."
+      },
+      "RemovedRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity"
+          },
+          "kept_id": {
+            "type": "string",
+            "title": "Kept Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "similarity",
+          "kept_id"
+        ],
+        "title": "RemovedRecord"
+      },
+      "ResolvePairRequest": {
+        "properties": {
+          "remove_id": {
+            "type": "string",
+            "title": "Remove Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "remove_id"
+        ],
+        "title": "ResolvePairRequest",
+        "description": "Arbitrate one duplicate pair: delete this record, keep the other."
+      },
+      "ResolvePairResponse": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "removed_id": {
+            "type": "string",
+            "title": "Removed Id"
+          },
+          "removed_question": {
+            "type": "string",
+            "title": "Removed Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_name",
+          "removed_id",
+          "removed_question"
+        ],
+        "title": "ResolvePairResponse"
+      },
+      "SimilarityAnalysisResponse": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "total_records": {
+            "type": "integer",
+            "title": "Total Records"
+          },
+          "similar_pairs_found": {
+            "type": "integer",
+            "title": "Similar Pairs Found"
+          },
+          "similarities": {
+            "items": {
+              "$ref": "#/components/schemas/SimilarityPair"
+            },
+            "type": "array",
+            "title": "Similarities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_name",
+          "threshold",
+          "total_records",
+          "similar_pairs_found",
+          "similarities"
+        ],
+        "title": "SimilarityAnalysisResponse"
+      },
+      "SimilarityPair": {
+        "properties": {
+          "record1_id": {
+            "type": "string",
+            "title": "Record1 Id"
+          },
+          "record2_id": {
+            "type": "string",
+            "title": "Record2 Id"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity"
+          },
+          "question1": {
+            "type": "string",
+            "title": "Question1"
+          },
+          "question2": {
+            "type": "string",
+            "title": "Question2"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record1_id",
+          "record2_id",
+          "similarity",
+          "question1",
+          "question2"
+        ],
+        "title": "SimilarityPair"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "provider"
+        ],
+        "title": "UserResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

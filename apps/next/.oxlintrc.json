@@ -15,13 +15,5 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-    "api/**/*.gen.ts",
-    "api/core/**",
-    "api/client/**"
-  ]
+  "ignorePatterns": [".next/**", "out/**", "build/**", "next-env.d.ts", "api/gen/**"]
 }
