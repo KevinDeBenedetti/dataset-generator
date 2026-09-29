@@ -25,9 +25,10 @@ FROM base AS dependencies
 # Copy only dependency files to maximize cache
 COPY pyproject.toml uv.lock ./
 
-# Use cache mount to speed up installation
+# Use cache mount to speed up installation. The `jobs` group (Claude Agent SDK)
+# is included so the dashboard's Sync jobs page can run the Q&A job in-process.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --group jobs
 
 # =============================================================================
 # Stage: dev
@@ -63,4 +64,4 @@ EXPOSE ${APP_PORT}
 # the read-only pyproject.toml/uv.lock mounts and is a no-op when already synced.
 # Then --reload-dir limits the watcher to the source so it does not watch
 # /app/.venv (thousands of files, churned by bytecode writes).
-CMD ["sh", "-c", "uv sync --frozen --no-dev && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]
+CMD ["sh", "-c", "uv sync --frozen --no-dev --group jobs && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]

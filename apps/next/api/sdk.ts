@@ -3,7 +3,7 @@
 // `@hey-api/openapi-ts` regenerates `sdk.gen.ts` and `types.gen.ts`, so
 // these higher-level helpers (which unwrap responses, flatten errors and add the
 // SSE streaming endpoint) live here, in a file the generator never touches.
-import { client } from './client.gen'
+import { client } from './gen/client.gen'
 
 // The auth cookie is httpOnly and set by the API (cross-origin in dev), so every
 // request must send/accept credentials for the session to work.
@@ -82,7 +82,7 @@ import type {
   QaAgentTestRequest,
   QaAgentTestResponse,
   ValidationError,
-} from './types.gen'
+} from './gen/types.gen'
 
 // Helper to extract a readable error message from an API error body.
 // FastAPI returns either { detail: string } (our ErrorResponse) or, on a 422,
@@ -717,6 +717,99 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     throw new Error(getErrorMessage(response.error, 'Failed to fetch the current user'))
   }
   return response.data as unknown as AuthUser
+}
+
+// Scheduled dataset↔Hugging Face jobs (server/jobs) — same code the
+// dataset-sync.yml / qa-dataset-sync.yml GitHub Actions run on a Monday
+// cron, triggered here on demand for testing from the dashboard.
+
+export interface CorpusJobStatus {
+  configured: boolean
+  github_username: boolean
+  github_token: boolean
+  hf_token: boolean
+  hf_dataset_repo: boolean
+}
+
+export interface QADatasetJobStatus {
+  configured: boolean
+  github_username: boolean
+  github_token: boolean
+  claude_credentials: boolean
+  hf_token: boolean
+  hf_qa_dataset_repo: boolean
+}
+
+export interface JobsStatusResponse {
+  corpus: CorpusJobStatus
+  qa_dataset: QADatasetJobStatus
+}
+
+// Which server env vars each job needs are set — booleans only, no secret
+// values ever come back.
+export async function getJobsStatus(): Promise<JobsStatusResponse> {
+  const response = await client.get<JobsStatusResponse>({ url: '/jobs/status' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch jobs status'))
+  }
+  return response.data as unknown as JobsStatusResponse
+}
+
+export type CorpusSource = 'profile' | 'github' | 'github_code' | 'github_docs'
+
+export interface CorpusSyncResponse {
+  manifest: {
+    generated_at: string
+    generator: string
+    source_commit?: string
+    files: { path: string; source: string; records: number; sha256: string }[]
+  }
+  url: string | null
+  dry_run: boolean
+}
+
+// Builds the portfolio knowledge corpus from the GitHub API and, unless
+// dryRun, publishes it to the configured private Hugging Face dataset.
+export async function triggerCorpusSync(options?: {
+  sources?: CorpusSource[]
+  dryRun?: boolean
+}): Promise<CorpusSyncResponse> {
+  const response = await client.post<CorpusSyncResponse>({
+    url: '/jobs/corpus-sync',
+    body: { sources: options?.sources ?? null, dry_run: options?.dryRun ?? false },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to run the corpus sync job'))
+  }
+  return response.data as unknown as CorpusSyncResponse
+}
+
+export interface QADatasetSyncResponse {
+  repo: string | null
+  url: string | null
+  records: number
+  dropped: number
+  errors: string[]
+  dry_run: boolean
+}
+
+// Generates the GitHub Q&A dataset (billed against the configured Claude
+// subscription) and, unless dryRun, publishes it to the configured private
+// Hugging Face dataset. Pass maxRepos for a cheap test run.
+export async function triggerQADatasetSync(options?: {
+  maxRepos?: number
+  dryRun?: boolean
+}): Promise<QADatasetSyncResponse> {
+  const response = await client.post<QADatasetSyncResponse>({
+    url: '/jobs/qa-dataset-sync',
+    body: { max_repos: options?.maxRepos ?? null, dry_run: options?.dryRun ?? false },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to run the QA dataset sync job'))
+  }
+  return response.data as unknown as QADatasetSyncResponse
 }
 
 // Absolute URL the browser navigates to in order to start the OIDC flow.

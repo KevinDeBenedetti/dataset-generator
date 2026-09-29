@@ -372,6 +372,3 @@ yarn-error.log
 
 urls/
 .claude
-
-# OpenAPI schema dumped by `make api-schema` / `make api-check`
-openapi.json

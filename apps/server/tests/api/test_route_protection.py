@@ -6,12 +6,12 @@ request without a valid token is rejected (401), and one with an authenticated
 user passes through.
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import collections, dataset, generate, quality_rules
+from server.api import collections, dataset, generate, jobs, quality_rules
 from server.core.database import get_db
 from server.models.user import User, UserRole
 from server.services.auth import get_current_user
@@ -24,6 +24,7 @@ def _build_protected_app(test_db):
     app.include_router(generate.router, dependencies=auth_required)
     app.include_router(collections.router, dependencies=auth_required)
     app.include_router(quality_rules.router, dependencies=auth_required)
+    app.include_router(jobs.router, dependencies=auth_required)
 
     def override_get_db():
         yield test_db
@@ -65,13 +66,16 @@ def test_protected_routes_allow_authenticated(test_db):
     assert response.json() == []
 
 
-# Destructive/costly routes are additionally gated behind require_admin.
+# Destructive/costly routes are additionally gated behind require_admin. A
+# fourth element, when present, is the JSON body a POST route requires.
 _ADMIN_ONLY_ROUTES = [
     ("delete", "/dataset/my_dataset"),
     ("post", "/dataset/my_dataset/clean-similarities"),
     ("post", "/dataset/my_dataset/resolve-pair"),
     ("post", "/collections/my_dataset/qdrant"),
     ("put", "/quality-rules"),
+    ("post", "/jobs/corpus-sync", {}),
+    ("post", "/jobs/qa-dataset-sync", {}),
 ]
 
 
@@ -83,8 +87,10 @@ def test_admin_routes_reject_non_admin(test_db):
     app.dependency_overrides[get_current_user] = lambda: regular_user
 
     client = TestClient(app)
-    for method, path in _ADMIN_ONLY_ROUTES:
-        response = getattr(client, method)(path)
+    for route in _ADMIN_ONLY_ROUTES:
+        method, path = route[0], route[1]
+        kwargs = {"json": route[2]} if len(route) > 2 else {}
+        response = getattr(client, method)(path, **kwargs)
         assert response.status_code == 403, f"{method} {path} should be admin-only"
 
 
@@ -145,5 +151,28 @@ def test_admin_routes_allow_admin(test_db):
     ):
         assert (
             client.put("/quality-rules", json={"min_answer_words": 5}).status_code
+            == 200
+        )
+    with patch(
+        "server.api.jobs.run_corpus_sync",
+        new=AsyncMock(return_value={"manifest": {}, "url": None, "dry_run": True}),
+    ):
+        assert (
+            client.post("/jobs/corpus-sync", json={"dry_run": True}).status_code == 200
+        )
+    with patch(
+        "server.api.jobs.run_qa_dataset_sync",
+        new=AsyncMock(
+            return_value={
+                "repo": None,
+                "url": None,
+                "records": 0,
+                "dropped": 0,
+                "dry_run": True,
+            }
+        ),
+    ):
+        assert (
+            client.post("/jobs/qa-dataset-sync", json={"dry_run": True}).status_code
             == 200
         )

@@ -57,8 +57,9 @@ dev = [
 migration = [
     "alembic>=1.16.5",
 ]
-# Scheduled dataset jobs (server/jobs) only: the SDK bundles the Claude Code
-# binary, which the server image has no use for (`uv sync --group jobs`).
+# Scheduled dataset jobs (server/jobs): the SDK bundles the Claude Code binary,
+# so it stays out of the default install. The server image and the
+# qa-dataset-sync workflow opt in with `uv sync --group jobs`.
 jobs = [
     "claude-agent-sdk>=0.2.160",
 ]

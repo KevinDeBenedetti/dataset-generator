@@ -422,12 +422,13 @@ async def build_qa_dataset(
     snapshot: GitHubSnapshot,
     complete: CompletionFn,
     model: str,
+    max_repos: int = MAX_REPOS,
 ) -> QADataset:
     repos = sorted(
         (r for r in snapshot.repos if r.description or r.readme),
         key=lambda r: r.stars,
         reverse=True,
-    )[:MAX_REPOS]
+    )[:max_repos]
     errors: List[str] = []
     done = 0
 
@@ -635,9 +636,18 @@ def publish_qa_dataset(dataset: QADataset, username: str, repo_id: str) -> dict:
 # --- CLI ---------------------------------------------------------------------
 
 
-async def run(complete: Optional[CompletionFn] = None) -> dict:
-    from server.services.huggingface import _api
+async def run(
+    complete: Optional[CompletionFn] = None,
+    max_repos: Optional[int] = None,
+    dry_run: bool = False,
+) -> dict:
+    """Generate the Q&A dataset and, unless ``dry_run``, publish it.
 
+    ``max_repos`` overrides :data:`MAX_REPOS` — useful for a cheap on-demand
+    test run that only touches one or two repos. ``dry_run`` skips the Hugging
+    Face publish step (and the token check that guards it) entirely, so it
+    needs no HF_TOKEN/HF_QA_DATASET_REPO; only the generation credentials.
+    """
     username = _env("GITHUB_USERNAME")
     if not username:
         raise JobError("GITHUB_USERNAME is required")
@@ -645,17 +655,21 @@ async def run(complete: Optional[CompletionFn] = None) -> dict:
         _env("CLAUDE_CODE_OAUTH_TOKEN") or _env("ANTHROPIC_API_KEY")
     ):
         raise JobError("CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY) is required")
-    if not _env("HF_TOKEN"):
-        raise JobError("HF_TOKEN is required")
-    repo_id = _env("HF_QA_DATASET_REPO")
-    if not repo_id:
-        raise JobError("HF_QA_DATASET_REPO is required (e.g. 'kevindb/github-qa')")
 
-    # Check the HF token before spending any (limited) subscription usage.
-    try:
-        await asyncio.to_thread(_api().whoami)
-    except Exception as exc:
-        raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
+    repo_id = _env("HF_QA_DATASET_REPO")
+    if not dry_run:
+        if not _env("HF_TOKEN"):
+            raise JobError("HF_TOKEN is required")
+        if not repo_id:
+            raise JobError("HF_QA_DATASET_REPO is required (e.g. 'kevindb/github-qa')")
+
+        # Check the HF token before spending any (limited) subscription usage.
+        from server.services.huggingface import _api
+
+        try:
+            await asyncio.to_thread(_api().whoami)
+        except Exception as exc:
+            raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
 
     model = _env("CLAUDE_MODEL", DEFAULT_MODEL)
     complete = complete or claude_completion(model)
@@ -667,13 +681,25 @@ async def run(complete: Optional[CompletionFn] = None) -> dict:
             logger.warning("non-fatal: %s", err)
 
         logger.info("generating Q&A pairs with %s…", model)
-        dataset = await build_qa_dataset(client, snapshot, complete, model)
+        dataset = await build_qa_dataset(
+            client, snapshot, complete, model, max_repos or MAX_REPOS
+        )
     finally:
         await client.close()
     for err in dataset.errors:
         logger.warning("non-fatal: %s", err)
 
-    return await asyncio.to_thread(publish_qa_dataset, dataset, username, repo_id)
+    if dry_run:
+        return {
+            "repo": repo_id,
+            "url": None,
+            "records": len(dataset.pairs),
+            "dropped": dataset.dropped,
+            "errors": dataset.errors,
+            "dry_run": True,
+        }
+    result = await asyncio.to_thread(publish_qa_dataset, dataset, username, repo_id)
+    return {**result, "errors": dataset.errors, "dry_run": False}
 
 
 def main() -> int:

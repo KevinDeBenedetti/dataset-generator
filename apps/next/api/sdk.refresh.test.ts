@@ -17,13 +17,13 @@ function pathnameOf(input: RequestInfo | URL): string {
   return new URL(url).pathname
 }
 
-// `sdk.ts` imports `client` from `./client.gen` and mutates it (setConfig +
+// `sdk.ts` imports `client` from `./gen/client.gen` and mutates it (setConfig +
 // the refresh interceptor) but doesn't re-export it, so tests need both: the
 // singleton itself, and `sdk.ts` evaluated for its side effects. Importing
-// `./client.gen` first guarantees the same module instance `sdk.ts` mutates
+// `./gen/client.gen` first guarantees the same module instance `sdk.ts` mutates
 // (both resolve from the same cache within one `vi.resetModules()` epoch).
 async function loadClient() {
-  const { client } = await import('./client.gen')
+  const { client } = await import('./gen/client.gen')
   await import('./sdk')
   return client
 }

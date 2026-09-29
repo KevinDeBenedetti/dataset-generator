@@ -44,6 +44,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: 'Delivery',
     items: [
       { icon: 'download', label: 'Exports', href: '/exports' },
+      { icon: 'refresh', label: 'Sync jobs', href: '/sync-jobs' },
       { icon: 'key', label: 'API keys & integrations', href: '/api-keys' },
     ],
   },
