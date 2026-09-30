@@ -1169,12 +1169,23 @@ def publish_qa_dataset(dataset: QADataset, username: str, repo_id: str) -> dict:
     diffs against, so it must never land without the pairs it describes."""
     from huggingface_hub import CommitOperationAdd
 
-    from server.services.huggingface import _api, ensure_private_dataset_repo
+    from server.services.huggingface import (
+        HuggingFaceNotConfiguredError,
+        _api,
+        ensure_private_dataset_repo,
+        qualify_repo_id,
+    )
 
     if not dataset.pairs:
         raise JobError("generated 0 pairs — refusing to publish an empty dataset")
 
     api = _api()
+    try:
+        # A bare "github-qa" would 404 on commit — complete it with the namespace
+        # (also fixes drafts stored before this was done at generation time).
+        repo_id = qualify_repo_id(repo_id)
+    except HuggingFaceNotConfiguredError as exc:
+        raise JobError(str(exc)) from exc
     ensure_private_dataset_repo(api, repo_id)
     card = dataset_card(
         dataset,
@@ -1286,6 +1297,17 @@ async def generate(
             await asyncio.to_thread(_api().whoami)
         except Exception as exc:
             raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
+
+    if repo_id and _env("HF_TOKEN"):
+        from server.services.huggingface import (
+            HuggingFaceNotConfiguredError,
+            qualify_repo_id,
+        )
+
+        try:
+            repo_id = await asyncio.to_thread(qualify_repo_id, repo_id)
+        except HuggingFaceNotConfiguredError as exc:
+            raise JobError(str(exc)) from exc
 
     previous = PreviousState()
     if full_refresh:

@@ -314,3 +314,17 @@ def test_main_reports_missing_env(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_USERNAME", raising=False)
     assert corpus.main(["export"]) == 1
     assert "GITHUB_USERNAME is required" in capsys.readouterr().err
+
+
+def test_push_completes_a_bare_repo_name(tmp_path):
+    (tmp_path / "manifest.json").write_text(json.dumps({"files": []}))
+    api = MagicMock()
+    api.whoami.return_value = {"name": "kevin"}
+    api.repo_info.return_value = MagicMock(private=True)
+    with patch("server.services.huggingface._api", return_value=api):
+        url = push_corpus(tmp_path, "kb")
+
+    # The bare name would 404 on commit: it is pushed to <account>/kb.
+    assert url == "https://huggingface.co/datasets/kevin/kb"
+    assert api.create_repo.call_args.args[0] == "kevin/kb"
+    assert api.upload_folder.call_args.kwargs["repo_id"] == "kevin/kb"

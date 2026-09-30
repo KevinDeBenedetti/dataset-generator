@@ -810,7 +810,12 @@ async def export_corpus(
 
 def push_corpus(directory: Path, repo_id: str, commit_sha: str = "") -> str:
     """Commit the exported directory to a private HF dataset in one commit."""
-    from server.services.huggingface import _api, ensure_private_dataset_repo
+    from server.services.huggingface import (
+        HuggingFaceNotConfiguredError,
+        _api,
+        ensure_private_dataset_repo,
+        qualify_repo_id,
+    )
 
     if not directory.is_dir():
         raise JobError(f"{directory} does not exist — run the export first")
@@ -827,6 +832,11 @@ def push_corpus(directory: Path, repo_id: str, commit_sha: str = "") -> str:
         username = api.whoami().get("name")
     except Exception as exc:
         raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
+    try:
+        # A bare name would 404 on commit — complete it with the namespace.
+        repo_id = qualify_repo_id(repo_id)
+    except HuggingFaceNotConfiguredError as exc:
+        raise JobError(str(exc)) from exc
     ensure_private_dataset_repo(api, repo_id)
 
     files = manifest.get("files") or []
