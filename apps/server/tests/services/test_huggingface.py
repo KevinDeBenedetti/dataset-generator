@@ -20,6 +20,7 @@ from server.services.huggingface import (
     import_dataset_from_hub,
     is_huggingface_configured,
     list_user_datasets,
+    qualify_repo_id,
     resolve_repo_id,
     slugify,
 )
@@ -187,6 +188,31 @@ def test_repo_id_uses_the_configured_namespace(token, api, monkeypatch):
 
 def test_explicit_repo_id_wins(token, api):
     assert resolve_repo_id("Docs FR", "someone/else") == "someone/else"
+
+
+def test_qualify_repo_id_completes_a_bare_name(token, api):
+    # A bare id 404s on commit/download/info: it needs its namespace.
+    assert qualify_repo_id("github-personal") == "kevin/github-personal"
+    assert qualify_repo_id("  github-personal ") == "kevin/github-personal"
+
+
+def test_qualify_repo_id_prefers_the_configured_namespace(token, api, monkeypatch):
+    monkeypatch.setattr(config, "hf_namespace", "my-org")
+    assert qualify_repo_id("github-personal") == "my-org/github-personal"
+
+
+def test_qualify_repo_id_keeps_a_full_id_without_calling_the_hub(token, monkeypatch):
+    def no_hub():
+        raise AssertionError("a full id needs no Hub call")
+
+    monkeypatch.setattr(hf, "_api", no_hub)
+    assert qualify_repo_id("someone/else") == "someone/else"
+
+
+def test_qualify_repo_id_needs_a_namespace(token, api, monkeypatch):
+    monkeypatch.setattr(api, "whoami", lambda: {})
+    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_NAMESPACE"):
+        qualify_repo_id("github-personal")
 
 
 # --- export ------------------------------------------------------------------

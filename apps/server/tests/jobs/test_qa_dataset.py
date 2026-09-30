@@ -803,3 +803,47 @@ async def test_publish_requires_a_repo():
     draft = qa_dataset.Draft(_draft_dataset(), "kevin", "", False, "m")
     with pytest.raises(JobError, match="HF_QA_DATASET_REPO"):
         await qa_dataset.publish(draft)
+
+
+def test_publish_completes_a_bare_repo_name(snapshot):
+    # HF_QA_DATASET_REPO=github-personal (no namespace) 404'd on the commit.
+    api = MagicMock()
+    api.whoami.return_value = {"name": "kevin"}
+    api.repo_info.return_value = MagicMock(private=True)
+    pairs, _ = sanitize_pairs(profile_pairs(snapshot.profile, 1))
+    with patch("server.services.huggingface._api", return_value=api):
+        result = publish_qa_dataset(QADataset(pairs, 0, []), "kevin", "github-personal")
+
+    assert result["repo"] == "kevin/github-personal"
+    assert result["url"] == "https://huggingface.co/datasets/kevin/github-personal"
+    assert api.create_repo.call_args.args[0] == "kevin/github-personal"
+    assert api.create_commit.call_args.kwargs["repo_id"] == "kevin/github-personal"
+
+
+async def test_generate_reads_the_previous_version_from_the_full_repo_id(
+    monkeypatch, github
+):
+    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
+    monkeypatch.setenv("HF_TOKEN", "hf")
+    monkeypatch.setenv("HF_QA_DATASET_REPO", "github-personal")
+    github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
+    github.json("/users/kevin/repos", [])
+    api = MagicMock()
+    api.whoami.return_value = {"name": "kevin"}
+    api.hf_hub_download.side_effect = EntryNotFoundError("missing")
+
+    async def complete(_req):  # pragma: no cover — no repos
+        raise AssertionError("unexpected LLM call")
+
+    with (
+        patch(
+            "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
+        ),
+        patch("server.services.huggingface._api", return_value=api),
+    ):
+        draft = await qa_dataset.generate(complete)
+
+    # Otherwise the bare name 404s and is silently treated as a first run.
+    assert draft.repo_id == "kevin/github-personal"
+    assert api.hf_hub_download.call_args.kwargs["repo_id"] == "kevin/github-personal"

@@ -496,6 +496,27 @@ def resolve_repo_id(dataset_name: str, repo_id: Optional[str] = None) -> str:
     return f"{namespace}/{slugify(dataset_name)}"
 
 
+def qualify_repo_id(repo_id: str) -> str:
+    """``namespace/name`` for a repo id that may be a bare name.
+
+    The Hub's repo-creation endpoint accepts a bare ``github-qa`` and creates
+    ``<you>/github-qa``, but every other endpoint (commit, download, info) needs
+    the full id and answers 404 to the bare one. So a configured bare name is
+    completed once, up front, with ``HF_NAMESPACE`` — or the token's own
+    account — and the full id is what gets used everywhere.
+    """
+    repo_id = repo_id.strip()
+    if "/" in repo_id:
+        return repo_id
+    namespace = config.hf_namespace or _api().whoami().get("name")
+    if not namespace:
+        raise HuggingFaceNotConfiguredError(
+            f"Hugging Face repo '{repo_id}' has no namespace and none could be "
+            "determined. Use the full 'user/name' id, or set HF_NAMESPACE."
+        )
+    return f"{namespace}/{repo_id}"
+
+
 def ensure_private_dataset_repo(api: Any, repo_id: str) -> None:
     """Create the dataset repo private, or confirm an existing one already is.
 
