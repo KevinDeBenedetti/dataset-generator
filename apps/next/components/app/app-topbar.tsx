@@ -10,16 +10,13 @@ import { toggleTheme } from '@/lib/utils'
 const LABELS: Record<string, string> = {
   '/dashboard': 'Overview',
   '/datasets': 'Datasets',
-  '/generate': 'Generation',
-  '/sources': 'Sources',
+  '/generate': 'Generate',
+  '/jobs': 'Jobs',
   '/quality': 'Quality control',
-  '/jobs': 'Jobs & batch',
   '/agent-test': 'Verify QA',
   '/prompts': 'LLM Prompts',
-  '/exports': 'Exports',
-  '/api-keys': 'API keys',
+  '/models': 'Models',
   '/settings': 'Settings',
-  '/dataset-detail': 'Dataset detail',
 }
 
 function labelFor(pathname: string) {

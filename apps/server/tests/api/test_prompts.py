@@ -19,17 +19,26 @@ def test_list_prompts(client: TestClient):
     assert data["total"] > 0
 
     keys = {p["key"] for p in data["prompts"]}
-    assert {"qa_agent", "cleaning", "extraction", "qa_legacy"} <= keys
+    assert keys == {"qa_agent", "cleaning", "extraction"}
 
     for prompt in data["prompts"]:
         assert prompt["content"].strip() != ""
         assert prompt["role"] in {"system", "user", "assistant"}
 
 
-def test_list_prompts_marks_legacy_inactive(client: TestClient):
-    """Test the superseded legacy QA prompt is flagged inactive; live ones aren't."""
-    response = client.get("/prompts")
-    prompts = {p["key"]: p for p in response.json()["prompts"]}
+def test_list_prompts_shows_the_role_defaults(client: TestClient):
+    """Each prompt names the model its role currently defaults to."""
+    from unittest.mock import patch
 
-    assert prompts["qa_legacy"]["active"] is False
-    assert prompts["qa_agent"]["active"] is True
+    defaults = {
+        "qa": "claude:q",
+        "cleaning": "openai:c",
+        "vision": "openai:v",
+        "jobs": "x",
+    }
+    with patch("server.api.prompts.get_model_defaults", return_value=defaults):
+        prompts = {p["key"]: p for p in client.get("/prompts").json()["prompts"]}
+    assert prompts["qa_agent"]["model"] == "claude:q"
+    assert prompts["cleaning"]["model"] == "openai:c"
+    assert prompts["extraction"]["model"] == "openai:v"
+    assert all(p["active"] for p in prompts.values())

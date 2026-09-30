@@ -193,6 +193,58 @@ class Config:
         default_factory=lambda: _env("QDRANT_COLLECTION_PREFIX", "dataset_")
     )
 
+    # Claude subscription provider (services/providers/claude.py): calls go
+    # through the Claude Agent SDK, authenticated with CLAUDE_CODE_OAUTH_TOKEN
+    # (`claude setup-token`) or ANTHROPIC_API_KEY. CLAUDE_MODELS overrides the
+    # model list offered in the UI (comma-separated ids).
+    claude_models_raw: str = field(default_factory=lambda: _env("CLAUDE_MODELS", ""))
+    # Model used by the scheduled jobs when no default is set in the DB (the CI
+    # runs DB-free): a "<provider>:<model>" reference.
+    qa_job_model: str = field(
+        default_factory=lambda: _env(
+            "QA_JOB_MODEL", f"claude:{_env('CLAUDE_MODEL', 'claude-sonnet-5')}"
+        )
+    )
+
+    # Local sentence embeddings (services/semantic.py) — FastEmbed/ONNX, no API
+    # call. Back semantic dedup, the "don't ask these again" prompt list,
+    # uncovered-section detection and the answer grounding check. Disabled, or
+    # when the model can't load, every caller falls back to the lexical path.
+    # The multilingual model scores a question and its translation ~0.97, so
+    # dedup works across the fr/en/es/de target languages.
+    semantic_enabled: bool = field(
+        default_factory=lambda: (
+            _env("SEMANTIC_ENABLED", "true").lower() not in ("0", "false", "no")
+        )
+    )
+    semantic_model: str = field(
+        default_factory=lambda: _env(
+            "SEMANTIC_MODEL",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        )
+    )
+    # Question ↔ question cosine at or above which a new pair is a duplicate.
+    semantic_dedup_threshold: float = field(
+        default_factory=lambda: float(_env("SEMANTIC_DEDUP_THRESHOLD", "0.85"))
+    )
+    # Answer ↔ best source chunk cosine below which the answer is flagged for
+    # review. Measured on the default model: faithful paraphrases score
+    # ~0.45–0.65, off-topic answers ~0.3–0.4 — it catches drift away from the
+    # source, not a factual error stated on the right topic.
+    answer_grounding_threshold: float = field(
+        default_factory=lambda: float(_env("ANSWER_GROUNDING_THRESHOLD", "0.35"))
+    )
+    # Source section ↔ best question cosine below which the section counts as
+    # a topic no question covers yet.
+    uncovered_section_threshold: float = field(
+        default_factory=lambda: float(_env("UNCOVERED_SECTION_THRESHOLD", "0.4"))
+    )
+    # Where the ONNX model is cached (FastEmbed's own default is a temp dir,
+    # which re-downloads ~220 MB after every reboot/container recreate).
+    fastembed_cache_path: str = field(
+        default_factory=lambda: _env("FASTEMBED_CACHE_PATH", "")
+    )
+
     # LLM
     max_tokens_cleaning: int = 3000
     max_tokens_qa: int = 4000

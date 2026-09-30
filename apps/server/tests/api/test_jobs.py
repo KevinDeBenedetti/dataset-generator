@@ -4,114 +4,132 @@ Thin wrappers over server.services.jobs, so these mock that service and
 assert the HTTP contract (status + shape / error mapping).
 """
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from server.jobs.corpus import JobError as CorpusJobError
 from server.jobs.qa_dataset import JobError as QADatasetJobError
+from server.services.jobs import RunConflictError, UnknownJobError, UnknownRunError
+
+RUN = {
+    "id": "run-1",
+    "job": "github-personal",
+    "status": "running",
+    "options": {"max_repos": 2},
+    "model_ref": "openai:gpt-x",
+    "started_at": datetime(2026, 9, 30, tzinfo=timezone.utc),
+    "progress": {"done": 1, "total": 4, "label": "repo-a"},
+    "has_draft": False,
+}
 
 
-def test_get_jobs_status(client: TestClient):
-    status = {
-        "corpus": {
-            "configured": True,
-            "github_username": True,
-            "github_token": True,
-            "hf_token": True,
-            "hf_dataset_repo": True,
-        },
-        "qa_dataset": {
+def test_get_jobs(client: TestClient):
+    jobs = [
+        {
+            "id": "github-personal",
+            "title": "GitHub personal Q&A",
+            "description": "…",
+            "workflow": "qa-dataset-sync.yml",
+            "schedule": "Mondays 06:00 UTC",
+            "uses_model": True,
+            "default_model": "claude:claude-sonnet-5",
+            "has_draft": True,
             "configured": False,
-            "github_username": True,
-            "github_token": True,
-            "claude_credentials": False,
-            "hf_token": True,
-            "hf_qa_dataset_repo": False,
+            "missing_env": ["HF_TOKEN"],
+            "options_schema": {"type": "object", "properties": {}},
+            "latest_run": {"id": "run-1", "status": "succeeded"},
+        }
+    ]
+    with patch("server.api.jobs.list_jobs", return_value=jobs):
+        response = client.get("/jobs")
+    assert response.status_code == 200
+    assert response.json() == {"jobs": jobs}
+
+
+def test_start_run_is_accepted(client: TestClient):
+    with patch("server.api.jobs.start_run", new=AsyncMock(return_value=RUN)) as start:
+        response = client.post(
+            "/jobs/github-personal/run",
+            json={"options": {"max_repos": 2}, "model_ref": "openai:gpt-x"},
+        )
+    assert response.status_code == 202
+    body = response.json()
+    assert body["id"] == "run-1" and body["progress"]["label"] == "repo-a"
+    start.assert_awaited_once_with("github-personal", {"max_repos": 2}, "openai:gpt-x")
+
+
+def test_start_run_errors(client: TestClient):
+    cases = [
+        (UnknownJobError("nope"), 404),
+        (RunConflictError("already running"), 409),
+        (ValueError("Unknown model 'x:y'"), 400),
+    ]
+    for error, status in cases:
+        with patch("server.api.jobs.start_run", new=AsyncMock(side_effect=error)):
+            response = client.post("/jobs/github-personal/run", json={})
+        assert response.status_code == status, error
+
+
+def test_start_run_invalid_options_is_422(client: TestClient):
+    response = client.post(
+        "/jobs/github-personal/run", json={"options": {"max_repos": 0}}
+    )
+    assert response.status_code == 422
+
+
+def test_get_run(client: TestClient):
+    run = {
+        **RUN,
+        "status": "succeeded",
+        "progress": None,
+        "result": {"dry_run": True, "metrics": [["New", 2]], "errors": []},
+        "has_draft": True,
+        "preview": {
+            "repo_id": "ns/qa",
+            "kept": 5,
+            "new": [{"id": "n1", "question": "Q?", "answer": "A.", "repo": "r"}],
+            "review": [],
         },
     }
-    with patch("server.api.jobs.jobs_status", return_value=status):
-        response = client.get("/jobs/status")
+    with patch("server.api.jobs.get_run", return_value=run):
+        response = client.get("/jobs/runs/run-1")
     assert response.status_code == 200
-    assert response.json() == status
+    body = response.json()
+    assert body["preview"]["new"][0]["id"] == "n1"
+    assert body["result"]["metrics"] == [["New", 2]]
 
 
-def test_trigger_corpus_sync_success(client: TestClient):
-    result = {
-        "manifest": {"files": [{"source": "profile", "records": 4}]},
-        "url": "https://huggingface.co/datasets/ns/corpus",
-        "dry_run": False,
+def test_get_unknown_run_is_404(client: TestClient):
+    with patch("server.api.jobs.get_run", side_effect=UnknownRunError("x")):
+        assert client.get("/jobs/runs/x").status_code == 404
+
+
+def test_publish_run(client: TestClient):
+    published = {
+        **RUN,
+        "status": "published",
+        "published_url": "https://huggingface.co/datasets/ns/qa",
     }
     with patch(
-        "server.api.jobs.run_corpus_sync", new=AsyncMock(return_value=result)
-    ) as run:
+        "server.api.jobs.publish_run", new=AsyncMock(return_value=published)
+    ) as publish:
         response = client.post(
-            "/jobs/corpus-sync", json={"sources": ["profile"], "dry_run": False}
+            "/jobs/runs/run-1/publish", json={"exclude": ["n2"], "promote": ["h1"]}
         )
     assert response.status_code == 200
-    assert response.json() == result
-    run.assert_awaited_once_with(["profile"], False)
+    assert response.json()["published_url"] == "https://huggingface.co/datasets/ns/qa"
+    publish.assert_awaited_once_with("run-1", ["n2"], ["h1"])
 
 
-def test_trigger_corpus_sync_bad_request_on_job_error(client: TestClient):
-    with patch(
-        "server.api.jobs.run_corpus_sync",
-        new=AsyncMock(side_effect=CorpusJobError('unknown source "bogus"')),
-    ):
-        response = client.post("/jobs/corpus-sync", json={"sources": ["bogus"]})
-    assert response.status_code == 400
-    assert "bogus" in response.json()["detail"]
-
-
-def test_trigger_corpus_sync_defaults_to_all_sources(client: TestClient):
-    result = {"manifest": {}, "url": None, "dry_run": True}
-    with patch(
-        "server.api.jobs.run_corpus_sync", new=AsyncMock(return_value=result)
-    ) as run:
-        response = client.post("/jobs/corpus-sync", json={})
-    assert response.status_code == 200
-    run.assert_awaited_once_with(None, False)
-
-
-def test_trigger_corpus_sync_maps_unexpected_errors_to_502(client: TestClient):
-    with patch(
-        "server.api.jobs.run_corpus_sync",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
-    ):
-        response = client.post("/jobs/corpus-sync", json={})
-    assert response.status_code == 502
-
-
-def test_trigger_qa_dataset_sync_success(client: TestClient):
-    result = {
-        "repo": "ns/qa",
-        "url": "https://huggingface.co/datasets/ns/qa",
-        "records": 12,
-        "dropped": 1,
-        "errors": [],
-        "dry_run": False,
-    }
-    with patch(
-        "server.api.jobs.run_qa_dataset_sync", new=AsyncMock(return_value=result)
-    ) as run:
-        response = client.post(
-            "/jobs/qa-dataset-sync", json={"max_repos": 2, "dry_run": False}
-        )
-    assert response.status_code == 200
-    assert response.json() == result
-    run.assert_awaited_once_with(2, False)
-
-
-def test_trigger_qa_dataset_sync_bad_request_on_job_error(client: TestClient):
-    with patch(
-        "server.api.jobs.run_qa_dataset_sync",
-        new=AsyncMock(side_effect=QADatasetJobError("HF_TOKEN is required")),
-    ):
-        response = client.post("/jobs/qa-dataset-sync", json={})
-    assert response.status_code == 400
-    assert "HF_TOKEN" in response.json()["detail"]
-
-
-def test_trigger_qa_dataset_sync_rejects_non_positive_max_repos(client: TestClient):
-    response = client.post("/jobs/qa-dataset-sync", json={"max_repos": 0})
-    assert response.status_code == 422
+def test_publish_errors(client: TestClient):
+    cases = [
+        (UnknownRunError("x"), 404),
+        (RunConflictError("no draft"), 409),
+        (QADatasetJobError("HF_TOKEN is required"), 400),
+        (RuntimeError("hub down"), 502),
+    ]
+    for error, status in cases:
+        with patch("server.api.jobs.publish_run", new=AsyncMock(side_effect=error)):
+            response = client.post("/jobs/runs/run-1/publish", json={})
+        assert response.status_code == status, error

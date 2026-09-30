@@ -129,12 +129,3 @@ class TestReasoningEffort:
     def test_explicit_level_is_kept(self, monkeypatch):
         monkeypatch.setenv("OPENAI_REASONING_EFFORT", "High")
         assert Config().openai_reasoning_effort == "high"
-
-
-def test_agent_omits_reasoning_effort_when_off(monkeypatch):
-    from server.services.agent import QAAgentService
-
-    monkeypatch.setattr(config, "openai_reasoning_effort", "")
-    chat_model = QAAgentService()._build_chat_model("gpt-4o-mini")
-
-    assert "reasoning_effort" not in chat_model._default_params

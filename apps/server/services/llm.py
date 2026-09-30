@@ -1,11 +1,11 @@
-import base64
 import functools
 import logging
+from typing import List, Optional
+
 import openai
-import instructor
-from typing import Any, List, Dict, Optional, cast
+
 from server.core.config import config
-from server.schemas.dataset import QA
+from server.services.providers import CompletionRequest, complete
 
 
 class PromptManager:
@@ -40,25 +40,15 @@ class PromptManager:
     - If the image contains no readable text, respond with an empty string.
     """
 
-    @classmethod
-    def get_qa_prompt(cls, context: str, target_language: Optional[str] = None) -> str:
-        target_language = target_language or config.target_language or "en"
-        return f"""
-        Generate high-quality question-answer pairs based on this text.
-
-        Strict rules:
-        - Varied questions (what, who, when, where, why, how)
-        - Complete and precise answers (minimum 2 sentences)
-        - Context must be the exact excerpt that enables the answer
-        - Avoid trivial or overly generic questions
-        - Questions and answers must be in {target_language} language
-
-        Source text:
-        {context}...
-        """
-
 
 class LLMService:
+    """Text cleaning, page transcription and embeddings.
+
+    Cleaning and transcription take a model reference (``"<provider>:<model>"``,
+    see services/providers) and run on either provider; embeddings stay on the
+    OpenAI-compatible endpoint (the Qdrant sync needs its vector space).
+    """
+
     def __init__(self):
         self.prompt_manager = PromptManager()
 
@@ -72,102 +62,49 @@ class LLMService:
             api_key=config.openai_api_key, base_url=config.openai_base_url
         )
 
-    @functools.cached_property
-    def instructor_client(self) -> Any:
-        return cast(
-            Any, instructor.from_openai(self.client, mode=instructor.Mode.MD_JSON)
-        )
-
-    def clean_text(self, text: str, model: Optional[str] = None) -> str:
-        """Clean text using provided model or fallback to config.model_cleaning."""
-        model = model or config.model_cleaning
+    async def clean_text(self, text: str, model: str) -> str:
+        """Clean ``text`` with the ``model`` reference; the raw text on failure."""
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": self.prompt_manager.CLEANING_PROMPT},
-                    {"role": "user", "content": text[:10000]},
-                ],
-                max_tokens=config.max_tokens_cleaning,
-                temperature=config.temperature,
+            result = await complete(
+                model,
+                CompletionRequest(
+                    system=self.prompt_manager.CLEANING_PROMPT,
+                    user=text[:10000],
+                    max_tokens=config.max_tokens_cleaning,
+                ),
             )
-            content = response.choices[0].message.content
-            return (content or "").strip() or text.strip()
+            return result.text or text.strip()
         except Exception as e:
             logging.error(f"Text cleaning failed: {e}")
             return text
 
-    def extract_text_from_image(
+    async def extract_text_from_image(
         self,
         image_bytes: bytes,
         mime_type: str = "image/png",
         model: Optional[str] = None,
     ) -> str:
-        """Transcribe an image (or rendered PDF page) to text via the VLM.
+        """Transcribe an image (or rendered PDF page) to text with a vision model.
 
-        Uses the configured vision model (``OPENAI_VLM_MODEL``). Returns the
-        transcribed text, or an empty string if the call fails or the page has
-        no readable text. Raises ``ValueError`` if no vision model is configured.
+        Returns the transcribed text, or an empty string if the call fails or
+        the page has no readable text. Raises ``ValueError`` if no vision model
+        is given.
         """
-        model = model or config.openai_vlm_model
         if not model:
-            raise ValueError("No vision model configured (set OPENAI_VLM_MODEL)")
-
-        b64 = base64.b64encode(image_bytes).decode("ascii")
+            raise ValueError("No vision model configured (set it on /models)")
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": self.prompt_manager.EXTRACTION_PROMPT,
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:{mime_type};base64,{b64}"},
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=config.max_tokens_cleaning,
-                temperature=config.temperature,
+            result = await complete(
+                model,
+                CompletionRequest(
+                    user=self.prompt_manager.EXTRACTION_PROMPT,
+                    images=[(image_bytes, mime_type)],
+                    max_tokens=config.max_tokens_cleaning,
+                ),
             )
-            content = response.choices[0].message.content
-            return (content or "").strip()
+            return result.text
         except Exception as e:
             logging.error(f"VLM text extraction failed: {e}")
             return ""
-
-    def generate_qa(
-        self,
-        text: str,
-        target_language: Optional[str] = None,
-        model: Optional[str] = None,
-    ) -> List[QA]:
-        """Generate QA using optional target_language and model; fall back to config."""
-        target_language = target_language or config.target_language
-        model = model or config.model_qa
-        try:
-            result = self.instructor_client.chat.completions.create(
-                model=model,
-                response_model=list[QA],
-                messages=[
-                    {
-                        "role": "user",
-                        "content": self.prompt_manager.get_qa_prompt(
-                            text, target_language
-                        ),
-                    }
-                ],
-                max_tokens=config.max_tokens_qa,
-            )
-            return result
-        except Exception as e:
-            logging.error(f"QA generation failed: {e}")
-            return []
 
     def embed_texts(
         self, texts: List[str], model: Optional[str] = None
@@ -189,16 +126,3 @@ class LLMService:
         # The API preserves input order; sort defensively by index regardless.
         ordered = sorted(response.data, key=lambda d: d.index)
         return [list(item.embedding) for item in ordered]
-
-    def get_models(self) -> List[Dict]:
-        """Returns the list of available models from the OpenAI API."""
-        try:
-            resp = self.client.models.list()
-            # resp.data contains model objects; we return a reduced list
-            models = [
-                {"id": m.id, "object": getattr(m, "object", None)} for m in resp.data
-            ]
-            return models
-        except Exception as e:
-            logging.error(f"Failed to list OpenAI models: {e}")
-            return []

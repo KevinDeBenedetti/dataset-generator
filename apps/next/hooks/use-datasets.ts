@@ -3,7 +3,7 @@ import {
   getDatasets,
   getDatasetSources,
   generateDatasetFromFile,
-  generateDatasetFromGitHub,
+  generateDatasetFromUrl,
   deleteDataset,
   analyzeSimilarities,
   cleanSimilarities,
@@ -17,25 +17,18 @@ import { useGenerateStore } from '@/stores/generate'
 import { DATASET_ALL_RUNS_QUERY_KEY } from './use-dataset-versions'
 
 // The /generate form can mine two kinds of source; the mutation branches on it.
+// Model fields are "<provider>:<model>" references; null = the role default.
+interface GenerateCommon {
+  name: string
+  targetLanguage: string | null
+  similarityThreshold: number
+  modelQa?: string | null
+  persist?: boolean
+}
+
 export type GenerateParams =
-  | {
-      source: 'file'
-      file: File
-      name: string
-      targetLanguage: string | null
-      similarityThreshold: number
-      persist?: boolean
-    }
-  | {
-      source: 'github'
-      githubUsername: string
-      githubToken?: string | null
-      name: string
-      targetLanguage: string | null
-      similarityThreshold: number
-      maxRepos?: number | null
-      persist?: boolean
-    }
+  | (GenerateCommon & { source: 'file'; file: File; modelVlm?: string | null })
+  | (GenerateCommon & { source: 'url'; url: string; modelCleaning?: string | null })
 
 export const DATASETS_QUERY_KEY = ['datasets']
 
@@ -79,17 +72,19 @@ export function useGenerateDataset() {
           datasetName: params.name,
           targetLanguage: params.targetLanguage,
           similarityThreshold: params.similarityThreshold,
+          modelQa: params.modelQa,
+          modelVlm: params.modelVlm,
           persist: params.persist,
         })
       }
 
-      return generateDatasetFromGitHub({
-        github_username: params.githubUsername,
-        github_token: params.githubToken,
+      return generateDatasetFromUrl({
+        url: params.url,
         dataset_name: params.name,
         target_language: params.targetLanguage,
         similarity_threshold: params.similarityThreshold,
-        max_repos: params.maxRepos,
+        model_cleaning: params.modelCleaning,
+        model_qa: params.modelQa,
         persist: params.persist,
       })
     },
@@ -104,7 +99,7 @@ export function useGenerateDataset() {
       setGenerationStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
       // A generation adds pairs, sources and a run: the detail page's sources
-      // and history, and the /jobs run history, are stale as soon as it lands.
+      // and history, and the recent-runs list, are stale as soon as it lands.
       queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
       queryClient.invalidateQueries({ queryKey: [DATASET_ALL_RUNS_QUERY_KEY] })
     },

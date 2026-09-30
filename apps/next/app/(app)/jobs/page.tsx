@@ -1,242 +1,591 @@
 'use client'
 
-import Link from 'next/link'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
-import { useAllDatasetRuns, useDatasets, useGenerateDataset } from '@/hooks'
-import { useGenerateStore } from '@/stores/generate'
+import { ModelSelect } from '@/components/app/model-select'
+import { useJobRun, useJobs, usePublishJobRun, useStartJobRun } from '@/hooks'
+import { useIsAdmin } from '@/hooks/use-auth'
+import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
 
-const GITHUB_SOURCE = 'github://'
-// Same default as the /generate form — runs don't record their threshold.
-const DEFAULT_SIMILARITY_THRESHOLD = 0.9
-
-function formatDate(value?: string | null): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+// The subset of JSON schema the job option models produce (pydantic).
+interface OptionSchema {
+  type?: string
+  title?: string
+  description?: string
+  default?: unknown
+  minimum?: number
+  anyOf?: OptionSchema[]
+  items?: { enum?: string[] }
 }
 
-// Only GitHub runs can be replayed: the account is in the source URL, whereas
-// an uploaded file (`file://…`) is not kept after its generation.
-function githubUsernameOf(sourceUrl?: string | null): string | null {
-  if (!sourceUrl?.startsWith(GITHUB_SOURCE)) return null
-  return sourceUrl.slice(GITHUB_SOURCE.length) || null
+type OptionValue = boolean | string | string[]
+
+function Switch({
+  on,
+  onToggle,
+  label,
+  disabled,
+}: {
+  on: boolean
+  onToggle: () => void
+  label: string
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      className={`switch${on ? ' on' : ''}`}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onToggle}
+    />
+  )
+}
+
+// Optional[int] comes through as anyOf [{type: integer}, {type: null}].
+function kindOf(schema: OptionSchema): 'boolean' | 'integer' | 'enum-list' | 'other' {
+  const type = schema.type ?? schema.anyOf?.find((s) => s.type && s.type !== 'null')?.type
+  if (type === 'boolean') return 'boolean'
+  if (type === 'integer' || type === 'number') return 'integer'
+  if (type === 'array' && schema.items?.enum) return 'enum-list'
+  return 'other'
+}
+
+function initialValues(properties: Record<string, OptionSchema>): Record<string, OptionValue> {
+  const values: Record<string, OptionValue> = {}
+  for (const [key, schema] of Object.entries(properties)) {
+    const kind = kindOf(schema)
+    if (kind === 'boolean') values[key] = schema.default === true
+    else if (kind === 'enum-list') values[key] = (schema.default as string[]) ?? []
+    else if (kind === 'integer') values[key] = schema.default == null ? '' : String(schema.default)
+  }
+  return values
+}
+
+// Form values → the options body: empty numbers are omitted (server default).
+function toOptions(
+  properties: Record<string, OptionSchema>,
+  values: Record<string, OptionValue>,
+): Record<string, unknown> {
+  const options: Record<string, unknown> = {}
+  for (const [key, schema] of Object.entries(properties)) {
+    const value = values[key]
+    if (kindOf(schema) === 'integer') {
+      if (typeof value === 'string' && value.trim()) options[key] = Math.round(Number(value))
+    } else if (value !== undefined) {
+      options[key] = value
+    }
+  }
+  return options
+}
+
+function OptionField({
+  name,
+  schema,
+  value,
+  onChange,
+  disabled,
+}: {
+  name: string
+  schema: OptionSchema
+  value: OptionValue
+  onChange: (value: OptionValue) => void
+  disabled: boolean
+}) {
+  const label = schema.title ?? name
+  const kind = kindOf(schema)
+
+  if (kind === 'boolean') {
+    return (
+      <div className="job-source-row">
+        <div>
+          <div className="label">{label}</div>
+          {schema.description && <div className="hint">{schema.description}</div>}
+        </div>
+        <Switch
+          on={value === true}
+          onToggle={() => onChange(!value)}
+          label={label}
+          disabled={disabled}
+        />
+      </div>
+    )
+  }
+
+  if (kind === 'integer') {
+    const min = schema.minimum ?? schema.anyOf?.find((s) => s.minimum != null)?.minimum
+    return (
+      <div className="field">
+        <label htmlFor={`opt-${name}`} className="label">
+          {label}
+        </label>
+        <input
+          id={`opt-${name}`}
+          className="input"
+          type="number"
+          min={min}
+          placeholder="Server default"
+          value={value as string}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+        {schema.description && <div className="hint">{schema.description}</div>}
+      </div>
+    )
+  }
+
+  if (kind === 'enum-list') {
+    const selected = new Set(value as string[])
+    return (
+      <div>
+        <div className="label" style={{ marginBottom: 8 }}>
+          {label}
+        </div>
+        <div className="job-source-list">
+          {(schema.items?.enum ?? []).map((option) => (
+            <div key={option} className="job-source-row">
+              <div className="label mono">{option}</div>
+              <Switch
+                on={selected.has(option)}
+                onToggle={() => {
+                  const next = new Set(selected)
+                  if (next.has(option)) next.delete(option)
+                  else next.add(option)
+                  onChange([...next])
+                }}
+                label={option}
+                disabled={disabled}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+function Metrics({ run }: { run: JobRunOut }) {
+  const metrics = (run.result?.metrics ?? []) as [string, unknown][]
+  if (metrics.length === 0) return null
+  return (
+    <div className="job-metrics">
+      {metrics.map(([label, value]) => (
+        <span key={label}>
+          <span className="muted">{label}</span> <strong>{String(value)}</strong>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Errors({ run }: { run: JobRunOut }) {
+  const errors = run.result?.errors ?? []
+  if (errors.length === 0) return null
+  return (
+    <details className="job-errors">
+      <summary className="hint">
+        {errors.length} non-fatal error(s) — those sources are retried next run
+      </summary>
+      <ul className="job-error-list">
+        {errors.map((e) => (
+          <li key={e}>{e}</li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+function PairRow({
+  pair,
+  checked,
+  onToggle,
+  disabled,
+}: {
+  pair: DraftPair
+  checked: boolean
+  onToggle: () => void
+  disabled: boolean
+}) {
+  return (
+    <label className={`draft-row${checked ? '' : ' off'}`} aria-label={pair.question}>
+      <input
+        type="checkbox"
+        className="size-4 accent-primary"
+        checked={checked}
+        onChange={onToggle}
+        disabled={disabled}
+      />
+      <div style={{ minWidth: 0 }}>
+        <div className="draft-q">{pair.question}</div>
+        <div className="draft-a">{pair.answer}</div>
+        <div className="draft-meta">
+          {pair.repo && <span className="tag mono">{pair.repo}</span>}
+          {pair.category && <span className="muted">{pair.category}</span>}
+          {pair.grounding != null && (
+            <span className="muted">grounding {(pair.grounding * 100).toFixed(0)}%</span>
+          )}
+        </div>
+      </div>
+    </label>
+  )
+}
+
+function toggled(set: Set<string>, id?: string | null): Set<string> {
+  const next = new Set(set)
+  if (!id) return next
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  return next
+}
+
+// Step 2–3: review what a run generated, then publish exactly that.
+function DraftReview({ run, isAdmin }: { run: JobRunOut; isAdmin: boolean }) {
+  const preview = run.preview
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const [promoted, setPromoted] = useState<Set<string>>(new Set())
+  const publish = usePublishJobRun(run.id)
+
+  if (!preview) return null
+  const newCount = preview.new.length - excluded.size + promoted.size
+  const total = preview.kept + newCount
+  const busy = publish.isPending
+
+  const onPublish = () =>
+    publish.mutate(
+      { exclude: [...excluded], promote: [...promoted] },
+      {
+        onSuccess: () => toast.success('Published to Hugging Face'),
+        onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+      },
+    )
+
+  return (
+    <div className="job-result">
+      <div className="label" style={{ marginBottom: 4 }}>
+        Review the draft
+      </div>
+      <p className="hint" style={{ marginBottom: 10 }}>
+        {preview.kept} pair(s) carried over unchanged, {preview.new.length} new
+        {preview.review.length > 0
+          ? `, ${preview.review.length} held out (answer far from its source — off by default)`
+          : ''}
+        . Untick what you don&apos;t want published.
+      </p>
+
+      {preview.new.length === 0 && preview.review.length === 0 && (
+        <p className="muted" style={{ marginBottom: 10 }}>
+          Nothing changed since the published version — no new pair.
+        </p>
+      )}
+
+      {preview.new.length > 0 && (
+        <div className="draft-section">
+          <div className="draft-head">
+            <span className="label">New pairs</span>
+            <span className="hint">
+              {preview.new.length - excluded.size}/{preview.new.length} selected
+            </span>
+          </div>
+          <div className="draft-list">
+            {preview.new.map((pair) => (
+              <PairRow
+                key={pair.id ?? pair.question}
+                pair={pair}
+                checked={!excluded.has(pair.id ?? '')}
+                onToggle={() => setExcluded((s) => toggled(s, pair.id))}
+                disabled={busy}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {preview.review.length > 0 && (
+        <div className="draft-section">
+          <div className="draft-head">
+            <span className="label">To review</span>
+            <span className="hint">
+              {promoted.size}/{preview.review.length} included
+            </span>
+          </div>
+          <div className="draft-list">
+            {preview.review.map((pair) => (
+              <PairRow
+                key={pair.id ?? pair.question}
+                pair={pair}
+                checked={promoted.has(pair.id ?? '')}
+                onToggle={() => setPromoted((s) => toggled(s, pair.id))}
+                disabled={busy}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={!isAdmin || busy || total === 0}
+          onClick={onPublish}
+        >
+          <Icon name={busy ? 'loader' : 'upload'} className={busy ? 'animate-spin' : undefined} />
+          {busy ? 'Publishing…' : `Publish ${total} pairs to Hugging Face`}
+        </button>
+        {preview.repo_id && (
+          <span className="hint mono" title="HF_QA_DATASET_REPO">
+            → {preview.repo_id} (private)
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// The state of the job's current (or latest) run.
+function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
+  const { data: run, error } = useJobRun(runId)
+  if (error) {
+    return (
+      <p className="hint job-error">{error instanceof Error ? error.message : String(error)}</p>
+    )
+  }
+  if (!run) return null
+
+  if (run.status === 'running') {
+    const { done = 0, total = 0, label = '' } = run.progress ?? {}
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0
+    return (
+      <div className="job-result">
+        <div className="hint" style={{ marginBottom: 6 }}>
+          {total > 0
+            ? `Generating… ${done}/${total} repos${label ? ` · ${label}` : ''}`
+            : label || 'Fetching your GitHub repositories…'}
+        </div>
+        <div className="job-progress">
+          <div style={{ width: `${total > 0 ? pct : 5}%` }} />
+        </div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          Runs on the server — you can leave this page and come back.
+        </p>
+      </div>
+    )
+  }
+
+  if (run.status === 'failed' || run.status === 'interrupted') {
+    return (
+      <div className="job-result">
+        <p className="hint job-error">
+          {run.status === 'interrupted'
+            ? 'The last run was interrupted (server restarted). Start it again.'
+            : `The last run failed: ${run.error}`}
+        </p>
+      </div>
+    )
+  }
+
+  if (run.status === 'published') {
+    return (
+      <div className="job-result">
+        <div className="hint" style={{ marginBottom: 6 }}>
+          Published {run.published_at ? new Date(run.published_at).toLocaleString() : ''}.{' '}
+          {run.published_url && (
+            <a href={run.published_url} target="_blank" rel="noopener noreferrer">
+              View on Hugging Face
+              <Icon name="external" className="ic-sm" />
+            </a>
+          )}
+        </div>
+        <Metrics run={run} />
+        <Errors run={run} />
+      </div>
+    )
+  }
+
+  // succeeded
+  if (run.has_draft) {
+    return (
+      <>
+        <div className="job-result">
+          <Metrics run={run} />
+          <Errors run={run} />
+        </div>
+        <DraftReview key={run.id} run={run} isAdmin={isAdmin} />
+      </>
+    )
+  }
+  return (
+    <div className="job-result">
+      <div className="hint" style={{ marginBottom: 6 }}>
+        {run.result?.dry_run ? 'Dry run complete — nothing published.' : 'Published.'}{' '}
+        {run.published_url && (
+          <a href={run.published_url} target="_blank" rel="noopener noreferrer">
+            View on Hugging Face
+            <Icon name="external" className="ic-sm" />
+          </a>
+        )}
+      </div>
+      <Metrics run={run} />
+      <Errors run={run} />
+    </div>
+  )
+}
+
+function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
+  const properties = (job.options_schema.properties ?? {}) as Record<string, OptionSchema>
+  const [values, setValues] = useState(() => initialValues(properties))
+  const [modelRef, setModelRef] = useState('')
+  const [startedRunId, setStartedRunId] = useState<string | null>(null)
+  const start = useStartJobRun(job.id)
+  const runId = startedRunId ?? job.latest_run?.id ?? null
+  const { data: run } = useJobRun(runId)
+  const running = start.isPending || run?.status === 'running'
+
+  const onStart = () =>
+    start.mutate(
+      {
+        options: toOptions(properties, values),
+        modelRef: job.uses_model ? modelRef || null : null,
+      },
+      {
+        onSuccess: (r) => setStartedRunId(r.id),
+        onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+      },
+    )
+
+  const startLabel = job.has_draft
+    ? 'Generate draft'
+    : values.dry_run === true
+      ? 'Run (dry run)'
+      : 'Run & publish'
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">{job.title}</div>
+          <div className="card-desc">
+            {job.schedule} via <code className="mono">{job.workflow}</code>
+          </div>
+        </div>
+        <span className={`badge badge-${job.configured ? 'success' : 'destructive'}`}>
+          <span className="dot" />
+          {job.configured ? 'Configured' : 'Not configured'}
+        </span>
+      </div>
+      <div
+        className="card-body"
+        style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: 14 }}
+      >
+        <p className="hint">{job.description}</p>
+        {(job.missing_env ?? []).length > 0 && (
+          <p className="hint job-config-hint">
+            Server not configured — missing {(job.missing_env ?? []).join(', ')}.
+          </p>
+        )}
+
+        {job.uses_model && (
+          <div className="field">
+            <label htmlFor={`model-${job.id}`} className="label">
+              Model
+            </label>
+            <ModelSelect
+              id={`model-${job.id}`}
+              value={modelRef}
+              onChange={setModelRef}
+              modelRole="jobs"
+              disabled={running}
+              className="input"
+            />
+            <div className="hint">
+              Claude models bill against the subscription; OpenAI models against the API key.
+            </div>
+          </div>
+        )}
+
+        {Object.entries(properties).map(([name, schema]) => (
+          <OptionField
+            key={name}
+            name={name}
+            schema={schema}
+            value={values[name]}
+            onChange={(value) => setValues((v) => ({ ...v, [name]: value }))}
+            disabled={running}
+          />
+        ))}
+      </div>
+      <div
+        className="card-foot"
+        style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            className={`btn ${job.has_draft && run?.status === 'succeeded' ? 'btn-outline' : 'btn-primary'}`}
+            disabled={!isAdmin || running}
+            onClick={onStart}
+            type="button"
+          >
+            <Icon
+              name={running ? 'loader' : 'play'}
+              className={running ? 'animate-spin' : undefined}
+            />
+            {running ? 'Running…' : startLabel}
+          </button>
+          {!isAdmin && <span className="hint">Only an admin can run a job.</span>}
+          {job.has_draft && !running && (
+            <span className="hint">Nothing is published until you review the draft.</span>
+          )}
+        </div>
+        {runId && <RunPanel runId={runId} isAdmin={isAdmin} />}
+      </div>
+    </div>
+  )
 }
 
 export default function JobsPage() {
-  const runsQuery = useAllDatasetRuns()
-  const runs = runsQuery.data ?? []
-  const { data: datasets } = useDatasets()
-  const generateMutation = useGenerateDataset()
-
-  // The generation (if any) running in this session — started from /generate
-  // or re-run from the history below. The backend runs pipelines synchronously
-  // per request — there is no server-side job queue to poll.
-  const generationStatus = useGenerateStore((state) => state.generationStatus)
-  const generationError = useGenerateStore((state) => state.error)
-  const liveSteps = useGenerateStore((state) => state.liveSteps)
-  const pendingName = useGenerateStore((state) => state.pendingName)
-  const isGenerating = generationStatus === 'pending'
-
-  const rerun = (datasetName: string, githubUsername: string) => {
-    const targetLanguage = datasets?.find((d) => d.name === datasetName)?.target_language ?? null
-    generateMutation.mutate({
-      source: 'github',
-      githubUsername,
-      name: datasetName,
-      targetLanguage,
-      similarityThreshold: DEFAULT_SIMILARITY_THRESHOLD,
-      persist: true,
-    })
-  }
+  const jobsQuery = useJobs()
+  const isAdmin = useIsAdmin()
 
   return (
     <div className="jobs-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Jobs &amp; batch</h1>
+          <h1 className="page-title">Jobs</h1>
           <p className="page-sub">
-            The generation running in this session and every recorded generation run.
+            Dataset jobs built from recurring sources. Each one runs on its GitHub Actions schedule
+            and can be run here on demand — the same code either way.
           </p>
         </div>
         <div className="page-actions">
           <button
             className="btn btn-outline"
-            onClick={() => runsQuery.refetch()}
-            disabled={runsQuery.isRefetching}
+            onClick={() => jobsQuery.refetch()}
+            disabled={jobsQuery.isRefetching}
             type="button"
           >
-            <Icon name="refresh" className={runsQuery.isRefetching ? 'animate-spin' : undefined} />
-            Refresh
+            <Icon name="refresh" className={jobsQuery.isRefetching ? 'animate-spin' : undefined} />
+            Refresh status
           </button>
-          <Link className="btn btn-primary" href="/generate">
-            <Icon name="plus" />
-            New generation
-          </Link>
         </div>
       </div>
 
-      {generationStatus === 'error' && generationError && (
-        <p className="hint" style={{ color: 'var(--destructive)', marginBottom: 12 }}>
-          Last generation{pendingName ? ` of ${pendingName}` : ''} failed: {generationError}
+      {jobsQuery.error && (
+        <p className="hint job-error" style={{ marginBottom: 18 }}>
+          {jobsQuery.error instanceof Error ? jobsQuery.error.message : 'Failed to load the jobs'}
         </p>
       )}
+      {jobsQuery.isPending && <p className="muted">Loading jobs…</p>}
 
-      {isGenerating ? (
-        <div className="job">
-          <div className="job-top">
-            <span className="job-ic">
-              <Icon name="sparkles" />
-            </span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {pendingName ?? 'Generation'} · pipeline{' '}
-                <span className="badge badge-info">
-                  <span className="dot" />
-                  Running
-                </span>
-              </div>
-              <div
-                className="muted"
-                style={{ fontSize: 12, marginTop: 2, fontFamily: "'Geist Mono',monospace" }}
-              >
-                {liveSteps.length > 0
-                  ? (liveSteps[liveSteps.length - 1].detail ??
-                    liveSteps[liveSteps.length - 1].label)
-                  : 'Starting…'}
-              </div>
-            </div>
-          </div>
-          <div className="job-stages">
-            {liveSteps.map((step) => (
-              <div
-                className={`stage${step.status === 'success' ? ' done' : step.status === 'error' ? '' : ' run'}`}
-                key={`${step.key}-${step.label}`}
-              >
-                {step.label}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="card" style={{ marginBottom: 18 }}>
-          <div className="card-body" style={{ paddingTop: 20 }}>
-            <p className="muted">
-              No generation running in this session.{' '}
-              <Link href="/generate" style={{ textDecoration: 'underline' }}>
-                Start one from the Generation page.
-              </Link>
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="card" style={{ marginTop: 22 }}>
-        <div className="card-head">
-          <div>
-            <div className="card-title">Generation history</div>
-            <div className="card-desc">Recorded runs — one row per generation.</div>
-          </div>
-        </div>
-        {runsQuery.isPending && (
-          <div className="card-body">
-            <p className="muted">Loading runs…</p>
-          </div>
-        )}
-        {!runsQuery.isPending && runsQuery.error && (
-          <div className="card-body">
-            <p className="hint" style={{ color: 'var(--destructive)' }}>
-              {runsQuery.error instanceof Error
-                ? runsQuery.error.message
-                : 'Failed to load generation runs'}
-            </p>
-          </div>
-        )}
-        {!runsQuery.isPending && !runsQuery.error && runs.length === 0 && (
-          <div className="card-body">
-            <p className="muted">No generation runs recorded yet.</p>
-          </div>
-        )}
-        {runs.length > 0 && (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Job</th>
-                <th>Version</th>
-                <th>Target</th>
-                <th>Source</th>
-                <th>Started</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => {
-                const githubUsername = githubUsernameOf(run.source_url)
-                const rerunningThis = isGenerating && pendingName === run.dataset
-                return (
-                  <tr key={`${run.dataset}-${run.run_name ?? run.version}`}>
-                    {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
-                      false positive: static, non-interactive cell; the icon is
-                      already aria-hidden (see Icon) and the cell has visible
-                      accessible text (run.dataset). */}
-                    <td>
-                      <div className="cell-main">
-                        <span className="cell-ic">
-                          <Icon name="sparkles" />
-                        </span>
-                        <div className="cell-title">{run.dataset} · generation</div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="tag">
-                        {run.run_name ?? (run.version != null ? `v${run.version}` : '—')}
-                      </span>
-                    </td>
-                    <td className="muted">
-                      {run.item_count != null ? `${run.item_count} pairs` : '—'}
-                    </td>
-                    <td
-                      className="muted"
-                      style={{
-                        maxWidth: 220,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {run.source_url ?? '—'}
-                    </td>
-                    <td className="muted">{formatDate(run.created_at)}</td>
-                    <td>
-                      <span className="badge badge-success">
-                        <span className="dot" />
-                        Recorded
-                      </span>
-                    </td>
-                    <td>
-                      {githubUsername && (
-                        <button
-                          className="btn btn-outline btn-sm"
-                          type="button"
-                          disabled={isGenerating}
-                          title={`Re-run generation for ${run.dataset} from github.com/${githubUsername}`}
-                          onClick={() => rerun(run.dataset, githubUsername)}
-                        >
-                          <Icon
-                            name={rerunningThis ? 'loader' : 'refresh'}
-                            className={rerunningThis ? 'animate-spin' : undefined}
-                          />
-                          {rerunningThis ? 'Running…' : 'Re-run'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="grid-2" style={{ alignItems: 'start', gap: 24 }}>
+        {(jobsQuery.data ?? []).map((job) => (
+          <JobCard key={job.id} job={job} isAdmin={isAdmin} />
+        ))}
       </div>
     </div>
   )

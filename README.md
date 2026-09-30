@@ -31,7 +31,9 @@ This project is designed with a modular architecture that separates concerns int
 
 ## ✨ Key Features
 
-- **Multi-source Ingestion**: File uploads (PDF/image, via a vision model) and GitHub account docs
+- **Multi-source Ingestion**: File uploads (PDF/image, via a vision model) and single web pages, from the **Generate** page
+- **Dataset jobs**: recurring sources (GitHub personal Q&A, knowledge corpus) defined in code, run on a GitHub Actions schedule or on demand from the **Jobs** page
+- **Two model providers**: every call (cleaning, Q&A, vision, jobs) can run on the OpenAI-compatible API or on a Claude subscription (Claude Agent SDK, `CLAUDE_CODE_OAUTH_TOKEN`); per-step defaults are set on the **Models** page
 - **AI-Powered QA Generation**: Leverage state-of-the-art LLMs for intelligent question-answer pair creation
 - **Multi-language Support**: Generate datasets in French, English, Spanish, and German
 - **Versioned storage**: datasets are created/updated in PostgreSQL at generation time, with DVC-like versioning — each generation is recorded as a numbered run (`v1`, `v2`, …) and pairs are idempotent by content hash
@@ -42,10 +44,10 @@ This project is designed with a modular architecture that separates concerns int
 
 ## 🔄 Workflow
 
-1. **Ingestion**: Reading raw content from an uploaded file (transcribed page-by-page via a vision model) or a GitHub account's public docs
+1. **Ingestion**: Reading raw content from an uploaded file (transcribed page-by-page via a vision model) or a web page
 2. **Cleaning**: Processing and normalizing text to extract relevant content (per page)
 3. **QA Generation**: Creating high-quality question-answer pairs via LLMs with configurable prompts
-4. **Quality Assurance**: Automated validation and cross-page deduplication of generated datasets
+4. **Quality Assurance**: Automated validation, semantic deduplication (local multilingual sentence embeddings) and answer-grounding checks of generated datasets
 5. **Versioning & Export**: Automatic save at generation time (versioned runs), plus multi-format export
 6. **Storage**: Persistent storage with metadata tracking and version control
 
@@ -75,7 +77,7 @@ Dataset versioning is controlled by this environment variable (sensible default 
 | --- | --- | --- |
 | `PERSIST_DATASETS` | `true` | Store the generated pairs and record a version at generation time |
 
-This can also be overridden per request: the `POST /dataset/generate/file` and `POST /dataset/generate/github` bodies accept `persist`, and the **Generate** page exposes it as a form control.
+This can also be overridden per request: the `POST /dataset/generate/file` and `POST /dataset/generate/url` bodies accept `persist`, and the **Generate** page exposes it as a form control.
 
 ### Database (PostgreSQL)
 

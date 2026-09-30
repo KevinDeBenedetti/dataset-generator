@@ -22,6 +22,17 @@ def authenticated():
     app.dependency_overrides.pop(get_current_user, None)
 
 
+@pytest.fixture(autouse=True)
+def env_model_defaults():
+    """Role defaults from the env only — these tests have no database."""
+    from server.services.model_defaults import env_defaults
+
+    with patch(
+        "server.services.model_defaults.get_model_defaults", side_effect=env_defaults
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_file_pipeline():
     """Mock DatasetPipeline.process_file for the file-upload endpoint."""
@@ -105,66 +116,97 @@ class TestGenerateDatasetFromFile:
 
 
 @pytest.fixture
-def mock_github_pipeline():
-    """Mock DatasetPipeline.process_github for the GitHub endpoint."""
+def mock_url_pipeline():
+    """Mock DatasetPipeline.process_url for the URL endpoint."""
     with patch("server.api.generate.DatasetPipeline") as mock:
         instance = Mock()
-        instance.process_github = AsyncMock()
+        instance.process_url = AsyncMock()
         mock.return_value = instance
         yield instance
 
 
-class TestGenerateDatasetFromGitHub:
-    """Tests for POST /dataset/generate/github."""
+class TestGenerateDatasetFromUrl:
+    """Tests for POST /dataset/generate/url (single web page)."""
 
     def _pipeline_result(self):
         return {
-            "qa_pairs": [],
-            "total": 3,
-            "exact_duplicates": 0,
-            "similar_duplicates": 0,
-            "dataset_id": "gh-ds-1",
-            "dataset_name": "gh_ds",
-            "pages_crawled": 3,
+            "qa_pairs": [{"question": "What is it?", "answer": "A guide."}],
+            "total": 1,
+            "dataset_id": "web-ds",
+            "pages_crawled": 1,
             "steps": [],
         }
 
-    def test_create_dataset_from_github_success(self, mock_github_pipeline):
-        mock_github_pipeline.process_github.return_value = self._pipeline_result()
+    def test_create_dataset_from_url_success(self, mock_url_pipeline):
+        mock_url_pipeline.process_url.return_value = self._pipeline_result()
 
         response = client.post(
-            "/dataset/generate/github",
-            json={"github_username": "octocat", "dataset_name": "gh_ds"},
+            "/dataset/generate/url",
+            json={"url": "https://docs.example.com/guide", "dataset_name": "web-ds"},
         )
 
         assert response.status_code == 201
         data = response.json()
-        assert data["id"] == "gh-ds-1"
-        assert data["pages_crawled"] == 3
-        kwargs = mock_github_pipeline.process_github.call_args.kwargs
-        assert kwargs["username"] == "octocat"
+        assert data["id"] == "web-ds" and data["total_questions"] == 1
+        kwargs = mock_url_pipeline.process_url.call_args.kwargs
+        assert kwargs["url"] == "https://docs.example.com/guide"
+        # Role defaults, normalized to provider references.
+        assert kwargs["model_cleaning"] == "openai:gpt-4o-mini"
+        assert kwargs["model_qa"] == "openai:gpt-4o-mini"
 
-    def test_unknown_user_returns_400(self, mock_github_pipeline):
-        mock_github_pipeline.process_github = AsyncMock(
-            side_effect=ValueError("GitHub user 'ghost' not found")
-        )
+    def test_explicit_models_are_forwarded(self, mock_url_pipeline, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+        mock_url_pipeline.process_url.return_value = self._pipeline_result()
 
         response = client.post(
-            "/dataset/generate/github",
-            json={"github_username": "ghost", "dataset_name": "x"},
-        )
-
-        assert response.status_code == 400
-        assert "not found" in response.json()["detail"]
-
-    def test_invalid_model_returns_400(self, mock_github_pipeline):
-        response = client.post(
-            "/dataset/generate/github",
+            "/dataset/generate/url",
             json={
-                "github_username": "octocat",
+                "url": "https://docs.example.com",
                 "dataset_name": "x",
-                "model_qa": "does-not-exist",
+                "model_qa": "claude:claude-sonnet-5",
             },
         )
 
+        assert response.status_code == 201
+        kwargs = mock_url_pipeline.process_url.call_args.kwargs
+        assert kwargs["model_qa"] == "claude:claude-sonnet-5"
+
+    def test_refused_url_returns_400(self, mock_url_pipeline):
+        from server.services.web import WebFetchError
+
+        mock_url_pipeline.process_url = AsyncMock(
+            side_effect=WebFetchError("localhost resolves to a non-public address")
+        )
+        response = client.post(
+            "/dataset/generate/url",
+            json={"url": "http://localhost:8000", "dataset_name": "x"},
+        )
         assert response.status_code == 400
+        assert "non-public" in response.json()["detail"]
+
+    def test_unknown_model_returns_400(self, mock_url_pipeline):
+        response = client.post(
+            "/dataset/generate/url",
+            json={
+                "url": "https://docs.example.com",
+                "dataset_name": "x",
+                "model_qa": "openai:not-configured",
+            },
+        )
+        assert response.status_code == 400
+        assert "Unknown model" in response.json()["detail"]
+        mock_url_pipeline.process_url.assert_not_called()
+
+    def test_unconfigured_provider_returns_400(self, mock_url_pipeline, monkeypatch):
+        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        response = client.post(
+            "/dataset/generate/url",
+            json={
+                "url": "https://docs.example.com",
+                "dataset_name": "x",
+                "model_qa": "claude:claude-sonnet-5",
+            },
+        )
+        assert response.status_code == 400
+        assert "CLAUDE_CODE_OAUTH_TOKEN" in response.json()["detail"]

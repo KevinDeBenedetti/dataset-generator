@@ -32,7 +32,7 @@ def mock_save_generation():
 
 @pytest.fixture
 def mock_qa_service():
-    """Patch the QAService class so process_file/process_github don't hit the store.
+    """Patch the QAService class so process_file/process_url don't hit the store.
 
     ``QAService`` is now instantiated per-call inside each ``process_*``
     method (scoped to that call's dataset name), so tests patch the class
@@ -63,10 +63,9 @@ class TestDatasetPipeline:
             ("doc.pdf p.1", b"img1", "image/png"),
             ("doc.pdf p.2", b"img2", "image/png"),
         ]
-        mock_llm_service_class.return_value.extract_text_from_image.side_effect = [
-            "text from page one",
-            "text from page two",
-        ]
+        mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
+            side_effect=["text from page one", "text from page two"]
+        )
         mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
             side_effect=[["qa1"], ["qa2", "qa3"]]
         )
@@ -119,10 +118,9 @@ class TestDatasetPipeline:
             ("doc.pdf p.1", b"img1", "image/png"),
             ("doc.pdf p.2", b"img2", "image/png"),
         ]
-        mock_llm_service_class.return_value.extract_text_from_image.side_effect = [
-            "",  # page 1: no readable text
-            "real text",  # page 2
-        ]
+        mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
+            side_effect=["", "real text"]  # page 1 has no readable text
+        )
         mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
             return_value=["qa1"]
         )
@@ -145,52 +143,76 @@ class TestDatasetPipeline:
         assert result["pages_crawled"] == 2  # still reflects all pages read
         assert result["total"] == 1
 
-    @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.fetch_account_docs")
+
+class TestProcessUrl:
+    @pytest.fixture
+    def page(self):
+        from server.services.web import Page
+
+        with patch("server.pipelines.dataset.fetch_page") as fetch:
+            fetch.return_value = Page(
+                url="https://docs.example.com/guide",
+                body="<html><body><nav>menu</nav><h1>Guide</h1>"
+                "<p>Install it with make.</p></body></html>",
+                content_type="text/html; charset=utf-8",
+            )
+            yield fetch
+
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
-    async def test_process_github_success(
-        self,
-        mock_qa_agent_service_class,
-        mock_llm_service_class,
-        mock_fetch_docs,
-        mock_qa_service,
+    async def test_fetch_clean_generate(
+        self, agent_class, llm_class, page, mock_qa_service
     ):
-        """process_github cleans each doc, generates QA and aggregates stats."""
-        mock_fetch_docs.return_value = [
-            ("octocat/repo1:README", "# raw readme one"),
-            ("octocat/repo2:README", "# raw readme two"),
-        ]
-        mock_llm_service_class.return_value.clean_text.side_effect = [
-            "clean one",
-            "clean two",
-        ]
-        mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
-            side_effect=[["qa1"], ["qa2", "qa3"]]
+        llm_class.return_value.clean_text = AsyncMock(
+            return_value="Guide. Install it with make."
         )
-        mock_qa_service.process_qa_pairs.side_effect = [
-            _qa_stats(total=1),
-            _qa_stats(total=2),
-        ]
+        agent_class.return_value.generate_qa = AsyncMock(return_value=["qa1"])
+        mock_qa_service.process_qa_pairs.return_value = _qa_stats(total=1)
 
-        pipeline = DatasetPipeline()
-        result = await pipeline.process_github(
-            username="octocat",
-            token="tok",
-            dataset_name="test_dataset",
-            model_cleaning="gpt-4o-mini",
+        result = await DatasetPipeline().process_url(
+            url="https://docs.example.com/guide",
+            dataset_name="ds",
             target_language="en",
-            model_qa="gpt-4o-mini",
+            model_cleaning="openai:clean",
+            model_qa="claude:claude-sonnet-5",
             persist=False,
         )
 
-        assert result["pages_crawled"] == 2
-        assert result["total"] == 3
-        assert result["qa_pairs"] == ["qa1", "qa2", "qa3"]
-        assert result["dataset_id"] == "test_dataset"
-        # The token + username are forwarded to the GitHub fetch.
-        mock_fetch_docs.assert_called_once_with("octocat", token="tok", max_repos=None)
-        assert mock_llm_service_class.return_value.clean_text.call_count == 2
+        raw, model = llm_class.return_value.clean_text.call_args.args
+        assert "Install it with make." in raw and "menu" not in raw
+        assert model == "openai:clean"
+        text, lang, qa_model = agent_class.return_value.generate_qa.call_args.args
+        assert (text, lang, qa_model) == (
+            "Guide. Install it with make.",
+            "en",
+            "claude:claude-sonnet-5",
+        )
+        assert mock_qa_service.process_qa_pairs.call_args.kwargs["url"] == (
+            "https://docs.example.com/guide"
+        )
+        assert [s["key"] for s in result["steps"]] == ["fetch", "clean", "qa", "save"]
+        assert result["total"] == 1 and result["pages_crawled"] == 1
 
-        save_kwargs = mock_qa_service.process_qa_pairs.call_args.kwargs
-        assert save_kwargs["url"] == "github://octocat"
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    async def test_empty_page_generates_nothing(
+        self, agent_class, llm_class, page, mock_qa_service
+    ):
+        from server.services.web import Page
+
+        page.return_value = Page("https://x.dev", "<script>x()</script>", "text/html")
+        llm_class.return_value.clean_text = AsyncMock()
+        agent_class.return_value.generate_qa = AsyncMock()
+
+        result = await DatasetPipeline().process_url(
+            url="https://x.dev",
+            dataset_name="ds",
+            target_language="en",
+            model_cleaning="openai:c",
+            model_qa="openai:q",
+            persist=False,
+        )
+        llm_class.return_value.clean_text.assert_not_called()
+        agent_class.return_value.generate_qa.assert_not_called()
+        assert result["steps"][0]["status"] == "warning"
+        assert result["total"] == 0
