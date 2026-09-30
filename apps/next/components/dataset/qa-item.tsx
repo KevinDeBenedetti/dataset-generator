@@ -11,8 +11,17 @@ interface QAItemProps {
   value: string
 }
 
+// Set by the server's answer grounding check (services/semantic.py): the
+// answer is semantically far from the source text — a hallucination signal.
+function groundingFlag(metadata: QaItem['metadata']): number | null {
+  const meta = metadata as Record<string, unknown> | null | undefined
+  if (meta?.needs_review !== true) return null
+  return typeof meta.grounding_score === 'number' ? meta.grounding_score : 0
+}
+
 export function QAItem({ qa, index, value }: QAItemProps) {
   const [expanded, setExpanded] = useState(false)
+  const reviewScore = groundingFlag(qa.metadata)
 
   const toggleContextExpansion = () => {
     setExpanded(!expanded)
@@ -30,6 +39,14 @@ export function QAItem({ qa, index, value }: QAItemProps) {
             {qa.confidence != null && (
               <span className="bg-blue-100 px-2 py-1 rounded">
                 Confidence: {(qa.confidence * 100).toFixed(1)}%
+              </span>
+            )}
+            {reviewScore != null && (
+              <span
+                className="bg-amber-100 text-amber-800 px-2 py-1 rounded"
+                title="The answer is far from the source text — check it before relying on it"
+              >
+                Needs review · grounding {(reviewScore * 100).toFixed(0)}%
               </span>
             )}
             <span className="bg-gray-100 px-2 py-1 rounded">ID: {qa.id.substring(0, 8)}...</span>

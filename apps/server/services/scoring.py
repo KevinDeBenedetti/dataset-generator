@@ -21,8 +21,14 @@ import re
 from typing import Any, Dict, List, Optional
 
 from server.core.config import config
-from server.services.agent import build_chat_model
 from server.services.datasets import get_pairs_to_score, set_pair_confidences
+from server.services.model_defaults import resolve_model
+from server.services.providers import (
+    CompletionRequest,
+    complete,
+    get_provider,
+    parse_ref,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +57,7 @@ _OBJECT = re.compile(r"\{[^{}]*\}")
 
 
 class ScoringNotConfiguredError(RuntimeError):
-    """Raised when no LLM endpoint is configured."""
+    """Raised when the judge model's provider is not configured."""
 
 
 def _format_batch(pairs: List[Dict[str, Any]]) -> str:
@@ -85,21 +91,21 @@ def parse_scores(raw: str, count: int) -> Dict[int, float]:
     return scores
 
 
-async def _score_batch(
-    chat_model: Any, pairs: List[Dict[str, Any]]
-) -> Dict[str, float]:
+async def _score_batch(model: str, pairs: List[Dict[str, Any]]) -> Dict[str, float]:
     try:
-        response = await chat_model.ainvoke(
-            [
-                {"role": "system", "content": JUDGE_INSTRUCTION},
-                {"role": "user", "content": _format_batch(pairs)},
-            ]
+        result = await complete(
+            model,
+            CompletionRequest(
+                system=JUDGE_INSTRUCTION,
+                user=_format_batch(pairs),
+                max_tokens=config.max_tokens_qa,
+                reasoning=True,
+            ),
         )
     except Exception as exc:
         logger.warning("scoring batch failed: %s", exc)
         return {}
-    content = response.content if isinstance(response.content, str) else ""
-    by_index = parse_scores(content, len(pairs))
+    by_index = parse_scores(result.text, len(pairs))
     if len(by_index) < len(pairs):
         logger.warning("scoring batch returned %d/%d scores", len(by_index), len(pairs))
     return {pairs[i - 1]["id"]: score for i, score in by_index.items()}
@@ -110,23 +116,25 @@ async def score_dataset(
 ) -> Dict[str, Any]:
     """Score a dataset's pairs and store the results.
 
-    Raises ValueError for an unknown dataset and
-    :class:`ScoringNotConfiguredError` without an LLM endpoint.
+    ``model`` is a model reference (default: the qa role default). Raises
+    ValueError for an unknown dataset and :class:`ScoringNotConfiguredError`
+    when the judge's provider isn't configured.
     """
-    if not config.openai_api_key:
+    model = resolve_model("qa", model)
+    provider = get_provider(parse_ref(model)[0]) if model else None
+    if provider is None or not provider.configured():
+        missing = ", ".join(provider.missing_env()) if provider else "a qa model"
         raise ScoringNotConfiguredError(
-            "No LLM is configured. Set OPENAI_API_KEY (and OPENAI_BASE_URL / "
-            "OPENAI_LLM_MODEL) to score Q/A pairs."
+            f"No judge model is usable — set {missing} (see the Models page) "
+            "to score Q/A pairs."
         )
-    model = model or config.model_qa
     pairs = await asyncio.to_thread(get_pairs_to_score, dataset_name, only_unscored)
-    chat_model = build_chat_model(model)
 
     semaphore = asyncio.Semaphore(CONCURRENCY)
 
     async def run(batch: List[Dict[str, Any]]) -> Dict[str, float]:
         async with semaphore:
-            return await _score_batch(chat_model, batch)
+            return await _score_batch(model, batch)
 
     batches = [pairs[i : i + BATCH_SIZE] for i in range(0, len(pairs), BATCH_SIZE)]
     scores: Dict[str, float] = {}

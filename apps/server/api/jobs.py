@@ -1,70 +1,81 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 
-from server.jobs.corpus import JobError as CorpusJobError
-from server.jobs.qa_dataset import JobError as QADatasetJobError
-from server.schemas.jobs import (
-    CorpusSyncRequest,
-    CorpusSyncResponse,
-    JobsStatusResponse,
-    QADatasetSyncRequest,
-    QADatasetSyncResponse,
-)
+from server.jobs.registry import JOB_ERRORS
+from server.schemas.jobs import JobRunOut, JobRunRequest, JobsResponse, PublishRequest
 from server.services.auth import require_admin
-from server.services.jobs import jobs_status, run_corpus_sync, run_qa_dataset_sync
+from server.services.jobs import (
+    RunConflictError,
+    UnknownJobError,
+    UnknownRunError,
+    get_run,
+    list_jobs,
+    publish_run,
+    start_run,
+)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/status", response_model=JobsStatusResponse)
-async def get_jobs_status():
-    """Whether each scheduled job's required server env vars are set."""
-    return jobs_status()
+@router.get("", response_model=JobsResponse)
+async def get_jobs() -> JobsResponse:
+    """The dataset job catalogue, with each job's options, status and latest run."""
+    return JobsResponse(jobs=list_jobs())
 
 
 @router.post(
-    "/corpus-sync",
-    response_model=CorpusSyncResponse,
-    # Publishes outside the app — admin only, like the Hugging Face export route.
+    "/{job_id}/run",
+    response_model=JobRunOut,
+    status_code=202,
+    # Publishes outside the app and may spend model quota — admin only.
     dependencies=[Depends(require_admin)],
 )
-async def trigger_corpus_sync(body: CorpusSyncRequest):
-    """Run the weekly portfolio knowledge-corpus job on demand.
+async def post_job_run(job_id: str, body: JobRunRequest) -> JobRunOut:
+    """Start a run in the background — poll GET /jobs/runs/{id} for its state.
 
-    Builds every requested split from the GitHub API and, unless `dry_run`,
-    publishes them to the configured private Hugging Face dataset in one
-    commit — the same job `dataset-sync.yml` runs on its Monday schedule.
+    The same code the job's workflow runs on a schedule. A draft job
+    (github-personal) stops at a draft: review it, then POST .../publish.
     """
     try:
-        return await run_corpus_sync(body.sources, body.dry_run)
-    except CorpusJobError as e:
+        return JobRunOut(**await start_run(job_id, body.options, body.model_ref))
+    except UnknownJobError:
+        raise HTTPException(status_code=404, detail=f"Unknown job '{job_id}'")
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False))
+    except RunConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    # An unusable model reference. After ValidationError, which subclasses it.
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error running corpus sync job: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"Corpus sync failed: {e}")
+
+
+@router.get("/runs/{run_id}", response_model=JobRunOut)
+async def get_job_run(run_id: str) -> JobRunOut:
+    """A run's state: live progress while running, then its result and draft."""
+    try:
+        return JobRunOut(**get_run(run_id))
+    except UnknownRunError:
+        raise HTTPException(status_code=404, detail=f"Unknown run '{run_id}'")
 
 
 @router.post(
-    "/qa-dataset-sync",
-    response_model=QADatasetSyncResponse,
-    # Spends Claude subscription usage and publishes outside the app — admin only.
+    "/runs/{run_id}/publish",
+    response_model=JobRunOut,
     dependencies=[Depends(require_admin)],
 )
-async def trigger_qa_dataset_sync(body: QADatasetSyncRequest):
-    """Run the GitHub Q&A dataset job on demand.
-
-    Generates pairs via the Claude Agent SDK (billed against the configured
-    Claude subscription) and, unless `dry_run`, publishes them to the
-    configured private Hugging Face dataset — the same job
-    `qa-dataset-sync.yml` runs on its Monday schedule. Set `max_repos` to a
-    small number for a cheap test run.
-    """
+async def post_publish_run(run_id: str, body: PublishRequest) -> JobRunOut:
+    """Publish a run's reviewed draft to Hugging Face, as reviewed."""
     try:
-        return await run_qa_dataset_sync(body.max_repos, body.dry_run)
-    except QADatasetJobError as e:
+        return JobRunOut(**await publish_run(run_id, body.exclude, body.promote))
+    except UnknownRunError:
+        raise HTTPException(status_code=404, detail=f"Unknown run '{run_id}'")
+    except RunConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except JOB_ERRORS as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logging.error(f"Error running QA dataset sync job: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"QA dataset sync failed: {e}")
+        logger.exception("Publishing run %s failed", run_id)
+        raise HTTPException(status_code=502, detail=f"Publishing failed: {e}")

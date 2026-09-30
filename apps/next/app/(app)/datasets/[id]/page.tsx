@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 // The design's detail-page styles (.qa, .ver, .tabpane) live with the static
 // mockup; this is the real, data-backed page wearing the same skin.
-import '../../dataset-detail/dataset-detail.css'
+import './dataset.css'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { QAList, PaginationWrapper, DatasetSearch } from '@/components/dataset'

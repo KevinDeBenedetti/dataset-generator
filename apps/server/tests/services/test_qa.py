@@ -351,3 +351,111 @@ class TestQAService:
 
         assert result["quality_rejected"] == 0
         assert result["total"] == 1
+
+
+def _qa(question: str, answer: str, confidence: float = 0.9) -> Mock:
+    qa = Mock()
+    qa.question, qa.answer, qa.confidence = question, answer, confidence
+    return qa
+
+
+class TestQAServiceSemantic:
+    """QAService with an embedding model (fake, deterministic)."""
+
+    SOURCE = (
+        "The API listens on port 8000 and the web UI on port 3000. "
+        "Run make dev to start both services with docker compose."
+    )
+
+    def _service(self, existing=(), embedder=None):
+        from server.tests.fake_embedder import FakeEmbedder
+
+        self.embedder = embedder or FakeEmbedder()
+        with patch("server.services.qa.get_dataset_pairs", return_value=list(existing)):
+            service = QAService("ds", embedder=self.embedder)
+            service.prepare()
+        return service
+
+    def _run(self, service, qa_list, url="https://example.com/b"):
+        return service.process_qa_pairs(
+            qa_list=qa_list,
+            cleaned_text=self.SOURCE,
+            url=url,
+            model="m",
+            similarity_threshold=0.85,
+        )
+
+    def test_rephrasing_from_another_source_is_similar(self):
+        existing = _existing_item(
+            "Which port does the API listen on?",
+            "8000",
+            "other context entirely",
+            "https://example.com/a",
+        )
+        service = self._service([existing])
+        result = self._run(
+            service, [_qa("Which port does the API listen on", "Port 8000.")]
+        )
+        # The lexical path would keep it: different source_url.
+        assert result["similar_duplicates"] == 1
+        assert result["total"] == 0
+
+    def test_rephrasing_within_one_batch_is_caught(self):
+        service = self._service()
+        result = self._run(
+            service,
+            [
+                _qa(
+                    "How do I start the services?", "Run make dev with docker compose."
+                ),
+                _qa("How do I start the services", "Use make dev."),
+            ],
+        )
+        assert result["total"] == 1
+        assert result["similar_duplicates"] == 1
+
+    def test_later_call_sees_earlier_additions(self):
+        service = self._service()
+        self._run(service, [_qa("Which port does the web UI use?", "Port 3000.")])
+        result = self._run(service, [_qa("Which port does the web UI use", "3000.")])
+        assert result["similar_duplicates"] == 1
+
+    def test_grounding_flags_answers_far_from_source(self):
+        service = self._service()
+        result = self._run(
+            service,
+            [
+                _qa(
+                    "Which port does the API listen on?",
+                    "The API listens on port 8000 and the web UI on port 3000.",
+                ),
+                _qa("Who founded the project?", "A Swiss bank, in 1998."),
+            ],
+        )
+        by_question = {i["question"]: i["metadata"] for i in result["items"]}
+        grounded = by_question["Which port does the API listen on?"]
+        ungrounded = by_question["Who founded the project?"]
+        assert grounded["needs_review"] is False and grounded["grounding_score"] > 0.5
+        assert ungrounded["needs_review"] is True
+        assert result["flagged_for_review"] == 1
+        assert result["total"] == 2  # flagged, not rejected
+
+    def test_existing_questions_embedded_once(self):
+        existing = _existing_item("What is it?", "A tool.", "ctx", "https://x")
+        service = self._service([existing])
+        self._run(service, [_qa("Which port does the API listen on?", "8000.")])
+        self._run(service, [_qa("Which port does the web UI use?", "3000.")])
+        assert self.embedder.calls[0] == ["What is it?"]
+        assert sum(c == ["What is it?"] for c in self.embedder.calls) == 1
+
+    def test_without_embedder_falls_back_to_lexical(self):
+        existing = _existing_item(
+            "Which port does the API listen on?", "8000", "ctx", "https://example.com/a"
+        )
+        with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
+            service = QAService("ds", embedder=None)
+            result = self._run(
+                service, [_qa("Which port does the API listen on", "Port 8000.")]
+            )
+        assert result["similar_duplicates"] == 0
+        assert "grounding_score" not in result["items"][0]["metadata"]

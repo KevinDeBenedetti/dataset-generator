@@ -20,7 +20,6 @@ from server.services.github import GitHubService
 logger = logging.getLogger(__name__)
 
 MAX_README_CHARS = 3000
-MAX_REPOS = 500
 
 DOC_EXTENSIONS = (".md", ".mdx", ".markdown", ".txt", ".rst")
 MAX_DOC_BYTES = 50 * 1024
@@ -133,8 +132,9 @@ class CorpusGitHubClient(GitHubService):
             )
 
     async def list_user_repos(self, username: str) -> List[str]:
-        """Public, non-fork, non-archived repos as ``owner/name`` slugs."""
-        repos = await self.list_public_repos(username, max_repos=MAX_REPOS)
+        """All public, non-fork, non-archived repos as ``owner/name`` slugs
+        (every page of the listing — no cap)."""
+        repos = await self.list_public_repos(username)
         return [
             r["full_name"]
             for r in repos

@@ -74,6 +74,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
       DEBUG_LOGS: ${DEBUG_LOGS:-}
+      # Local embedding model (services/semantic.py), cached in the
+      # fastembed_cache volume so it is downloaded once, not per container.
+      FASTEMBED_CACHE_PATH: /app/.cache/fastembed
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -99,6 +102,7 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - server_venv:/app/.venv
+      - fastembed_cache:/app/.cache/fastembed
     restart: always
     # Source is bind-mounted above for uvicorn --reload; watch rebuilds the image
     # when Python dependencies change.
@@ -184,6 +188,7 @@ services:
 volumes:
   next_node_modules:
   server_venv:
+  fastembed_cache:
   postgres_data:
   qdrant_storage:
   redis_data:

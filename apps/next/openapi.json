@@ -153,7 +153,7 @@
           "generate"
         ],
         "summary": "Generate a dataset from an uploaded file (PDF or image)",
-        "description": "Create a new dataset from an uploaded PDF or image. Each page is transcribed with the configured vision model (OPENAI_VLM_MODEL), then mined for question-answer pairs.",
+        "description": "Create or extend a dataset from an uploaded PDF or image. Each page is transcribed with a vision model (the vision role default unless model_vlm is given), then mined for question-answer pairs.",
         "operationId": "create_dataset_for_file_dataset_generate_file_post",
         "requestBody": {
           "content": {
@@ -167,7 +167,7 @@
         },
         "responses": {
           "201": {
-            "description": "Dataset created successfully",
+            "description": "Dataset created",
             "content": {
               "application/json": {
                 "schema": {
@@ -177,7 +177,7 @@
             }
           },
           "400": {
-            "description": "Invalid parameters or unsupported/corrupt file",
+            "description": "Invalid parameters or source",
             "content": {
               "application/json": {
                 "schema": {
@@ -209,19 +209,19 @@
         }
       }
     },
-    "/dataset/generate/github": {
+    "/dataset/generate/url": {
       "post": {
         "tags": [
           "generate"
         ],
-        "summary": "Generate a dataset from a GitHub account's public docs",
-        "description": "Create a new dataset from a GitHub account: each public repo's README and top-level docs are cleaned and mined for question-answer pairs. An optional token only raises the API rate limit (public data only).",
-        "operationId": "create_dataset_for_github_dataset_generate_github_post",
+        "summary": "Generate a dataset from a web page",
+        "description": "Create or extend a dataset from one web page (no crawling): the page is fetched, reduced to text, cleaned, then mined for question-answer pairs. Private/loopback addresses are refused.",
+        "operationId": "create_dataset_for_url_dataset_generate_url_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/GitHubGenerationRequest"
+                "$ref": "#/components/schemas/UrlGenerationRequest"
               }
             }
           },
@@ -229,7 +229,7 @@
         },
         "responses": {
           "201": {
-            "description": "Dataset created successfully",
+            "description": "Dataset created",
             "content": {
               "application/json": {
                 "schema": {
@@ -239,7 +239,7 @@
             }
           },
           "400": {
-            "description": "Invalid parameters or unknown GitHub user",
+            "description": "Invalid parameters or source",
             "content": {
               "application/json": {
                 "schema": {
@@ -1073,20 +1073,130 @@
         }
       }
     },
-    "/openai/models": {
+    "/models": {
       "get": {
         "tags": [
-          "openai"
+          "models"
         ],
-        "summary": "List Openai Models",
-        "description": "Returns the list of available models from the OpenAI API.",
-        "operationId": "list_openai_models_openai_models_get",
+        "summary": "List Models",
+        "description": "Every provider with its status and models, plus the per-role defaults.",
+        "operationId": "list_models_models_get",
+        "parameters": [
+          {
+            "name": "discover",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also ask the OpenAI-compatible endpoint which models it serves (a network call, 5 s max) on top of the configured ones",
+              "default": false,
+              "title": "Discover"
+            },
+            "description": "Also ask the OpenAI-compatible endpoint which models it serves (a network call, 5 s max) on top of the configured ones"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/defaults": {
+      "put": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Put Model Defaults",
+        "description": "Set the default model of one or more roles (admin only).",
+        "operationId": "put_model_defaults_models_defaults_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDefaultsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/test": {
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Test Model",
+        "description": "Send one short prompt to a model and report what came back.",
+        "operationId": "test_model_models_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelTestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -1336,21 +1446,21 @@
         }
       }
     },
-    "/jobs/status": {
+    "/jobs": {
       "get": {
         "tags": [
           "jobs"
         ],
-        "summary": "Get Jobs Status",
-        "description": "Whether each scheduled job's required server env vars are set.",
-        "operationId": "get_jobs_status_jobs_status_get",
+        "summary": "Get Jobs",
+        "description": "The dataset job catalogue, with each job's options, status and latest run.",
+        "operationId": "get_jobs_jobs_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobsStatusResponse"
+                  "$ref": "#/components/schemas/JobsResponse"
                 }
               }
             }
@@ -1358,31 +1468,42 @@
         }
       }
     },
-    "/jobs/corpus-sync": {
+    "/jobs/{job_id}/run": {
       "post": {
         "tags": [
           "jobs"
         ],
-        "summary": "Trigger Corpus Sync",
-        "description": "Run the weekly portfolio knowledge-corpus job on demand.\n\nBuilds every requested split from the GitHub API and, unless `dry_run`,\npublishes them to the configured private Hugging Face dataset in one\ncommit — the same job `dataset-sync.yml` runs on its Monday schedule.",
-        "operationId": "trigger_corpus_sync_jobs_corpus_sync_post",
+        "summary": "Post Job Run",
+        "description": "Start a run in the background — poll GET /jobs/runs/{id} for its state.\n\nThe same code the job's workflow runs on a schedule. A draft job\n(github-personal) stops at a draft: review it, then POST .../publish.",
+        "operationId": "post_job_run_jobs__job_id__run_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CorpusSyncRequest"
+                "$ref": "#/components/schemas/JobRunRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CorpusSyncResponse"
+                  "$ref": "#/components/schemas/JobRunOut"
                 }
               }
             }
@@ -1400,23 +1521,77 @@
         }
       }
     },
-    "/jobs/qa-dataset-sync": {
+    "/jobs/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job Run",
+        "description": "A run's state: live progress while running, then its result and draft.",
+        "operationId": "get_job_run_jobs_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/runs/{run_id}/publish": {
       "post": {
         "tags": [
           "jobs"
         ],
-        "summary": "Trigger Qa Dataset Sync",
-        "description": "Run the GitHub Q&A dataset job on demand.\n\nGenerates pairs via the Claude Agent SDK (billed against the configured\nClaude subscription) and, unless `dry_run`, publishes them to the\nconfigured private Hugging Face dataset — the same job\n`qa-dataset-sync.yml` runs on its Monday schedule. Set `max_repos` to a\nsmall number for a cheap test run.",
-        "operationId": "trigger_qa_dataset_sync_jobs_qa_dataset_sync_post",
+        "summary": "Post Publish Run",
+        "description": "Publish a run's reviewed draft to Hugging Face, as reviewed.",
+        "operationId": "post_publish_run_jobs_runs__run_id__publish_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/QADatasetSyncRequest"
+                "$ref": "#/components/schemas/PublishRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1424,7 +1599,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/QADatasetSyncResponse"
+                  "$ref": "#/components/schemas/JobRunOut"
                 }
               }
             }
@@ -1509,7 +1684,8 @@
                 "type": "null"
               }
             ],
-            "title": "Model Qa"
+            "title": "Model Qa",
+            "description": "Model reference for QA"
           },
           "model_vlm": {
             "anyOf": [
@@ -1520,14 +1696,15 @@
                 "type": "null"
               }
             ],
-            "title": "Model Vlm"
+            "title": "Model Vlm",
+            "description": "Model reference for page transcription"
           },
           "similarity_threshold": {
             "type": "number",
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Similarity Threshold",
-            "default": 0.9
+            "default": 0.85
           },
           "persist": {
             "type": "boolean",
@@ -1879,97 +2056,6 @@
         ],
         "title": "CollectionsResponse"
       },
-      "CorpusJobStatus": {
-        "properties": {
-          "configured": {
-            "type": "boolean",
-            "title": "Configured"
-          },
-          "github_username": {
-            "type": "boolean",
-            "title": "Github Username"
-          },
-          "github_token": {
-            "type": "boolean",
-            "title": "Github Token"
-          },
-          "hf_token": {
-            "type": "boolean",
-            "title": "Hf Token"
-          },
-          "hf_dataset_repo": {
-            "type": "boolean",
-            "title": "Hf Dataset Repo"
-          }
-        },
-        "type": "object",
-        "required": [
-          "configured",
-          "github_username",
-          "github_token",
-          "hf_token",
-          "hf_dataset_repo"
-        ],
-        "title": "CorpusJobStatus"
-      },
-      "CorpusSyncRequest": {
-        "properties": {
-          "sources": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sources",
-            "description": "Splits to build: profile, github, github_code, github_docs (default: all four)"
-          },
-          "dry_run": {
-            "type": "boolean",
-            "title": "Dry Run",
-            "description": "Build the corpus but skip publishing it to Hugging Face",
-            "default": false
-          }
-        },
-        "type": "object",
-        "title": "CorpusSyncRequest"
-      },
-      "CorpusSyncResponse": {
-        "properties": {
-          "manifest": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Manifest"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Url",
-            "description": "Hub dataset URL, or null on a dry run"
-          },
-          "dry_run": {
-            "type": "boolean",
-            "title": "Dry Run"
-          }
-        },
-        "type": "object",
-        "required": [
-          "manifest",
-          "dry_run"
-        ],
-        "title": "CorpusSyncResponse"
-      },
       "DatasetAnalysis": {
         "properties": {
           "run_name": {
@@ -2105,7 +2191,7 @@
           "model_cleaning": {
             "type": "string",
             "title": "Model Cleaning",
-            "description": "Model used for text cleaning"
+            "description": "Model used to clean (URL) or transcribe (file) the source"
           },
           "target_language": {
             "type": "string",
@@ -2156,7 +2242,7 @@
               }
             ],
             "title": "Scraped Content",
-            "description": "Raw markdown scraped from the source URL(s)"
+            "description": "Text extracted from the source, as fed to QA generation"
           },
           "persisted": {
             "anyOf": [
@@ -2198,7 +2284,7 @@
               "question": "What is the main topic of this document?"
             }
           ],
-          "similarity_threshold": 0.9,
+          "similarity_threshold": 0.85,
           "target_language": "en",
           "total_questions": 50
         }
@@ -2447,6 +2533,123 @@
         ],
         "title": "DeleteDatasetResponse"
       },
+      "DraftPair": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "grounding": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grounding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "DraftPair"
+      },
+      "DraftPreview": {
+        "properties": {
+          "repo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Id",
+            "description": "Hugging Face repo it publishes to"
+          },
+          "kept": {
+            "type": "integer",
+            "title": "Kept",
+            "description": "Pairs carried over from unchanged sources"
+          },
+          "new": {
+            "items": {
+              "$ref": "#/components/schemas/DraftPair"
+            },
+            "type": "array",
+            "title": "New",
+            "description": "Pairs generated by this run"
+          },
+          "review": {
+            "items": {
+              "$ref": "#/components/schemas/DraftPair"
+            },
+            "type": "array",
+            "title": "Review",
+            "description": "Held out: answer far from its source (off by default)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kept",
+          "new",
+          "review"
+        ],
+        "title": "DraftPreview"
+      },
       "DuplicateDatasetResponse": {
         "properties": {
           "message": {
@@ -2510,102 +2713,6 @@
           "detail": "Model 'invalid-model' not in available models: ['gpt-3.5-turbo', 'gpt-4']",
           "error_code": "INVALID_MODEL"
         }
-      },
-      "GitHubGenerationRequest": {
-        "properties": {
-          "github_username": {
-            "type": "string",
-            "title": "Github Username",
-            "description": "GitHub account whose public repos will be mined"
-          },
-          "github_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Github Token",
-            "description": "Optional token — only used to raise the API rate limit; only public information is read"
-          },
-          "dataset_name": {
-            "type": "string",
-            "title": "Dataset Name",
-            "description": "Name of the dataset to create"
-          },
-          "model_cleaning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Cleaning",
-            "description": "Model to use for text cleaning"
-          },
-          "target_language": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Language",
-            "description": "Target language for QA generation"
-          },
-          "model_qa": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Qa",
-            "description": "Model to use for QA generation"
-          },
-          "similarity_threshold": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Similarity Threshold",
-            "description": "Similarity threshold to detect duplicates (0.0-1.0)",
-            "default": 0.9
-          },
-          "max_repos": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Repos",
-            "description": "Cap on the number of public repos to mine (default: all)"
-          },
-          "persist": {
-            "type": "boolean",
-            "title": "Persist",
-            "description": "Store the generated pairs and record a version at generation time",
-            "default": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "github_username",
-          "dataset_name"
-        ],
-        "title": "GitHubGenerationRequest",
-        "description": "Model for generating a dataset from a GitHub account's public docs."
       },
       "HTTPValidationError": {
         "properties": {
@@ -2914,21 +3021,348 @@
         "title": "HuggingFaceImportResponse",
         "description": "Result of pulling a Hub dataset repo's Q/A pairs into local storage."
       },
-      "JobsStatusResponse": {
+      "JobInfo": {
         "properties": {
-          "corpus": {
-            "$ref": "#/components/schemas/CorpusJobStatus"
+          "id": {
+            "type": "string",
+            "title": "Id"
           },
-          "qa_dataset": {
-            "$ref": "#/components/schemas/QADatasetJobStatus"
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "workflow": {
+            "type": "string",
+            "title": "Workflow",
+            "description": "GitHub Actions workflow running it on a schedule"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "uses_model": {
+            "type": "boolean",
+            "title": "Uses Model"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model",
+            "description": "Model reference used when a run names none (jobs role)"
+          },
+          "has_draft": {
+            "type": "boolean",
+            "title": "Has Draft",
+            "description": "Runs stop at a draft to review, published separately"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "missing_env": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Env",
+            "description": "Server env vars still to set"
+          },
+          "options_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options Schema",
+            "description": "JSON schema of the options POST /jobs/{id}/run accepts"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRunRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
-          "corpus",
-          "qa_dataset"
+          "id",
+          "title",
+          "description",
+          "workflow",
+          "schedule",
+          "uses_model",
+          "has_draft",
+          "configured",
+          "options_schema"
         ],
-        "title": "JobsStatusResponse"
+        "title": "JobInfo"
+      },
+      "JobProgress": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "total",
+          "label"
+        ],
+        "title": "JobProgress"
+      },
+      "JobResultOut": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "metrics": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {}
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Metrics",
+            "description": "(label, value) pairs, in display order"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Non-fatal errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dry_run"
+        ],
+        "title": "JobResultOut"
+      },
+      "JobRunOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job": {
+            "type": "string",
+            "title": "Job"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "running, succeeded, failed, published or interrupted"
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobResultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "has_draft": {
+            "type": "boolean",
+            "title": "Has Draft",
+            "default": false
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job",
+          "status",
+          "started_at"
+        ],
+        "title": "JobRunOut"
+      },
+      "JobRunRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "JobRunRef"
+      },
+      "JobRunRequest": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "description": "Validated against the job's options_schema"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference, e.g. \"claude:claude-sonnet-5\" (jobs using a model only; default: the jobs role default)"
+          }
+        },
+        "type": "object",
+        "title": "JobRunRequest"
+      },
+      "JobsResponse": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobInfo"
+            },
+            "type": "array",
+            "title": "Jobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs"
+        ],
+        "title": "JobsResponse"
       },
       "LoginRequest": {
         "properties": {
@@ -2951,6 +3385,162 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "ModelDefaultsUpdate": {
+        "properties": {
+          "defaults": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Defaults",
+            "description": "Roles to change, mapped to a model reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "defaults"
+        ],
+        "title": "ModelDefaultsUpdate"
+      },
+      "ModelInfoOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "description": "\"<provider>:<model>\" reference"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "vision": {
+            "type": "boolean",
+            "title": "Vision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "id",
+          "provider",
+          "label",
+          "vision"
+        ],
+        "title": "ModelInfoOut"
+      },
+      "ModelTestRequest": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "description": "Model reference, e.g. \"claude:claude-sonnet-5\""
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "default": "Reply with one short sentence confirming you are reachable."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref"
+        ],
+        "title": "ModelTestRequest"
+      },
+      "ModelTestResponse": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "ok",
+          "latency_ms"
+        ],
+        "title": "ModelTestResponse"
+      },
+      "ModelsResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderOut"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "defaults": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Defaults",
+            "description": "Model reference per role (cleaning, qa, vision, jobs)"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "providers",
+          "defaults",
+          "roles"
+        ],
+        "title": "ModelsResponse"
       },
       "PipelineStep": {
         "properties": {
@@ -3063,6 +3653,67 @@
         ],
         "title": "PromptsResponse"
       },
+      "ProviderOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "missing_env": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Env",
+            "description": "Env vars to set to enable it"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInfoOut"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "configured",
+          "models"
+        ],
+        "title": "ProviderOut"
+      },
+      "PublishRequest": {
+        "properties": {
+          "exclude": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclude",
+            "description": "Ids of new pairs to leave out"
+          },
+          "promote": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Promote",
+            "description": "Ids of review pairs to include"
+          }
+        },
+        "type": "object",
+        "title": "PublishRequest"
+      },
       "QAAgentTestRequest": {
         "properties": {
           "text": {
@@ -3093,7 +3744,7 @@
               }
             ],
             "title": "Model",
-            "description": "Model id (defaults to server config)"
+            "description": "Model reference, e.g. \"claude:claude-sonnet-5\" (defaults to the qa role default)"
           }
         },
         "type": "object",
@@ -3157,123 +3808,6 @@
           "raw_response"
         ],
         "title": "QAAgentTestResponse"
-      },
-      "QADatasetJobStatus": {
-        "properties": {
-          "configured": {
-            "type": "boolean",
-            "title": "Configured"
-          },
-          "github_username": {
-            "type": "boolean",
-            "title": "Github Username"
-          },
-          "github_token": {
-            "type": "boolean",
-            "title": "Github Token"
-          },
-          "claude_credentials": {
-            "type": "boolean",
-            "title": "Claude Credentials"
-          },
-          "hf_token": {
-            "type": "boolean",
-            "title": "Hf Token"
-          },
-          "hf_qa_dataset_repo": {
-            "type": "boolean",
-            "title": "Hf Qa Dataset Repo"
-          }
-        },
-        "type": "object",
-        "required": [
-          "configured",
-          "github_username",
-          "github_token",
-          "claude_credentials",
-          "hf_token",
-          "hf_qa_dataset_repo"
-        ],
-        "title": "QADatasetJobStatus"
-      },
-      "QADatasetSyncRequest": {
-        "properties": {
-          "max_repos": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Repos",
-            "description": "Cap on repos processed (default: 15) — lower this for a cheap test run"
-          },
-          "dry_run": {
-            "type": "boolean",
-            "title": "Dry Run",
-            "description": "Generate pairs but skip publishing them to Hugging Face",
-            "default": false
-          }
-        },
-        "type": "object",
-        "title": "QADatasetSyncRequest"
-      },
-      "QADatasetSyncResponse": {
-        "properties": {
-          "repo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repo"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Url",
-            "description": "Hub dataset URL, or null on a dry run"
-          },
-          "records": {
-            "type": "integer",
-            "title": "Records"
-          },
-          "dropped": {
-            "type": "integer",
-            "title": "Dropped"
-          },
-          "errors": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Errors",
-            "default": []
-          },
-          "dry_run": {
-            "type": "boolean",
-            "title": "Dry Run"
-          }
-        },
-        "type": "object",
-        "required": [
-          "records",
-          "dropped",
-          "dry_run"
-        ],
-        "title": "QADatasetSyncResponse"
       },
       "QAItem": {
         "properties": {
@@ -3825,6 +4359,77 @@
           "question2"
         ],
         "title": "SimilarityPair"
+      },
+      "UrlGenerationRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "http(s) URL of the page to mine"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Name of the dataset to create or extend"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language",
+            "description": "Target language for QA generation"
+          },
+          "model_cleaning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Cleaning",
+            "description": "Model reference for text cleaning, e.g. \"openai:gpt-4o-mini\" (default: the cleaning role default)"
+          },
+          "model_qa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Qa",
+            "description": "Model reference for QA generation, e.g. \"claude:claude-sonnet-5\" (default: the qa role default)"
+          },
+          "similarity_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Similarity Threshold",
+            "description": "Question similarity at or above which a pair is a duplicate (0.0-1.0): embedding cosine across the dataset when the local model is available, else a lexical ratio within the same source",
+            "default": 0.85
+          },
+          "persist": {
+            "type": "boolean",
+            "title": "Persist",
+            "description": "Store the generated pairs and record a version at generation time",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "dataset_name"
+        ],
+        "title": "UrlGenerationRequest",
+        "description": "Generate a dataset from one web page (no crawling)."
       },
       "UserResponse": {
         "properties": {

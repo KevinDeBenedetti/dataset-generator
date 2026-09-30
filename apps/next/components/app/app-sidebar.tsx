@@ -28,25 +28,21 @@ const NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
       { icon: 'database', label: 'Datasets', href: '/datasets' },
-      { icon: 'sparkles', label: 'Generation', href: '/generate' },
+      { icon: 'sparkles', label: 'Generate', href: '/generate' },
+      { icon: 'activity', label: 'Jobs', href: '/jobs' },
     ],
   },
   {
-    label: 'Quality & processing',
+    label: 'Quality',
     items: [
       { icon: 'shield', label: 'Quality control', href: '/quality' },
-      { icon: 'activity', label: 'Jobs & batch', href: '/jobs' },
       { icon: 'copyCheck', label: 'Verify QA', href: '/agent-test' },
       { icon: 'terminal', label: 'LLM Prompts', href: '/prompts' },
     ],
   },
   {
-    label: 'Delivery',
-    items: [
-      { icon: 'download', label: 'Exports', href: '/exports' },
-      { icon: 'refresh', label: 'Sync jobs', href: '/sync-jobs' },
-      { icon: 'key', label: 'API keys & integrations', href: '/api-keys' },
-    ],
+    label: 'Configuration',
+    items: [{ icon: 'cpu', label: 'Models', href: '/models' }],
   },
 ]
 
@@ -108,7 +104,7 @@ export function AppSidebar() {
             })}
             {/* Real Hugging Face connection status, not a nav destination —
                 links out to the account's Hub profile once connected. */}
-            {group.label === 'Delivery' &&
+            {group.label === 'Configuration' &&
               (hfConnected && hfData?.namespace ? (
                 <a
                   href={`https://huggingface.co/${hfData.namespace}`}

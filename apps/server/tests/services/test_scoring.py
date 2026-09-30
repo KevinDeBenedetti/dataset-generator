@@ -1,5 +1,4 @@
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -42,16 +41,17 @@ def _pairs(n):
     ]
 
 
-def _chat_model(replies):
-    model = MagicMock()
-    model.ainvoke = AsyncMock(side_effect=[SimpleNamespace(content=r) for r in replies])
-    return model
+def _completions(replies):
+    """A stand-in for the provider registry's complete(), one reply per call."""
+    from server.services.providers import CompletionResult
+
+    return AsyncMock(side_effect=[CompletionResult(r) for r in replies])
 
 
 async def test_score_dataset_batches_and_stores_scores(monkeypatch):
     monkeypatch.setattr(scoring.config, "openai_api_key", "k")
     monkeypatch.setattr(scoring, "BATCH_SIZE", 2)
-    chat = _chat_model(
+    chat = _completions(
         [
             '{"scores":[{"i":1,"confidence":0.9},{"i":2,"confidence":0.7}]}',
             '{"scores":[{"i":1,"confidence":0.4}]}',
@@ -66,15 +66,15 @@ async def test_score_dataset_batches_and_stores_scores(monkeypatch):
     with (
         patch.object(scoring, "get_pairs_to_score", return_value=_pairs(3)),
         patch.object(scoring, "set_pair_confidences", side_effect=fake_set),
-        patch.object(scoring, "build_chat_model", return_value=chat),
+        patch.object(scoring, "complete", new=chat),
     ):
-        result = await score_dataset("ds", model="judge")
+        result = await score_dataset("ds", model="openai:judge")
 
     assert stored["scores"] == {"p0": 0.9, "p1": 0.7, "p2": 0.4}
-    assert stored["method"] == "llm_judge:judge"
+    assert stored["method"] == "llm_judge:openai:judge"
     assert result == {
         "dataset_name": "ds",
-        "model": "judge",
+        "model": "openai:judge",
         "requested": 3,
         "scored": 3,
         "failed": 0,
@@ -83,15 +83,14 @@ async def test_score_dataset_batches_and_stores_scores(monkeypatch):
 
 async def test_score_dataset_counts_a_failed_batch(monkeypatch):
     monkeypatch.setattr(scoring.config, "openai_api_key", "k")
-    chat = MagicMock()
-    chat.ainvoke = AsyncMock(side_effect=RuntimeError("provider down"))
+    chat = AsyncMock(side_effect=RuntimeError("provider down"))
 
     with (
         patch.object(scoring, "get_pairs_to_score", return_value=_pairs(2)),
         patch.object(scoring, "set_pair_confidences", return_value=0) as set_scores,
-        patch.object(scoring, "build_chat_model", return_value=chat),
+        patch.object(scoring, "complete", new=chat),
     ):
-        result = await score_dataset("ds", model="judge")
+        result = await score_dataset("ds", model="openai:judge")
 
     assert set_scores.call_args.args[1] == {}
     assert (result["scored"], result["failed"]) == (0, 2)
@@ -99,5 +98,19 @@ async def test_score_dataset_counts_a_failed_batch(monkeypatch):
 
 async def test_score_dataset_requires_an_llm(monkeypatch):
     monkeypatch.setattr(scoring.config, "openai_api_key", "")
-    with pytest.raises(ScoringNotConfiguredError):
+    monkeypatch.setattr(
+        scoring, "resolve_model", lambda role, override=None: "openai:m"
+    )
+    with pytest.raises(ScoringNotConfiguredError, match="OPENAI_API_KEY"):
+        await score_dataset("ds")
+
+
+async def test_score_dataset_requires_a_usable_judge_provider(monkeypatch):
+    # A claude: default with no Claude credentials is as unusable as no key.
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        scoring, "resolve_model", lambda role, override=None: "claude:x"
+    )
+    with pytest.raises(ScoringNotConfiguredError, match="CLAUDE_CODE_OAUTH_TOKEN"):
         await score_dataset("ds")

@@ -3,15 +3,8 @@
 import { Suspense, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import {
-  DatasetGenerate,
-  Result,
-  GenerationTimeline,
-  DatasetAnalyze,
-  DatasetClean,
-} from '@/components/dataset'
+import { DatasetGenerate, Result, GenerationTimeline, RecentRuns } from '@/components/dataset'
 import { useGenerateStore } from '@/stores/generate'
-import { useDatasetStore } from '@/stores/dataset'
 import { useDatasets } from '@/hooks'
 
 function GenerateContent() {
@@ -27,17 +20,13 @@ function GenerateContent() {
   const dataset = useGenerateStore((state) => state.dataset)
   const generationStatus = useGenerateStore((state) => state.generationStatus)
   const liveSteps = useGenerateStore((state) => state.liveSteps)
-  const analyzeStatus = useDatasetStore((state) => state.analyzeStatus)
-  const analyzingResult = useDatasetStore((state) => state.analyzingResult)
-  const cleanStatus = useDatasetStore((state) => state.cleanStatus)
-  const cleaningResult = useDatasetStore((state) => state.cleaningResult)
 
   useEffect(() => {
     refetch()
   }, [refetch])
 
   return (
-    <section className="max-w-2xl mx-auto flex flex-col gap-4 p-4">
+    <section className="max-w-3xl mx-auto flex flex-col gap-4 p-4">
       <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">
         {presetDataset ? `Add a source to ${presetDataset}` : 'Generate a dataset'}
       </h1>
@@ -72,9 +61,19 @@ function GenerateContent() {
         </div>
       )}
 
-      {analyzeStatus === 'success' && analyzingResult && <DatasetAnalyze />}
+      <p className="text-center text-xs text-muted-foreground">
+        Recurring sources (your GitHub account, the knowledge corpus) run as{' '}
+        <Link href="/jobs" className="underline">
+          jobs
+        </Link>
+        ; duplicates across a dataset are analysed and cleaned on{' '}
+        <Link href="/quality" className="underline">
+          Quality control
+        </Link>
+        .
+      </p>
 
-      {cleanStatus === 'success' && cleaningResult && <DatasetClean />}
+      <RecentRuns />
     </section>
   )
 }

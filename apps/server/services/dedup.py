@@ -89,6 +89,14 @@ def find_similar(
     return None
 
 
+def find_exact(candidate: QAEntry, existing: Iterable[QAEntry]) -> Optional[str]:
+    """Hash of an entry with the same content hash as ``candidate``, or None."""
+    for entry in existing:
+        if entry.hash == candidate.hash:
+            return entry.hash
+    return None
+
+
 def classify_duplicate(
     candidate: QAEntry,
     existing: Iterable[QAEntry],
@@ -98,13 +106,15 @@ def classify_duplicate(
 
     Exact wins over similar: an identical content hash anywhere is an exact
     duplicate; otherwise a same-source near-match (see :func:`find_similar`) is
-    a similar duplicate.
+    a similar duplicate. This is the lexical path — ``QAService`` swaps the
+    similar step for an embedding comparison when a model is available (see
+    ``server.services.semantic``).
     """
     entries: List[QAEntry] = list(existing)
 
-    for entry in entries:
-        if entry.hash == candidate.hash:
-            return DuplicateVerdict("exact", entry.hash, 1.0)
+    exact = find_exact(candidate, entries)
+    if exact is not None:
+        return DuplicateVerdict("exact", exact, 1.0)
 
     match = find_similar(candidate, entries, similarity_threshold)
     if match is not None:

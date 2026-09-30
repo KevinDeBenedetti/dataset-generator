@@ -10,6 +10,9 @@ os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
 os.environ["OPENAI_LLM_MODEL"] = "gpt-4o-mini"
 os.environ["OPENAI_VLM_MODEL"] = "mistral-small-3.1-24b-instruct-2503"
 os.environ["OPENAI_EMBEDDING_MODEL"] = "text-embedding-3-small"
+# Never download the local embedding model in tests: code paths that use it
+# take an injected fake embedder (see tests/services/test_semantic.py).
+os.environ["SEMANTIC_ENABLED"] = "false"
 
 import pytest
 from contextlib import contextmanager
@@ -20,6 +23,32 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from server.core.database import Base, get_db, normalize_database_url
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_database(monkeypatch):
+    """Keep tests off the database named in the developer's ``.env``.
+
+    Role model defaults and job runs are read through
+    ``server.core.database.get_scoped_db``, whose engine is built from the
+    environment at import. A test that doesn't inject a database would silently
+    read *that* one — and pass or fail depending on what is stored there (a
+    ``claude:`` default set on the Models page, say). Both services degrade to
+    their env fallbacks when the database is unreachable, so make it so; tests
+    that need a database override this with their own ``get_scoped_db``.
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def unreachable():
+        raise RuntimeError("no ambient database in tests")
+        yield  # pragma: no cover
+
+    for target in (
+        "server.services.model_defaults.get_scoped_db",
+        "server.services.jobs.get_scoped_db",
+    ):
+        monkeypatch.setattr(target, unreachable)
 
 
 @pytest.fixture(scope="session")
@@ -41,7 +70,17 @@ def postgres_url() -> Generator[str, None, None]:
 
     from testcontainers.community.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:17-alpine", driver="psycopg") as container:
+    # Explicit credentials: PostgresContainer otherwise reads POSTGRES_USER /
+    # POSTGRES_PASSWORD / POSTGRES_DB from the environment, which load_dotenv()
+    # fills from the dev .env ("datasets") — a word that also appears in
+    # migration messages, breaking the "never logs the password" assertion.
+    with PostgresContainer(
+        "postgres:17-alpine",
+        username="test",
+        password="test-only-pw-7f3a",
+        dbname="test",
+        driver="psycopg",
+    ) as container:
         yield normalize_database_url(container.get_connection_url())
 
 
@@ -138,8 +177,8 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
         dataset,
         generate,
         jobs,
+        models,
         q_a,
-        openai,
         prompts,
         quality_rules,
     )
@@ -163,7 +202,7 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
     test_app.include_router(generate.router)
     test_app.include_router(dataset.router)
     test_app.include_router(q_a.router)
-    test_app.include_router(openai.router)
+    test_app.include_router(models.router)
     test_app.include_router(collections.router)
     test_app.include_router(quality_rules.router)
     test_app.include_router(prompts.router)

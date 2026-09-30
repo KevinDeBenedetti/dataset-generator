@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { getAvailableModels, testQaAgent } from '@/api/sdk'
+import { testQaAgent } from '@/api/sdk'
+import { ModelSelect } from '@/components/app/model-select'
 import type { QaAgentTestResponse } from '@/api/types'
 
 // The generated `qa_pairs` is `unknown[]`; this is the shape the agent returns.
@@ -37,14 +37,6 @@ export default function AgentTestPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<QaAgentTestResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // Real model list from the configured provider (GET /openai/models); an
-  // empty selection lets the server use its configured default.
-  const modelsQuery = useQuery({
-    queryKey: ['openai-models'],
-    queryFn: getAvailableModels,
-    retry: false,
-  })
 
   const run = async () => {
     setLoading(true)
@@ -91,20 +83,8 @@ export default function AgentTestPage() {
           ))}
         </select>
 
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={loading || modelsQuery.isPending}
-          aria-label="Model"
-          className="h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-        >
-          <option value="">Server default model</option>
-          {(modelsQuery.data ?? []).map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </select>
+        {/* Any provider's model; empty = the qa role default. */}
+        <ModelSelect value={model} onChange={setModel} modelRole="qa" disabled={loading} />
 
         <Button onClick={run} disabled={!text.trim() || loading} className="flex-1">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Run agent</span>}

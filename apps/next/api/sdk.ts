@@ -82,6 +82,11 @@ import type {
   QaAgentTestRequest,
   QaAgentTestResponse,
   ValidationError,
+  JobInfo,
+  JobRunOut,
+  ModelsResponse,
+  ModelTestResponse,
+  UrlGenerationRequest,
 } from './gen/types.gen'
 
 // Helper to extract a readable error message from an API error body.
@@ -131,9 +136,7 @@ export async function getDatasets(): Promise<DatasetResponse[]> {
 }
 
 // Generate a dataset from an uploaded file (PDF or image). Multipart upload, so
-// this uses a hand-rolled fetch (FormData) rather than the JSON client. The
-// `/dataset/generate/file` endpoint isn't in the generated client yet (regenerate
-// the SDK once the server is running to pick it up).
+// this uses a hand-rolled fetch (FormData) rather than the JSON client.
 export interface GenerateFromFileParams {
   file: File
   datasetName: string
@@ -180,30 +183,18 @@ export async function generateDatasetFromFile(
   return (await response.json()) as DatasetGenerationResponse
 }
 
-// Generate a dataset from a GitHub account's public docs. JSON body; the
-// `/dataset/generate/github` endpoint isn't in the generated client yet.
-export interface GenerateFromGitHubParams {
-  github_username: string
-  github_token?: string | null
-  dataset_name: string
-  target_language?: string | null
-  model_cleaning?: string | null
-  model_qa?: string | null
-  similarity_threshold?: number
-  max_repos?: number | null
-  persist?: boolean
-}
-
-export async function generateDatasetFromGitHub(
-  body: GenerateFromGitHubParams,
+// Generate a dataset from one web page (no crawling). Model fields are
+// "<provider>:<model>" references; omitted ones use the role defaults.
+export async function generateDatasetFromUrl(
+  body: UrlGenerationRequest,
 ): Promise<DatasetGenerationResponse> {
   const response = await client.post<DatasetGenerationResponse>({
-    url: '/dataset/generate/github',
+    url: '/dataset/generate/url',
     body,
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to generate dataset from GitHub'))
+    throw new Error(getErrorMessage(response.error, 'Failed to generate dataset from URL'))
   }
   return response.data as unknown as DatasetGenerationResponse
 }
@@ -301,17 +292,45 @@ export async function resolvePair(
   return response.data as unknown as ResolvePairResponse
 }
 
-// Models available from the configured OpenAI-compatible provider
-// (GET /openai/models returns {models: [{id, object}]}).
-export async function getAvailableModels(): Promise<string[]> {
-  const response = await client.get<{ models: Array<{ id: string }> }>({
-    url: '/openai/models',
+// Model providers (OpenAI API, Claude subscription), their models and the
+// default model reference of each role (cleaning, qa, vision, jobs).
+// `discover` also asks the OpenAI-compatible endpoint which models it serves.
+export async function getModels(discover = false): Promise<ModelsResponse> {
+  const response = await client.get<ModelsResponse>({
+    url: `/models${discover ? '?discover=true' : ''}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch available models'))
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch models'))
   }
-  const data = response.data as unknown as { models: Array<{ id: string }> }
-  return (data.models ?? []).map((m) => m.id)
+  return response.data as unknown as ModelsResponse
+}
+
+// Set the default model of one or more roles (admin only).
+export async function updateModelDefaults(
+  defaults: Record<string, string>,
+): Promise<ModelsResponse> {
+  const response = await client.put<ModelsResponse>({
+    url: '/models/defaults',
+    body: { defaults },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to save the model defaults'))
+  }
+  return response.data as unknown as ModelsResponse
+}
+
+// Send one short prompt to a model (admin only — spends provider quota).
+export async function testModel(ref: string, prompt?: string): Promise<ModelTestResponse> {
+  const response = await client.post<ModelTestResponse>({
+    url: '/models/test',
+    body: prompt ? { ref, prompt } : { ref },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to test the model'))
+  }
+  return response.data as unknown as ModelTestResponse
 }
 
 // Hand-written: mirrors PromptsResponse (apps/server/schemas/prompts.py).
@@ -743,97 +762,59 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return response.data as unknown as AuthUser
 }
 
-// Scheduled dataset↔Hugging Face jobs (server/jobs) — same code the
-// dataset-sync.yml / qa-dataset-sync.yml GitHub Actions run on a Monday
-// cron, triggered here on demand for testing from the dashboard.
-
-export interface CorpusJobStatus {
-  configured: boolean
-  github_username: boolean
-  github_token: boolean
-  hf_token: boolean
-  hf_dataset_repo: boolean
-}
-
-export interface QADatasetJobStatus {
-  configured: boolean
-  github_username: boolean
-  github_token: boolean
-  claude_credentials: boolean
-  hf_token: boolean
-  hf_qa_dataset_repo: boolean
-}
-
-export interface JobsStatusResponse {
-  corpus: CorpusJobStatus
-  qa_dataset: QADatasetJobStatus
-}
-
-// Which server env vars each job needs are set — booleans only, no secret
-// values ever come back.
-export async function getJobsStatus(): Promise<JobsStatusResponse> {
-  const response = await client.get<JobsStatusResponse>({ url: '/jobs/status' })
+// Dataset job catalogue (server/jobs/registry.py) — the same code their
+// GitHub Actions workflows run on a schedule, triggered here on demand. Each
+// job serves the JSON schema of its options, which the Jobs page renders.
+export async function getJobs(): Promise<JobInfo[]> {
+  const response = await client.get<{ jobs: JobInfo[] }>({ url: '/jobs' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch jobs status'))
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch the jobs'))
   }
-  return response.data as unknown as JobsStatusResponse
+  return (response.data as unknown as { jobs: JobInfo[] }).jobs
 }
 
-export type CorpusSource = 'profile' | 'github' | 'github_code' | 'github_docs'
-
-export interface CorpusSyncResponse {
-  manifest: {
-    generated_at: string
-    generator: string
-    source_commit?: string
-    files: { path: string; source: string; records: number; sha256: string }[]
-  }
-  url: string | null
-  dry_run: boolean
-}
-
-// Builds the portfolio knowledge corpus from the GitHub API and, unless
-// dryRun, publishes it to the configured private Hugging Face dataset.
-export async function triggerCorpusSync(options?: {
-  sources?: CorpusSource[]
-  dryRun?: boolean
-}): Promise<CorpusSyncResponse> {
-  const response = await client.post<CorpusSyncResponse>({
-    url: '/jobs/corpus-sync',
-    body: { sources: options?.sources ?? null, dry_run: options?.dryRun ?? false },
+// Starts a run in the background (202) — poll getJobRun for its progress.
+export async function startJobRun(
+  jobId: string,
+  options: Record<string, unknown>,
+  modelRef?: string | null,
+): Promise<JobRunOut> {
+  const response = await client.post<JobRunOut>({
+    url: `/jobs/${encodeURIComponent(jobId)}/run`,
+    body: { options, model_ref: modelRef || null },
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to run the corpus sync job'))
+    throw new Error(getErrorMessage(response.error, `Failed to start the ${jobId} job`))
   }
-  return response.data as unknown as CorpusSyncResponse
+  return response.data as unknown as JobRunOut
 }
 
-export interface QADatasetSyncResponse {
-  repo: string | null
-  url: string | null
-  records: number
-  dropped: number
-  errors: string[]
-  dry_run: boolean
+export async function getJobRun(runId: string): Promise<JobRunOut> {
+  const response = await client.get<JobRunOut>({
+    url: `/jobs/runs/${encodeURIComponent(runId)}`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to fetch the job run'))
+  }
+  return response.data as unknown as JobRunOut
 }
 
-// Generates the GitHub Q&A dataset (billed against the configured Claude
-// subscription) and, unless dryRun, publishes it to the configured private
-// Hugging Face dataset. Pass maxRepos for a cheap test run.
-export async function triggerQADatasetSync(options?: {
-  maxRepos?: number
-  dryRun?: boolean
-}): Promise<QADatasetSyncResponse> {
-  const response = await client.post<QADatasetSyncResponse>({
-    url: '/jobs/qa-dataset-sync',
-    body: { max_repos: options?.maxRepos ?? null, dry_run: options?.dryRun ?? false },
+// Publishes a run's reviewed draft: `exclude` drops new pairs, `promote` moves
+// pairs from the review list into the export.
+export async function publishJobRun(
+  runId: string,
+  selection: { exclude: string[]; promote: string[] },
+): Promise<JobRunOut> {
+  const response = await client.post<JobRunOut>({
+    url: `/jobs/runs/${encodeURIComponent(runId)}/publish`,
+    body: selection,
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to run the QA dataset sync job'))
+    throw new Error(getErrorMessage(response.error, 'Failed to publish to Hugging Face'))
   }
-  return response.data as unknown as QADatasetSyncResponse
+  return response.data as unknown as JobRunOut
 }
 
 // Absolute URL the browser navigates to in order to start the OIDC flow.

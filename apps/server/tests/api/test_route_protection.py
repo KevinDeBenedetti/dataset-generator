@@ -11,7 +11,15 @@ from unittest.mock import AsyncMock, patch
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import collections, dataset, generate, jobs, q_a, quality_rules
+from server.api import (
+    collections,
+    dataset,
+    generate,
+    jobs,
+    models,
+    q_a,
+    quality_rules,
+)
 from server.core.database import get_db
 from server.models.user import User, UserRole
 from server.services.auth import get_current_user
@@ -26,6 +34,7 @@ def _build_protected_app(test_db):
     app.include_router(quality_rules.router, dependencies=auth_required)
     app.include_router(jobs.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
+    app.include_router(models.router, dependencies=auth_required)
 
     def override_get_db():
         yield test_db
@@ -43,11 +52,13 @@ def test_protected_routes_reject_anonymous(test_db):
     assert client.get("/collections").status_code == 401
     assert (
         client.post(
-            "/dataset/generate/github",
-            json={"github_username": "octocat", "dataset_name": "x"},
+            "/dataset/generate/url",
+            json={"url": "https://example.com", "dataset_name": "x"},
         ).status_code
         == 401
     )
+    assert client.get("/jobs").status_code == 401
+    assert client.get("/models").status_code == 401
 
 
 def test_protected_routes_allow_authenticated(test_db):
@@ -75,8 +86,11 @@ _ADMIN_ONLY_ROUTES = [
     ("post", "/dataset/my_dataset/resolve-pair"),
     ("post", "/collections/my_dataset/qdrant"),
     ("put", "/quality-rules"),
-    ("post", "/jobs/corpus-sync", {}),
-    ("post", "/jobs/qa-dataset-sync", {}),
+    ("post", "/jobs/github-personal/run", {}),
+    ("post", "/jobs/knowledge-corpus/run", {}),
+    ("post", "/jobs/runs/run-1/publish", {}),
+    ("put", "/models/defaults", {"defaults": {}}),
+    ("post", "/models/test", {"ref": "openai:m"}),
     ("post", "/q_a/my_dataset/score"),
 ]
 
@@ -155,26 +169,18 @@ def test_admin_routes_allow_admin(test_db):
             client.put("/quality-rules", json={"min_answer_words": 5}).status_code
             == 200
         )
-    with patch(
-        "server.api.jobs.run_corpus_sync",
-        new=AsyncMock(return_value={"manifest": {}, "url": None, "dry_run": True}),
+    from datetime import datetime, timezone
+
+    run = {
+        "id": "run-1",
+        "job": "knowledge-corpus",
+        "status": "running",
+        "started_at": datetime(2026, 9, 30, tzinfo=timezone.utc),
+    }
+    with patch("server.api.jobs.start_run", new=AsyncMock(return_value=run)):
+        assert client.post("/jobs/knowledge-corpus/run", json={}).status_code == 202
+    with (
+        patch("server.api.models.update_model_defaults"),
+        patch("server.api.models.get_model_defaults", return_value={}),
     ):
-        assert (
-            client.post("/jobs/corpus-sync", json={"dry_run": True}).status_code == 200
-        )
-    with patch(
-        "server.api.jobs.run_qa_dataset_sync",
-        new=AsyncMock(
-            return_value={
-                "repo": None,
-                "url": None,
-                "records": 0,
-                "dropped": 0,
-                "dry_run": True,
-            }
-        ),
-    ):
-        assert (
-            client.post("/jobs/qa-dataset-sync", json={"dry_run": True}).status_code
-            == 200
-        )
+        assert client.put("/models/defaults", json={"defaults": {}}).status_code == 200

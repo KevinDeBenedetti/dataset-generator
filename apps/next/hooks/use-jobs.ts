@@ -1,42 +1,54 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  getJobsStatus,
-  triggerCorpusSync,
-  triggerQADatasetSync,
-  type CorpusSource,
-} from '@/api/sdk'
+import { getJobRun, getJobs, publishJobRun, startJobRun } from '@/api/sdk'
+import type { JobRunOut } from '@/api/types'
 
-export const JOBS_STATUS_QUERY_KEY = ['jobs-status']
+export const JOBS_QUERY_KEY = ['jobs']
+const JOB_RUN_QUERY_KEY = 'job-run'
 
-export function useJobsStatus() {
+// The dataset job catalogue, with each job's options schema, config status
+// and latest run.
+export function useJobs() {
   return useQuery({
-    queryKey: JOBS_STATUS_QUERY_KEY,
-    queryFn: getJobsStatus,
+    queryKey: JOBS_QUERY_KEY,
+    queryFn: getJobs,
   })
 }
 
-export function useTriggerCorpusSync() {
-  const queryClient = useQueryClient()
+// One run's state, polled every 2 s while it is running.
+export function useJobRun(runId: string | null | undefined) {
+  return useQuery({
+    queryKey: [JOB_RUN_QUERY_KEY, runId],
+    queryFn: () => getJobRun(runId as string),
+    enabled: !!runId,
+    refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
+  })
+}
 
+export function useStartJobRun(jobId: string) {
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (options?: { sources?: CorpusSource[]; dryRun?: boolean }) =>
-      triggerCorpusSync(options),
-    // A successful (non-dry-run) publish may flip what's "configured" — e.g.
-    // the first run creates the Hub repo — so the status card stays current.
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: JOBS_STATUS_QUERY_KEY })
+    mutationFn: ({
+      options,
+      modelRef,
+    }: {
+      options: Record<string, unknown>
+      modelRef?: string | null
+    }) => startJobRun(jobId, options, modelRef),
+    onSuccess: (run: JobRunOut) => {
+      queryClient.setQueryData([JOB_RUN_QUERY_KEY, run.id], run)
+      queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
     },
   })
 }
 
-export function useTriggerQADatasetSync() {
+export function usePublishJobRun(runId: string) {
   const queryClient = useQueryClient()
-
   return useMutation({
-    mutationFn: (options?: { maxRepos?: number; dryRun?: boolean }) =>
-      triggerQADatasetSync(options),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: JOBS_STATUS_QUERY_KEY })
+    mutationFn: (selection: { exclude: string[]; promote: string[] }) =>
+      publishJobRun(runId, selection),
+    onSuccess: (run: JobRunOut) => {
+      queryClient.setQueryData([JOB_RUN_QUERY_KEY, run.id], run)
+      queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
     },
   })
 }

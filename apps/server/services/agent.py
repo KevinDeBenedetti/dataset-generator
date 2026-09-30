@@ -1,11 +1,12 @@
 """QA generation agent.
 
-Runs as a single-node LangGraph graph wrapping a LangChain ``ChatOpenAI`` model
-pointed at the configured OpenAI-compatible endpoint. The model is instructed
+Runs as a single-node LangGraph graph whose node calls a model through the
+provider registry (services/providers) — the OpenAI-compatible API or the
+Claude subscription, picked by the model reference. The model is instructed
 to emit a JSON list of QA pairs, which we parse tolerantly ourselves (see
-``_parse_qa_list``) rather than relying on LangChain structured output —
-reasoning-heavy / gpt-oss-style models can still truncate or wrap the JSON,
-and the diagnostic endpoint needs the raw text regardless of whether it parses.
+``_parse_qa_list``) rather than relying on structured output — reasoning-heavy
+/ gpt-oss-style models can still truncate or wrap the JSON, and the diagnostic
+endpoint needs the raw text regardless of whether it parses.
 The graph is a placeholder for now (one node, no branching) but gives the
 agent room to grow into multi-step behaviour (retries, validation) later.
 """
@@ -15,13 +16,15 @@ import json
 import logging
 import re
 from collections import Counter
-from typing import Any, List, Optional, TypedDict
+from typing import List, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ValidationError
 
 from server.core.config import config
 from server.schemas.dataset import QA
+from server.services.model_defaults import resolve_model
+from server.services.providers import CompletionRequest, complete
 
 
 class QAList(BaseModel):
@@ -211,49 +214,24 @@ class _AgentState(TypedDict):
     raw_response: str
 
 
-def build_chat_model(model: str) -> Any:
-    """An async-capable ChatOpenAI on the configured OpenAI-compatible endpoint."""
-    # Imported lazily: langchain_openai builds a module-level SSL context
-    # (via certifi) at import time, which some sandboxes block — same
-    # reason LLMService/QAAgentService keep their openai clients lazy.
-    from langchain_openai import ChatOpenAI
-
-    # Built per call (not cached) since the model id varies per request;
-    # construction itself is cheap and does no I/O.
-    kwargs: dict = dict(
-        model=model,
-        api_key=config.openai_api_key,
-        base_url=config.openai_base_url or None,
-        max_tokens=config.max_tokens_qa,
-        temperature=config.temperature,
-    )
-    # "low" keeps gpt-oss-style models from spending their whole budget
-    # reasoning and never emitting the final JSON.
-    if config.openai_reasoning_effort:
-        kwargs["reasoning_effort"] = config.openai_reasoning_effort
-    return ChatOpenAI(**kwargs)
-
-
 class QAAgentService:
-    """Generate QA pairs via a single-node LangGraph graph over ChatOpenAI."""
-
-    def _build_chat_model(self, model: str) -> Any:
-        return build_chat_model(model)
+    """Generate QA pairs via a single-node LangGraph graph over any provider."""
 
     async def _generate_node(self, state: _AgentState) -> dict:
-        chat_model = self._build_chat_model(state["model"])
         prompt = (
             f"Target language: {state['target_language']}\n\n"
             f"Source text:\n{state['text']}"
         )
-        response = await chat_model.ainvoke(
-            [
-                {"role": "system", "content": QA_AGENT_INSTRUCTION},
-                {"role": "user", "content": prompt},
-            ]
+        result = await complete(
+            state["model"],
+            CompletionRequest(
+                system=QA_AGENT_INSTRUCTION,
+                user=prompt,
+                max_tokens=config.max_tokens_qa,
+                reasoning=True,
+            ),
         )
-        content = response.content if isinstance(response.content, str) else ""
-        return {"raw_response": content.strip()}
+        return {"raw_response": result.text.strip()}
 
     @functools.cached_property
     def _graph(self):
@@ -281,7 +259,7 @@ class QAAgentService:
     ) -> List[QA]:
         """Generate QA pairs; returns an empty list on failure."""
         target_language = target_language or config.target_language or "en"
-        model = model or config.model_qa
+        model = resolve_model("qa", model)
         try:
             raw = await self._run(text, target_language, model)
             if not raw:
@@ -304,7 +282,7 @@ class QAAgentService:
         returns and whether it parses into valid QA pairs.
         """
         target_language = target_language or config.target_language or "en"
-        model = model or config.model_qa
+        model = resolve_model("qa", model)
         raw_response = ""
         error: Optional[str] = None
         pairs: List[QA] = []

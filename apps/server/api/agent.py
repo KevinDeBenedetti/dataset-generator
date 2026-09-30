@@ -11,8 +11,9 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from server.core.config import config
 from server.services.agent import QAAgentService
+from server.services.model_defaults import resolve_model
+from server.services.providers import validate_ref
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -23,7 +24,9 @@ class QAAgentTestRequest(BaseModel):
         None, description="Target language (defaults to server config)"
     )
     model: Optional[str] = Field(
-        None, description="Model id (defaults to server config)"
+        None,
+        description='Model reference, e.g. "claude:claude-sonnet-5" '
+        "(defaults to the qa role default)",
     )
 
 
@@ -44,19 +47,17 @@ class QAAgentTestResponse(BaseModel):
     summary="Run the QA agent on a text and return raw + parsed output",
 )
 async def qa_agent_test(request: QAAgentTestRequest) -> QAAgentTestResponse:
-    model = request.model or config.model_qa
-    if model and model not in config.available_models:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Model '{model}' not in available models: {config.available_models}",
-        )
+    try:
+        model = validate_ref(resolve_model("qa", request.model))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     service = QAAgentService()
     try:
         result = await service.generate_qa_debug(
             text=request.text,
             target_language=request.target_language,
-            model=request.model,
+            model=model,
         )
     except Exception as exc:  # pragma: no cover - defensive
         logging.exception("QA agent test failed")

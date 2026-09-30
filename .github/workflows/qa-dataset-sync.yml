@@ -10,13 +10,23 @@ name: QA dataset sync
 # instead of pay-per-token API usage. The SDK bundles the Claude Code binary,
 # so it sits in the optional `jobs` dependency group, out of the server image.
 #
+# Incremental: the job reads the published train.jsonl + manifest.json back and
+# only sends sources whose content changed to the LLM; new pairs are deduped
+# and grounding-checked with a local embedding model (FastEmbed, cached below).
+# Dispatch with full_refresh=true to regenerate everything from scratch.
+#
 # `on: schedule` only fires on the default branch: merge to main to arm the cron.
 
 on:
   schedule:
     # Mondays at 06:00 UTC — after the knowledge-corpus dataset-sync.yml run.
     - cron: "0 6 * * 1"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: "Ignore the published version and regenerate every source"
+        type: boolean
+        default: false
 
 concurrency:
   group: qa-dataset-sync
@@ -32,6 +42,9 @@ jobs:
     defaults:
       run:
         working-directory: apps
+    env:
+      SEMANTIC_MODEL: ${{ vars.SEMANTIC_MODEL || 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2' }}
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.cache/fastembed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -42,14 +55,28 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --no-dev --group jobs
 
+      # ~220 MB ONNX model: download it once, not every Monday.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.FASTEMBED_CACHE_PATH }}
+          key: fastembed-${{ env.SEMANTIC_MODEL }}
+
       - name: Generate and export the Q&A dataset
         env:
           GITHUB_USERNAME: ${{ vars.DATASET_GITHUB_USERNAME || github.repository_owner }}
           GITHUB_TOKEN: ${{ secrets.DATASET_GITHUB_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          # Optional "<provider>:<model>" override (default: claude:$CLAUDE_MODEL).
+          QA_JOB_MODEL: ${{ vars.QA_JOB_MODEL }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_QA_DATASET_REPO: ${{ secrets.HF_QA_DATASET_REPO }}
           HF_QA_DATASET_LICENSE: ${{ vars.HF_QA_DATASET_LICENSE }}
           HF_QA_DATASET_LICENSE_LINK: ${{ vars.HF_QA_DATASET_LICENSE_LINK }}
+          QA_FULL_REFRESH: ${{ inputs.full_refresh && 'true' || 'false' }}
+          # Optional overrides; unset repo variables fall back to the defaults
+          # in server/core/config.py.
+          SEMANTIC_DEDUP_THRESHOLD: ${{ vars.SEMANTIC_DEDUP_THRESHOLD }}
+          ANSWER_GROUNDING_THRESHOLD: ${{ vars.ANSWER_GROUNDING_THRESHOLD }}
+          UNCOVERED_SECTION_THRESHOLD: ${{ vars.UNCOVERED_SECTION_THRESHOLD }}
         run: uv run --no-sync python -m server.jobs.qa_dataset
