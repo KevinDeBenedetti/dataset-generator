@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.10.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.9.0...v0.10.0) (2026-10-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** add LLM-based Q&A scoring for datasets
+
+### Features
+
+* **admin:** introduce multi-user admin platform with audit, platform settings, and user management ([f8175b1](https://github.com/KevinDeBenedetti/dataset-generator/commit/f8175b1193ee4942211dd94bbddf5fa8f2bf92cd))
+* **api,web:** integrate Hugging Face datasets hub and enhance dashboard ([32e4c2e](https://github.com/KevinDeBenedetti/dataset-generator/commit/32e4c2e09911eb9fd8a9ca9be0e7025c80ea722c))
+* **api:** add LLM-based Q&A scoring for datasets ([bfcddf8](https://github.com/KevinDeBenedetti/dataset-generator/commit/bfcddf897c69d94528c3377c64b9d3c8a94dc230))
+* **api:** add support for fetching HuggingFace datasets ([73e267f](https://github.com/KevinDeBenedetti/dataset-generator/commit/73e267f28f5211c32c2715499f18b3cd772c8fbd))
+* **jobs:** introduce corpus and QA dataset sync pipelines ([eebe7a8](https://github.com/KevinDeBenedetti/dataset-generator/commit/eebe7a8ac69121bb88597850bcad539c156e2795))
+* **jobs:** qualify bare Hugging Face repo IDs before committing ([9f6f344](https://github.com/KevinDeBenedetti/dataset-generator/commit/9f6f3447958ee75ed2de3cbfc5e91dba41a4a004))
+* **server,workflow:** add semantic deduplication, answer grounding, and multi-provider support ([b64adda](https://github.com/KevinDeBenedetti/dataset-generator/commit/b64adda75eddc797147eaceee18303f6ae761d5d))
+
+
+### Bug Fixes
+
+* remove dead config and fix data-loss/auth/config regressions from the audit ([803a1a9](https://github.com/KevinDeBenedetti/dataset-generator/commit/803a1a9443928bad05bce48992fb02372d5f1718))
+* **tests:** harden migration tests against hanging and improve config handling ([0226463](https://github.com/KevinDeBenedetti/dataset-generator/commit/0226463687ae2bd478942d81845b41adf9b65954))
+* **tests:** prevent test suite hangs caused by unclosed database sessions ([e630e06](https://github.com/KevinDeBenedetti/dataset-generator/commit/e630e062036b2d060b7bea6f68cdf4d820fa6fee))
+
+
+### Chores
+
+* add allowlist for server test fake keys and canary tokens ([2a1c872](https://github.com/KevinDeBenedetti/dataset-generator/commit/2a1c8721a1431da69e59bda3a0d4d04493ea4277))
+* **api:** migrate API contract workflow from client code to schema dump ([d242de4](https://github.com/KevinDeBenedetti/dataset-generator/commit/d242de4c354203876d64a9cb8f5303ea81ecbbb3))
+
 ## [0.9.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.8.0...v0.9.0) (2026-09-25)
 
 
