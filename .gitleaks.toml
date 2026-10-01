@@ -8,3 +8,9 @@ description = "Example env file — variable names only, values are always blank
 paths = [
   '''(^|/)\.env\.example$''',
 ]
+
+[[allowlists]]
+description = "Server tests: fake keys and canary tokens (sk-canary-…, hf_Canary…) that exist to prove secrets never leak from the API, logs or the database — none is a real credential"
+paths = [
+  '''(^|/)apps/server/tests/''',
+]
