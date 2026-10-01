@@ -13,6 +13,24 @@ from server.services.legacy import claim_legacy_rows
 from server.services.users import create_user
 
 
+class _Borrowed:
+    """The test's session, handed to code that closes its session when done.
+
+    Patching ``test_db.close`` to a no-op instead would leave the session open
+    at teardown — its transaction then blocks the schema drop on Postgres (and
+    hangs the suite), while SQLite never notices.
+    """
+
+    def __init__(self, session):
+        self._session = session
+
+    def close(self):
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+
 @pytest.fixture
 def system(test_db):
     user = User(
@@ -134,9 +152,7 @@ def test_the_cli_reports_and_uses_a_nonzero_exit_on_error(
     monkeypatch, test_db, system, kevin, capsys
 ):
     _legacy_rows(test_db, system)
-    monkeypatch.setattr("server.cli.SessionLocal", lambda: test_db)
-    # The CLI closes its session; keep the fixture's usable for the assertions.
-    monkeypatch.setattr(test_db, "close", lambda: None)
+    monkeypatch.setattr("server.cli.SessionLocal", lambda: _Borrowed(test_db))
 
     assert main(["claim-legacy", "--email", "kevin@test.local"]) == 0
     assert "2 datasets" in capsys.readouterr().out
@@ -155,8 +171,7 @@ def test_gen_key_prints_a_ring_entry_that_parses(capsys):
 
 
 def test_rewrap_secrets_reports_counts(monkeypatch, test_db, capsys):
-    monkeypatch.setattr("server.cli.SessionLocal", lambda: test_db)
-    monkeypatch.setattr(test_db, "close", lambda: None)
+    monkeypatch.setattr("server.cli.SessionLocal", lambda: _Borrowed(test_db))
     monkeypatch.setattr(
         "server.services.user_secrets.rewrap_all",
         lambda db: {"rewrapped": 2, "unchanged": 1, "failed": 0},

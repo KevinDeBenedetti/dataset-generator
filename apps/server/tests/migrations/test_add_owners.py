@@ -6,7 +6,6 @@ constraint swaps): it runs with the rest of the suite via ``make test``.
 
 import datetime as dt
 from pathlib import Path
-from urllib.parse import quote
 
 import pytest
 from alembic import command
@@ -19,6 +18,7 @@ from sqlalchemy import (
     MetaData,
     Table,
     create_engine,
+    make_url,
     inspect,
     select,
     text,
@@ -32,16 +32,28 @@ SYSTEM_EMAIL = "system@datasetgen.invalid"
 
 # A lock wait or a stuck statement must fail the test with a message, never hang
 # the suite: a migration test that blocks would otherwise stall CI for hours.
+# Set on the database itself (new sessions inherit it) — not in the URL, where
+# the "%" of an encoded value breaks Alembic's ini interpolation.
 _TIMEOUTS = "-c lock_timeout=15000 -c statement_timeout=60000"
+
+
+def _bound_waits(url):
+    name = make_url(url).database
+    engine = create_engine(url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER DATABASE \"{name}\" SET lock_timeout = '15s'"))
+            conn.execute(
+                text(f"ALTER DATABASE \"{name}\" SET statement_timeout = '60s'")
+            )
+    finally:
+        engine.dispose()
 
 
 def _cfg(url):
     """Alembic config for ``url`` with an absolute script location (independent
-    of the working directory) and bounded waits."""
-    separator = "&" if "?" in url else "?"
-    # "%" is configparser's interpolation character: double it in the ini value.
-    options = quote(_TIMEOUTS).replace("%", "%%")
-    config = get_alembic_config(f"{url}{separator}options={options}")
+    of the working directory)."""
+    config = get_alembic_config(url)
     config.set_main_option("script_location", str(_SCRIPTS))
     return config
 
@@ -89,6 +101,7 @@ def _insert(engine, table_name, **values):
 def legacy_db(make_database):
     """A database at the revision before the migration, holding legacy rows."""
     url = make_database("migrations_owners")
+    _bound_waits(url)
     command.upgrade(_cfg(url), BEFORE)
     return url
 

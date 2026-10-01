@@ -151,6 +151,9 @@ def test_an_admin_email_receives_the_parked_legacy_data_once(test_db, monkeypatc
         is_active=False,
     )
     test_db.add(system)
+    # The models declare no relationships, so the session doesn't know the user
+    # must be inserted before its dataset: Postgres enforces the foreign key.
+    test_db.commit()
     test_db.add(Dataset(id="d1", name="old", owner_id="sys"))
     test_db.commit()
     monkeypatch.setattr(config, "admin_emails_raw", "boss@example.com")
