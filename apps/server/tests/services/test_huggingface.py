@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from server.core.config import config
+from server.tests.creds import FULL, NONE, make_creds  # noqa: F401
 from server.services import huggingface as hf
 from server.services.huggingface import (
     DATA_PATH_IN_REPO,
@@ -24,6 +24,10 @@ from server.services.huggingface import (
     resolve_repo_id,
     slugify,
 )
+
+# The user the export/import acts for (the service is owner-scoped).
+CREDS = make_creds(hf_token="hf_test_token")
+OWNER = "owner-1"
 
 
 class FakeRepoInfo:
@@ -138,15 +142,14 @@ def _pair(pair_id, question, **overrides):
 
 
 @pytest.fixture
-def token(monkeypatch):
-    monkeypatch.setattr(config, "hf_token", "hf_test_token")
-    monkeypatch.setattr(config, "hf_namespace", "")
+def token():
+    """The default CREDS carry a token and no namespace (kept for readability)."""
 
 
 @pytest.fixture
 def api(monkeypatch):
     fake = FakeHfApi()
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
     return fake
 
 
@@ -166,10 +169,11 @@ def _stub_dataset(pairs, target_language="fr"):
 
 
 def test_not_configured_without_a_token(monkeypatch):
-    monkeypatch.setattr(config, "hf_token", "")
-    assert is_huggingface_configured() is False
-    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_TOKEN"):
-        export_dataset_to_hub("ds")
+    assert is_huggingface_configured(NONE) is False
+    assert is_huggingface_configured(CREDS) is True
+    view, pairs = _stub_dataset([_pair("a", "Q1?")])
+    with view, pairs, pytest.raises(HuggingFaceNotConfiguredError, match="Settings"):
+        export_dataset_to_hub(OWNER, NONE, "ds")
 
 
 def test_slugify_makes_a_valid_repo_name():
@@ -178,41 +182,41 @@ def test_slugify_makes_a_valid_repo_name():
 
 
 def test_repo_id_defaults_to_the_token_account(token, api):
-    assert resolve_repo_id("Docs FR") == "kevin/Docs-FR"
+    assert resolve_repo_id(CREDS, "Docs FR") == "kevin/Docs-FR"
 
 
-def test_repo_id_uses_the_configured_namespace(token, api, monkeypatch):
-    monkeypatch.setattr(config, "hf_namespace", "my-org")
-    assert resolve_repo_id("Docs FR") == "my-org/Docs-FR"
+def test_repo_id_uses_the_configured_namespace(token, api):
+    org = make_creds(hf_token="hf_test_token", hf_namespace="my-org")
+    assert resolve_repo_id(org, "Docs FR") == "my-org/Docs-FR"
 
 
 def test_explicit_repo_id_wins(token, api):
-    assert resolve_repo_id("Docs FR", "someone/else") == "someone/else"
+    assert resolve_repo_id(CREDS, "Docs FR", "someone/else") == "someone/else"
 
 
 def test_qualify_repo_id_completes_a_bare_name(token, api):
     # A bare id 404s on commit/download/info: it needs its namespace.
-    assert qualify_repo_id("github-personal") == "kevin/github-personal"
-    assert qualify_repo_id("  github-personal ") == "kevin/github-personal"
+    assert qualify_repo_id(CREDS, "github-personal") == "kevin/github-personal"
+    assert qualify_repo_id(CREDS, "  github-personal ") == "kevin/github-personal"
 
 
-def test_qualify_repo_id_prefers_the_configured_namespace(token, api, monkeypatch):
-    monkeypatch.setattr(config, "hf_namespace", "my-org")
-    assert qualify_repo_id("github-personal") == "my-org/github-personal"
+def test_qualify_repo_id_prefers_the_configured_namespace(token, api):
+    org = make_creds(hf_token="hf_test_token", hf_namespace="my-org")
+    assert qualify_repo_id(org, "github-personal") == "my-org/github-personal"
 
 
 def test_qualify_repo_id_keeps_a_full_id_without_calling_the_hub(token, monkeypatch):
-    def no_hub():
+    def no_hub(creds):
         raise AssertionError("a full id needs no Hub call")
 
     monkeypatch.setattr(hf, "_api", no_hub)
-    assert qualify_repo_id("someone/else") == "someone/else"
+    assert qualify_repo_id(CREDS, "someone/else") == "someone/else"
 
 
 def test_qualify_repo_id_needs_a_namespace(token, api, monkeypatch):
     monkeypatch.setattr(api, "whoami", lambda: {})
-    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_NAMESPACE"):
-        qualify_repo_id("github-personal")
+    with pytest.raises(HuggingFaceNotConfiguredError, match="namespace"):
+        qualify_repo_id(CREDS, "github-personal")
 
 
 # --- export ------------------------------------------------------------------
@@ -221,7 +225,7 @@ def test_qualify_repo_id_needs_a_namespace(token, api, monkeypatch):
 def test_export_creates_a_private_repo_and_uploads(token, api):
     view, pairs = _stub_dataset([_pair("a", "Q1?"), _pair("b", "Q2?")])
     with view, pairs:
-        result = export_dataset_to_hub("ds")
+        result = export_dataset_to_hub(OWNER, CREDS, "ds")
 
     assert result["repo_id"] == "kevin/ds"
     assert result["private"] is True
@@ -241,14 +245,14 @@ def test_export_refuses_an_existing_public_repo(token, monkeypatch):
     """The whole point of the guard: `private=True` is ignored on an existing
     repo, so uploading into a public one would publish the dataset."""
     fake = FakeHfApi(existing_private=False)
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
     view, pairs = _stub_dataset([_pair("a", "Q1?")])
     with view, pairs:
         with pytest.raises(
             HuggingFaceRepoPublicError, match="already exists and is public"
         ):
-            export_dataset_to_hub("ds")
+            export_dataset_to_hub(OWNER, CREDS, "ds")
 
     # Nothing was sent.
     assert fake.uploads == []
@@ -256,11 +260,11 @@ def test_export_refuses_an_existing_public_repo(token, monkeypatch):
 
 def test_export_accepts_an_existing_private_repo(token, monkeypatch):
     fake = FakeHfApi(existing_private=True)
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
     view, pairs = _stub_dataset([_pair("a", "Q1?")])
     with view, pairs:
-        result = export_dataset_to_hub("ds")
+        result = export_dataset_to_hub(OWNER, CREDS, "ds")
 
     assert result["pairs_exported"] == 1
     assert len(fake.uploads) == 2
@@ -269,14 +273,14 @@ def test_export_accepts_an_existing_private_repo(token, monkeypatch):
 def test_export_unknown_dataset_raises(token, api):
     with patch.object(hf, "get_dataset_view", return_value=None):
         with pytest.raises(ValueError, match="not found"):
-            export_dataset_to_hub("ghost")
+            export_dataset_to_hub(OWNER, CREDS, "ghost")
 
 
 def test_export_empty_dataset_raises(token, api):
     view, pairs = _stub_dataset([])
     with view, pairs:
         with pytest.raises(ValueError, match="no Q/A pairs"):
-            export_dataset_to_hub("ds")
+            export_dataset_to_hub(OWNER, CREDS, "ds")
 
 
 # --- payload -----------------------------------------------------------------
@@ -293,7 +297,7 @@ def test_uploaded_jsonl_has_one_object_per_pair(token, api):
         ]
     )
     with view, pairs:
-        export_dataset_to_hub("ds")
+        export_dataset_to_hub(OWNER, CREDS, "ds")
 
     body = api.uploads[0]["content"].decode("utf-8")
     rows = [json.loads(line) for line in body.strip().split("\n")]
@@ -308,7 +312,7 @@ def test_uploaded_jsonl_has_one_object_per_pair(token, api):
 def test_uploaded_jsonl_keeps_non_ascii_readable(token, api):
     view, pairs = _stub_dataset([_pair("a", "Où est la gare ?")])
     with view, pairs:
-        export_dataset_to_hub("ds")
+        export_dataset_to_hub(OWNER, CREDS, "ds")
 
     body = api.uploads[0]["content"].decode("utf-8")
     assert "Où est la gare ?" in body
@@ -317,10 +321,9 @@ def test_uploaded_jsonl_keeps_non_ascii_readable(token, api):
 # --- listing -------------------------------------------------------------
 
 
-def test_list_user_datasets_not_configured_without_a_token(monkeypatch):
-    monkeypatch.setattr(config, "hf_token", "")
-    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_TOKEN"):
-        list_user_datasets()
+def test_list_user_datasets_not_configured_without_a_token():
+    with pytest.raises(HuggingFaceNotConfiguredError, match="Settings"):
+        list_user_datasets(NONE)
 
 
 def test_list_user_datasets_uses_the_token_account(token, monkeypatch):
@@ -330,9 +333,9 @@ def test_list_user_datasets_uses_the_token_account(token, monkeypatch):
             FakeDatasetInfo("kevin/ds-b", private=True),
         ]
     )
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
-    result = list_user_datasets()
+    result = list_user_datasets(CREDS)
 
     assert result["namespace"] == "kevin"
     assert result["total"] == 2
@@ -374,9 +377,9 @@ def test_list_user_datasets_surfaces_full_metadata(token, monkeypatch):
             )
         ]
     )
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
-    row = list_user_datasets()["datasets"][0]
+    row = list_user_datasets(CREDS)["datasets"][0]
 
     assert row["author"] == "kevin"
     assert row["downloads"] == 42
@@ -400,9 +403,9 @@ def test_list_user_datasets_handles_no_card(token, monkeypatch):
     fake = FakeHfApi(
         datasets=[FakeDatasetInfo("kevin/ds-a", card_data=None, siblings=None)]
     )
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
-    row = list_user_datasets()["datasets"][0]
+    row = list_user_datasets(CREDS)["datasets"][0]
 
     assert row["pretty_name"] is None
     assert row["language"] is None
@@ -418,7 +421,7 @@ def test_list_user_datasets_normalizes_a_multi_value_license(token, monkeypatch)
     combining sources) must come back as a plain string: the schema types
     `HuggingFaceDataset.license` as `Optional[str]`, and a raw list there would
     fail response-model validation for the *whole* listing endpoint — after
-    list_user_datasets() already succeeded — taking every dataset down with it."""
+    list_user_datasets(CREDS) already succeeded — taking every dataset down with it."""
     fake = FakeHfApi(
         datasets=[
             FakeDatasetInfo(
@@ -427,20 +430,21 @@ def test_list_user_datasets_normalizes_a_multi_value_license(token, monkeypatch)
             )
         ]
     )
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
-    row = list_user_datasets()["datasets"][0]
+    row = list_user_datasets(CREDS)["datasets"][0]
 
     assert row["license"] == "mit, cc-by-4.0"
     assert isinstance(row["license"], str)
 
 
 def test_list_user_datasets_uses_the_configured_namespace(token, monkeypatch):
-    monkeypatch.setattr(config, "hf_namespace", "my-org")
     fake = FakeHfApi(datasets=[])
-    monkeypatch.setattr(hf, "_api", lambda: fake)
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
 
-    result = list_user_datasets()
+    result = list_user_datasets(
+        make_creds(hf_token="hf_test_token", hf_namespace="my-org")
+    )
 
     assert result["namespace"] == "my-org"
     assert result["total"] == 0
@@ -450,7 +454,7 @@ def test_list_user_datasets_uses_the_configured_namespace(token, monkeypatch):
 def test_dataset_card_points_the_viewer_at_the_data_file(token, api):
     view, pairs = _stub_dataset([_pair("a", "Q1?")], target_language="fr")
     with view, pairs:
-        export_dataset_to_hub("ds")
+        export_dataset_to_hub(OWNER, CREDS, "ds")
 
     card = api.uploads[1]["content"].decode("utf-8")
     assert f"data_files: {DATA_PATH_IN_REPO}" in card
@@ -474,7 +478,9 @@ def _hub(files):
     """Patch the Hub reads: ``files`` maps repo paths to their bytes."""
     return (
         patch.object(hf, "_list_repo_files", return_value=list(files)),
-        patch.object(hf, "_download_file", side_effect=lambda _repo, name: files[name]),
+        patch.object(
+            hf, "_download_file", side_effect=lambda _creds, _repo, name: files[name]
+        ),
     )
 
 
@@ -488,14 +494,14 @@ def _saved(files, repo="kevin/my-ds", **kwargs):
             hf, "save_generation", return_value={"created_count": 1, "version": 1}
         ) as save,
     ):
-        result = import_dataset_from_hub(repo, **kwargs)
-    return result, save.call_args.args[1], save
+        result = import_dataset_from_hub(OWNER, CREDS, repo, **kwargs)
+    # save_generation(owner_id, name, items, …): the items are the third argument.
+    return result, save.call_args.args[2], save
 
 
-def test_import_not_configured_without_a_token(monkeypatch):
-    monkeypatch.setattr(config, "hf_token", "")
-    with pytest.raises(HuggingFaceNotConfiguredError, match="HF_TOKEN"):
-        import_dataset_from_hub("kevin/ds")
+def test_import_not_configured_without_a_token():
+    with pytest.raises(HuggingFaceNotConfiguredError, match="Settings"):
+        import_dataset_from_hub(OWNER, NONE, "kevin/ds")
 
 
 def test_import_reads_the_apps_own_export_and_keeps_its_ids(token):
@@ -578,7 +584,8 @@ def test_import_uses_the_explicit_local_dataset_name(token):
         dataset_name="renamed",
     )
     assert result["dataset_name"] == "renamed"
-    assert save.call_args.args[0] == "renamed"
+    assert save.call_args.args[0] == OWNER  # imported into the caller's own space
+    assert save.call_args.args[1] == "renamed"
 
 
 def test_import_replaces_foreign_ids_with_a_content_hash(token):
@@ -674,7 +681,7 @@ def test_import_without_a_readable_file_lists_the_repo(token, monkeypatch):
     listing, download = _hub({"README.md": b"", "data/train-00000.parquet": b""})
     with listing, download:
         with pytest.raises(ValueError, match="pyarrow") as exc:
-            import_dataset_from_hub("kevin/my-ds")
+            import_dataset_from_hub(OWNER, CREDS, "kevin/my-ds")
     assert "data/train-00000.parquet" in str(exc.value)
 
 
@@ -682,7 +689,7 @@ def test_import_with_no_mappable_row_lists_the_columns(token):
     listing, download = _hub({"train.jsonl": _jsonl({"text": "free-form"})})
     with listing, download:
         with pytest.raises(ValueError, match="columns found: text"):
-            import_dataset_from_hub("kevin/my-ds")
+            import_dataset_from_hub(OWNER, CREDS, "kevin/my-ds")
 
 
 def test_import_propagates_a_missing_repo(token):
@@ -692,4 +699,4 @@ def test_import_propagates_a_missing_repo(token):
         side_effect=ValueError("Hugging Face dataset repo 'kevin/nope' not found"),
     ):
         with pytest.raises(ValueError, match="not found"):
-            import_dataset_from_hub("kevin/nope")
+            import_dataset_from_hub(OWNER, CREDS, "kevin/nope")

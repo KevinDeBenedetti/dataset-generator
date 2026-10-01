@@ -3,12 +3,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from server.services import scoring
+from server.tests.creds import FULL, NONE
 from server.services.scoring import (
     ScoringNotConfiguredError,
     _format_batch,
     parse_scores,
     score_dataset,
 )
+
+
+OWNER = "owner-1"
+CREDS = FULL
 
 
 def test_parse_scores_tolerates_prose_and_clamps():
@@ -49,7 +54,6 @@ def _completions(replies):
 
 
 async def test_score_dataset_batches_and_stores_scores(monkeypatch):
-    monkeypatch.setattr(scoring.config, "openai_api_key", "k")
     monkeypatch.setattr(scoring, "BATCH_SIZE", 2)
     chat = _completions(
         [
@@ -59,7 +63,7 @@ async def test_score_dataset_batches_and_stores_scores(monkeypatch):
     )
     stored = {}
 
-    def fake_set(name, scores, method):
+    def fake_set(owner_id, name, scores, method):
         stored.update(scores=scores, method=method)
         return len(scores)
 
@@ -68,8 +72,10 @@ async def test_score_dataset_batches_and_stores_scores(monkeypatch):
         patch.object(scoring, "set_pair_confidences", side_effect=fake_set),
         patch.object(scoring, "complete", new=chat),
     ):
-        result = await score_dataset("ds", model="openai:judge")
+        result = await score_dataset(OWNER, "ds", CREDS, model="openai:judge")
 
+    # Every judge call ran on the caller's credentials.
+    assert all(call.args[2] is CREDS for call in chat.call_args_list)
     assert stored["scores"] == {"p0": 0.9, "p1": 0.7, "p2": 0.4}
     assert stored["method"] == "llm_judge:openai:judge"
     assert result == {
@@ -82,7 +88,6 @@ async def test_score_dataset_batches_and_stores_scores(monkeypatch):
 
 
 async def test_score_dataset_counts_a_failed_batch(monkeypatch):
-    monkeypatch.setattr(scoring.config, "openai_api_key", "k")
     chat = AsyncMock(side_effect=RuntimeError("provider down"))
 
     with (
@@ -90,27 +95,24 @@ async def test_score_dataset_counts_a_failed_batch(monkeypatch):
         patch.object(scoring, "set_pair_confidences", return_value=0) as set_scores,
         patch.object(scoring, "complete", new=chat),
     ):
-        result = await score_dataset("ds", model="openai:judge")
+        result = await score_dataset(OWNER, "ds", CREDS, model="openai:judge")
 
-    assert set_scores.call_args.args[1] == {}
+    assert set_scores.call_args.args[2] == {}
     assert (result["scored"], result["failed"]) == (0, 2)
 
 
 async def test_score_dataset_requires_an_llm(monkeypatch):
-    monkeypatch.setattr(scoring.config, "openai_api_key", "")
     monkeypatch.setattr(
-        scoring, "resolve_model", lambda role, override=None: "openai:m"
+        scoring, "resolve_model", lambda role, override=None, user_id=None: "openai:m"
     )
-    with pytest.raises(ScoringNotConfiguredError, match="OPENAI_API_KEY"):
-        await score_dataset("ds")
+    with pytest.raises(ScoringNotConfiguredError, match="OpenAI API key"):
+        await score_dataset(OWNER, "ds", NONE)
 
 
 async def test_score_dataset_requires_a_usable_judge_provider(monkeypatch):
     # A claude: default with no Claude credentials is as unusable as no key.
-    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
-        scoring, "resolve_model", lambda role, override=None: "claude:x"
+        scoring, "resolve_model", lambda role, override=None, user_id=None: "claude:x"
     )
-    with pytest.raises(ScoringNotConfiguredError, match="CLAUDE_CODE_OAUTH_TOKEN"):
-        await score_dataset("ds")
+    with pytest.raises(ScoringNotConfiguredError, match="Claude token"):
+        await score_dataset(OWNER, "ds", NONE)

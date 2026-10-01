@@ -1,11 +1,12 @@
-import functools
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-import openai
-
+from server.core import net
 from server.core.config import config
+from server.services import platform
+from server.services.credentials import OPENAI_API_KEY, Credentials
 from server.services.providers import CompletionRequest, complete
+from server.services.providers.openai import check_base_url
 
 
 class PromptManager:
@@ -49,18 +50,35 @@ class LLMService:
     OpenAI-compatible endpoint (the Qdrant sync needs its vector space).
     """
 
-    def __init__(self):
+    def __init__(self, creds: Credentials):
+        self.creds = creds
         self.prompt_manager = PromptManager()
 
-    @functools.cached_property
-    def client(self) -> openai.OpenAI:
-        # Lazy: building the real client touches SSL/certifi at construction
-        # time, which some sandboxes block. Deferring it to first use means
-        # instantiating LLMService is always safe, even when every method
-        # that would touch the client is mocked out (as most tests do).
-        return openai.OpenAI(
-            api_key=config.openai_api_key, base_url=config.openai_base_url
-        )
+    def _embedding_client(self):
+        """A per-call OpenAI client on the caller's own key and endpoint.
+
+        Lazy: building it touches SSL/certifi, which some sandboxes block.
+        """
+        import openai
+
+        if not self.creds.has(OPENAI_API_KEY):
+            raise ValueError("No OpenAI API key — add yours in Settings")
+        kwargs: Dict[str, Any] = {
+            "api_key": self.creds.secret(OPENAI_API_KEY),
+            "base_url": self.creds.openai_base_url or None,
+        }
+        if not self.creds.base_url_trusted:
+            if self.creds.openai_base_url:
+                check_base_url(self.creds.openai_base_url)
+            allowed = (
+                None
+                if platform.allow_custom_base_url()
+                else platform.allowed_llm_hosts()
+            )
+            kwargs["http_client"] = net.pinned_sync_client(
+                timeout=120.0, allowed_hosts=allowed
+            )
+        return openai.OpenAI(**kwargs)
 
     async def clean_text(self, text: str, model: str) -> str:
         """Clean ``text`` with the ``model`` reference; the raw text on failure."""
@@ -72,6 +90,7 @@ class LLMService:
                     user=text[:10000],
                     max_tokens=config.max_tokens_cleaning,
                 ),
+                self.creds,
             )
             return result.text or text.strip()
         except Exception as e:
@@ -100,6 +119,7 @@ class LLMService:
                     images=[(image_bytes, mime_type)],
                     max_tokens=config.max_tokens_cleaning,
                 ),
+                self.creds,
             )
             return result.text
         except Exception as e:
@@ -122,7 +142,8 @@ class LLMService:
             )
         if not texts:
             return []
-        response = self.client.embeddings.create(model=model, input=texts)
+        with self._embedding_client() as client:
+            response = client.embeddings.create(model=model, input=texts)
         # The API preserves input order; sort defensively by index regardless.
         ordered = sorted(response.data, key=lambda d: d.index)
         return [list(item.embedding) for item in ordered]

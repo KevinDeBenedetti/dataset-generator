@@ -8,10 +8,14 @@ the full scrape/clean pipeline.
 import logging
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from server.models.user import User
+from server.api.deps import get_credentials
 from server.services.agent import QAAgentService
+from server.services.credentials import Credentials
+from server.services.auth import get_current_user
 from server.services.model_defaults import resolve_model
 from server.services.providers import validate_ref
 
@@ -46,13 +50,17 @@ class QAAgentTestResponse(BaseModel):
     response_model=QAAgentTestResponse,
     summary="Run the QA agent on a text and return raw + parsed output",
 )
-async def qa_agent_test(request: QAAgentTestRequest) -> QAAgentTestResponse:
+async def qa_agent_test(
+    request: QAAgentTestRequest,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+) -> QAAgentTestResponse:
     try:
-        model = validate_ref(resolve_model("qa", request.model))
+        model = validate_ref(resolve_model("qa", request.model, user_id=user.id), creds)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    service = QAAgentService()
+    service = QAAgentService(creds)
     try:
         result = await service.generate_qa_debug(
             text=request.text,

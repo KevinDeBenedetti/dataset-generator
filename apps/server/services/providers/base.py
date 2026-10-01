@@ -9,6 +9,8 @@ predate providers keep working unchanged.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
+from server.services.credentials import Credentials
+
 DEFAULT_PROVIDER = "openai"
 PROVIDER_NAMES = ("openai", "claude")
 
@@ -49,21 +51,26 @@ class CompletionResult:
 
 
 class Provider(Protocol):
+    """A model backend. Every method that spends or reads a key takes the
+    caller's ``creds`` — providers hold no credentials of their own."""
+
     name: str
     label: str
 
-    def configured(self) -> bool: ...
+    def configured(self, creds: Credentials) -> bool: ...
 
-    def missing_env(self) -> List[str]: ...
+    def missing(self, creds: Credentials) -> List[str]:
+        """What to add for this provider to work (shown to the user)."""
+        ...
 
-    def models(self) -> List[ModelInfo]: ...
+    def models(self, creds: Credentials) -> List[ModelInfo]: ...
 
-    async def list_models(self) -> List[ModelInfo]: ...
+    async def list_models(self, creds: Credentials) -> List[ModelInfo]: ...
 
-    def knows(self, model_id: str) -> bool: ...
+    def knows(self, model_id: str, creds: Credentials) -> bool: ...
 
     async def complete(
-        self, model: str, req: CompletionRequest
+        self, model: str, req: CompletionRequest, creds: Credentials
     ) -> CompletionResult: ...
 
 

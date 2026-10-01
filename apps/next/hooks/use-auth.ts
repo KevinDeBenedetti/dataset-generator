@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { login, logout, getCurrentUser, type AuthUser } from '@/api/sdk'
+import {
+  getAuthProviders,
+  getCurrentUser,
+  getIdentities,
+  login,
+  logout,
+  logoutEverywhere,
+  unlinkIdentity,
+  type AuthUser,
+} from '@/api/sdk'
 
 export const CURRENT_USER_QUERY_KEY = ['auth', 'me']
 
@@ -60,6 +69,41 @@ export function useLogout() {
     mutationFn: logout,
     onSuccess: () => {
       queryClient.setQueryData(CURRENT_USER_QUERY_KEY, null)
+      queryClient.clear()
+      router.replace('/login')
+      router.refresh()
+    },
+  })
+}
+
+export function useAuthProviders() {
+  return useQuery({
+    queryKey: ['auth', 'providers'],
+    queryFn: getAuthProviders,
+    staleTime: 300_000,
+  })
+}
+
+export const IDENTITIES_QUERY_KEY = ['me', 'identities']
+
+export function useIdentities() {
+  return useQuery({ queryKey: IDENTITIES_QUERY_KEY, queryFn: getIdentities })
+}
+
+export function useUnlinkIdentity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: unlinkIdentity,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: IDENTITIES_QUERY_KEY }),
+  })
+}
+
+export function useLogoutEverywhere() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+  return useMutation({
+    mutationFn: logoutEverywhere,
+    onSuccess: () => {
       queryClient.clear()
       router.replace('/login')
       router.refresh()

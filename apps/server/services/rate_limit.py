@@ -222,17 +222,25 @@ class RedisRateLimiter:
 LOGIN_SCOPE = "login"
 
 
-def _build_login_limiter() -> RateLimiter:
+REFRESH_SCOPE = "refresh"
+SSO_SCOPE = "sso"
+SECRETS_SCOPE = "secrets"
+
+
+def build_rate_limiter(
+    scope: str, max_attempts: int, window_seconds: float
+) -> RateLimiter:
     """Pick the Redis backend when configured/reachable, else in-process.
 
-    A misconfigured or unreachable Redis must never break logins, so any failure
-    building/pinging the client downgrades to the in-process limiter.
+    ``scope`` namespaces the Redis keys, so each throttled endpoint has its own
+    budget. A misconfigured or unreachable Redis must never break logins, so any
+    failure building/pinging the client downgrades to the in-process limiter.
     """
     from server.core.config import config
 
     in_process = SlidingWindowRateLimiter(
-        max_attempts=config.auth_login_max_attempts,
-        window_seconds=config.auth_login_window_seconds,
+        max_attempts=max_attempts,
+        window_seconds=window_seconds,
     )
     if not config.redis_url:
         return in_process
@@ -253,28 +261,50 @@ def _build_login_limiter() -> RateLimiter:
         from redis_fastapi.config import get_settings
 
         client = AsyncRedis.from_url(config.redis_url, decode_responses=True)
-        backend = RateLimitBackend(client, scope=LOGIN_SCOPE)
-        key_prefix = f"{get_settings().pattern_prefix('ratelimit')}:{LOGIN_SCOPE}:"
+        backend = RateLimitBackend(client, scope=scope)
+        key_prefix = f"{get_settings().pattern_prefix('ratelimit')}:{scope}:"
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, never crash
         logging.warning(
-            "Redis unavailable for login rate limiting (%s) — falling back to "
+            "Redis unavailable for %s rate limiting (%s) — falling back to "
             "in-process limiter.",
+            scope,
             exc,
         )
         return in_process
 
     # Host only: REDIS_URL may carry a password.
     logging.info(
-        "Login rate limiter backed by Redis at %s", urlsplit(config.redis_url).hostname
+        "%s rate limiter backed by Redis at %s",
+        scope,
+        urlsplit(config.redis_url).hostname,
     )
     return RedisRateLimiter(
-        max_attempts=config.auth_login_max_attempts,
-        window_seconds=config.auth_login_window_seconds,
+        max_attempts=max_attempts,
+        window_seconds=window_seconds,
         backend=backend,
         client=client,
         key_prefix=key_prefix,
     )
 
 
-# Process-wide limiter for the login endpoint.
-login_rate_limiter: RateLimiter = _build_login_limiter()
+# Process-wide limiters. Login counts only failures; the refresh and SSO-start
+# limiters count every request (each call registers one "failure").
+def _limiters():
+    from server.core.config import config
+
+    return (
+        build_rate_limiter(
+            LOGIN_SCOPE,
+            config.auth_login_max_attempts,
+            config.auth_login_window_seconds,
+        ),
+        build_rate_limiter(REFRESH_SCOPE, config.auth_refresh_max_per_minute, 60),
+        build_rate_limiter(SSO_SCOPE, config.auth_sso_max_per_minute, 60),
+    )
+
+
+login_rate_limiter, refresh_rate_limiter, sso_rate_limiter = _limiters()
+
+# Saving/testing a key makes an outbound call with it: keep that from becoming a
+# key-guessing oracle. Keyed by user id, 30 a minute.
+secrets_rate_limiter = build_rate_limiter(SECRETS_SCOPE, 30, 60)

@@ -40,14 +40,31 @@ def _now() -> datetime:
 
 
 class Dataset(Base):
-    """A named collection of generated Q/A pairs."""
+    """A named collection of generated Q/A pairs, owned by one user."""
 
     __tablename__ = "datasets"
+    # The name is the identifier every API route and the front-end use (ids stay
+    # internal), and it is unique *per owner*: two users may each have a
+    # "docs-fr", and "generate into an existing dataset" resolves to one row.
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_datasets_owner_name"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    # The name is the identifier every API route and the front-end use; ids stay
-    # internal. Unique so "generate into an existing dataset" resolves to one row.
-    name: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    # Who owns it. Every read and write goes through the owner-scoped accessors in
+    # services/datasets.py; deleting the user deletes their datasets.
+    owner_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # The Qdrant collection holding this dataset's embeddings, once chosen. Null =
+    # the default ``<prefix>ds_<id>`` (see services/qdrant.py); datasets that
+    # predate owners keep their original ``<prefix><slug>`` collection here, so
+    # nothing has to be re-embedded.
+    qdrant_collection: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     target_language: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=True, default=_now)

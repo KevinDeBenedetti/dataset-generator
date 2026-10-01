@@ -6,7 +6,7 @@ request without a valid token is rejected (401), and one with an authenticated
 user passes through.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -22,6 +22,8 @@ from server.api import (
 )
 from server.core.database import get_db
 from server.models.user import User, UserRole
+from server.api.deps import get_credentials
+from server.tests.creds import FULL
 from server.services.auth import get_current_user
 
 
@@ -40,6 +42,7 @@ def _build_protected_app(test_db):
         yield test_db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_credentials] = lambda: FULL
     return app
 
 
@@ -78,109 +81,28 @@ def test_protected_routes_allow_authenticated(test_db):
     assert response.json() == []
 
 
-# Destructive/costly routes are additionally gated behind require_admin. A
-# fourth element, when present, is the JSON body a POST route requires.
-_ADMIN_ONLY_ROUTES = [
-    ("delete", "/dataset/my_dataset"),
-    ("post", "/dataset/my_dataset/clean-similarities"),
-    ("post", "/dataset/my_dataset/resolve-pair"),
+# Routes that used to be admin-only because they acted with the server's own
+# keys: they now run on the caller's own credentials, so any signed-in user may
+# call them (their data is scoped by owner — see test_tenant_isolation).
+_FORMERLY_ADMIN_ROUTES = [
     ("post", "/collections/my_dataset/qdrant"),
-    ("put", "/quality-rules"),
     ("post", "/jobs/github-personal/run", {}),
-    ("post", "/jobs/knowledge-corpus/run", {}),
     ("post", "/jobs/runs/run-1/publish", {}),
-    ("put", "/models/defaults", {"defaults": {}}),
     ("post", "/models/test", {"ref": "openai:m"}),
     ("post", "/q_a/my_dataset/score"),
+    ("delete", "/dataset/my_dataset"),
+    ("put", "/quality-rules"),
 ]
 
 
-def test_admin_routes_reject_non_admin(test_db):
+def test_a_regular_user_is_not_turned_away_from_routes_on_their_own_keys(test_db):
     app = _build_protected_app(test_db)
-
-    # An authenticated but non-admin user resolves through get_current_user.
-    regular_user = User(id="u1", email="user@example.com", role=UserRole.USER)
-    app.dependency_overrides[get_current_user] = lambda: regular_user
-
-    client = TestClient(app)
-    for route in _ADMIN_ONLY_ROUTES:
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="u1", email="user@example.com", role=UserRole.USER
+    )
+    client = TestClient(app, raise_server_exceptions=False)
+    for route in _FORMERLY_ADMIN_ROUTES:
         method, path = route[0], route[1]
         kwargs = {"json": route[2]} if len(route) > 2 else {}
         response = getattr(client, method)(path, **kwargs)
-        assert response.status_code == 403, f"{method} {path} should be admin-only"
-
-
-def test_admin_routes_allow_admin(test_db):
-    app = _build_protected_app(test_db)
-
-    admin_user = User(id="a1", email="admin@example.com", role=UserRole.ADMIN)
-    app.dependency_overrides[get_current_user] = lambda: admin_user
-
-    client = TestClient(app)
-    # Past the admin gate the handlers run; mock their service layer so we assert
-    # the gate (200), not the store/Qdrant side effects.
-    with patch(
-        "server.api.dataset.delete_dataset_view",
-        return_value={
-            "message": "deleted",
-            "dataset_id": "my_dataset",
-            "records_deleted": 0,
-        },
-    ):
-        assert client.delete("/dataset/my_dataset").status_code == 200
-    with patch(
-        "server.api.dataset.clean_similarities_view",
-        return_value={
-            "dataset_id": "my_dataset",
-            "dataset_name": "my_dataset",
-            "threshold": 0.8,
-            "total_records": 0,
-            "removed_records": 0,
-            "details": [],
-            "removed_items": [],
-        },
-    ):
-        assert client.post("/dataset/my_dataset/clean-similarities").status_code == 200
-    with patch(
-        "server.api.dataset.resolve_similarity_pair",
-        return_value={
-            "dataset_id": "my_dataset",
-            "dataset_name": "my_dataset",
-            "removed_id": "aaaa1111",
-            "removed_question": "What is Python?",
-        },
-    ):
-        assert (
-            client.post(
-                "/dataset/my_dataset/resolve-pair", json={"remove_id": "aaaa1111"}
-            ).status_code
-            == 200
-        )
-    with patch(
-        "server.api.quality_rules.update_quality_rules",
-        return_value={
-            "min_answer_words": 5,
-            "reject_below_confidence": 0.5,
-            "auto_reject_enabled": True,
-            "updated_at": None,
-        },
-    ):
-        assert (
-            client.put("/quality-rules", json={"min_answer_words": 5}).status_code
-            == 200
-        )
-    from datetime import datetime, timezone
-
-    run = {
-        "id": "run-1",
-        "job": "knowledge-corpus",
-        "status": "running",
-        "started_at": datetime(2026, 9, 30, tzinfo=timezone.utc),
-    }
-    with patch("server.api.jobs.start_run", new=AsyncMock(return_value=run)):
-        assert client.post("/jobs/knowledge-corpus/run", json={}).status_code == 202
-    with (
-        patch("server.api.models.update_model_defaults"),
-        patch("server.api.models.get_model_defaults", return_value={}),
-    ):
-        assert client.put("/models/defaults", json={"defaults": {}}).status_code == 200
+        assert response.status_code not in (401, 403), f"{method} {path} is gated"

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from server.core.database import Base
@@ -21,11 +21,23 @@ class AuthProvider:
     """How the account authenticates."""
 
     LOCAL = "local"  # email + password
-    OIDC = "oidc"  # Infomaniak OIDC
+    OIDC = "oidc"  # Infomaniak OIDC (accounts created before identities existed)
+    INFOMANIAK = "infomaniak"
+    GITHUB = "github"
+    SYSTEM = "system"  # the inactive owner of pre-multi-user data (see below)
+
+
+# Owns the datasets/runs/settings that predate per-user ownership when there was
+# no admin yet to receive them. Inactive and passwordless, on a reserved TLD: it
+# can never sign in, and `python -m server.cli claim-legacy` empties it.
+SYSTEM_EMAIL = "system@datasetgen.invalid"
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
+    )
 
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
@@ -40,13 +52,21 @@ class User(Base):
     provider: Mapped[str] = mapped_column(
         String, nullable=False, default=AuthProvider.LOCAL
     )
-    # The OIDC subject identifier ("sub"), set for accounts linked to Infomaniak.
+    # Legacy: the Infomaniak subject before ``identities`` existed (copied there
+    # by migration c0d1e2f3a4b5; no longer read). SSO sign-ins go through
+    # ``Identity`` rows.
     oidc_sub: Mapped[Optional[str]] = mapped_column(
         String, nullable=True, unique=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
+    )
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Access tokens issued before this instant are refused ("sign out
+    # everywhere", deactivation): a JWT otherwise stays valid until it expires.
+    sessions_valid_after: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
     )
 
     @property

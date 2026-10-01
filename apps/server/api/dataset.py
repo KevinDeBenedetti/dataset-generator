@@ -4,7 +4,10 @@ from typing import List, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
-from server.services.auth import require_admin
+from server.models.user import User
+from server.api.deps import get_credentials
+from server.services.auth import get_current_user
+from server.services.credentials import Credentials
 from server.services.datasets import (
     AmbiguousRecordError,
     list_datasets_view,
@@ -49,10 +52,11 @@ router = APIRouter(
 async def create_dataset(
     name: str = Query(..., description="Name of the new dataset"),
     description: str = Query(None, description="Optional dataset description"),
+    user: User = Depends(get_current_user),
 ):
-    """Create a new (empty) dataset."""
+    """Create a new (empty) dataset of yours."""
     try:
-        return create_dataset_view(name, description)
+        return create_dataset_view(user.id, name, description)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -66,17 +70,18 @@ async def get_all_datasets(
         None,
         description="Optional dataset name to get a specific dataset's details",
     ),
+    user: User = Depends(get_current_user),
 ):
-    """Retrieve all datasets, or a specific one (by name)."""
+    """Retrieve all your datasets, or a specific one (by name)."""
     try:
         if dataset_id:
-            dataset = get_dataset_view(dataset_id)
+            dataset = get_dataset_view(user.id, dataset_id)
             if not dataset:
                 raise HTTPException(
                     status_code=404, detail=f"Dataset '{dataset_id}' not found"
                 )
             return dataset
-        return list_datasets_view()
+        return list_datasets_view(user.id)
     except HTTPException:
         raise
     except Exception as e:
@@ -85,10 +90,12 @@ async def get_all_datasets(
 
 
 @router.get("/dataset/{dataset_name}/sources", response_model=DatasetSourcesResponse)
-async def get_dataset_sources(dataset_name: str):
+async def get_dataset_sources(
+    dataset_name: str, user: User = Depends(get_current_user)
+):
     """List the sources a dataset was built from, with its analysis history."""
     try:
-        return get_dataset_sources_view(dataset_name)
+        return get_dataset_sources_view(user.id, dataset_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -97,10 +104,12 @@ async def get_dataset_sources(dataset_name: str):
 
 
 @router.get("/dataset/{dataset_name}/versions", response_model=DatasetVersionsResponse)
-async def get_dataset_versions(dataset_name: str):
+async def get_dataset_versions(
+    dataset_name: str, user: User = Depends(get_current_user)
+):
     """The dataset's version history (one entry per recorded generation)."""
     try:
-        return list_dataset_versions(dataset_name)
+        return list_dataset_versions(user.id, dataset_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -108,15 +117,19 @@ async def get_dataset_versions(dataset_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/dataset/huggingface", response_model=HuggingFaceDatasetsResponse)
-async def get_huggingface_datasets():
-    """List the Hugging Face Hub dataset repos owned by the configured account."""
+@router.get(
+    "/dataset/huggingface",
+    response_model=HuggingFaceDatasetsResponse,
+    summary="List your Hugging Face dataset repos",
+)
+async def get_huggingface_datasets(creds: Credentials = Depends(get_credentials)):
+    """List the Hugging Face Hub dataset repos of the account your token belongs to."""
     try:
         # list_user_datasets is a fully synchronous, blocking call (Hub HTTP
         # request) — run it off the event loop thread so one slow Hub lookup
         # doesn't stall every other concurrent request on the single uvicorn
         # worker.
-        return await run_in_threadpool(list_user_datasets)
+        return await run_in_threadpool(list_user_datasets, creds)
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -124,7 +137,10 @@ async def get_huggingface_datasets():
         raise HTTPException(status_code=502, detail=f"Hugging Face lookup failed: {e}")
 
 
-@router.post("/dataset/huggingface/import", response_model=HuggingFaceImportResponse)
+@router.post(
+    "/dataset/huggingface/import",
+    response_model=HuggingFaceImportResponse,
+)
 async def import_huggingface_dataset(
     repo_id: str = Query(
         ..., description="Full 'namespace/name' Hub repo id to import"
@@ -133,6 +149,8 @@ async def import_huggingface_dataset(
         None,
         description="Local dataset name to import into (defaults to the repo's name segment)",
     ),
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
 ):
     """Pull a Hugging Face dataset repo's Q/A pairs into a local dataset, so it
     can be analyzed like any other dataset (duplicates, score stats, rules)."""
@@ -140,7 +158,9 @@ async def import_huggingface_dataset(
         # Same reasoning as the listing route: this does blocking downloads,
         # synchronous parsing over every row, and a blocking DB write, with no
         # size cap — keep it off the event loop thread.
-        return await run_in_threadpool(import_dataset_from_hub, repo_id, dataset_name)
+        return await run_in_threadpool(
+            import_dataset_from_hub, user.id, creds, repo_id, dataset_name
+        )
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
@@ -153,8 +173,6 @@ async def import_huggingface_dataset(
 @router.post(
     "/dataset/{dataset_name}/export/huggingface",
     response_model=HuggingFaceExportResponse,
-    # Publishing outside the app — admin only, like the destructive routes.
-    dependencies=[Depends(require_admin)],
 )
 async def export_to_huggingface(
     dataset_name: str,
@@ -163,10 +181,12 @@ async def export_to_huggingface(
         description="Target repo as 'namespace/name' (defaults to the "
         "configured namespace and the dataset's slug)",
     ),
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
 ):
-    """Export a dataset to the Hugging Face Hub as a **private** dataset repo."""
+    """Export one of your datasets to the Hugging Face Hub as a **private** repo."""
     try:
-        return export_dataset_to_hub(dataset_name, repo_id)
+        return export_dataset_to_hub(user.id, creds, dataset_name, repo_id)
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except HuggingFaceRepoPublicError as e:
@@ -187,10 +207,11 @@ async def duplicate_dataset(
     target_name: str = Query(
         None, description="Name of the copy (defaults to '<name>-copy')"
     ),
+    user: User = Depends(get_current_user),
 ):
-    """Copy a dataset's Q/A pairs into another dataset."""
+    """Copy one of your datasets' Q/A pairs into another dataset of yours."""
     try:
-        return duplicate_dataset_view(dataset_name, target_name)
+        return duplicate_dataset_view(user.id, dataset_name, target_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -205,10 +226,11 @@ async def duplicate_dataset(
 async def analyze_similarities(
     dataset_name: str,
     threshold: float = Query(0.8, description="Similarity threshold"),
+    user: User = Depends(get_current_user),
 ):
     """Analyze near-duplicate questions in a dataset (read-only)."""
     try:
-        return analyze_similarities_view(dataset_name, threshold)
+        return analyze_similarities_view(user.id, dataset_name, threshold)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -219,18 +241,17 @@ async def analyze_similarities(
 @router.post(
     "/dataset/{dataset_name}/clean-similarities",
     response_model=CleanSimilarityResponse,
-    # Destructive (deletes stored pairs) — admin only.
-    dependencies=[Depends(require_admin)],
 )
 async def clean_similarities(
     dataset_name: str,
     threshold: float = Query(
         0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"
     ),
+    user: User = Depends(get_current_user),
 ):
-    """Remove near-duplicate questions from a dataset (deletes stored pairs)."""
+    """Remove near-duplicate questions from one of your datasets (deletes pairs)."""
     try:
-        return clean_similarities_view(dataset_name, threshold)
+        return clean_similarities_view(user.id, dataset_name, threshold)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -241,17 +262,19 @@ async def clean_similarities(
 @router.post(
     "/dataset/{dataset_name}/resolve-pair",
     response_model=ResolvePairResponse,
-    # Destructive (deletes one stored pair) — admin only, like clean.
-    dependencies=[Depends(require_admin)],
 )
-async def resolve_pair(dataset_name: str, body: ResolvePairRequest):
+async def resolve_pair(
+    dataset_name: str,
+    body: ResolvePairRequest,
+    user: User = Depends(get_current_user),
+):
     """Arbitrate a single duplicate pair: delete the given record, keep the other.
 
     Accepts the full item id or the 8-char prefix returned by
     analyze-similarities.
     """
     try:
-        return resolve_similarity_pair(dataset_name, body.remove_id)
+        return resolve_similarity_pair(user.id, dataset_name, body.remove_id)
     except AmbiguousRecordError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -264,13 +287,11 @@ async def resolve_pair(dataset_name: str, body: ResolvePairRequest):
 @router.delete(
     "/dataset/{dataset_name}",
     response_model=DeleteDatasetResponse,
-    # Destructive (drops the dataset, its pairs + Qdrant collection) — admin only.
-    dependencies=[Depends(require_admin)],
 )
-async def delete_dataset(dataset_name: str):
-    """Delete a dataset, its Q/A pairs and its Qdrant collection."""
+async def delete_dataset(dataset_name: str, user: User = Depends(get_current_user)):
+    """Delete one of your datasets, its Q/A pairs and its Qdrant collection."""
     try:
-        return delete_dataset_view(dataset_name)
+        return delete_dataset_view(user.id, dataset_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

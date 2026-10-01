@@ -33,7 +33,7 @@ def test_get_quality_rules_defaults(client: TestClient):
     assert data["auto_reject_enabled"] is False
 
 
-def test_update_quality_rules_success(client: TestClient):
+def test_update_quality_rules_success(client: TestClient, owner):
     """Test a partial update of the quality rules."""
     updated = _rules(
         min_answer_words=5,
@@ -58,13 +58,14 @@ def test_update_quality_rules_success(client: TestClient):
     assert data["reject_below_confidence"] == 0.6
     assert data["auto_reject_enabled"] is True
     mock_update.assert_called_once_with(
+        owner.id,
         min_answer_words=5,
         reject_below_confidence=0.6,
         auto_reject_enabled=True,
     )
 
 
-def test_update_quality_rules_partial(client: TestClient):
+def test_update_quality_rules_partial(client: TestClient, owner):
     """Test that omitted fields are forwarded as None (service keeps them unchanged)."""
     with patch(
         "server.api.quality_rules.update_quality_rules", return_value=_rules()
@@ -72,6 +73,7 @@ def test_update_quality_rules_partial(client: TestClient):
         response = client.put("/quality-rules", json={"min_answer_words": 3})
     assert response.status_code == 200
     mock_update.assert_called_once_with(
+        owner.id,
         min_answer_words=3,
         reject_below_confidence=None,
         auto_reject_enabled=None,

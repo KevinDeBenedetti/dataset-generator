@@ -11,7 +11,6 @@ import { Icon } from '@/components/app/icon'
 import { QAList, PaginationWrapper, DatasetSearch } from '@/components/dataset'
 import { useDatasets, useDatasetSources, useExportToHuggingFace } from '@/hooks'
 import { useQAByDataset } from '@/hooks/use-qa'
-import { useIsAdmin } from '@/hooks/use-auth'
 import { relativeTime } from '@/lib/utils'
 import type { DatasetAnalysis, DatasetSource } from '@/api/types'
 
@@ -107,9 +106,6 @@ export default function DatasetDetailPage() {
 
   const addSourceHref = `/generate?dataset=${encodeURIComponent(datasetName)}`
 
-  // The export endpoint is admin-only (it publishes outside the app), so the
-  // action is hidden rather than left to fail with a 403.
-  const isAdmin = useIsAdmin()
   const hfExport = useExportToHuggingFace()
   const handleExportToHub = async () => {
     try {
@@ -173,18 +169,16 @@ export default function DatasetDetailPage() {
             />
             Refresh
           </button>
-          {isAdmin && (
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={handleExportToHub}
-              disabled={hfExport.isPending}
-              title="Export to the Hugging Face Hub as a private dataset repo"
-            >
-              <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
-              {hfExport.isPending ? 'Exporting…' : 'Export to Hugging Face'}
-            </button>
-          )}
+          <button
+            className="btn btn-outline"
+            type="button"
+            onClick={handleExportToHub}
+            disabled={hfExport.isPending}
+            title="Export to the Hugging Face Hub as a private dataset repo"
+          >
+            <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
+            {hfExport.isPending ? 'Exporting…' : 'Export to Hugging Face'}
+          </button>
           <Link className="btn btn-primary" href={addSourceHref}>
             <Icon name="plus" />
             Add a source

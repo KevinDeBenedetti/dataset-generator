@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from server.core.config import config
 from server.services.agent import QAAgentService
+from server.services.credentials import Credentials
 from server.services.datasets import save_generation
 from server.services.files import file_to_page_images
 from server.services.llm import LLMService
@@ -75,9 +76,12 @@ class DatasetPipeline:
     server-side for later retrieval.
     """
 
-    def __init__(self):
-        self.llm_service = LLMService()
-        self.qa_agent_service = QAAgentService()
+    def __init__(self, owner_id: str, creds: Credentials):
+        # Everything this pipeline reads or writes belongs to this user: the
+        # dedup pool, the quality rules, and the dataset the pairs land in.
+        self.owner_id = owner_id
+        self.llm_service = LLMService(creds)
+        self.qa_agent_service = QAAgentService(creds)
 
     async def process_file(
         self,
@@ -211,7 +215,11 @@ class DatasetPipeline:
         )
 
     async def _qa_service(self, dataset_name: str) -> QAService:
-        qa_service = QAService(dataset_name, quality_rules=get_quality_rules())
+        qa_service = QAService(
+            self.owner_id,
+            dataset_name,
+            quality_rules=get_quality_rules(self.owner_id),
+        )
         # DB read + embedding model load + one pass over the dataset's
         # questions: off the event loop.
         await asyncio.to_thread(qa_service.prepare)
@@ -355,6 +363,7 @@ class DatasetPipeline:
         pairs generated in *this* call, not a full re-read of the dataset.
         """
         return save_generation(
+            self.owner_id,
             dataset_name,
             items,
             source_url=source_url,

@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import httpx
 
 from server.core.config import _env
+from server.services.credentials import Credentials
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
     GitHubAPIError,
@@ -808,7 +809,9 @@ async def export_corpus(
 # --- push --------------------------------------------------------------------
 
 
-def push_corpus(directory: Path, repo_id: str, commit_sha: str = "") -> str:
+def push_corpus(
+    creds: Credentials, directory: Path, repo_id: str, commit_sha: str = ""
+) -> str:
     """Commit the exported directory to a private HF dataset in one commit."""
     from server.services.huggingface import (
         HuggingFaceNotConfiguredError,
@@ -825,16 +828,16 @@ def push_corpus(directory: Path, repo_id: str, commit_sha: str = "") -> str:
         raise JobError(f"no manifest.json in {directory} — the export did not complete")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    api = _api()
+    api = _api(creds)
     # Fail on a bad token before uploading megabytes: a fine-grained token
     # missing write access otherwise only surfaces at the final commit.
     try:
         username = api.whoami().get("name")
     except Exception as exc:
-        raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
+        raise JobError(f"Hugging Face rejected your token: {exc}") from exc
     try:
         # A bare name would 404 on commit — complete it with the namespace.
-        repo_id = qualify_repo_id(repo_id)
+        repo_id = qualify_repo_id(creds, repo_id)
     except HuggingFaceNotConfiguredError as exc:
         raise JobError(str(exc)) from exc
     ensure_private_dataset_repo(api, repo_id)
@@ -904,6 +907,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             _required("HF_TOKEN")
             url = push_corpus(
+                Credentials.from_env(),
                 Path(args.dir),
                 _required("HF_DATASET_REPO"),
                 os.getenv("GITHUB_SHA", ""),

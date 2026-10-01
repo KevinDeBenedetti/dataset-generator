@@ -24,6 +24,7 @@ from pydantic import BaseModel, ValidationError
 from server.core.config import config
 from server.schemas.dataset import QA
 from server.services.model_defaults import resolve_model
+from server.services.credentials import Credentials
 from server.services.providers import CompletionRequest, complete
 
 
@@ -217,6 +218,9 @@ class _AgentState(TypedDict):
 class QAAgentService:
     """Generate QA pairs via a single-node LangGraph graph over any provider."""
 
+    def __init__(self, creds: Credentials):
+        self.creds = creds
+
     async def _generate_node(self, state: _AgentState) -> dict:
         prompt = (
             f"Target language: {state['target_language']}\n\n"
@@ -230,6 +234,7 @@ class QAAgentService:
                 max_tokens=config.max_tokens_qa,
                 reasoning=True,
             ),
+            self.creds,
         )
         return {"raw_response": result.text.strip()}
 

@@ -32,9 +32,10 @@ Thumbs.db
 **/*.sqlite
 **/*.sqlite3
 
-# Env
-.env.local
-.env.*.local
+# Env — never bake secrets into an image layer (only the template is kept).
+.env
+.env.*
+!.env.example
 
 # Apps non nécessaires pour le server
 apps/next

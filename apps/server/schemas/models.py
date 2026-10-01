@@ -15,8 +15,8 @@ class ProviderOut(BaseModel):
     name: str
     label: str
     configured: bool
-    missing_env: List[str] = Field(
-        default_factory=list, description="Env vars to set to enable it"
+    missing: List[str] = Field(
+        default_factory=list, description="What to add in Settings to enable it"
     )
     models: List[ModelInfoOut]
 

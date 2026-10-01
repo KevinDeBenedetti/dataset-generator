@@ -25,8 +25,11 @@ from server.jobs.qa_dataset import (
     to_jsonl,
 )
 from server.jobs.github_snapshot import RepoData
+from server.tests.creds import make_creds
 from server.tests.fake_embedder import FakeEmbedder
 from server.tests.jobs.conftest import b64
+
+CREDS = make_creds(hf_token="hf_000000000000")
 
 
 def test_profile_pairs(snapshot):
@@ -192,7 +195,7 @@ def test_publish_commits_both_files_to_private_repo(snapshot):
     api.repo_info.return_value = MagicMock(private=True)
     pairs, _ = sanitize_pairs(profile_pairs(snapshot.profile, 1))
     with patch("server.services.huggingface._api", return_value=api):
-        result = publish_qa_dataset(QADataset(pairs, 0, []), "kevin", "ns/qa")
+        result = publish_qa_dataset(CREDS, QADataset(pairs, 0, []), "kevin", "ns/qa")
 
     assert result == {
         "repo": "ns/qa",
@@ -211,13 +214,13 @@ def test_publish_commits_both_files_to_private_repo(snapshot):
 
 def test_publish_refuses_empty_dataset():
     with pytest.raises(JobError, match="0 pairs"):
-        publish_qa_dataset(QADataset([], 0, []), "kevin", "ns/qa")
+        publish_qa_dataset(CREDS, QADataset([], 0, []), "kevin", "ns/qa")
 
 
 async def test_run_checks_hf_token_before_generating(monkeypatch):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("HF_TOKEN", "hf")
-    monkeypatch.setenv("HF_QA_DATASET_REPO", "ns/qa")
+    creds = make_creds(
+        github_username="kevin", hf_token="hf_000000000000", hf_qa_repo="ns/qa"
+    )
     api = MagicMock()
     api.whoami.side_effect = RuntimeError("401")
 
@@ -225,24 +228,21 @@ async def test_run_checks_hf_token_before_generating(monkeypatch):
         raise AssertionError("generation started with a rejected HF token")
 
     with patch("server.services.huggingface._api", return_value=api):
-        with pytest.raises(JobError, match="HF_TOKEN rejected"):
-            await qa_dataset.run(complete)
+        with pytest.raises(JobError, match="rejected your token"):
+            await qa_dataset.run(creds, complete)
 
 
 async def test_run_requires_claude_credentials(monkeypatch):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(JobError, match="CLAUDE_CODE_OAUTH_TOKEN"):
-        await qa_dataset.run()
+    creds = make_creds(github_username="kevin")
+    with pytest.raises(JobError, match="Claude token"):
+        await qa_dataset.run(
+            creds,
+        )
 
 
 async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    # No HF_TOKEN / HF_QA_DATASET_REPO at all — a dry run needs neither.
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    monkeypatch.delenv("HF_QA_DATASET_REPO", raising=False)
+    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
+    # No Hugging Face token or repo at all — a dry run needs neither.
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
 
@@ -252,7 +252,7 @@ async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
     with patch(
         "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
     ):
-        result = await qa_dataset.run(complete, dry_run=True)
+        result = await qa_dataset.run(creds, complete, dry_run=True)
 
     assert result["dry_run"] is True
     assert result["url"] is None
@@ -261,10 +261,12 @@ async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
 
 
 async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    monkeypatch.setenv("HF_TOKEN", "hf")
-    monkeypatch.setenv("HF_QA_DATASET_REPO", "ns/qa")
+    creds = make_creds(
+        github_username="kevin",
+        anthropic_api_key="ak-000000000000",
+        hf_token="hf_000000000000",
+        hf_qa_repo="ns/qa",
+    )
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
     api = MagicMock()
@@ -286,7 +288,7 @@ async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
         ) as build,
     ):
         with pytest.raises(JobError, match="0 pairs"):
-            await qa_dataset.run(complete, max_repos=2, dry_run=False)
+            await qa_dataset.run(creds, complete, max_repos=2, dry_run=False)
 
     assert build.call_args.args[-1] == 2
 
@@ -648,10 +650,12 @@ def test_load_previous_state_first_run_and_errors():
 
 
 async def test_run_full_refresh_skips_previous_version(monkeypatch, github):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    monkeypatch.setenv("HF_TOKEN", "hf")
-    monkeypatch.setenv("HF_QA_DATASET_REPO", "ns/qa")
+    creds = make_creds(
+        github_username="kevin",
+        anthropic_api_key="ak-000000000000",
+        hf_token="hf_000000000000",
+        hf_qa_repo="ns/qa",
+    )
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
 
@@ -662,7 +666,7 @@ async def test_run_full_refresh_skips_previous_version(monkeypatch, github):
     with patch(
         "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
     ):
-        result = await qa_dataset.run(_echo([]), dry_run=True, full_refresh=True)
+        result = await qa_dataset.run(creds, _echo([]), dry_run=True, full_refresh=True)
     assert result["full_refresh"] is True
     assert (result["kept"], result["new"], result["review"]) == (0, 0, 0)
 
@@ -774,9 +778,7 @@ async def test_build_reports_progress(github, snapshot):
 
 
 async def test_generate_without_hub_is_a_full_run(monkeypatch, github):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    monkeypatch.delenv("HF_TOKEN", raising=False)
+    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
 
@@ -786,23 +788,21 @@ async def test_generate_without_hub_is_a_full_run(monkeypatch, github):
     with patch(
         "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
     ):
-        draft = await qa_dataset.generate(complete, require_hub=False)
+        draft = await qa_dataset.generate(creds, complete, require_hub=False)
     assert draft.username == "kevin" and len(draft.dataset.pairs) == 3
     assert draft.stats()["records"] == 3
 
 
 async def test_generate_requires_the_hub_by_default(monkeypatch):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    with pytest.raises(JobError, match="HF_TOKEN"):
-        await qa_dataset.generate(AsyncMock())
+    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
+    with pytest.raises(JobError, match="Hugging Face token"):
+        await qa_dataset.generate(creds, AsyncMock())
 
 
 async def test_publish_requires_a_repo():
     draft = qa_dataset.Draft(_draft_dataset(), "kevin", "", False, "m")
-    with pytest.raises(JobError, match="HF_QA_DATASET_REPO"):
-        await qa_dataset.publish(draft)
+    with pytest.raises(JobError, match="Q&A dataset repo"):
+        await qa_dataset.publish(CREDS, draft)
 
 
 def test_publish_completes_a_bare_repo_name(snapshot):
@@ -812,7 +812,9 @@ def test_publish_completes_a_bare_repo_name(snapshot):
     api.repo_info.return_value = MagicMock(private=True)
     pairs, _ = sanitize_pairs(profile_pairs(snapshot.profile, 1))
     with patch("server.services.huggingface._api", return_value=api):
-        result = publish_qa_dataset(QADataset(pairs, 0, []), "kevin", "github-personal")
+        result = publish_qa_dataset(
+            CREDS, QADataset(pairs, 0, []), "kevin", "github-personal"
+        )
 
     assert result["repo"] == "kevin/github-personal"
     assert result["url"] == "https://huggingface.co/datasets/kevin/github-personal"
@@ -823,10 +825,12 @@ def test_publish_completes_a_bare_repo_name(snapshot):
 async def test_generate_reads_the_previous_version_from_the_full_repo_id(
     monkeypatch, github
 ):
-    monkeypatch.setenv("GITHUB_USERNAME", "kevin")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
-    monkeypatch.setenv("HF_TOKEN", "hf")
-    monkeypatch.setenv("HF_QA_DATASET_REPO", "github-personal")
+    creds = make_creds(
+        github_username="kevin",
+        anthropic_api_key="ak-000000000000",
+        hf_token="hf_000000000000",
+        hf_qa_repo="github-personal",
+    )
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
     api = MagicMock()
@@ -842,7 +846,7 @@ async def test_generate_reads_the_previous_version_from_the_full_repo_id(
         ),
         patch("server.services.huggingface._api", return_value=api),
     ):
-        draft = await qa_dataset.generate(complete)
+        draft = await qa_dataset.generate(creds, complete)
 
     # Otherwise the bare name 404s and is silently treated as a first run.
     assert draft.repo_id == "kevin/github-personal"

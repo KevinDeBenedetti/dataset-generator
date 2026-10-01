@@ -24,7 +24,7 @@ import re
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from server.core.config import config
+from server.services.credentials import HF_TOKEN, Credentials
 from server.services.datasets import (
     get_dataset_pairs,
     get_dataset_view,
@@ -46,25 +46,25 @@ class HuggingFaceRepoPublicError(RuntimeError):
     """Raised when the target repo already exists and is public."""
 
 
-def is_huggingface_configured() -> bool:
-    """True when a Hub token is set (the namespace is optional)."""
-    return bool(config.hf_token)
+def is_huggingface_configured(creds: Credentials) -> bool:
+    """True when the caller has a Hub token (the namespace is optional)."""
+    return creds.has(HF_TOKEN)
 
 
-def _require_token() -> str:
-    if not config.hf_token:
+def _require_token(creds: Credentials) -> str:
+    if not creds.has(HF_TOKEN):
         raise HuggingFaceNotConfiguredError(
-            "Hugging Face is not configured. Set HF_TOKEN (a token with write "
-            "access) to export datasets to the Hub."
+            "Hugging Face is not configured. Add your Hugging Face token (with "
+            "write access) in Settings to use the Hub."
         )
-    return config.hf_token
+    return creds.secret(HF_TOKEN)
 
 
-def _api():
+def _api(creds: Credentials):
     """Build an HfApi client. Imported lazily so the SDK stays optional at boot."""
     from huggingface_hub import HfApi
 
-    return HfApi(token=_require_token())
+    return HfApi(token=_require_token(creds))
 
 
 def slugify(name: str) -> str:
@@ -117,22 +117,22 @@ def _card_metadata(card_data: Any) -> Dict[str, Any]:
     }
 
 
-def list_user_datasets() -> Dict[str, Any]:
+def list_user_datasets(creds: Credentials) -> Dict[str, Any]:
     """The Hub dataset repos owned by the configured account, newest first.
 
-    Uses the token's own namespace (``HF_NAMESPACE``, or the token's account),
+    Uses the token's own namespace (the namespace saved in Settings, or the token's account),
     same as :func:`resolve_repo_id` — so this lists exactly the account an
     export would land in, private repos included. Fetches ``full=True`` so the
     response carries everything the Hub knows about each repo (card metadata,
     tags, storage size, gated status, …), not just the default summary fields.
     """
-    _require_token()
-    api = _api()
-    namespace = config.hf_namespace or api.whoami().get("name")
+    _require_token(creds)
+    api = _api(creds)
+    namespace = creds.hf_namespace or api.whoami().get("name")
     if not namespace:
         raise HuggingFaceNotConfiguredError(
-            "Could not determine the Hugging Face namespace. Set HF_NAMESPACE "
-            "(your user or organization name)."
+            "Could not determine the Hugging Face namespace. Set your Hugging Face "
+            "namespace in Settings (your user or organization name)."
         )
 
     datasets = list(
@@ -140,7 +140,7 @@ def list_user_datasets() -> Dict[str, Any]:
             author=namespace,
             sort="last_modified",
             full=True,
-            token=config.hf_token,
+            token=creds.secret(HF_TOKEN),
         )
     )
     rows = [
@@ -193,24 +193,24 @@ _NON_DATA_FILENAMES = {
 }
 
 
-def _list_repo_files(repo_id: str) -> List[str]:
+def _list_repo_files(creds: Credentials, repo_id: str) -> List[str]:
     """Every file path in the dataset repo. ValueError if the repo is unknown."""
     from huggingface_hub.errors import RepositoryNotFoundError
 
     try:
-        return list(_api().list_repo_files(repo_id, repo_type="dataset"))
+        return list(_api(creds).list_repo_files(repo_id, repo_type="dataset"))
     except RepositoryNotFoundError:
         raise ValueError(f"Hugging Face dataset repo '{repo_id}' not found")
 
 
-def _download_file(repo_id: str, filename: str) -> bytes:
+def _download_file(creds: Credentials, repo_id: str, filename: str) -> bytes:
     from huggingface_hub import hf_hub_download
 
     path = hf_hub_download(
         repo_id=repo_id,
         filename=filename,
         repo_type="dataset",
-        token=_require_token(),
+        token=_require_token(creds),
     )
     with open(path, "rb") as f:
         return f.read()
@@ -380,7 +380,10 @@ def _import_pair_id(
 
 
 def import_dataset_from_hub(
-    repo_id: str, dataset_name: Optional[str] = None
+    owner_id: str,
+    creds: Credentials,
+    repo_id: str,
+    dataset_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Pull a Hub dataset repo's Q/A pairs into local storage.
 
@@ -395,10 +398,10 @@ def import_dataset_from_hub(
     ValueError (naming what was found) when the repo is unknown, has no
     readable data file, or no row maps onto a Q/A pair.
     """
-    _require_token()
+    _require_token(creds)
     local_name = dataset_name or repo_id.split("/")[-1]
 
-    files = _list_repo_files(repo_id)
+    files = _list_repo_files(creds, repo_id)
     data_files = _pick_data_files(files)
     if not data_files:
         hint = ""
@@ -414,7 +417,7 @@ def import_dataset_from_hub(
     columns: set[str] = set()
     skipped = 0
     for filename in data_files:
-        rows = _parse_rows(filename, _download_file(repo_id, filename))
+        rows = _parse_rows(filename, _download_file(creds, repo_id, filename))
         logger.info("HF import %s: %s → %d row(s)", repo_id, filename, len(rows))
         for row in rows:
             columns.update(row.keys())
@@ -465,6 +468,7 @@ def import_dataset_from_hub(
     )
 
     result = save_generation(
+        owner_id,
         local_name,
         unique,
         source_url=source_fallback,
@@ -478,41 +482,43 @@ def import_dataset_from_hub(
     }
 
 
-def resolve_repo_id(dataset_name: str, repo_id: Optional[str] = None) -> str:
+def resolve_repo_id(
+    creds: Credentials, dataset_name: str, repo_id: Optional[str] = None
+) -> str:
     """The full ``namespace/name`` the export writes to.
 
     An explicit ``repo_id`` wins. Otherwise the name is derived from the
-    dataset and the namespace from ``HF_NAMESPACE`` — falling back to the
+    dataset and the namespace from the namespace saved in Settings — falling back to the
     token's own account, so a working token is enough to export.
     """
     if repo_id:
         return repo_id
-    namespace = config.hf_namespace or _api().whoami().get("name")
+    namespace = creds.hf_namespace or _api(creds).whoami().get("name")
     if not namespace:
         raise HuggingFaceNotConfiguredError(
-            "Could not determine the Hugging Face namespace. Set HF_NAMESPACE "
-            "(your user or organization name)."
+            "Could not determine the Hugging Face namespace. Set your Hugging Face "
+            "namespace in Settings (your user or organization name)."
         )
     return f"{namespace}/{slugify(dataset_name)}"
 
 
-def qualify_repo_id(repo_id: str) -> str:
+def qualify_repo_id(creds: Credentials, repo_id: str) -> str:
     """``namespace/name`` for a repo id that may be a bare name.
 
     The Hub's repo-creation endpoint accepts a bare ``github-qa`` and creates
     ``<you>/github-qa``, but every other endpoint (commit, download, info) needs
     the full id and answers 404 to the bare one. So a configured bare name is
-    completed once, up front, with ``HF_NAMESPACE`` — or the token's own
+    completed once, up front, with the namespace saved in Settings — or the token's own
     account — and the full id is what gets used everywhere.
     """
     repo_id = repo_id.strip()
     if "/" in repo_id:
         return repo_id
-    namespace = config.hf_namespace or _api().whoami().get("name")
+    namespace = creds.hf_namespace or _api(creds).whoami().get("name")
     if not namespace:
         raise HuggingFaceNotConfiguredError(
             f"Hugging Face repo '{repo_id}' has no namespace and none could be "
-            "determined. Use the full 'user/name' id, or set HF_NAMESPACE."
+            "determined. Use the full 'user/name' id, or set your namespace in Settings."
         )
     return f"{namespace}/{repo_id}"
 
@@ -629,7 +635,10 @@ This dataset is **private**.
 
 
 def export_dataset_to_hub(
-    dataset_name: str, repo_id: Optional[str] = None
+    owner_id: str,
+    creds: Credentials,
+    dataset_name: str,
+    repo_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Push a dataset to the Hub as a private dataset repo.
 
@@ -637,17 +646,18 @@ def export_dataset_to_hub(
     for an unknown/empty dataset, and :class:`HuggingFaceRepoPublicError` when
     the target repo already exists and is public.
     """
-    _require_token()
-
-    dataset = get_dataset_view(dataset_name)
+    # Ownership first: a dataset that isn't yours is 'not found' whatever your
+    # Hub setup looks like.
+    dataset = get_dataset_view(owner_id, dataset_name)
     if dataset is None:
         raise ValueError(f"Dataset '{dataset_name}' not found")
-    pairs = get_dataset_pairs(dataset_name)
+    _require_token(creds)
+    pairs = get_dataset_pairs(owner_id, dataset_name)
     if not pairs:
         raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs to export")
 
-    api = _api()
-    target = resolve_repo_id(dataset_name, repo_id)
+    api = _api(creds)
+    target = resolve_repo_id(creds, dataset_name, repo_id)
     ensure_private_dataset_repo(api, target)
 
     source_labels = sorted({str(p["source_url"]) for p in pairs if p.get("source_url")})

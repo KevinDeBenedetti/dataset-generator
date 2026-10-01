@@ -4,6 +4,7 @@ Thin wrappers over server.services.jobs, so these mock that service and
 assert the HTTP contract (status + shape / error mapping).
 """
 
+from server.tests.creds import FULL
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -36,7 +37,7 @@ def test_get_jobs(client: TestClient):
             "default_model": "claude:claude-sonnet-5",
             "has_draft": True,
             "configured": False,
-            "missing_env": ["HF_TOKEN"],
+            "missing": ["your Hugging Face token"],
             "options_schema": {"type": "object", "properties": {}},
             "latest_run": {"id": "run-1", "status": "succeeded"},
         }
@@ -47,7 +48,7 @@ def test_get_jobs(client: TestClient):
     assert response.json() == {"jobs": jobs}
 
 
-def test_start_run_is_accepted(client: TestClient):
+def test_start_run_is_accepted(client: TestClient, owner):
     with patch("server.api.jobs.start_run", new=AsyncMock(return_value=RUN)) as start:
         response = client.post(
             "/jobs/github-personal/run",
@@ -56,7 +57,9 @@ def test_start_run_is_accepted(client: TestClient):
     assert response.status_code == 202
     body = response.json()
     assert body["id"] == "run-1" and body["progress"]["label"] == "repo-a"
-    start.assert_awaited_once_with("github-personal", {"max_repos": 2}, "openai:gpt-x")
+    start.assert_awaited_once_with(
+        owner.id, FULL, "github-personal", {"max_repos": 2}, "openai:gpt-x"
+    )
 
 
 def test_start_run_errors(client: TestClient):
@@ -105,7 +108,7 @@ def test_get_unknown_run_is_404(client: TestClient):
         assert client.get("/jobs/runs/x").status_code == 404
 
 
-def test_publish_run(client: TestClient):
+def test_publish_run(client: TestClient, owner):
     published = {
         **RUN,
         "status": "published",
@@ -119,7 +122,7 @@ def test_publish_run(client: TestClient):
         )
     assert response.status_code == 200
     assert response.json()["published_url"] == "https://huggingface.co/datasets/ns/qa"
-    publish.assert_awaited_once_with("run-1", ["n2"], ["h1"])
+    publish.assert_awaited_once_with(owner.id, FULL, "run-1", ["n2"], ["h1"])
 
 
 def test_publish_errors(client: TestClient):
@@ -133,3 +136,24 @@ def test_publish_errors(client: TestClient):
         with patch("server.api.jobs.publish_run", new=AsyncMock(side_effect=error)):
             response = client.post("/jobs/runs/run-1/publish", json={})
         assert response.status_code == status, error
+
+
+def test_cancel_run(client: TestClient, owner):
+    with patch(
+        "server.api.jobs.cancel_run", return_value={**RUN, "status": "cancelled"}
+    ) as cancel:
+        response = client.post("/jobs/runs/run-1/cancel")
+    assert response.status_code == 200 and response.json()["status"] == "cancelled"
+    cancel.assert_called_once_with(owner.id, "run-1")
+
+
+def test_a_used_up_quota_is_a_429(client: TestClient):
+    from server.services.jobs import QuotaExceededError
+
+    with patch(
+        "server.api.jobs.start_run",
+        new=AsyncMock(side_effect=QuotaExceededError("Daily limit reached")),
+    ):
+        response = client.post("/jobs/github-personal/run", json={"options": {}})
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Daily limit reached"

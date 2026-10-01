@@ -1,12 +1,12 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
-import { useJobRun, useJobs, usePublishJobRun, useStartJobRun } from '@/hooks'
-import { useIsAdmin } from '@/hooks/use-auth'
+import { useCancelJobRun, useJobRun, useJobs, usePublishJobRun, useStartJobRun } from '@/hooks'
 import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
 
 // The subset of JSON schema the job option models produce (pydantic).
@@ -245,7 +245,7 @@ function toggled(set: Set<string>, id?: string | null): Set<string> {
 }
 
 // Step 2–3: review what a run generated, then publish exactly that.
-function DraftReview({ run, isAdmin }: { run: JobRunOut; isAdmin: boolean }) {
+function DraftReview({ run }: { run: JobRunOut }) {
   const preview = run.preview
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [promoted, setPromoted] = useState<Set<string>>(new Set())
@@ -332,7 +332,7 @@ function DraftReview({ run, isAdmin }: { run: JobRunOut; isAdmin: boolean }) {
         <button
           className="btn btn-primary"
           type="button"
-          disabled={!isAdmin || busy || total === 0}
+          disabled={busy || total === 0}
           onClick={onPublish}
         >
           <Icon name={busy ? 'loader' : 'upload'} className={busy ? 'animate-spin' : undefined} />
@@ -349,7 +349,21 @@ function DraftReview({ run, isAdmin }: { run: JobRunOut; isAdmin: boolean }) {
 }
 
 // The state of the job's current (or latest) run.
-function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
+function CancelButton({ runId, requested }: { runId: string; requested: boolean }) {
+  const cancel = useCancelJobRun(runId)
+  return (
+    <button
+      className="btn btn-outline btn-sm"
+      type="button"
+      disabled={requested || cancel.isPending}
+      onClick={() => cancel.mutate()}
+    >
+      {requested ? 'Stopping…' : 'Cancel'}
+    </button>
+  )
+}
+
+function RunPanel({ runId }: { runId: string }) {
   const { data: run, error } = useJobRun(runId)
   if (error) {
     return (
@@ -357,6 +371,25 @@ function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
     )
   }
   if (!run) return null
+
+  if (run.status === 'queued') {
+    return (
+      <div className="job-result">
+        <div className="hint" style={{ marginBottom: 6 }}>
+          Queued — waiting for a worker to pick it up.
+        </div>
+        <CancelButton runId={run.id} requested={!!run.cancel_requested} />
+      </div>
+    )
+  }
+
+  if (run.status === 'publishing') {
+    return (
+      <div className="job-result">
+        <div className="hint">Publishing to Hugging Face…</div>
+      </div>
+    )
+  }
 
   if (run.status === 'running') {
     const { done = 0, total = 0, label = '' } = run.progress ?? {}
@@ -374,17 +407,20 @@ function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
         <p className="hint" style={{ marginTop: 6 }}>
           Runs on the server — you can leave this page and come back.
         </p>
+        <CancelButton runId={run.id} requested={!!run.cancel_requested} />
       </div>
     )
   }
 
-  if (run.status === 'failed' || run.status === 'interrupted') {
+  if (run.status === 'failed' || run.status === 'interrupted' || run.status === 'cancelled') {
     return (
       <div className="job-result">
         <p className="hint job-error">
-          {run.status === 'interrupted'
-            ? 'The last run was interrupted (server restarted). Start it again.'
-            : `The last run failed: ${run.error}`}
+          {run.status === 'cancelled'
+            ? 'The last run was cancelled.'
+            : run.status === 'interrupted'
+              ? 'The last run was interrupted (its worker stopped). Start it again.'
+              : `The last run failed: ${run.error}`}
         </p>
       </div>
     )
@@ -416,7 +452,7 @@ function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
           <Metrics run={run} />
           <Errors run={run} />
         </div>
-        <DraftReview key={run.id} run={run} isAdmin={isAdmin} />
+        <DraftReview key={run.id} run={run} />
       </>
     )
   }
@@ -437,7 +473,7 @@ function RunPanel({ runId, isAdmin }: { runId: string; isAdmin: boolean }) {
   )
 }
 
-function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
+function JobCard({ job }: { job: JobInfo }) {
   const properties = (job.options_schema.properties ?? {}) as Record<string, OptionSchema>
   const [values, setValues] = useState(() => initialValues(properties))
   const [modelRef, setModelRef] = useState('')
@@ -445,7 +481,7 @@ function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
   const start = useStartJobRun(job.id)
   const runId = startedRunId ?? job.latest_run?.id ?? null
   const { data: run } = useJobRun(runId)
-  const running = start.isPending || run?.status === 'running'
+  const running = start.isPending || ['queued', 'running', 'publishing'].includes(run?.status ?? '')
 
   const onStart = () =>
     start.mutate(
@@ -484,9 +520,10 @@ function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
         style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: 14 }}
       >
         <p className="hint">{job.description}</p>
-        {(job.missing_env ?? []).length > 0 && (
+        {(job.missing ?? []).length > 0 && (
           <p className="hint job-config-hint">
-            Server not configured — missing {(job.missing_env ?? []).join(', ')}.
+            Not configured — add {(job.missing ?? []).join(', ')} in{' '}
+            <Link href="/settings">Settings</Link>.
           </p>
         )}
 
@@ -527,7 +564,7 @@ function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             className={`btn ${job.has_draft && run?.status === 'succeeded' ? 'btn-outline' : 'btn-primary'}`}
-            disabled={!isAdmin || running}
+            disabled={running}
             onClick={onStart}
             type="button"
           >
@@ -537,12 +574,11 @@ function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
             />
             {running ? 'Running…' : startLabel}
           </button>
-          {!isAdmin && <span className="hint">Only an admin can run a job.</span>}
           {job.has_draft && !running && (
             <span className="hint">Nothing is published until you review the draft.</span>
           )}
         </div>
-        {runId && <RunPanel runId={runId} isAdmin={isAdmin} />}
+        {runId && <RunPanel runId={runId} />}
       </div>
     </div>
   )
@@ -550,7 +586,6 @@ function JobCard({ job, isAdmin }: { job: JobInfo; isAdmin: boolean }) {
 
 export default function JobsPage() {
   const jobsQuery = useJobs()
-  const isAdmin = useIsAdmin()
 
   return (
     <div className="jobs-page">
@@ -584,7 +619,7 @@ export default function JobsPage() {
 
       <div className="grid-2" style={{ alignItems: 'start', gap: 24 }}>
         {(jobsQuery.data ?? []).map((job) => (
-          <JobCard key={job.id} job={job} isAdmin={isAdmin} />
+          <JobCard key={job.id} job={job} />
         ))}
       </div>
     </div>

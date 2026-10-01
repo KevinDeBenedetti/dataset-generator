@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
+from server.tests.creds import FULL
 from server.pipelines.dataset import DatasetPipeline
 
 
@@ -74,7 +75,7 @@ class TestDatasetPipeline:
             _qa_stats(total=2),
         ]
 
-        pipeline = DatasetPipeline()
+        pipeline = DatasetPipeline("owner-1", FULL)
         result = await pipeline.process_file(
             content=b"pdf-bytes",
             filename="doc.pdf",
@@ -126,7 +127,7 @@ class TestDatasetPipeline:
         )
         mock_qa_service.process_qa_pairs.return_value = _qa_stats(total=1)
 
-        pipeline = DatasetPipeline()
+        pipeline = DatasetPipeline("owner-1", FULL)
         result = await pipeline.process_file(
             content=b"pdf",
             filename="doc.pdf",
@@ -169,7 +170,7 @@ class TestProcessUrl:
         agent_class.return_value.generate_qa = AsyncMock(return_value=["qa1"])
         mock_qa_service.process_qa_pairs.return_value = _qa_stats(total=1)
 
-        result = await DatasetPipeline().process_url(
+        result = await DatasetPipeline("owner-1", FULL).process_url(
             url="https://docs.example.com/guide",
             dataset_name="ds",
             target_language="en",
@@ -204,7 +205,7 @@ class TestProcessUrl:
         llm_class.return_value.clean_text = AsyncMock()
         agent_class.return_value.generate_qa = AsyncMock()
 
-        result = await DatasetPipeline().process_url(
+        result = await DatasetPipeline("owner-1", FULL).process_url(
             url="https://x.dev",
             dataset_name="ds",
             target_language="en",

@@ -55,10 +55,12 @@ class QAService:
 
     def __init__(
         self,
+        owner_id: str,
         dataset_name: str,
         quality_rules: Optional[Dict[str, Any]] = None,
         embedder: Any = _DEFAULT,
     ):
+        self.owner_id = owner_id
         self.dataset_name = dataset_name
         self.quality_rules = quality_rules or {}
         self._embedder_arg = embedder
@@ -85,7 +87,7 @@ class QAService:
     def _load_existing_entries(self) -> List[QAEntry]:
         if self._existing_entries is None:
             try:
-                pairs = get_dataset_pairs(self.dataset_name)
+                pairs = get_dataset_pairs(self.owner_id, self.dataset_name)
             except Exception:  # noqa: BLE001 — DB unreachable: dedup within this run only
                 logging.warning(
                     "Could not read existing pairs of '%s' — deduplicating "

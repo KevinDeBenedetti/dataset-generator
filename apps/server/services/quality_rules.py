@@ -1,7 +1,7 @@
 """Persisted quality rules applied to generated Q&A pairs.
 
-One global config row (see :class:`server.models.quality_rules.QualityRules`).
-The pipeline reads the rules once per run and passes them to
+One row per user (see :class:`server.models.quality_rules.QualityRules`).
+The pipeline reads the owner's rules once per run and passes them to
 :class:`server.services.qa.QAService`, which enforces them only when
 ``auto_reject_enabled`` is true.
 """
@@ -33,15 +33,18 @@ def _to_dict(row: QualityRules) -> Dict[str, Any]:
     }
 
 
-def get_quality_rules() -> Dict[str, Any]:
-    """The current rules, or the defaults when never configured.
+def get_quality_rules(user_id: Optional[str]) -> Dict[str, Any]:
+    """``user_id``'s rules, or the defaults when never configured (and always the
+    defaults without a user — the system/CI path has no stored rules).
 
     Never raises: generation must not fail because the rules table is
     missing/unreachable — it falls back to enforcement-off defaults.
     """
+    if not user_id:
+        return dict(DEFAULT_RULES)
     try:
         with get_scoped_db() as db:
-            row = db.get(QualityRules, "default")
+            row = db.get(QualityRules, user_id)
             return _to_dict(row) if row else dict(DEFAULT_RULES)
     except Exception as exc:  # noqa: BLE001 — degrade to defaults
         logger.warning("Could not read quality rules, using defaults: %s", exc)
@@ -49,18 +52,19 @@ def get_quality_rules() -> Dict[str, Any]:
 
 
 def update_quality_rules(
+    user_id: str,
     *,
     min_answer_words: Optional[int] = None,
     reject_below_confidence: Optional[float] = None,
     auto_reject_enabled: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Upsert the singleton row, changing only the provided fields."""
+    """Upsert ``user_id``'s row, changing only the provided fields."""
     from datetime import datetime, timezone
 
     with get_scoped_db() as db:
-        row = db.get(QualityRules, "default")
+        row = db.get(QualityRules, user_id)
         if row is None:
-            row = QualityRules(id="default")
+            row = QualityRules(user_id=user_id)
             db.add(row)
         if min_answer_words is not None:
             row.min_answer_words = min_answer_words
