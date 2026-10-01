@@ -331,6 +331,20 @@ def client_for(test_db: Session, datasets_db):
 
 
 @pytest.fixture(autouse=True)
+def _no_ambient_qdrant(monkeypatch):
+    """Keep tests off the Qdrant named in the developer's ``.env``.
+
+    With ``QDRANT_URL`` set, any route that lists or drops collections builds a
+    real client and tries to reach it (hence the "Failed to obtain server
+    version" warning). Tests that exercise Qdrant inject a fake client or set
+    the URL themselves.
+    """
+    from server.core.config import config
+
+    monkeypatch.setattr(config, "qdrant_url", "")
+
+
+@pytest.fixture(autouse=True)
 def _reset_login_rate_limiter():
     """Clear the process-global limiters between tests so failed-login and
     refresh cases in one test don't throttle another (shared 'testclient' IP)."""
