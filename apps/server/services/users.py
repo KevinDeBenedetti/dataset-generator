@@ -15,10 +15,6 @@ def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email.lower()).first()
 
 
-def get_user_by_oidc_sub(db: Session, sub: str) -> Optional[User]:
-    return db.query(User).filter(User.oidc_sub == sub).first()
-
-
 def create_user(
     db: Session,
     *,

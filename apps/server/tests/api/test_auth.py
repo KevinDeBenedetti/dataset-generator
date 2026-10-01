@@ -8,6 +8,12 @@ from server.services.rate_limit import login_rate_limiter
 from server.models.user import UserRole
 
 
+@pytest.fixture
+def client(auth_client):
+    """These tests exercise the real authentication, not a pre-signed-in caller."""
+    return auth_client
+
+
 def _seed_user(db, email="user@example.com", password="pw12345", role=UserRole.USER):
     return create_user(db, email=email, password=password, role=role)
 
@@ -78,6 +84,11 @@ class TestMeAndLogout:
 
 
 class TestRefresh:
+    @pytest.fixture
+    def strict_rotation(self, monkeypatch):
+        """No reuse grace: any second use of a refresh token is treated as theft."""
+        monkeypatch.setattr(config, "auth_refresh_reuse_grace_seconds", 0)
+
     def _login(self, client, test_db, email="carol@example.com", password="secret"):
         _seed_user(test_db, email=email, password=password)
         resp = client.post("/auth/login", json={"email": email, "password": password})
@@ -101,7 +112,7 @@ class TestRefresh:
         # The new access token authenticates.
         assert client.get("/auth/me").status_code == 200
 
-    def test_consumed_refresh_token_is_rejected(self, client, test_db):
+    def test_consumed_refresh_token_is_rejected(self, client, test_db, strict_rotation):
         self._login(client, test_db)
         old = client.cookies.get(config.auth_refresh_cookie_name)
         assert client.post("/auth/refresh").status_code == 200
@@ -110,7 +121,7 @@ class TestRefresh:
         client.cookies.set(config.auth_refresh_cookie_name, old)
         assert client.post("/auth/refresh").status_code == 401
 
-    def test_replay_revokes_the_successor_too(self, client, test_db):
+    def test_replay_revokes_the_successor_too(self, client, test_db, strict_rotation):
         self._login(client, test_db)
         old = client.cookies.get(config.auth_refresh_cookie_name)
         assert client.post("/auth/refresh").status_code == 200
@@ -122,6 +133,39 @@ class TestRefresh:
         # The whole family is dead: the legitimate successor no longer works.
         client.cookies.set(config.auth_refresh_cookie_name, successor)
         assert client.post("/auth/refresh").status_code == 401
+
+    def test_a_tab_racing_the_rotation_is_not_logged_out(self, client, test_db):
+        """Default grace: a second request with the token that was *just* rotated
+        (another tab, the Next server) gets its own successor, not a family wipe."""
+        self._login(client, test_db)
+        old = client.cookies.get(config.auth_refresh_cookie_name)
+        first_response = client.post("/auth/refresh")
+        assert first_response.status_code == 200
+        first = first_response.cookies.get(config.auth_refresh_cookie_name)
+
+        client.cookies.set(config.auth_refresh_cookie_name, old)
+        second_response = client.post("/auth/refresh")
+        assert second_response.status_code == 200
+        second = second_response.cookies.get(config.auth_refresh_cookie_name)
+        assert first and second and second not in (old, first)
+
+        # Both successors are live: neither tab is kicked out.
+        for token in (first, second):
+            client.cookies.clear()
+            client.cookies.set(config.auth_refresh_cookie_name, token)
+            assert client.post("/auth/refresh").status_code == 200
+
+    def test_refresh_is_throttled_per_client(self, client, test_db, monkeypatch):
+        from server.services.rate_limit import refresh_rate_limiter
+
+        self._login(client, test_db)
+        monkeypatch.setattr(refresh_rate_limiter, "max_attempts", 2)
+        refresh_rate_limiter.clear()
+        assert client.post("/auth/refresh").status_code == 200
+        assert client.post("/auth/refresh").status_code == 200
+        blocked = client.post("/auth/refresh")
+        assert blocked.status_code == 429
+        assert int(blocked.headers["Retry-After"]) >= 1
 
     def test_refresh_without_cookie_is_401(self, client):
         assert client.post("/auth/refresh").status_code == 401
@@ -197,3 +241,16 @@ class TestLoginRateLimit:
         # ...so the budget is full again: three more failures stay 401, not 429.
         for _ in range(3):
             assert client.post("/auth/login", json=bad).status_code == 401
+
+
+class TestLocalLoginSwitch:
+    def test_disabled_login_is_404_and_never_checks_the_password(
+        self, client, test_db, monkeypatch
+    ):
+        _seed_user(test_db, email="zed@example.com", password="secret")
+        monkeypatch.setattr(config, "enable_local_login", False)
+        response = client.post(
+            "/auth/login", json={"email": "zed@example.com", "password": "secret"}
+        )
+        assert response.status_code == 404
+        assert "access_token" not in response.headers.get("set-cookie", "")

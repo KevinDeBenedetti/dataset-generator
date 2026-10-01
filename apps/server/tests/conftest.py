@@ -13,6 +13,19 @@ os.environ["OPENAI_EMBEDDING_MODEL"] = "text-embedding-3-small"
 # Never download the local embedding model in tests: code paths that use it
 # take an injected fake embedder (see tests/services/test_semantic.py).
 os.environ["SEMANTIC_ENABLED"] = "false"
+# The auth tests exercise the local email/password login and the plain cookie
+# names; outside development the app turns the former off and prefixes the
+# latter with __Host- (see Config), so pin the test-suite values.
+os.environ["ENABLE_LOCAL_LOGIN"] = "true"
+# Existing tests drive providers through the env; the per-user paths are tested
+# explicitly with their own flags.
+os.environ["ALLOW_ENV_CREDENTIALS"] = "true"
+os.environ["ENABLE_CLAUDE_PROVIDER"] = "true"
+# The Claude provider exists in development and CI only; the suite runs as CI
+# (GitHub Actions sets it anyway). Production behaviour is tested explicitly.
+os.environ["CI"] = "true"
+os.environ["AUTH_COOKIE_NAME"] = "access_token"
+os.environ["AUTH_REFRESH_COOKIE_NAME"] = "refresh_token"
 
 import pytest
 from contextlib import contextmanager
@@ -164,14 +177,28 @@ def datasets_db(monkeypatch, test_engine):
             session.close()
 
     monkeypatch.setattr("server.services.datasets.get_scoped_db", scoped)
+    # Stored secrets and settings live in the same per-test database.
+    monkeypatch.setattr("server.services.user_secrets.get_scoped_db", scoped)
+    from server.core.config import config as _config
+    from server.core.crypto import generate_key
+
+    monkeypatch.setattr(_config, "secrets_encryption_keys_raw", f"t1:{generate_key()}")
     return scoped
 
 
-@pytest.fixture(scope="function")
-def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
-    """Create a test client with overridden database dependency."""
+def _build_test_app(
+    test_db: Session, acting_user=None, real_credentials: bool = False
+) -> FastAPI:
+    """The API without lifespan or the app-level auth gate.
+
+    With ``acting_user`` the request is authenticated as that (persisted) user:
+    both ``get_current_user`` and ``require_admin`` resolve to it, as a valid
+    session would. Without it the real ``get_current_user`` stays in place —
+    what the auth tests exercise (cookies, refresh, 401s).
+    """
     from fastapi.middleware.cors import CORSMiddleware
     from server.api import (
+        admin,
         auth,
         collections,
         dataset,
@@ -180,8 +207,10 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
         models,
         q_a,
         prompts,
+        me,
         quality_rules,
     )
+    from server.services.auth import get_current_user, require_admin
 
     # Create test app without lifespan to avoid migration issues
     test_app = FastAPI(
@@ -205,6 +234,8 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
     test_app.include_router(models.router)
     test_app.include_router(collections.router)
     test_app.include_router(quality_rules.router)
+    test_app.include_router(me.router)
+    test_app.include_router(admin.router)
     test_app.include_router(prompts.router)
     test_app.include_router(jobs.router)
 
@@ -226,33 +257,96 @@ def client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
 
     test_app.dependency_overrides[get_db] = override_get_db
 
-    # The feature routers are mounted here without the app-level auth gate, so
-    # these tests exercise handlers directly. The destructive routes still carry
-    # a route-level ``Depends(require_admin)``, so satisfy it with a test admin
-    # (overriding require_admin also short-circuits its get_current_user
-    # sub-dependency — get_current_user itself stays real for the auth tests).
-    from server.models.user import User, UserRole
-    from server.services.auth import require_admin
+    if not real_credentials:
+        # Routes act with a fully-configured set of credentials; the tests that
+        # exercise per-user keys ask for the real resolution instead.
+        from server.api.deps import get_credentials
+        from server.tests.creds import FULL
 
-    test_app.dependency_overrides[require_admin] = lambda: User(
-        id="test-admin", email="admin@test.local", role=UserRole.ADMIN
+        test_app.dependency_overrides[get_credentials] = lambda: FULL
+
+    if acting_user is not None:
+        test_app.dependency_overrides[get_current_user] = lambda: acting_user
+        test_app.dependency_overrides[require_admin] = lambda: acting_user
+    else:
+        # Auth tests: get_current_user stays real, but the admin-only routes
+        # still need a caller that passes their gate.
+        from server.models.user import User, UserRole
+
+        test_app.dependency_overrides[require_admin] = lambda: User(
+            id="test-admin", email="admin@test.local", role=UserRole.ADMIN
+        )
+    return test_app
+
+
+@pytest.fixture(scope="function")
+def owner(test_db: Session):
+    """The persisted admin the default ``client`` acts as (and owns its data)."""
+    from server.models.user import UserRole
+    from server.services.users import create_user
+
+    return create_user(
+        test_db, email="owner@test.local", password="pw12345", role=UserRole.ADMIN
     )
 
+
+@pytest.fixture(scope="function")
+def client(test_db: Session, datasets_db, owner) -> Generator[TestClient, None, None]:
+    """A client authenticated as ``owner`` — feature routes see a signed-in admin."""
+    test_app = _build_test_app(test_db, owner)
     with TestClient(test_app) as test_client:
         yield test_client
-
     test_app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def auth_client(test_db: Session, datasets_db) -> Generator[TestClient, None, None]:
+    """A client with the *real* authentication (cookies, refresh, 401s) — for the
+    auth tests. Log in through ``/auth/login`` to get a session."""
+    test_app = _build_test_app(test_db)
+    with TestClient(test_app) as test_client:
+        yield test_client
+    test_app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def client_for(test_db: Session, datasets_db):
+    """Factory: ``client_for(user)`` is a client authenticated as that user.
+
+    For isolation tests, which need two users hitting the same database.
+    """
+    opened = []
+
+    def make(user, real_credentials: bool = False) -> TestClient:
+        test_app = _build_test_app(test_db, user, real_credentials)
+        test_client = TestClient(test_app)
+        test_client.__enter__()
+        opened.append((test_client, test_app))
+        return test_client
+
+    yield make
+    for test_client, test_app in opened:
+        test_client.__exit__(None, None, None)
+        test_app.dependency_overrides.clear()
 
 
 @pytest.fixture(autouse=True)
 def _reset_login_rate_limiter():
-    """Clear the process-global login limiter between tests so failed-login
-    cases in one test don't throttle another (shared 'testclient' IP)."""
-    from server.services.rate_limit import login_rate_limiter
+    """Clear the process-global limiters between tests so failed-login and
+    refresh cases in one test don't throttle another (shared 'testclient' IP)."""
+    from server.services import rate_limit
 
-    login_rate_limiter.clear()
+    limiters = (
+        rate_limit.login_rate_limiter,
+        rate_limit.refresh_rate_limiter,
+        rate_limit.sso_rate_limiter,
+        rate_limit.secrets_rate_limiter,
+    )
+    for limiter in limiters:
+        limiter.clear()
     yield
-    login_rate_limiter.clear()
+    for limiter in limiters:
+        limiter.clear()
 
 
 @pytest.fixture

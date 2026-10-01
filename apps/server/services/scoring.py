@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from server.core.config import config
 from server.services.datasets import get_pairs_to_score, set_pair_confidences
 from server.services.model_defaults import resolve_model
+from server.services.credentials import Credentials
 from server.services.providers import (
     CompletionRequest,
     complete,
@@ -91,7 +92,9 @@ def parse_scores(raw: str, count: int) -> Dict[int, float]:
     return scores
 
 
-async def _score_batch(model: str, pairs: List[Dict[str, Any]]) -> Dict[str, float]:
+async def _score_batch(
+    model: str, pairs: List[Dict[str, Any]], creds: Credentials
+) -> Dict[str, float]:
     try:
         result = await complete(
             model,
@@ -101,6 +104,7 @@ async def _score_batch(model: str, pairs: List[Dict[str, Any]]) -> Dict[str, flo
                 max_tokens=config.max_tokens_qa,
                 reasoning=True,
             ),
+            creds,
         )
     except Exception as exc:
         logger.warning("scoring batch failed: %s", exc)
@@ -112,7 +116,11 @@ async def _score_batch(model: str, pairs: List[Dict[str, Any]]) -> Dict[str, flo
 
 
 async def score_dataset(
-    dataset_name: str, only_unscored: bool = True, model: Optional[str] = None
+    owner_id: str,
+    dataset_name: str,
+    creds: Credentials,
+    only_unscored: bool = True,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Score a dataset's pairs and store the results.
 
@@ -120,21 +128,22 @@ async def score_dataset(
     ValueError for an unknown dataset and :class:`ScoringNotConfiguredError`
     when the judge's provider isn't configured.
     """
-    model = resolve_model("qa", model)
+    model = resolve_model("qa", model, user_id=owner_id)
     provider = get_provider(parse_ref(model)[0]) if model else None
-    if provider is None or not provider.configured():
-        missing = ", ".join(provider.missing_env()) if provider else "a qa model"
+    if provider is None or not provider.configured(creds):
+        missing = ", ".join(provider.missing(creds)) if provider else "a qa model"
         raise ScoringNotConfiguredError(
-            f"No judge model is usable — set {missing} (see the Models page) "
-            "to score Q/A pairs."
+            f"No judge model is usable — add {missing} in Settings to score Q/A pairs."
         )
-    pairs = await asyncio.to_thread(get_pairs_to_score, dataset_name, only_unscored)
+    pairs = await asyncio.to_thread(
+        get_pairs_to_score, owner_id, dataset_name, only_unscored
+    )
 
     semaphore = asyncio.Semaphore(CONCURRENCY)
 
     async def run(batch: List[Dict[str, Any]]) -> Dict[str, float]:
         async with semaphore:
-            return await _score_batch(model, batch)
+            return await _score_batch(model, batch, creds)
 
     batches = [pairs[i : i + BATCH_SIZE] for i in range(0, len(pairs), BATCH_SIZE)]
     scores: Dict[str, float] = {}
@@ -142,7 +151,7 @@ async def score_dataset(
         scores.update(result)
 
     updated = await asyncio.to_thread(
-        set_pair_confidences, dataset_name, scores, f"llm_judge:{model}"
+        set_pair_confidences, owner_id, dataset_name, scores, f"llm_judge:{model}"
     )
     logger.info(
         "scored %d/%d pair(s) of %r with %s", updated, len(pairs), dataset_name, model

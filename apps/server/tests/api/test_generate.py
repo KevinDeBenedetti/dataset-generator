@@ -6,7 +6,9 @@ from fastapi.testclient import TestClient
 
 from server.main import app
 from server.models.user import User, UserRole
+from server.api.deps import get_credentials
 from server.services.auth import get_current_user
+from server.tests.creds import FULL, make_creds
 
 client = TestClient(app)
 
@@ -18,8 +20,10 @@ def authenticated():
     app.dependency_overrides[get_current_user] = lambda: User(
         id="test-user", email="tester@example.com", role=UserRole.USER
     )
+    app.dependency_overrides[get_credentials] = lambda: FULL
     yield
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_credentials, None)
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +32,8 @@ def env_model_defaults():
     from server.services.model_defaults import env_defaults
 
     with patch(
-        "server.services.model_defaults.get_model_defaults", side_effect=env_defaults
+        "server.services.model_defaults.get_model_defaults",
+        side_effect=lambda user_id=None: env_defaults(),
     ):
         yield
 
@@ -155,7 +160,6 @@ class TestGenerateDatasetFromUrl:
         assert kwargs["model_qa"] == "openai:gpt-4o-mini"
 
     def test_explicit_models_are_forwarded(self, mock_url_pipeline, monkeypatch):
-        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
         mock_url_pipeline.process_url.return_value = self._pipeline_result()
 
         response = client.post(
@@ -197,9 +201,11 @@ class TestGenerateDatasetFromUrl:
         assert "Unknown model" in response.json()["detail"]
         mock_url_pipeline.process_url.assert_not_called()
 
-    def test_unconfigured_provider_returns_400(self, mock_url_pipeline, monkeypatch):
-        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    def test_unconfigured_provider_returns_400(self, mock_url_pipeline):
+        # A user who never added a Claude token.
+        app.dependency_overrides[get_credentials] = lambda: make_creds(
+            openai_api_key="sk-user-0000000000000000", base_url_trusted=True
+        )
         response = client.post(
             "/dataset/generate/url",
             json={
@@ -209,4 +215,5 @@ class TestGenerateDatasetFromUrl:
             },
         )
         assert response.status_code == 400
-        assert "CLAUDE_CODE_OAUTH_TOKEN" in response.json()["detail"]
+        assert "Claude token" in response.json()["detail"]
+        assert "Settings" in response.json()["detail"]

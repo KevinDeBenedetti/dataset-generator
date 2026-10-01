@@ -2,6 +2,7 @@
 Tests for Q&A API endpoints.
 """
 
+from server.tests.creds import FULL
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -26,7 +27,7 @@ def _qa_view_fn(total=15):
         for i in range(total)
     ]
 
-    def _view(dataset_name, limit=10, offset=0):
+    def _view(owner_id, dataset_name, limit=10, offset=0):
         page = items[offset : (offset + limit) if limit else None]
         return {
             "dataset_name": dataset_name,
@@ -142,7 +143,7 @@ def test_get_qa_stats_with_custom_threshold(client: TestClient):
     """Test that score_threshold is passed through to the view."""
     with patch(
         "server.api.q_a.get_qa_stats_view",
-        side_effect=lambda dataset_name, score_threshold: _qa_stats_fn(
+        side_effect=lambda owner_id, dataset_name, score_threshold: _qa_stats_fn(
             dataset_name, score_threshold
         ),
     ):
@@ -165,7 +166,7 @@ def test_get_qa_stats_threshold_validation(client: TestClient):
     )
 
 
-def test_score_qa_returns_the_summary(client: TestClient):
+def test_score_qa_returns_the_summary(client: TestClient, owner):
     summary = {
         "dataset_name": "ds",
         "model": "judge",
@@ -179,7 +180,9 @@ def test_score_qa_returns_the_summary(client: TestClient):
         response = client.post("/q_a/ds/score", params={"only_unscored": "false"})
     assert response.status_code == 200
     assert response.json() == summary
-    score.assert_awaited_once_with("ds", only_unscored=False, model=None)
+    score.assert_awaited_once_with(
+        owner.id, "ds", FULL, only_unscored=False, model=None
+    )
 
 
 def test_score_qa_maps_errors(client: TestClient):

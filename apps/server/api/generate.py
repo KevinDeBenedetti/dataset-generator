@@ -2,10 +2,12 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from server.core.config import config
+from server.api.deps import get_credentials
 from server.pipelines.dataset import DatasetPipeline
+from server.services.credentials import Credentials
 from server.schemas.dataset import TargetLanguage
 from server.schemas.generate import (
     DatasetGenerationResponse,
@@ -14,6 +16,8 @@ from server.schemas.generate import (
     QAPair,
     UrlGenerationRequest,
 )
+from server.models.user import User
+from server.services.auth import get_current_user
 from server.services.model_defaults import resolve_model
 from server.services.providers import validate_ref
 from server.services.web import WebFetchError
@@ -30,16 +34,18 @@ _RESPONSES: Dict[int | str, Dict[str, Any]] = {
 }
 
 
-def _model(role: str, requested: Optional[str]) -> str:
-    """The request's model reference, else the role default — validated. 400 otherwise."""
-    ref = resolve_model(role, requested)
+def _model(
+    role: str, requested: Optional[str], user_id: str, creds: Credentials
+) -> str:
+    """The request's model reference, else your role default — validated. 400 otherwise."""
+    ref = resolve_model(role, requested, user_id=user_id)
     if not ref:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"No {role} model configured — pick one on the Models page",
         )
     try:
-        return validate_ref(ref)
+        return validate_ref(ref, creds)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -124,12 +130,14 @@ async def create_dataset_for_file(
     ),
     similarity_threshold: float = Form(0.85, ge=0.0, le=1.0),
     persist: bool = Form(True),
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
 ) -> DatasetGenerationResponse:
     """Create a dataset from an uploaded PDF/image via a vision model."""
     start_time = time.time()
     language = _language(target_language)
-    model_qa_r = _model("qa", model_qa)
-    model_vlm_r = _model("vision", model_vlm)
+    model_qa_r = _model("qa", model_qa, user.id, creds)
+    model_vlm_r = _model("vision", model_vlm, user.id, creds)
 
     content = await file.read()
     if not content:
@@ -138,7 +146,7 @@ async def create_dataset_for_file(
         )
 
     try:
-        result = await DatasetPipeline().process_file(
+        result = await DatasetPipeline(user.id, creds).process_file(
             content=content,
             filename=file.filename or "upload",
             content_type=file.content_type or "",
@@ -183,15 +191,17 @@ async def create_dataset_for_file(
 )
 async def create_dataset_for_url(
     request: UrlGenerationRequest,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
 ) -> DatasetGenerationResponse:
     """Create a dataset from a single web page."""
     start_time = time.time()
     language = _language(request.target_language)
-    model_cleaning = _model("cleaning", request.model_cleaning)
-    model_qa = _model("qa", request.model_qa)
+    model_cleaning = _model("cleaning", request.model_cleaning, user.id, creds)
+    model_qa = _model("qa", request.model_qa, user.id, creds)
 
     try:
-        result = await DatasetPipeline().process_url(
+        result = await DatasetPipeline(user.id, creds).process_url(
             url=request.url,
             dataset_name=request.dataset_name,
             target_language=language,

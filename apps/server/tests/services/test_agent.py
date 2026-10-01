@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+from server.tests.creds import FULL
 from server.services.agent import QAAgentService, _parse_qa_list
 
 
@@ -72,7 +73,7 @@ class TestParseQaList:
 
 def _service_with_run(return_value=None, side_effect=None):
     """A QAAgentService whose model call (_run) is mocked, no network."""
-    service = QAAgentService()
+    service = QAAgentService(FULL)
     run = AsyncMock(return_value=return_value, side_effect=side_effect)
     return service, run
 
@@ -122,12 +123,13 @@ async def test_node_calls_the_provider_registry():
         "server.services.agent.complete",
         new=AsyncMock(return_value=CompletionResult(VALID_PAYLOAD)),
     ) as complete:
-        items = await QAAgentService().generate_qa(
+        items = await QAAgentService(FULL).generate_qa(
             "Some source text", "fr", "claude:claude-sonnet-5"
         )
 
     assert len(items) == 1
-    ref, req = complete.call_args.args
+    ref, req, creds = complete.call_args.args
+    assert creds is FULL
     assert ref == "claude:claude-sonnet-5"
     assert req.system == QA_AGENT_INSTRUCTION
     assert "Target language: fr" in req.user and "Some source text" in req.user

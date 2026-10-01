@@ -5,6 +5,7 @@ import socket
 import httpx
 import pytest
 
+from server.core import net
 from server.services import web
 from server.services.web import WebFetchError, fetch_page, html_to_text
 
@@ -36,7 +37,7 @@ def resolve(monkeypatch):
             raise socket.gaierror("unknown")
         return [table[host]]
 
-    monkeypatch.setattr(web, "_resolve", fake_resolve)
+    monkeypatch.setattr(net, "resolve", fake_resolve)
     return table
 
 

@@ -32,12 +32,19 @@ def _iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value is not None else None
 
 
-def _get_dataset(db: Session, dataset_name: str) -> Optional[Dataset]:
-    return db.scalar(select(Dataset).where(Dataset.name == dataset_name))
+def _get_dataset(db: Session, owner_id: str, dataset_name: str) -> Optional[Dataset]:
+    """The ``owner_id``'s dataset called ``dataset_name`` — the only way to look a
+    dataset up. There is deliberately no lookup by name alone: another user's
+    dataset must be indistinguishable from one that doesn't exist."""
+    return db.scalar(
+        select(Dataset).where(
+            Dataset.owner_id == owner_id, Dataset.name == dataset_name
+        )
+    )
 
 
-def _require_dataset(db: Session, dataset_name: str) -> Dataset:
-    dataset = _get_dataset(db, dataset_name)
+def _require_dataset(db: Session, owner_id: str, dataset_name: str) -> Dataset:
+    dataset = _get_dataset(db, owner_id, dataset_name)
     if dataset is None:
         raise ValueError(f"Dataset '{dataset_name}' not found")
     return dataset
@@ -57,30 +64,39 @@ def _to_dataset_view(
         "qa_sources_count": qa_count,
         "version": version,
         "created_at": _iso(dataset.created_at),
+        # Internal: which Qdrant collection holds it (None = the default name).
+        "qdrant_collection": dataset.qdrant_collection,
     }
 
 
-def list_datasets_view() -> List[Dict[str, Any]]:
-    """Every dataset, newest first, with its live Q/A count and version.
+def list_datasets_view(owner_id: str) -> List[Dict[str, Any]]:
+    """The owner's datasets, newest first, with its live Q/A count and version.
 
     Counts and versions are aggregated in two grouped queries rather than one
     per dataset, so the list costs three round trips whatever the number of
     datasets.
     """
     with get_scoped_db() as db:
-        datasets = list(db.scalars(select(Dataset).order_by(Dataset.created_at.desc())))
+        datasets = list(
+            db.scalars(
+                select(Dataset)
+                .where(Dataset.owner_id == owner_id)
+                .order_by(Dataset.created_at.desc())
+            )
+        )
+        ids = [d.id for d in datasets]
         counts = dict(
             db.execute(
-                select(QAPair.dataset_id, func.count(QAPair.id)).group_by(
-                    QAPair.dataset_id
-                )
+                select(QAPair.dataset_id, func.count(QAPair.id))
+                .where(QAPair.dataset_id.in_(ids))
+                .group_by(QAPair.dataset_id)
             ).all()
         )
         versions = dict(
             db.execute(
-                select(DatasetRun.dataset_id, func.max(DatasetRun.version)).group_by(
-                    DatasetRun.dataset_id
-                )
+                select(DatasetRun.dataset_id, func.max(DatasetRun.version))
+                .where(DatasetRun.dataset_id.in_(ids))
+                .group_by(DatasetRun.dataset_id)
             ).all()
         )
         return [
@@ -89,10 +105,10 @@ def list_datasets_view() -> List[Dict[str, Any]]:
         ]
 
 
-def get_dataset_view(dataset_name: str) -> Optional[Dict[str, Any]]:
+def get_dataset_view(owner_id: str, dataset_name: str) -> Optional[Dict[str, Any]]:
     """A single dataset by name, or None if it doesn't exist."""
     with get_scoped_db() as db:
-        dataset = _get_dataset(db, dataset_name)
+        dataset = _get_dataset(db, owner_id, dataset_name)
         if dataset is None:
             return None
         qa_count = (
@@ -112,14 +128,32 @@ def get_dataset_view(dataset_name: str) -> Optional[Dict[str, Any]]:
 # --- create / delete ---------------------------------------------------------
 
 
+class DatasetQuotaError(ValueError):
+    """The owner reached QUOTA_DATASETS."""
+
+
+def _check_dataset_quota(db: Session, owner_id: str) -> None:
+    from server.core.config import config
+
+    limit = config.quota_datasets
+    if not limit:
+        return
+    owned = db.query(Dataset).filter(Dataset.owner_id == owner_id).count()
+    if owned >= limit:
+        raise DatasetQuotaError(
+            f"You have reached the limit of {limit} datasets — delete one first."
+        )
+
+
 def create_dataset(
-    dataset_name: str, description: Optional[str] = None
+    owner_id: str, dataset_name: str, description: Optional[str] = None
 ) -> Dict[str, Any]:
     """Create an empty dataset. Raises ValueError if the name is taken."""
     with get_scoped_db() as db:
-        if _get_dataset(db, dataset_name) is not None:
+        if _get_dataset(db, owner_id, dataset_name) is not None:
             raise ValueError(f"Dataset '{dataset_name}' already exists")
-        dataset = Dataset(name=dataset_name, description=description)
+        _check_dataset_quota(db, owner_id)
+        dataset = Dataset(owner_id=owner_id, name=dataset_name, description=description)
         db.add(dataset)
         db.commit()
         return {
@@ -130,27 +164,31 @@ def create_dataset(
         }
 
 
-def delete_dataset(dataset_name: str) -> Dict[str, Any]:
+def delete_dataset(owner_id: str, dataset_name: str) -> Dict[str, Any]:
     """Delete a dataset, its pairs and its history, and drop its Qdrant collection.
 
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         deleted = (
             db.scalar(
                 select(func.count(QAPair.id)).where(QAPair.dataset_id == dataset.id)
             )
             or 0
         )
+        # Resolved before the row is gone: it names the collection to drop.
+        from server.services.qdrant import default_collection_name
+
+        collection = default_collection_name(dataset.id, dataset.qdrant_collection)
         # The pairs and runs go with it (FK ON DELETE CASCADE).
         db.delete(dataset)
         db.commit()
 
     # Cascade outside the DB: drop the Qdrant collection (best-effort, lazy import).
-    from server.services.qdrant import delete_collection_for
+    from server.services.qdrant import delete_collection
 
-    qdrant_dropped = delete_collection_for(dataset_name)
+    qdrant_dropped = delete_collection(collection)
 
     return {
         "message": (
@@ -165,10 +203,10 @@ def delete_dataset(dataset_name: str) -> Dict[str, Any]:
 # --- generation writes -------------------------------------------------------
 
 
-def next_version(dataset_name: str) -> int:
+def next_version(owner_id: str, dataset_name: str) -> int:
     """The version number the next run of this dataset gets (1-based)."""
     with get_scoped_db() as db:
-        dataset = _get_dataset(db, dataset_name)
+        dataset = _get_dataset(db, owner_id, dataset_name)
         if dataset is None:
             return 1
         current = db.scalar(
@@ -180,6 +218,7 @@ def next_version(dataset_name: str) -> int:
 
 
 def save_generation(
+    owner_id: str,
     dataset_name: str,
     items: List[Dict[str, Any]],
     *,
@@ -199,9 +238,11 @@ def save_generation(
     """
     stats = stats or {}
     with get_scoped_db() as db:
-        dataset = _get_dataset(db, dataset_name)
+        dataset = _get_dataset(db, owner_id, dataset_name)
         if dataset is None:
+            _check_dataset_quota(db, owner_id)
             dataset = Dataset(
+                owner_id=owner_id,
                 name=dataset_name,
                 description=description or f"Generated from {source_url}",
                 target_language=target_language,
@@ -299,14 +340,14 @@ def _to_qa_view(pair: QAPair) -> Dict[str, Any]:
 
 
 def get_qa_view(
-    dataset_name: str, limit: Optional[int] = 10, offset: int = 0
+    owner_id: str, dataset_name: str, limit: Optional[int] = 10, offset: int = 0
 ) -> Dict[str, Any]:
     """One page of a dataset's Q/A pairs, newest first (QAListResponse shape).
 
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         total_count = (
             db.scalar(
                 select(func.count(QAPair.id)).where(QAPair.dataset_id == dataset.id)
@@ -347,7 +388,7 @@ _SCORE_BUCKETS: List[Tuple[str, float, float]] = [
 
 
 def get_qa_stats_view(
-    dataset_name: str, score_threshold: float = 0.8
+    owner_id: str, dataset_name: str, score_threshold: float = 0.8
 ) -> Dict[str, Any]:
     """Confidence-score stats over a dataset (QAStatsResponse shape).
 
@@ -358,7 +399,7 @@ def get_qa_stats_view(
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         total_count = (
             db.scalar(
                 select(func.count(QAPair.id)).where(QAPair.dataset_id == dataset.id)
@@ -394,14 +435,14 @@ def get_qa_stats_view(
 
 
 def get_pairs_to_score(
-    dataset_name: str, only_unscored: bool = True
+    owner_id: str, dataset_name: str, only_unscored: bool = True
 ) -> List[Dict[str, Any]]:
     """The dataset's pairs as plain dicts for the LLM scorer.
 
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         query = select(QAPair).where(QAPair.dataset_id == dataset.id)
         if only_unscored:
             query = query.where(QAPair.confidence.is_(None))
@@ -417,7 +458,7 @@ def get_pairs_to_score(
 
 
 def set_pair_confidences(
-    dataset_name: str, scores: Dict[str, float], method: str
+    owner_id: str, dataset_name: str, scores: Dict[str, float], method: str
 ) -> int:
     """Store ``{pair id: confidence}`` and record how each score was produced.
 
@@ -427,7 +468,7 @@ def set_pair_confidences(
     if not scores:
         return 0
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         pairs = db.scalars(
             select(QAPair).where(
                 QAPair.dataset_id == dataset.id, QAPair.id.in_(list(scores))
@@ -484,13 +525,13 @@ def _to_analysis_view(run: DatasetRun) -> Dict[str, Any]:
     }
 
 
-def list_dataset_versions(dataset_name: str) -> Dict[str, Any]:
+def list_dataset_versions(owner_id: str, dataset_name: str) -> Dict[str, Any]:
     """A dataset's version history, newest first.
 
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         runs = list(
             db.scalars(
                 select(DatasetRun)
@@ -506,7 +547,7 @@ def list_dataset_versions(dataset_name: str) -> Dict[str, Any]:
         }
 
 
-def get_dataset_sources_view(dataset_name: str) -> Dict[str, Any]:
+def get_dataset_sources_view(owner_id: str, dataset_name: str) -> Dict[str, Any]:
     """The sources a dataset was built from, plus its analysis history.
 
     ``sources`` groups the pairs by ``source_url`` — what actually produced Q/A
@@ -517,7 +558,7 @@ def get_dataset_sources_view(dataset_name: str) -> Dict[str, Any]:
     Raises ValueError when the dataset doesn't exist.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
 
         rows = db.execute(
             select(
@@ -608,7 +649,7 @@ def _pair_dicts(db: Session, dataset: Dataset) -> List[Dict[str, Any]]:
 
 
 def analyze_similarities_view(
-    dataset_name: str, threshold: float = 0.8
+    owner_id: str, dataset_name: str, threshold: float = 0.8
 ) -> Dict[str, Any]:
     """Find near-duplicate questions in a dataset (no mutation)."""
     logger.info(
@@ -617,7 +658,7 @@ def analyze_similarities_view(
         threshold,
     )
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         pairs = _pair_dicts(db, dataset)
 
     similarities = []
@@ -656,7 +697,9 @@ class AmbiguousRecordError(ValueError):
     """A record id prefix matched more than one pair."""
 
 
-def resolve_similarity_pair(dataset_name: str, remove_id: str) -> Dict[str, Any]:
+def resolve_similarity_pair(
+    owner_id: str, dataset_name: str, remove_id: str
+) -> Dict[str, Any]:
     """Arbitrate one duplicate pair by deleting a single record.
 
     ``remove_id`` may be the full pair id or the 8-char prefix the analyze view
@@ -665,7 +708,7 @@ def resolve_similarity_pair(dataset_name: str, remove_id: str) -> Dict[str, Any]
     ask for the full id. Raises ValueError when the dataset or record is unknown.
     """
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         exact = db.scalar(
             select(QAPair).where(
                 QAPair.dataset_id == dataset.id, QAPair.id == remove_id
@@ -706,7 +749,7 @@ def resolve_similarity_pair(dataset_name: str, remove_id: str) -> Dict[str, Any]
 
 
 def clean_similarities_view(
-    dataset_name: str, threshold: float = 0.8
+    owner_id: str, dataset_name: str, threshold: float = 0.8
 ) -> Dict[str, Any]:
     """Remove near-duplicate questions from a dataset.
 
@@ -719,7 +762,7 @@ def clean_similarities_view(
         threshold,
     )
     with get_scoped_db() as db:
-        dataset = _require_dataset(db, dataset_name)
+        dataset = _require_dataset(db, owner_id, dataset_name)
         pairs = _pair_dicts(db, dataset)
         if not pairs:
             raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs")
@@ -799,7 +842,7 @@ def clean_similarities_view(
 # --- dedup pool / exports -----------------------------------------------------
 
 
-def get_dataset_pairs(dataset_name: str) -> List[Dict[str, Any]]:
+def get_dataset_pairs(owner_id: str, dataset_name: str) -> List[Dict[str, Any]]:
     """Every pair of a dataset, for the dedup pool and the Qdrant sync.
 
     Returns an empty list for an unknown dataset: both callers treat "nothing
@@ -807,7 +850,7 @@ def get_dataset_pairs(dataset_name: str) -> List[Dict[str, Any]]:
     new name goes through here before the dataset exists).
     """
     with get_scoped_db() as db:
-        dataset = _get_dataset(db, dataset_name)
+        dataset = _get_dataset(db, owner_id, dataset_name)
         if dataset is None:
             return []
         return [
@@ -821,7 +864,7 @@ def get_dataset_pairs(dataset_name: str) -> List[Dict[str, Any]]:
 
 
 def duplicate_dataset(
-    dataset_name: str, target_name: Optional[str] = None
+    owner_id: str, dataset_name: str, target_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """Copy a dataset's pairs into another dataset (the export flow).
 
@@ -833,15 +876,17 @@ def duplicate_dataset(
     Raises ValueError when the source doesn't exist or has no pairs.
     """
     with get_scoped_db() as db:
-        source = _require_dataset(db, dataset_name)
+        source = _require_dataset(db, owner_id, dataset_name)
         pairs = list(db.scalars(select(QAPair).where(QAPair.dataset_id == source.id)))
         if not pairs:
             raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs")
 
         name = target_name or f"{dataset_name}-copy"
-        target = _get_dataset(db, name)
+        target = _get_dataset(db, owner_id, name)
         if target is None:
+            _check_dataset_quota(db, owner_id)
             target = Dataset(
+                owner_id=owner_id,
                 name=name,
                 description=f"Copy of {dataset_name}",
                 target_language=source.target_language,

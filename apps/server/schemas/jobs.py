@@ -25,8 +25,8 @@ class JobInfo(BaseModel):
         ..., description="Runs stop at a draft to review, published separately"
     )
     configured: bool
-    missing_env: List[str] = Field(
-        default_factory=list, description="Server env vars still to set"
+    missing: List[str] = Field(
+        default_factory=list, description="What is still to add in Settings"
     )
     options_schema: Dict[str, Any] = Field(
         ..., description="JSON schema of the options POST /jobs/{id}/run accepts"
@@ -89,7 +89,9 @@ class JobRunOut(BaseModel):
     id: str
     job: str
     status: str = Field(
-        ..., description="running, succeeded, failed, published or interrupted"
+        ...,
+        description="queued, running, succeeded, failed, cancelled, interrupted, "
+        "publishing or published",
     )
     options: Dict[str, Any] = Field(default_factory=dict)
     model_ref: Optional[str] = None
@@ -102,6 +104,7 @@ class JobRunOut(BaseModel):
     preview: Optional[DraftPreview] = None
     published_url: Optional[str] = None
     published_at: Optional[datetime] = None
+    cancel_requested: bool = False
 
 
 class PublishRequest(BaseModel):

@@ -2,7 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.services.auth import require_admin
+from server.models.user import User
+from server.api.deps import get_credentials
+from server.services.auth import get_current_user
+from server.services.credentials import Credentials
 from server.services.qdrant import (
     QdrantNotConfiguredError,
     list_collections,
@@ -20,10 +23,10 @@ router = APIRouter(prefix="/collections", tags=["collections"])
 
 
 @router.get("", response_model=CollectionsResponse)
-async def get_collections():
+async def get_collections(user: User = Depends(get_current_user)):
     """List the stored datasets as collections, annotated with their Qdrant status."""
     try:
-        return list_collections()
+        return list_collections(user.id)
     except Exception as e:
         logging.error(f"Error listing collections: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -32,13 +35,16 @@ async def get_collections():
 @router.post(
     "/{dataset_name}/qdrant",
     response_model=QdrantSyncResponse,
-    # Costly (embeds every Q/A item + writes to Qdrant) — admin only.
-    dependencies=[Depends(require_admin)],
+    # Embeds every Q/A item with the caller's own OpenAI key.
 )
-async def push_collection_to_qdrant(dataset_name: str):
+async def push_collection_to_qdrant(
+    dataset_name: str,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+):
     """Embed a dataset's Q/A pairs and upsert them into Qdrant."""
     try:
-        return sync_dataset_to_qdrant(dataset_name)
+        return sync_dataset_to_qdrant(user.id, dataset_name, creds)
     except QdrantNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
@@ -49,11 +55,18 @@ async def push_collection_to_qdrant(dataset_name: str):
 
 
 @router.post("/{dataset_name}/search", response_model=CollectionSearchResponse)
-async def search_collection_endpoint(dataset_name: str, body: CollectionSearchRequest):
+async def search_collection_endpoint(
+    dataset_name: str,
+    body: CollectionSearchRequest,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+):
     """Embed the query and return the most similar Q/A pairs from the collection."""
     try:
         return search_collection(
+            user.id,
             dataset_name,
+            creds,
             query=body.query,
             limit=body.limit,
             score_threshold=body.score_threshold,

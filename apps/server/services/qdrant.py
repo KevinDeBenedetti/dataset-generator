@@ -14,7 +14,12 @@ import uuid
 from typing import Any, Dict, List, Optional, Protocol
 
 from server.core.config import config
-from server.services.datasets import get_dataset_pairs, list_datasets_view
+from server.services.datasets import (
+    get_dataset_pairs,
+    get_dataset_view,
+    list_datasets_view,
+)
+from server.services.credentials import Credentials
 from server.services.llm import LLMService
 
 logger = logging.getLogger(__name__)
@@ -42,15 +47,34 @@ def is_qdrant_configured() -> bool:
     return bool(config.qdrant_url)
 
 
-def collection_name_for(dataset_name: str) -> str:
-    """Derive a stable, Qdrant-safe collection name from a dataset name.
+def default_collection_name(dataset_id: str, stored: Optional[str] = None) -> str:
+    """The Qdrant collection holding a dataset's embeddings.
 
-    Qdrant accepts most strings, but we normalise to ``[a-z0-9_-]`` so the name
-    is predictable and URL-safe. Empty results fall back to a constant so a
-    weird name never produces an empty collection name.
+    Named after the dataset's immutable id — never its (user-chosen, non-unique
+    across users) name, whose slug could collide between two owners. A dataset
+    that predates owners keeps the ``<prefix><slug>`` collection recorded in
+    ``datasets.qdrant_collection`` (``stored``), so nothing is re-embedded.
     """
+    return stored or f"{config.qdrant_collection_prefix}ds_{dataset_id}"
+
+
+def legacy_collection_name(dataset_name: str) -> str:
+    """The pre-owner collection name (``<prefix><slug>``) — for the migration and
+    for tests; new datasets never use it."""
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", dataset_name.strip().lower()).strip("_")
     return f"{config.qdrant_collection_prefix}{slug or 'unnamed'}"
+
+
+def get_dataset_collection(owner_id: str, dataset_name: str) -> str:
+    """The collection of one of ``owner_id``'s datasets.
+
+    Raises ValueError for a dataset the owner doesn't have — which is also what
+    another user's dataset looks like.
+    """
+    dataset = get_dataset_view(owner_id, dataset_name)
+    if dataset is None:
+        raise ValueError(f"Dataset '{dataset_name}' not found")
+    return default_collection_name(dataset["id"], dataset.get("qdrant_collection"))
 
 
 def get_qdrant_client() -> Any:
@@ -116,8 +140,8 @@ def _embed_in_batches(llm_service: Embedder, texts: List[str]) -> List[List[floa
     return vectors
 
 
-def delete_collection_for(dataset_name: str) -> bool:
-    """Drop the Qdrant collection for a dataset (best-effort).
+def delete_collection(name: str) -> bool:
+    """Drop a Qdrant collection (best-effort).
 
     Returns True if a collection was dropped, False if Qdrant is unconfigured,
     the collection doesn't exist, or the drop failed. Never raises — used as a
@@ -127,13 +151,12 @@ def delete_collection_for(dataset_name: str) -> bool:
         return False
     try:
         client = get_qdrant_client()
-        name = collection_name_for(dataset_name)
         if client.collection_exists(name):
             client.delete_collection(name)
             logger.info("Dropped Qdrant collection %s", name)
             return True
     except Exception as exc:
-        logger.warning("Could not drop Qdrant collection for %s: %s", dataset_name, exc)
+        logger.warning("Could not drop Qdrant collection %s: %s", name, exc)
     return False
 
 
@@ -158,7 +181,9 @@ def get_collection_status(
 
 
 def sync_dataset_to_qdrant(
+    owner_id: str,
     dataset_name: str,
+    creds: Credentials,
     llm_service: Optional[Embedder] = None,
     client: Any = None,
     items: Optional[List[Dict[str, Any]]] = None,
@@ -175,14 +200,15 @@ def sync_dataset_to_qdrant(
     """
     from qdrant_client import models as qmodels
 
+    # Raises ValueError for a dataset the owner doesn't have.
+    collection_name = get_dataset_collection(owner_id, dataset_name)
     if items is None:
-        items = get_dataset_pairs(dataset_name)
+        items = get_dataset_pairs(owner_id, dataset_name)
     if not items:
         raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs to sync")
 
-    llm_service = llm_service or LLMService()
+    llm_service = llm_service or LLMService(creds)
     client = client or get_qdrant_client()
-    collection_name = collection_name_for(dataset_name)
 
     texts = [_item_to_text(it) for it in items]
     vectors = _embed_in_batches(llm_service, texts)
@@ -225,7 +251,9 @@ def sync_dataset_to_qdrant(
 
 
 def search_collection(
+    owner_id: str,
     dataset_name: str,
+    creds: Credentials,
     query: str,
     limit: int = 10,
     score_threshold: Optional[float] = None,
@@ -244,9 +272,10 @@ def search_collection(
     if not query:
         raise ValueError("Search query must not be empty")
 
-    llm_service = llm_service or LLMService()
+    # Raises ValueError for a dataset the owner doesn't have.
+    collection_name = get_dataset_collection(owner_id, dataset_name)
+    llm_service = llm_service or LLMService(creds)
     client = client or get_qdrant_client()
-    collection_name = collection_name_for(dataset_name)
 
     if not client.collection_exists(collection_name):
         raise ValueError(
@@ -292,14 +321,14 @@ def search_collection(
     }
 
 
-def list_collections() -> Dict[str, Any]:
+def list_collections(owner_id: str) -> Dict[str, Any]:
     """List the stored datasets as collections, annotated with their Qdrant status.
 
     ``qdrant_configured`` tells the UI whether the "Add to Qdrant" action is
     available; when configured, each dataset is annotated with ``in_qdrant``
     and ``points_count`` (best-effort; left null if Qdrant can't be reached).
     """
-    datasets = list_datasets_view()
+    datasets = list_datasets_view(owner_id)
     qdrant_configured = is_qdrant_configured()
 
     client = None
@@ -313,7 +342,9 @@ def list_collections() -> Dict[str, Any]:
     collections: List[Dict[str, Any]] = []
     for dataset in datasets:
         name = dataset["name"]
-        collection_name = collection_name_for(name)
+        collection_name = default_collection_name(
+            dataset["id"], dataset.get("qdrant_collection")
+        )
         in_qdrant: Optional[bool] = None
         points_count: Optional[int] = None
         if client is not None:

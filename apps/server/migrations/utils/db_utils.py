@@ -6,9 +6,13 @@ from alembic.runtime.migration import MigrationContext
 import logging
 from pathlib import Path
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 logger = logging.getLogger(__name__)
+
+# Arbitrary app-wide constant: the Postgres advisory lock that serialises
+# migration runs (several pods starting together must not race Alembic).
+MIGRATION_LOCK_KEY = 727_201
 
 DEFAULT_PATH = Path(__file__).parent.parent.parent / "alembic.ini"
 
@@ -88,7 +92,30 @@ def upgrade_db(db_url: str, revision: str = "head") -> None:
     cfg.attributes["configure_logger"] = False
     cfg.set_main_option("sqlalchemy.url", db_url)
     logger.debug("Upgrading database to revision %s", revision)
-    command.upgrade(cfg, revision)
+    # A session-level advisory lock on a dedicated connection: a second process
+    # blocks here until the first has finished, then finds nothing left to do.
+    # (Not usable through a transaction-pooling proxy — migrate on a direct URL.)
+    lock_engine = create_engine(db_url) if db_url.startswith("postgresql") else None
+    lock_conn = lock_engine.connect() if lock_engine is not None else None
+    try:
+        if lock_conn is not None:
+            logger.debug("Waiting for the migration advisory lock")
+            lock_conn.execute(
+                text("SELECT pg_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY}
+            )
+            lock_conn.commit()
+        command.upgrade(cfg, revision)
+    finally:
+        if lock_conn is not None:
+            try:
+                lock_conn.execute(
+                    text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
+                )
+                lock_conn.commit()
+            finally:
+                lock_conn.close()
+        if lock_engine is not None:
+            lock_engine.dispose()
     logger.info("Database migrated to %s", revision)
 
 

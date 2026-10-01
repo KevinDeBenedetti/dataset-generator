@@ -3,8 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import logging
 from typing import Optional
 
-from server.core.config import config
-from server.services.auth import require_admin
+from server.models.user import User
+from server.api.deps import get_credentials
+from server.services.auth import get_current_user
+from server.services.credentials import Credentials
+from server.services.providers import validate_ref
 from server.services.datasets import get_qa_stats_view, get_qa_view
 from server.services.scoring import ScoringNotConfiguredError, score_dataset
 from server.schemas.q_a import QAListResponse, QAScoreResponse, QAStatsResponse
@@ -21,6 +24,7 @@ async def get_qa_stats(
     score_threshold: float = Query(
         0.8, ge=0.0, le=1.0, description="Validated/below split threshold"
     ),
+    user: User = Depends(get_current_user),
 ) -> QAStatsResponse:
     """Aggregated confidence-score stats over the whole dataset (server-side).
 
@@ -29,7 +33,7 @@ async def get_qa_stats(
     """
     try:
         return QAStatsResponse(
-            **get_qa_stats_view(dataset_name, score_threshold=score_threshold)
+            **get_qa_stats_view(user.id, dataset_name, score_threshold=score_threshold)
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -41,8 +45,7 @@ async def get_qa_stats(
 @router.post(
     "/{dataset_name}/score",
     response_model=QAScoreResponse,
-    # Spends LLM tokens and rewrites stored scores — admin only.
-    dependencies=[Depends(require_admin)],
+    # Spends tokens on the caller's own model account.
 )
 async def score_qa(
     dataset_name: str,
@@ -50,8 +53,10 @@ async def score_qa(
         True, description="Score only pairs without a confidence (false: rescore all)"
     ),
     model: Optional[str] = Query(
-        None, description="Judge model (defaults to the configured QA model)"
+        None, description="Judge model reference (defaults to your qa model)"
     ),
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
 ) -> QAScoreResponse:
     """Score a dataset's pairs with an LLM judge and store the confidences.
 
@@ -59,15 +64,19 @@ async def score_qa(
     With a context, the judge rates how well it supports the answer (the same
     measure generation reports); without one, the pair's own quality.
     """
-    if model and model not in config.available_models:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{model}' not in available models: {config.available_models}",
-        )
+    if model:
+        try:
+            model = validate_ref(model, creds)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     try:
         return QAScoreResponse(
             **await score_dataset(
-                dataset_name, only_unscored=only_unscored, model=model
+                user.id,
+                dataset_name,
+                creds,
+                only_unscored=only_unscored,
+                model=model,
             )
         )
     except ScoringNotConfiguredError as e:
@@ -86,11 +95,12 @@ async def get_qa_by_dataset(
         10, ge=1, le=1000, description="Limit number of results"
     ),
     offset: Optional[int] = Query(0, ge=0, description="Pagination offset"),
+    user: User = Depends(get_current_user),
 ) -> QAListResponse:
     """Retrieve a dataset's Q&A pairs (keyed by dataset name)."""
     try:
         return QAListResponse(
-            **get_qa_view(dataset_name, limit=limit, offset=offset or 0)
+            **get_qa_view(user.id, dataset_name, limit=limit, offset=offset or 0)
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

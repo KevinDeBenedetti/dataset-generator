@@ -125,6 +125,15 @@ export function AppSidebar() {
               ))}
           </div>
         ))}
+        {user?.role === 'admin' && (
+          <div className="sb-group">
+            <div className="sb-label">Admin</div>
+            <Link href="/admin" className={cn('sb-link', isActive('/admin') && 'active')}>
+              <Icon name="shield" />
+              <span>Backoffice</span>
+            </Link>
+          </div>
+        )}
         <div className="sb-group">
           <div className="sb-label">Account</div>
           <Link href="/settings" className={cn('sb-link', isActive('/settings') && 'active')}>

@@ -2,6 +2,9 @@
 
 import Link from 'next/link'
 import { Icon } from '@/components/app/icon'
+import { Integrations } from '@/components/settings/integrations'
+import { LinkedAccounts } from '@/components/settings/linked-accounts'
+import { YourData } from '@/components/settings/your-data'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { initialsFor } from '@/lib/utils'
 import './settings.css'
@@ -14,11 +17,14 @@ export default function SettingsPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Settings</h1>
-          <p className="page-sub">Your account. Generation models are set on the Models page.</p>
+          <p className="page-sub">
+            Your account and the keys your requests run on. Generation models are set on the Models
+            page.
+          </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 640 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 720 }}>
         <div className="card">
           <div className="card-head">
             <div>
@@ -42,6 +48,23 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <LinkedAccounts />
+
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">Your keys</div>
+              <div className="card-desc">
+                Every model call and Hugging Face upload runs on <strong>your own</strong> keys.
+                They are stored encrypted, only ever sent to their provider, and nobody —
+                administrators included — can read them back.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Integrations />
+
         <div className="card">
           <div className="card-head">
             <div>
@@ -59,6 +82,7 @@ export default function SettingsPage() {
             </Link>
           </div>
         </div>
+        <YourData />
       </div>
     </div>
   )

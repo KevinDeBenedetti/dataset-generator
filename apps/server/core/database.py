@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, make_url
+from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
 from contextlib import contextmanager
@@ -94,6 +94,20 @@ def get_scoped_db():
         yield db
     finally:
         db.close()
+
+
+def database_ready() -> bool:
+    """True when Postgres answers ``SELECT 1`` — the readiness probe's check.
+
+    Kept out of the liveness probe on purpose: a database blip must take pods
+    out of the load balancer, not restart them all.
+    """
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
+    except Exception:  # noqa: BLE001 — any failure means "not ready"
+        return False
 
 
 def create_db_and_tables():

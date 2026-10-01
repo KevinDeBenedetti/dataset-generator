@@ -45,7 +45,13 @@ def _signing_key_for(secret: str) -> OctKey:
     return OctKey.import_key(secret)
 
 
-_CLAIMS_REGISTRY = JWTClaimsRegistry()
+def _claims_registry() -> JWTClaimsRegistry:
+    """Expiry plus issuer and audience: a token minted for another service that
+    happens to share the secret must not be accepted here."""
+    return JWTClaimsRegistry(
+        iss={"essential": True, "value": config.auth_issuer},
+        aud={"essential": True, "value": config.auth_audience},
+    )
 
 
 def _signing_key() -> OctKey:
@@ -78,6 +84,8 @@ def create_access_token(user: User) -> str:
     _warn_if_dev_secret()
     now = int(time.time())
     claims = {
+        "iss": config.auth_issuer,
+        "aud": config.auth_audience,
         "sub": user.id,
         "email": user.email,
         "role": user.role,
@@ -91,8 +99,8 @@ def decode_access_token(token: str) -> Optional[dict]:
     """Return the token claims if valid and unexpired, else None."""
     try:
         decoded = jwt.decode(token, _signing_key(), algorithms=[_ALGORITHM])
-        # Enforce expiry (and any other registered claims).
-        _CLAIMS_REGISTRY.validate(decoded.claims)
+        # Enforce expiry, issuer and audience.
+        _claims_registry().validate(decoded.claims)
         return dict(decoded.claims)
     except (JoseError, ValueError) as exc:
         logging.debug("Rejected access token: %s", exc)
@@ -150,8 +158,12 @@ def issue_refresh_token(
 def rotate_refresh_token(db: Session, raw: str) -> Optional[tuple[User, str]]:
     """Consume ``raw`` and return ``(user, new_raw_token)``, or None if invalid.
 
-    The presented token is revoked whatever happens. A token that was *already*
-    revoked signals replay: the whole family is revoked before rejecting.
+    Rotation is atomic: the token is claimed with a conditional
+    ``UPDATE … WHERE revoked_at IS NULL``, so of two concurrent requests
+    presenting it exactly one wins the claim — a read-then-write would let both
+    mint a session. The loser is then either a harmless race (the token was
+    rotated within ``auth_refresh_reuse_grace_seconds``: it gets its own
+    successor in the same family) or replay, which revokes the whole family.
     """
     row = (
         db.query(RefreshToken)
@@ -162,17 +174,44 @@ def rotate_refresh_token(db: Session, raw: str) -> Optional[tuple[User, str]]:
         return None
 
     now = _utcnow()
-    if row.revoked_at is not None:
-        logging.warning(
-            "Refresh token reuse detected for user %s — revoking family", row.user_id
-        )
-        _revoke_family(db, row.family_id)
-        db.commit()
-        return None
     if _as_utc(row.expires_at) <= now:
-        row.revoked_at = now
+        row.revoked_at = row.revoked_at or now
         db.commit()
         return None
+
+    claimed = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.id == row.id, RefreshToken.revoked_at.is_(None))
+        .update({RefreshToken.revoked_at: now}, synchronize_session=False)
+    )
+    if not claimed:
+        # Someone consumed it between our read and our write (or earlier).
+        db.expire(row)
+        db.refresh(row)
+        grace = timedelta(seconds=config.auth_refresh_reuse_grace_seconds)
+        # "Just rotated" needs a live successor in the family: after a logout or
+        # a replay revocation every token of the family is revoked, and a token
+        # revoked that way must never be forgiven.
+        just_rotated = (
+            row.revoked_at is not None
+            and now - _as_utc(row.revoked_at) <= grace
+            and db.query(RefreshToken)
+            .filter(
+                RefreshToken.family_id == row.family_id,
+                RefreshToken.revoked_at.is_(None),
+                RefreshToken.expires_at > now,
+            )
+            .first()
+            is not None
+        )
+        if not just_rotated:
+            logging.warning(
+                "Refresh token reuse detected for user %s — revoking family",
+                row.user_id,
+            )
+            _revoke_family(db, row.family_id)
+            db.commit()
+            return None
 
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or not user.is_active:
@@ -180,7 +219,7 @@ def rotate_refresh_token(db: Session, raw: str) -> Optional[tuple[User, str]]:
         db.commit()
         return None
 
-    row.revoked_at = now
+    # issue_refresh_token commits, which also commits the claim above.
     new_raw = issue_refresh_token(db, user, family_id=row.family_id)
     return user, new_raw
 
@@ -195,6 +234,28 @@ def revoke_refresh_token(db: Session, raw: str) -> None:
     if row:
         _revoke_family(db, row.family_id)
         db.commit()
+
+
+def end_all_sessions(db: Session, user: User) -> int:
+    """Sign ``user`` out everywhere: revoke every refresh token and refuse every
+    access token issued until now. Returns the number of tokens revoked."""
+    now = _utcnow()
+    revoked = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .update({RefreshToken.revoked_at: now}, synchronize_session=False)
+    )
+    user.sessions_valid_after = now
+    db.commit()
+    return revoked
+
+
+def _issued_before_cutoff(claims: dict, user: User) -> bool:
+    """True when the token predates the user's last "sign out everywhere"."""
+    if user.sessions_valid_after is None:
+        return False
+    cutoff = int(_as_utc(user.sessions_valid_after).timestamp())
+    return int(claims.get("iat", 0)) < cutoff
 
 
 def purge_expired_refresh_tokens(db: Session) -> int:
@@ -252,7 +313,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not claims or not claims.get("sub"):
         raise credentials_error
     user = db.query(User).filter(User.id == claims["sub"]).first()
-    if not user or not user.is_active:
+    if not user or not user.is_active or _issued_before_cutoff(claims, user):
         raise credentials_error
     return user
 

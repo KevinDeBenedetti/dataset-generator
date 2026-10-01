@@ -6,12 +6,16 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
+from server.models.user import User
 from server.services.quality_rules import (
     DEFAULT_RULES,
     get_quality_rules,
     rejection_reason,
     update_quality_rules,
 )
+
+USER = "user-1"
+OTHER = "user-2"
 
 
 @pytest.fixture(autouse=True)
@@ -29,10 +33,16 @@ def _isolated_db(monkeypatch, test_engine):
 
     monkeypatch.setattr("server.services.quality_rules.get_scoped_db", scoped)
 
+    # Rules belong to a user: both test users must exist.
+    with scoped() as session:
+        session.add(User(id=USER, email="u1@test.local", role="user"))
+        session.add(User(id=OTHER, email="u2@test.local", role="user"))
+        session.commit()
+
 
 def test_get_quality_rules_defaults_when_unset():
     # No row yet → the enforcement-off defaults.
-    rules = get_quality_rules()
+    rules = get_quality_rules(USER)
     assert rules["auto_reject_enabled"] is False
     assert rules["min_answer_words"] == DEFAULT_RULES["min_answer_words"]
 
@@ -42,27 +52,39 @@ def test_get_quality_rules_defaults_when_db_unreachable():
         "server.services.quality_rules.get_scoped_db",
         side_effect=RuntimeError("db down"),
     ):
-        rules = get_quality_rules()
+        rules = get_quality_rules(USER)
     assert rules == DEFAULT_RULES
 
 
 def test_update_then_get_roundtrip():
     updated = update_quality_rules(
-        min_answer_words=5, reject_below_confidence=0.6, auto_reject_enabled=True
+        USER, min_answer_words=5, reject_below_confidence=0.6, auto_reject_enabled=True
     )
     assert updated["min_answer_words"] == 5
     assert updated["reject_below_confidence"] == 0.6
     assert updated["auto_reject_enabled"] is True
 
-    fetched = get_quality_rules()
+    fetched = get_quality_rules(USER)
     assert fetched["min_answer_words"] == 5
     assert fetched["auto_reject_enabled"] is True
 
     # Partial update keeps the other fields.
-    update_quality_rules(auto_reject_enabled=False)
-    fetched = get_quality_rules()
+    update_quality_rules(USER, auto_reject_enabled=False)
+    fetched = get_quality_rules(USER)
     assert fetched["auto_reject_enabled"] is False
     assert fetched["min_answer_words"] == 5
+
+
+def test_each_user_has_their_own_rules():
+    update_quality_rules(USER, min_answer_words=9, auto_reject_enabled=True)
+
+    assert get_quality_rules(USER)["min_answer_words"] == 9
+    # The other user is untouched and still on the enforcement-off defaults.
+    assert get_quality_rules(OTHER) == DEFAULT_RULES
+
+    update_quality_rules(OTHER, min_answer_words=2)
+    assert get_quality_rules(USER)["min_answer_words"] == 9
+    assert get_quality_rules(OTHER)["min_answer_words"] == 2
 
 
 def test_rejection_reason_disabled_is_noop():

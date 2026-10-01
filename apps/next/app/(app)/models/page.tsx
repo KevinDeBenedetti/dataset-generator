@@ -1,11 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
 import { useModels, useTestModel, useUpdateModelDefaults } from '@/hooks/use-models'
-import { useIsAdmin } from '@/hooks/use-auth'
 import type { ModelTestResponse, ProviderOut } from '@/api/types'
 
 const ROLE_INFO: Record<string, { label: string; hint: string }> = {
@@ -15,7 +15,7 @@ const ROLE_INFO: Record<string, { label: string; hint: string }> = {
   jobs: { label: 'Jobs', hint: 'Dataset jobs run from the Jobs page' },
 }
 
-function ProviderCard({ provider, isAdmin }: { provider: ProviderOut; isAdmin: boolean }) {
+function ProviderCard({ provider }: { provider: ProviderOut }) {
   const [selected, setSelected] = useState(provider.models[0]?.ref ?? '')
   const [result, setResult] = useState<ModelTestResponse | null>(null)
   const testMutation = useTestModel()
@@ -41,16 +41,17 @@ function ProviderCard({ provider, isAdmin }: { provider: ProviderOut; isAdmin: b
         </span>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {(provider.missing_env ?? []).length > 0 && (
+        {(provider.missing ?? []).length > 0 && (
           <p className="hint" style={{ color: 'var(--destructive)' }}>
-            Set {(provider.missing_env ?? []).join(', ')} in the server environment to enable it.
+            Add {(provider.missing ?? []).join(', ')} in <Link href="/settings">Settings</Link> to
+            enable it.
           </p>
         )}
         {provider.name === 'claude' && (
           <p className="hint">
             Calls go through the Claude Agent SDK with{' '}
             <code className="mono">claude setup-token</code> and bill against your Claude
-            subscription, like the CI jobs.
+            subscription.
           </p>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -84,7 +85,7 @@ function ProviderCard({ provider, isAdmin }: { provider: ProviderOut; isAdmin: b
           <button
             className="btn btn-outline"
             type="button"
-            disabled={!isAdmin || !provider.configured || !selected || testMutation.isPending}
+            disabled={!provider.configured || !selected || testMutation.isPending}
             onClick={runTest}
           >
             <Icon
@@ -109,7 +110,6 @@ function ProviderCard({ provider, isAdmin }: { provider: ProviderOut; isAdmin: b
 export default function ModelsPage() {
   const modelsQuery = useModels(true)
   const updateMutation = useUpdateModelDefaults()
-  const isAdmin = useIsAdmin()
   const [draft, setDraft] = useState<Record<string, string>>({})
 
   const defaults = modelsQuery.data?.defaults
@@ -185,7 +185,7 @@ export default function ModelsPage() {
                     value={draft[role] ?? ''}
                     onChange={(ref) => setDraft((d) => ({ ...d, [role]: ref }))}
                     allowDefault={false}
-                    disabled={!isAdmin || updateMutation.isPending}
+                    disabled={updateMutation.isPending}
                     className="input"
                   />
                   <div className="hint">{ROLE_INFO[role]?.hint}</div>
@@ -196,7 +196,7 @@ export default function ModelsPage() {
               <button
                 className="btn btn-primary"
                 type="button"
-                disabled={!isAdmin || changed.length === 0 || updateMutation.isPending}
+                disabled={changed.length === 0 || updateMutation.isPending}
                 onClick={save}
               >
                 <Icon
@@ -205,13 +205,12 @@ export default function ModelsPage() {
                 />
                 Save defaults
               </button>
-              {!isAdmin && <span className="hint">Only an admin can change the defaults.</span>}
             </div>
           </div>
 
           <div className="grid-2" style={{ alignItems: 'start', gap: 24 }}>
             {modelsQuery.data.providers.map((provider) => (
-              <ProviderCard key={provider.name} provider={provider} isAdmin={isAdmin} />
+              <ProviderCard key={provider.name} provider={provider} />
             ))}
           </div>
         </>

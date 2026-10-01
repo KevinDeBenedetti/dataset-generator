@@ -107,14 +107,62 @@
         }
       }
     },
-    "/auth/oidc/login": {
+    "/auth/providers": {
       "get": {
         "tags": [
           "auth"
         ],
-        "summary": "Oidc Login",
-        "description": "Redirect the browser to the Infomaniak authorization endpoint.",
-        "operationId": "oidc_login_auth_oidc_login_get",
+        "summary": "Providers",
+        "description": "The sign-in methods this deployment offers.",
+        "operationId": "providers_auth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout All",
+        "description": "Sign out on every device: all refresh tokens revoked, all access tokens\nissued so far refused.",
+        "operationId": "logout_all_auth_logout_all_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/auth/{provider_name}/login": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sso Login",
+        "description": "Send the browser to the provider (state + PKCE kept in the session cookie).",
+        "operationId": "sso_login_auth__provider_name__login_get",
+        "parameters": [
+          {
+            "name": "provider_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Name"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -123,24 +171,96 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/auth/oidc/callback": {
+    "/auth/{provider_name}/link": {
       "get": {
         "tags": [
           "auth"
         ],
-        "summary": "Oidc Callback",
-        "description": "Handle the provider redirect: exchange the code, upsert the user, set\nthe auth cookie, then bounce back to the frontend.",
-        "operationId": "oidc_callback_auth_oidc_callback_get",
+        "summary": "Sso Link",
+        "description": "Like login, but the identity is added to the signed-in account.",
+        "operationId": "sso_link_auth__provider_name__link_get",
+        "parameters": [
+          {
+            "name": "provider_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Name"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/{provider_name}/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sso Callback",
+        "description": "The provider's redirect: resolve the account (services/identities.py),\nset the session cookies, go back to the app.",
+        "operationId": "sso_callback_auth__provider_name__callback_get",
+        "parameters": [
+          {
+            "name": "provider_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -277,7 +397,7 @@
           "dataset"
         ],
         "summary": "Create Dataset",
-        "description": "Create a new (empty) dataset.",
+        "description": "Create a new (empty) dataset of yours.",
         "operationId": "create_dataset_dataset_post",
         "parameters": [
           {
@@ -331,7 +451,7 @@
           "dataset"
         ],
         "summary": "Get All Datasets",
-        "description": "Retrieve all datasets, or a specific one (by name).",
+        "description": "Retrieve all your datasets, or a specific one (by name).",
         "operationId": "get_all_datasets_dataset_get",
         "parameters": [
           {
@@ -472,8 +592,8 @@
         "tags": [
           "dataset"
         ],
-        "summary": "Get Huggingface Datasets",
-        "description": "List the Hugging Face Hub dataset repos owned by the configured account.",
+        "summary": "List your Hugging Face dataset repos",
+        "description": "List the Hugging Face Hub dataset repos of the account your token belongs to.",
         "operationId": "get_huggingface_datasets_dataset_huggingface_get",
         "responses": {
           "200": {
@@ -551,7 +671,7 @@
           "dataset"
         ],
         "summary": "Export To Huggingface",
-        "description": "Export a dataset to the Hugging Face Hub as a **private** dataset repo.",
+        "description": "Export one of your datasets to the Hugging Face Hub as a **private** repo.",
         "operationId": "export_to_huggingface_dataset__dataset_name__export_huggingface_post",
         "parameters": [
           {
@@ -605,7 +725,7 @@
           "dataset"
         ],
         "summary": "Duplicate Dataset",
-        "description": "Copy a dataset's Q/A pairs into another dataset.",
+        "description": "Copy one of your datasets' Q/A pairs into another dataset of yours.",
         "operationId": "duplicate_dataset_dataset__dataset_name__duplicate_post",
         "parameters": [
           {
@@ -714,7 +834,7 @@
           "dataset"
         ],
         "summary": "Clean Similarities",
-        "description": "Remove near-duplicate questions from a dataset (deletes stored pairs).",
+        "description": "Remove near-duplicate questions from one of your datasets (deletes pairs).",
         "operationId": "clean_similarities_dataset__dataset_name__clean_similarities_post",
         "parameters": [
           {
@@ -822,7 +942,7 @@
           "dataset"
         ],
         "summary": "Delete Dataset",
-        "description": "Delete a dataset, its Q/A pairs and its Qdrant collection.",
+        "description": "Delete one of your datasets, its Q/A pairs and its Qdrant collection.",
         "operationId": "delete_dataset_dataset__dataset_name__delete",
         "parameters": [
           {
@@ -959,10 +1079,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Judge model (defaults to the configured QA model)",
+              "description": "Judge model reference (defaults to your qa model)",
               "title": "Model"
             },
-            "description": "Judge model (defaults to the configured QA model)"
+            "description": "Judge model reference (defaults to your qa model)"
           }
         ],
         "responses": {
@@ -1079,7 +1199,7 @@
           "models"
         ],
         "summary": "List Models",
-        "description": "Every provider with its status and models, plus the per-role defaults.",
+        "description": "Every provider with its status and models, plus your per-role defaults.",
         "operationId": "list_models_models_get",
         "parameters": [
           {
@@ -1125,7 +1245,7 @@
           "models"
         ],
         "summary": "Put Model Defaults",
-        "description": "Set the default model of one or more roles (admin only).",
+        "description": "Set your default model for one or more roles.",
         "operationId": "put_model_defaults_models_defaults_put",
         "requestBody": {
           "content": {
@@ -1368,7 +1488,7 @@
           "quality-rules"
         ],
         "summary": "Read Quality Rules",
-        "description": "The persisted generation-time quality rules (defaults when unset).",
+        "description": "Your generation-time quality rules (defaults when unset).",
         "operationId": "read_quality_rules_quality_rules_get",
         "responses": {
           "200": {
@@ -1388,7 +1508,7 @@
           "quality-rules"
         ],
         "summary": "Put Quality Rules",
-        "description": "Update the quality rules (admin only). Partial: omitted fields keep\ntheir current value.",
+        "description": "Update your quality rules. Partial: omitted fields keep their current value.\nThey only ever apply to your own generations, so any user may set them.",
         "operationId": "put_quality_rules_quality_rules_put",
         "requestBody": {
           "content": {
@@ -1407,6 +1527,664 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QualityRulesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/secrets": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Secrets",
+        "description": "Which of your keys are saved (with a last-four hint for API keys).",
+        "operationId": "get_secrets_me_secrets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/secrets/{kind}": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Put Secret",
+        "description": "Save a key or token, encrypted. It is checked live first unless ``force``.",
+        "operationId": "put_secret_me_secrets__kind__put",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretPut"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretPutResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete Secret",
+        "description": "Forget a saved key.",
+        "operationId": "delete_secret_me_secrets__kind__delete",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/secrets/{kind}/test": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Test Secret",
+        "description": "Re-check a saved key against its provider.",
+        "operationId": "test_secret_me_secrets__kind__test_post",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretCheck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/settings": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Settings",
+        "description": "Your non-secret integration settings (endpoint, namespace, repos, username).",
+        "operationId": "get_settings_me_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Put Settings",
+        "description": "Change some settings; a blank value clears one.",
+        "operationId": "put_settings_me_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/identities": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Identities",
+        "description": "The sign-in methods linked to your account.",
+        "operationId": "get_identities_me_identities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentitiesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/identities/{identity_id}": {
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete Identity",
+        "description": "Unlink one sign-in method — never the last one.",
+        "operationId": "delete_identity_me_identities__identity_id__delete",
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/export": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Export Account",
+        "description": "A zip of everything you own (datasets, settings) — never your keys.",
+        "operationId": "export_account_me_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/me": {
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete Me",
+        "description": "Delete your account and everything you own. Your Hugging Face repos stay.",
+        "operationId": "delete_me_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Users",
+        "description": "Accounts with counts and configured-key booleans — no content.",
+        "operationId": "list_users_admin_users_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Filter on the email",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Filter on the email"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUsersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users/{user_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get User",
+        "operationId": "get_user_admin_users__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update User",
+        "description": "Change a role or (de)activate — never the last admin, never ADMIN_EMAILS.",
+        "operationId": "update_user_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete User",
+        "description": "Delete an account and everything it owns (Hugging Face repos stay).",
+        "operationId": "delete_user_admin_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/audit": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Audit",
+        "operationId": "list_audit_admin_audit_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Action"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/usage": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Usage",
+        "operationId": "usage_admin_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/platform": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Platform",
+        "operationId": "get_platform_admin_platform_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Put Platform",
+        "operationId": "put_platform_admin_platform_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformResponse"
                 }
               }
             }
@@ -1474,7 +2252,7 @@
           "jobs"
         ],
         "summary": "Post Job Run",
-        "description": "Start a run in the background — poll GET /jobs/runs/{id} for its state.\n\nThe same code the job's workflow runs on a schedule. A draft job\n(github-personal) stops at a draft: review it, then POST .../publish.",
+        "description": "Queue a run (a worker executes it) — poll GET /jobs/runs/{id} for its state.\n\nThe same code the job's workflow runs on a schedule. A draft job\n(github-personal) stops at a draft: review it, then POST .../publish.",
         "operationId": "post_job_run_jobs__job_id__run_post",
         "parameters": [
           {
@@ -1617,6 +2395,49 @@
         }
       }
     },
+    "/jobs/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Post Cancel Run",
+        "description": "Cancel a queued run, or ask the worker to stop a running one.",
+        "operationId": "post_cancel_run_jobs_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
@@ -1636,7 +2457,25 @@
     "/health": {
       "get": {
         "summary": "Health",
+        "description": "Liveness: the process answers. Never touches the database.",
         "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "summary": "Ready",
+        "description": "Readiness: Postgres answers. Failing it takes the pod out of rotation.",
+        "operationId": "ready_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1652,6 +2491,250 @@
   },
   "components": {
     "schemas": {
+      "AdminUser": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked",
+            "description": "Listed in ADMIN_EMAILS: role and status fixed"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "configured_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Configured Keys",
+            "description": "Kinds of keys saved — never values"
+          },
+          "datasets": {
+            "type": "integer",
+            "title": "Datasets"
+          },
+          "pairs": {
+            "type": "integer",
+            "title": "Pairs"
+          },
+          "runs": {
+            "type": "integer",
+            "title": "Runs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "is_active",
+          "locked",
+          "providers",
+          "has_password",
+          "configured_keys",
+          "datasets",
+          "pairs",
+          "runs"
+        ],
+        "title": "AdminUser"
+      },
+      "AdminUserUpdate": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "admin"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "AdminUserUpdate"
+      },
+      "AdminUsersResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUser"
+            },
+            "type": "array",
+            "title": "Users"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "users"
+        ],
+        "title": "AdminUsersResponse"
+      },
+      "AuditEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "action",
+          "detail"
+        ],
+        "title": "AuditEntry"
+      },
+      "AuditResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "entries"
+        ],
+        "title": "AuditResponse"
+      },
       "Body_create_dataset_for_file_dataset_generate_file_post": {
         "properties": {
           "file": {
@@ -3021,6 +4104,91 @@
         "title": "HuggingFaceImportResponse",
         "description": "Result of pulling a Hub dataset repo's Q/A pairs into local storage."
       },
+      "IdentitiesResponse": {
+        "properties": {
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityOut"
+            },
+            "type": "array",
+            "title": "Identities"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password"
+          },
+          "locked_admin": {
+            "type": "boolean",
+            "title": "Locked Admin",
+            "description": "Your email is in ADMIN_EMAILS: you stay admin whatever happens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identities",
+          "has_password",
+          "locked_admin"
+        ],
+        "title": "IdentitiesResponse"
+      },
+      "IdentityOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "created_at"
+        ],
+        "title": "IdentityOut"
+      },
       "JobInfo": {
         "properties": {
           "id": {
@@ -3069,13 +4237,13 @@
             "type": "boolean",
             "title": "Configured"
           },
-          "missing_env": {
+          "missing": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Missing Env",
-            "description": "Server env vars still to set"
+            "title": "Missing",
+            "description": "What is still to add in Settings"
           },
           "options_schema": {
             "additionalProperties": true,
@@ -3192,7 +4360,7 @@
           "status": {
             "type": "string",
             "title": "Status",
-            "description": "running, succeeded, failed, published or interrupted"
+            "description": "queued, running, succeeded, failed, cancelled, interrupted, publishing or published"
           },
           "options": {
             "additionalProperties": true,
@@ -3295,6 +4463,11 @@
               }
             ],
             "title": "Published At"
+          },
+          "cancel_requested": {
+            "type": "boolean",
+            "title": "Cancel Requested",
+            "default": false
           }
         },
         "type": "object",
@@ -3581,6 +4754,65 @@
         "title": "PipelineStep",
         "description": "One step of the generation pipeline, for the frontend timeline."
       },
+      "PlatformResponse": {
+        "properties": {
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformSwitch"
+            },
+            "type": "array",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "PlatformResponse"
+      },
+      "PlatformSwitch": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "description": "Set from the backoffice (else the env default)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "value",
+          "overridden"
+        ],
+        "title": "PlatformSwitch"
+      },
+      "PlatformUpdate": {
+        "properties": {
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings",
+            "description": "key → value; null resets to the env default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "PlatformUpdate"
+      },
       "PromptInfo": {
         "properties": {
           "key": {
@@ -3653,6 +4885,29 @@
         ],
         "title": "PromptsResponse"
       },
+      "ProviderInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "configured"
+        ],
+        "title": "ProviderInfo"
+      },
       "ProviderOut": {
         "properties": {
           "name": {
@@ -3667,13 +4922,13 @@
             "type": "boolean",
             "title": "Configured"
           },
-          "missing_env": {
+          "missing": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Missing Env",
-            "description": "Env vars to set to enable it"
+            "title": "Missing",
+            "description": "What to add in Settings to enable it"
           },
           "models": {
             "items": {
@@ -3691,6 +4946,33 @@
           "models"
         ],
         "title": "ProviderOut"
+      },
+      "ProvidersResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "local_login": {
+            "type": "boolean",
+            "title": "Local Login"
+          },
+          "signup_open": {
+            "type": "boolean",
+            "title": "Signup Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "providers",
+          "local_login",
+          "signup_open"
+        ],
+        "title": "ProvidersResponse",
+        "description": "What the login page can offer — no secrets, just switches."
       },
       "PublishRequest": {
         "properties": {
@@ -4286,6 +5568,170 @@
         ],
         "title": "ResolvePairResponse"
       },
+      "SecretCheck": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "checked": {
+            "type": "boolean",
+            "title": "Checked",
+            "description": "False when this kind of secret can only be format-checked"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ok",
+          "checked",
+          "message"
+        ],
+        "title": "SecretCheck"
+      },
+      "SecretPut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Save even if the live check fails (the provider is down, or the key is only valid for actions the check does not cover)",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "SecretPut"
+      },
+      "SecretPutResponse": {
+        "properties": {
+          "secret": {
+            "$ref": "#/components/schemas/SecretStatus"
+          },
+          "check": {
+            "$ref": "#/components/schemas/SecretCheck"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "check"
+        ],
+        "title": "SecretPutResponse"
+      },
+      "SecretStatus": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint",
+            "description": "Last four characters of an API key, when it is safe to show"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "configured"
+        ],
+        "title": "SecretStatus",
+        "description": "What the API says about a stored secret — never the secret itself."
+      },
+      "SecretsResponse": {
+        "properties": {
+          "secrets": {
+            "items": {
+              "$ref": "#/components/schemas/SecretStatus"
+            },
+            "type": "array",
+            "title": "Secrets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secrets"
+        ],
+        "title": "SecretsResponse"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "settings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "SettingsResponse"
+      },
+      "SettingsUpdate": {
+        "properties": {
+          "settings": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "SettingsUpdate"
+      },
       "SimilarityAnalysisResponse": {
         "properties": {
           "dataset_id": {
@@ -4430,6 +5876,69 @@
         ],
         "title": "UrlGenerationRequest",
         "description": "Generate a dataset from one web page (no crawling)."
+      },
+      "UsageResponse": {
+        "properties": {
+          "users": {
+            "$ref": "#/components/schemas/UsageUsers"
+          },
+          "datasets": {
+            "type": "integer",
+            "title": "Datasets"
+          },
+          "pairs": {
+            "type": "integer",
+            "title": "Pairs"
+          },
+          "runs_30d": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Runs 30D"
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running"
+          }
+        },
+        "type": "object",
+        "required": [
+          "users",
+          "datasets",
+          "pairs",
+          "runs_30d",
+          "running"
+        ],
+        "title": "UsageResponse"
+      },
+      "UsageUsers": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "active": {
+            "type": "integer",
+            "title": "Active"
+          },
+          "admins": {
+            "type": "integer",
+            "title": "Admins"
+          },
+          "signed_in_30d": {
+            "type": "integer",
+            "title": "Signed In 30D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "active",
+          "admins",
+          "signed_in_30d"
+        ],
+        "title": "UsageUsers"
       },
       "UserResponse": {
         "properties": {

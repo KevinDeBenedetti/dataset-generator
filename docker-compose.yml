@@ -113,6 +113,36 @@ services:
         - action: rebuild
           path: ./uv.lock
 
+  # Executes the queued dataset jobs (python -m server.worker): the API only
+  # queues them. Same image and environment as the server; scale it with
+  # `docker compose up --scale worker=2` — claims never overlap.
+  worker:
+    depends_on:
+      server:
+        condition: service_healthy  # the server runs the migrations
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      FASTEMBED_CACHE_PATH: /app/.cache/fastembed
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+    build:
+      context: .
+      dockerfile: ./apps/server/Dockerfile
+      target: dev
+      args:
+        APP_PORT: ${SERVER_PORT:-8000}
+    command: ["uv", "run", "--no-sync", "python", "-m", "server.worker"]
+    volumes:
+      - ./apps/server:/app/server
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./uv.lock:/app/uv.lock:ro
+      - server_venv:/app/.venv
+      - fastembed_cache:/app/.cache/fastembed
+    restart: always
+    stop_grace_period: 30s
+
   # Postgres: the application database (users, refresh tokens, quality rules).
   # The server reaches it in-network at postgres:5432; it is also published to
   # the host on the project's slot-2 Postgres port (5452) so psql / a GUI client

@@ -1,5 +1,6 @@
 """Tests for the /collections API endpoints."""
 
+from server.tests.creds import FULL
 from unittest.mock import patch
 
 import pytest
@@ -69,7 +70,7 @@ def test_push_to_qdrant_success(client):
     assert response.json() == fake_result
 
 
-def test_search_returns_matching_pairs(client):
+def test_search_returns_matching_pairs(client, owner):
     fake = {
         "dataset_name": "Gamma",
         "collection_name": "dataset_gamma",
@@ -97,11 +98,16 @@ def test_search_returns_matching_pairs(client):
     assert response.json() == fake
     # The body's tuning knobs must reach the service, not be silently dropped.
     search.assert_called_once_with(
-        "Gamma", query="what is python", limit=5, score_threshold=0.5
+        owner.id,
+        "Gamma",
+        FULL,
+        query="what is python",
+        limit=5,
+        score_threshold=0.5,
     )
 
 
-def test_search_applies_schema_defaults_for_optional_knobs(client):
+def test_search_applies_schema_defaults_for_optional_knobs(client, owner):
     with patch("server.api.collections.search_collection") as search:
         search.return_value = {
             "dataset_name": "Gamma",
@@ -113,7 +119,9 @@ def test_search_applies_schema_defaults_for_optional_knobs(client):
         response = client.post("/collections/Gamma/search", json={"query": "q"})
 
     assert response.status_code == 200
-    search.assert_called_once_with("Gamma", query="q", limit=10, score_threshold=None)
+    search.assert_called_once_with(
+        owner.id, "Gamma", FULL, query="q", limit=10, score_threshold=None
+    )
 
 
 def test_search_rejects_an_empty_query(client):

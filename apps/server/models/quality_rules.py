@@ -1,15 +1,15 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from server.core.database import Base
 
 
 class QualityRules(Base):
-    """Singleton row holding the generation-time quality rules.
+    """One user's generation-time quality rules (one row per user).
 
-    One global config (id="default"): the thresholds shown on the /quality
+    The thresholds shown on the /quality
     page and applied by the generation pipeline when ``auto_reject_enabled``
     is on. Defaults are prefilled with sensible values but enforcement stays
     off until explicitly enabled.
@@ -17,7 +17,9 @@ class QualityRules(Base):
 
     __tablename__ = "quality_rules"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default="default")
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     # Minimum answer length, in words (0 = no minimum).
     min_answer_words: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
     # Generated pairs below this confidence are rejected.

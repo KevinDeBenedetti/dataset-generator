@@ -6,15 +6,15 @@ otherwise non-public address (SSRF) — re-checked on every redirect hop — and
 caps both the wait and the body size.
 """
 
-import asyncio
-import ipaddress
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import List, Optional
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 
 import httpx
+
+from server.core import net
 
 TIMEOUT_S = 15.0
 MAX_BYTES = 2 * 1024 * 1024
@@ -38,30 +38,11 @@ class Page:
         return "html" in self.content_type
 
 
-async def _resolve(host: str, port: int) -> List[str]:
-    """Every address ``host`` resolves to (a module function so tests can stub DNS)."""
-    infos = await asyncio.get_running_loop().getaddrinfo(host, port)
-    return [str(info[4][0]) for info in infos]
-
-
 async def _check_public(url: str) -> None:
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https"):
-        raise WebFetchError("Only http(s) URLs can be fetched")
-    host = parts.hostname
-    if not host:
-        raise WebFetchError("The URL has no host")
     try:
-        addresses = await _resolve(
-            host, parts.port or (443 if parts.scheme == "https" else 80)
-        )
-    except OSError as exc:
-        raise WebFetchError(f"Could not resolve {host}") from exc
-    for address in addresses:
-        if not ipaddress.ip_address(address).is_global:
-            raise WebFetchError(
-                f"{host} resolves to a non-public address — refusing to fetch it"
-            )
+        await net.check_url(url, allow_http=True)
+    except net.UnsafeURLError as exc:
+        raise WebFetchError(str(exc)) from exc
 
 
 async def fetch_page(url: str, client: Optional[httpx.AsyncClient] = None) -> Page:
@@ -71,8 +52,10 @@ async def fetch_page(url: str, client: Optional[httpx.AsyncClient] = None) -> Pa
     content type, an HTTP error status or a body over :data:`MAX_BYTES`.
     """
     own = client is None
-    client = client or httpx.AsyncClient(
-        timeout=TIMEOUT_S, headers={"User-Agent": _USER_AGENT}
+    # Each hop is validated up front and again at connect time, pinned to the
+    # address that passed (a DNS answer that changes in between is refused).
+    client = client or net.pinned_client(
+        timeout=TIMEOUT_S, allow_http=True, headers={"User-Agent": _USER_AGENT}
     )
     try:
         current = url.strip()

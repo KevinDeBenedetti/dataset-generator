@@ -31,7 +31,7 @@ from typing import (
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from server.core.config import _env
+from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
 from server.jobs import corpus as corpus_job
 from server.jobs import qa_dataset as qa_dataset_job
 
@@ -108,10 +108,14 @@ def _draft_from_dict(data: Dict[str, Any]) -> qa_dataset_job.Draft:
 
 
 async def _run_github_personal(
-    options: BaseModel, model_ref: Optional[str], progress: ProgressFn
+    creds: Credentials,
+    options: BaseModel,
+    model_ref: Optional[str],
+    progress: ProgressFn,
 ) -> JobOutcome:
     assert isinstance(options, GitHubPersonalOptions)
     draft = await qa_dataset_job.generate(
+        creds,
         max_repos=options.max_repos,
         full_refresh=options.full_refresh,
         model_ref=model_ref,
@@ -139,11 +143,14 @@ def _preview_github_personal(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _publish_github_personal(
-    data: Dict[str, Any], exclude: Sequence[str], promote: Sequence[str]
+    creds: Credentials,
+    data: Dict[str, Any],
+    exclude: Sequence[str],
+    promote: Sequence[str],
 ) -> JobResult:
     draft = _draft_from_dict(data)
     draft.dataset = draft.dataset.with_selection(exclude, promote)
-    result = await qa_dataset_job.publish(draft)
+    result = await qa_dataset_job.publish(creds, draft)
     return JobResult(
         dry_run=False,
         url=result["url"],
@@ -166,29 +173,36 @@ class KnowledgeCorpusOptions(BaseModel):
 
 
 async def _run_knowledge_corpus(
-    options: BaseModel, model_ref: Optional[str], progress: ProgressFn
+    creds: Credentials,
+    options: BaseModel,
+    model_ref: Optional[str],
+    progress: ProgressFn,
 ) -> JobOutcome:
     assert isinstance(options, KnowledgeCorpusOptions)
-    username = _env("GITHUB_USERNAME")
+    username = creds.github_username
     if not username:
-        raise corpus_job.JobError("GITHUB_USERNAME is not configured on the server")
-    hf_repo = _env("HF_DATASET_REPO")
+        raise corpus_job.JobError(
+            "Your GitHub username is required (set it in Settings)"
+        )
+    hf_repo = creds.hf_corpus_repo
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)
         manifest = await corpus_job.export_corpus(
             directory,
             list(options.sources) or list(corpus_job.KNOWN_SOURCES),
             username,
-            _env("GITHUB_TOKEN") or None,
+            creds.secret(GITHUB_TOKEN) or None,
             hf_repo or "",
         )
         url = None
         if not options.dry_run:
             if not hf_repo:
                 raise corpus_job.JobError(
-                    "HF_DATASET_REPO is not configured on the server"
+                    "The corpus dataset repo is required in Settings"
                 )
-            url = await run_in_threadpool(corpus_job.push_corpus, directory, hf_repo)
+            url = await run_in_threadpool(
+                corpus_job.push_corpus, creds, directory, hf_repo
+            )
     return JobOutcome(
         JobResult(
             dry_run=options.dry_run,
@@ -200,6 +214,11 @@ async def _run_knowledge_corpus(
 
 # --- catalogue ----------------------------------------------------------------
 
+_GITHUB_USERNAME = ("your GitHub username", lambda c: bool(c.github_username))
+_HF_TOKEN = ("your Hugging Face token", lambda c: c.has(HF_TOKEN))
+_HF_QA_REPO = ("the Q&A dataset repo", lambda c: bool(c.hf_qa_repo))
+_HF_CORPUS_REPO = ("the corpus dataset repo", lambda c: bool(c.hf_corpus_repo))
+
 
 @dataclass(frozen=True)
 class JobSpec:
@@ -208,20 +227,27 @@ class JobSpec:
     description: str
     workflow: str
     schedule: str
-    required_env: Tuple[str, ...]
+    # What the job needs from the user's settings: (label, predicate) — shown as
+    # "add X in Settings" when the predicate is false for the user's credentials.
+    requires: Tuple[Tuple[str, Callable[[Credentials], bool]], ...]
     uses_model: bool
     options: Type[BaseModel]
-    runner: Callable[[BaseModel, Optional[str], ProgressFn], Awaitable[JobOutcome]]
+    runner: Callable[
+        [Credentials, BaseModel, Optional[str], ProgressFn], Awaitable[JobOutcome]
+    ]
     # Set for draft jobs: publishes a reviewed draft (exclude/promote pair ids).
     publisher: Optional[
-        Callable[[Dict[str, Any], Sequence[str], Sequence[str]], Awaitable[JobResult]]
+        Callable[
+            [Credentials, Dict[str, Any], Sequence[str], Sequence[str]],
+            Awaitable[JobResult],
+        ]
     ] = None
     # Set for draft jobs: what the review shows (new pairs, pairs to review).
     preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
 
-    def missing_env(self) -> List[str]:
-        """Names only, never values — safe to serve to the dashboard."""
-        return [name for name in self.required_env if not _env(name)]
+    def missing(self, creds: Credentials) -> List[str]:
+        """Labels only, never values — safe to serve to the dashboard."""
+        return [label for label, present in self.requires if not present(creds)]
 
 
 JOBS: Dict[str, JobSpec] = {
@@ -236,7 +262,7 @@ JOBS: Dict[str, JobSpec] = {
             "published version are sent to the model.",
             workflow="qa-dataset-sync.yml",
             schedule="Mondays 06:00 UTC",
-            required_env=("GITHUB_USERNAME", "HF_TOKEN", "HF_QA_DATASET_REPO"),
+            requires=(_GITHUB_USERNAME, _HF_TOKEN, _HF_QA_REPO),
             uses_model=True,
             options=GitHubPersonalOptions,
             runner=_run_github_personal,
@@ -251,7 +277,7 @@ JOBS: Dict[str, JobSpec] = {
             "dataset.",
             workflow="dataset-sync.yml",
             schedule="Mondays 04:00 UTC",
-            required_env=("GITHUB_USERNAME", "HF_TOKEN", "HF_DATASET_REPO"),
+            requires=(_GITHUB_USERNAME, _HF_TOKEN, _HF_CORPUS_REPO),
             uses_model=False,
             options=KnowledgeCorpusOptions,
             runner=_run_knowledge_corpus,

@@ -6,11 +6,13 @@ mock. Editing them stays a code change on purpose: they are tuned alongside
 the parsing that consumes their output.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from server.schemas.prompts import PromptInfo, PromptsResponse
 from server.services.agent import QA_AGENT_INSTRUCTION
 from server.services.llm import PromptManager
+from server.models.user import User
+from server.services.auth import get_current_user
 from server.services.model_defaults import get_model_defaults
 
 router = APIRouter(
@@ -20,9 +22,9 @@ router = APIRouter(
 
 
 @router.get("", response_model=PromptsResponse)
-async def list_prompts() -> PromptsResponse:
+async def list_prompts(user: User = Depends(get_current_user)) -> PromptsResponse:
     """Every LLM prompt shipped with the app, with where/how it is used."""
-    models = get_model_defaults()
+    models = get_model_defaults(user.id)
     prompts = [
         PromptInfo(
             key="qa_agent",

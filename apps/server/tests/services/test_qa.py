@@ -6,6 +6,9 @@ from server.services.qa import QAService
 from server.services.dedup import DuplicateVerdict, compute_hash_from_content
 
 
+OWNER = "owner-1"
+
+
 def _existing_item(question: str, answer: str, context: str, source_url: str) -> dict:
     """A stored pair shaped like `get_dataset_pairs` returns."""
     return {
@@ -24,7 +27,7 @@ class TestQAService:
     def test_process_qa_pairs_new_items(self):
         """New QA pairs (no existing items) are all kept."""
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa1 = Mock()
             mock_qa1.question = "What is Docker?"
@@ -62,7 +65,7 @@ class TestQAService:
             source_url="https://example.com",
         )
         with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa = Mock()
             mock_qa.question = "What is Python?"
@@ -87,7 +90,7 @@ class TestQAService:
             type="similar", duplicate_hash="similar-id", similarity_score=0.92
         )
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa = Mock()
             mock_qa.question = "What exactly is Python?"
@@ -107,7 +110,7 @@ class TestQAService:
     def test_process_qa_pairs_without_confidence(self):
         """Missing `confidence` attribute defaults to 1.0."""
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa = Mock(spec=["question", "answer"])  # No confidence attribute
             mock_qa.question = "What is Redis?"
@@ -133,7 +136,7 @@ class TestQAService:
             source_url="https://example.com",
         )
         with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa1 = Mock()
             mock_qa1.question = "New question 1?"
@@ -164,7 +167,7 @@ class TestQAService:
     def test_process_qa_pairs_empty_list(self):
         """Empty input yields empty output, no calls needed."""
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
             result = qa_service.process_qa_pairs(
                 qa_list=[],
                 cleaned_text="Some text",
@@ -185,7 +188,7 @@ class TestQAService:
         with patch(
             "server.services.qa.get_dataset_pairs", return_value=[]
         ) as mock_fetch:
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
 
             mock_qa1 = Mock()
             mock_qa1.question = "What is Terraform?"
@@ -221,7 +224,7 @@ class TestQAService:
         """The existing-entries pool is loaded once (lazily) and reused across
         calls — not reloaded from the database every time."""
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
             assert qa_service._existing_entries is None
 
             mock_qa1 = Mock()
@@ -259,7 +262,7 @@ class TestQAService:
         with patch(
             "server.services.qa.get_dataset_pairs", return_value=[]
         ) as mock_fetch:
-            qa_service = QAService("my-dataset")
+            qa_service = QAService(OWNER, "my-dataset")
             mock_qa = Mock()
             mock_qa.question = "Q?"
             mock_qa.answer = "A"
@@ -271,7 +274,8 @@ class TestQAService:
                 model="gpt-4o-mini",
                 similarity_threshold=0.9,
             )
-        mock_fetch.assert_called_once_with("my-dataset")
+        # The pool is this owner's dataset — never a same-named one of another user.
+        mock_fetch.assert_called_once_with(OWNER, "my-dataset")
 
     def test_process_qa_pairs_db_unreachable_falls_back_to_empty_pool(self):
         """If reading the stored pairs errors (e.g. the DB is down), dedup
@@ -280,7 +284,7 @@ class TestQAService:
             "server.services.qa.get_dataset_pairs",
             side_effect=RuntimeError("unreachable"),
         ):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
             mock_qa = Mock()
             mock_qa.question = "Q?"
             mock_qa.answer = "A"
@@ -304,7 +308,7 @@ class TestQAService:
             "reject_below_confidence": 0.7,
         }
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset", quality_rules=rules)
+            qa_service = QAService(OWNER, "test_dataset", quality_rules=rules)
 
             too_short = Mock()
             too_short.question = "Q1?"
@@ -336,7 +340,7 @@ class TestQAService:
     def test_process_qa_pairs_quality_rules_disabled_by_default(self):
         """No rules passed → nothing is rejected (backwards compatible)."""
         with patch("server.services.qa.get_dataset_pairs", return_value=[]):
-            qa_service = QAService("test_dataset")
+            qa_service = QAService(OWNER, "test_dataset")
             mock_qa = Mock()
             mock_qa.question = "Q?"
             mock_qa.answer = "Short"
@@ -372,7 +376,7 @@ class TestQAServiceSemantic:
 
         self.embedder = embedder or FakeEmbedder()
         with patch("server.services.qa.get_dataset_pairs", return_value=list(existing)):
-            service = QAService("ds", embedder=self.embedder)
+            service = QAService(OWNER, "ds", embedder=self.embedder)
             service.prepare()
         return service
 
@@ -453,7 +457,7 @@ class TestQAServiceSemantic:
             "Which port does the API listen on?", "8000", "ctx", "https://example.com/a"
         )
         with patch("server.services.qa.get_dataset_pairs", return_value=[existing]):
-            service = QAService("ds", embedder=None)
+            service = QAService(OWNER, "ds", embedder=None)
             result = self._run(
                 service, [_qa("Which port does the API listen on", "Port 8000.")]
             )

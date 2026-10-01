@@ -11,9 +11,17 @@ import { client } from './gen/client.gen'
 // The browser-facing API origin defaults to localhost:8000 but is overridable via
 // NEXT_PUBLIC_API_BASE_URL, so the host port can change (e.g. to avoid collisions
 // when running several dev stacks) without editing the generated client.
+//
+// Unset, it defaults to the same-origin `/api` in production (the ingress routes
+// it to the API — one image for any host, no CORS) and to the dev server on
+// localhost:8000 otherwise.
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:8000')
+
 client.setConfig({
   credentials: 'include',
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000',
+  baseUrl: API_BASE_URL,
 })
 
 // ── Silent session refresh ───────────────────────────────────────────────────
@@ -24,7 +32,7 @@ client.setConfig({
 
 // A 401 from these endpoints is a definitive answer — refreshing would either
 // loop (/auth/refresh) or mask a real credential failure.
-const NO_REFRESH_PATHS = ['/auth/login', '/auth/logout', '/auth/refresh']
+const NO_REFRESH_PATHS = ['/auth/login', '/auth/logout', '/auth/refresh', '/auth/providers']
 
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -305,7 +313,7 @@ export async function getModels(discover = false): Promise<ModelsResponse> {
   return response.data as unknown as ModelsResponse
 }
 
-// Set the default model of one or more roles (admin only).
+// Set your default model of one or more roles.
 export async function updateModelDefaults(
   defaults: Record<string, string>,
 ): Promise<ModelsResponse> {
@@ -320,7 +328,7 @@ export async function updateModelDefaults(
   return response.data as unknown as ModelsResponse
 }
 
-// Send one short prompt to a model (admin only — spends provider quota).
+// Send one short prompt to a model (spends your own provider quota).
 export async function testModel(ref: string, prompt?: string): Promise<ModelTestResponse> {
   const response = await client.post<ModelTestResponse>({
     url: '/models/test',
@@ -800,6 +808,17 @@ export async function getJobRun(runId: string): Promise<JobRunOut> {
   return response.data as unknown as JobRunOut
 }
 
+// Cancels a queued run, or asks the worker to stop a running one.
+export async function cancelJobRun(runId: string): Promise<JobRunOut> {
+  const response = await client.post<JobRunOut>({
+    url: `/jobs/runs/${encodeURIComponent(runId)}/cancel`,
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to cancel the run'))
+  }
+  return response.data as unknown as JobRunOut
+}
+
 // Publishes a run's reviewed draft: `exclude` drops new pairs, `promote` moves
 // pairs from the review list into the export.
 export async function publishJobRun(
@@ -817,8 +836,260 @@ export async function publishJobRun(
   return response.data as unknown as JobRunOut
 }
 
-// Absolute URL the browser navigates to in order to start the OIDC flow.
-export function oidcLoginUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000'
-  return `${base}/auth/oidc/login`
+// Absolute URL the browser navigates to in order to sign in with a provider
+// ("infomaniak", "github"), or — while signed in — to link it to the account.
+export function ssoUrl(provider: string, action: 'login' | 'link' = 'login'): string {
+  return `${API_BASE_URL}/auth/${encodeURIComponent(provider)}/${action}`
+}
+
+// Hand-written: mirrors ProvidersResponse (apps/server/api/auth.py).
+export interface AuthProviders {
+  providers: { name: string; label: string; configured: boolean }[]
+  local_login: boolean
+  signup_open: boolean
+}
+
+export async function getAuthProviders(): Promise<AuthProviders> {
+  const response = await client.get<AuthProviders>({ url: '/auth/providers' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to load the sign-in options'))
+  }
+  return response.data as unknown as AuthProviders
+}
+
+// Sign out on every device (all sessions, this one included).
+export async function logoutEverywhere(): Promise<void> {
+  const response = await client.post<void>({ url: '/auth/logout-all' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to sign out everywhere'))
+  }
+}
+
+// Hand-written: mirrors IdentitiesResponse (apps/server/schemas/me.py).
+export interface LinkedIdentity {
+  id: string
+  provider: string
+  email?: string | null
+  username?: string | null
+  created_at: string
+  last_login_at?: string | null
+}
+
+export interface IdentitiesInfo {
+  identities: LinkedIdentity[]
+  has_password: boolean
+  locked_admin: boolean
+}
+
+export async function getIdentities(): Promise<IdentitiesInfo> {
+  const response = await client.get<IdentitiesInfo>({ url: '/me/identities' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to load your sign-in methods'))
+  }
+  return response.data as unknown as IdentitiesInfo
+}
+
+export async function unlinkIdentity(id: string): Promise<void> {
+  const response = await client.delete({ url: `/me/identities/${encodeURIComponent(id)}` })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to unlink'))
+  }
+}
+
+// --- Your keys and integration settings --------------------------------------
+
+export type SecretKind =
+  | 'openai_api_key'
+  | 'claude_token'
+  | 'anthropic_api_key'
+  | 'hf_token'
+  | 'github_token'
+
+export type SettingKey =
+  | 'openai_base_url'
+  | 'hf_namespace'
+  | 'hf_qa_repo'
+  | 'hf_corpus_repo'
+  | 'github_username'
+
+// Hand-written: mirrors apps/server/schemas/me.py. Secrets are write-only — the
+// API returns whether one is saved (and a last-four hint), never its value.
+export interface SecretStatus {
+  kind: SecretKind
+  configured: boolean
+  hint?: string | null
+  updated_at?: string | null
+}
+
+export interface SecretCheck {
+  kind: SecretKind
+  ok: boolean
+  checked: boolean
+  message: string
+}
+
+export async function getSecrets(): Promise<SecretStatus[]> {
+  const response = await client.get<{ secrets: SecretStatus[] }>({ url: '/me/secrets' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to load your keys'))
+  }
+  return (response.data as unknown as { secrets: SecretStatus[] }).secrets
+}
+
+// Save (or replace) a key. It is checked against its provider first; `force`
+// saves it anyway when only that check failed.
+export async function saveSecret(
+  kind: SecretKind,
+  value: string,
+  force = false,
+): Promise<{ secret: SecretStatus; check: SecretCheck }> {
+  const response = await client.put<{ secret: SecretStatus; check: SecretCheck }>({
+    url: `/me/secrets/${kind}`,
+    body: { value, force },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to save the key'))
+  }
+  return response.data as unknown as { secret: SecretStatus; check: SecretCheck }
+}
+
+export async function testSecret(kind: SecretKind): Promise<SecretCheck> {
+  const response = await client.post<SecretCheck>({ url: `/me/secrets/${kind}/test` })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to test the key'))
+  }
+  return response.data as unknown as SecretCheck
+}
+
+export async function deleteSecret(kind: SecretKind): Promise<void> {
+  const response = await client.delete({ url: `/me/secrets/${kind}` })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to remove the key'))
+  }
+}
+
+export async function getSettings(): Promise<Record<SettingKey, string>> {
+  const response = await client.get<{ settings: Record<SettingKey, string> }>({
+    url: '/me/settings',
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to load your settings'))
+  }
+  return (response.data as unknown as { settings: Record<SettingKey, string> }).settings
+}
+
+export async function saveSettings(
+  settings: Partial<Record<SettingKey, string>>,
+): Promise<Record<SettingKey, string>> {
+  const response = await client.put<{ settings: Record<SettingKey, string> }>({
+    url: '/me/settings',
+    body: { settings },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to save your settings'))
+  }
+  return (response.data as unknown as { settings: Record<SettingKey, string> }).settings
+}
+
+// --- Backoffice (admins only) -------------------------------------------------
+// Hand-written: mirrors apps/server/schemas/admin.py — accounts and usage, never
+// dataset content or secrets.
+
+export interface AdminUser {
+  id: string
+  email: string
+  role: 'user' | 'admin'
+  is_active: boolean
+  locked: boolean
+  providers: string[]
+  has_password: boolean
+  created_at?: string | null
+  last_login_at?: string | null
+  configured_keys: string[]
+  datasets: number
+  pairs: number
+  runs: number
+}
+
+export interface AuditEntry {
+  id: string
+  created_at: string
+  action: string
+  actor?: string | null
+  target?: string | null
+  target_user_id?: string | null
+  ip?: string | null
+  detail: Record<string, unknown>
+}
+
+export interface PlatformSwitch {
+  key: string
+  label: string
+  value: unknown
+  overridden: boolean
+}
+
+export interface AdminUsage {
+  users: { total: number; active: number; admins: number; signed_in_30d: number }
+  datasets: number
+  pairs: number
+  runs_30d: Record<string, number>
+  running: number
+}
+
+async function adminCall<T>(
+  method: 'get' | 'put' | 'patch' | 'delete',
+  url: string,
+  fallback: string,
+  body?: unknown,
+): Promise<T> {
+  const response = await client[method]<T>({
+    url,
+    ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
+  })
+  if (response.error) throw new Error(getErrorMessage(response.error, fallback))
+  return response.data as unknown as T
+}
+
+export const adminApi = {
+  users: (q = '', offset = 0, limit = 50) =>
+    adminCall<{ total: number; users: AdminUser[] }>(
+      'get',
+      `/admin/users?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`,
+      'Failed to load the users',
+    ),
+  updateUser: (id: string, changes: { role?: 'user' | 'admin'; is_active?: boolean }) =>
+    adminCall<AdminUser>('patch', `/admin/users/${id}`, 'Failed to update the user', changes),
+  deleteUser: (id: string) =>
+    adminCall<void>('delete', `/admin/users/${id}`, 'Failed to delete the user'),
+  audit: (offset = 0, action = '', userId = '') =>
+    adminCall<{ total: number; entries: AuditEntry[] }>(
+      'get',
+      `/admin/audit?offset=${offset}&action=${encodeURIComponent(action)}&user_id=${encodeURIComponent(userId)}`,
+      'Failed to load the audit log',
+    ),
+  usage: () => adminCall<AdminUsage>('get', '/admin/usage', 'Failed to load the usage'),
+  platform: () =>
+    adminCall<{ settings: PlatformSwitch[] }>('get', '/admin/platform', 'Failed to load'),
+  updatePlatform: (settings: Record<string, unknown>) =>
+    adminCall<{ settings: PlatformSwitch[] }>(
+      'put',
+      '/admin/platform',
+      'Failed to save the platform settings',
+      { settings },
+    ),
+}
+
+// Self-service: a zip of everything you own, and account deletion.
+export function exportUrl(): string {
+  return `${API_BASE_URL}/me/export`
+}
+
+export async function deleteMyAccount(): Promise<void> {
+  const response = await client.delete({ url: '/me' })
+  if (response.error) {
+    throw new Error(getErrorMessage(response.error, 'Failed to delete your account'))
+  }
 }

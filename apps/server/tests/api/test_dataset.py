@@ -2,6 +2,7 @@
 Tests for dataset API endpoints.
 """
 
+from server.tests.creds import FULL
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -406,7 +407,7 @@ def test_export_to_huggingface_hub_failure_returns_502(client: TestClient):
 # --- Hugging Face import ------------------------------------------------------
 
 
-def test_import_from_huggingface_success(client: TestClient):
+def test_import_from_huggingface_success(client: TestClient, owner):
     fake = {
         "dataset_name": "my_dataset",
         "repo_id": "kevin/my_dataset",
@@ -423,7 +424,7 @@ def test_import_from_huggingface_success(client: TestClient):
     body = response.json()
     assert body["dataset_name"] == "my_dataset"
     assert body["pairs_imported"] == 12
-    mocked.assert_called_once_with("kevin/my_dataset", None)
+    mocked.assert_called_once_with(owner.id, FULL, "kevin/my_dataset", None)
 
 
 def test_import_from_huggingface_without_token_returns_503(client: TestClient):
@@ -493,10 +494,10 @@ def test_get_huggingface_datasets_offloads_to_a_threadpool(client: TestClient):
 
     assert response.status_code == 200
     assert response.json() == fake
-    run_in_threadpool_mock.assert_called_once_with(list_user_datasets_mock)
+    run_in_threadpool_mock.assert_called_once_with(list_user_datasets_mock, FULL)
 
 
-def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient):
+def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient, owner):
     fake = {
         "dataset_name": "my_dataset",
         "repo_id": "kevin/my_dataset",
@@ -519,5 +520,5 @@ def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient):
     assert response.status_code == 200
     assert response.json() == fake
     run_in_threadpool_mock.assert_called_once_with(
-        import_dataset_from_hub_mock, "kevin/my_dataset", None
+        import_dataset_from_hub_mock, owner.id, FULL, "kevin/my_dataset", None
     )

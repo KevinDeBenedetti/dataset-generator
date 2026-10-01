@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { useCollections, useSearchCollection, useSyncCollectionToQdrant } from '@/hooks'
-import { useIsAdmin } from '@/hooks/use-auth'
 import type { CollectionSearchResult } from '@/api/sdk'
 
 function SearchPanel({ datasetName }: { datasetName: string }) {
@@ -84,7 +83,6 @@ export function DatasetSearch({ datasetName }: { datasetName: string }) {
   const inQdrant = collection?.in_qdrant === true
   const qaCount = collection?.qa_sources_count ?? 0
 
-  const isAdmin = useIsAdmin()
   const sync = useSyncCollectionToQdrant()
   const [showSearch, setShowSearch] = useState(false)
 
@@ -128,9 +126,8 @@ export function DatasetSearch({ datasetName }: { datasetName: string }) {
           </p>
         )}
 
-        {/* Syncing is admin-only (POST /collections/{id}/qdrant is
-            require_admin) — non-admins can still search once it's synced. */}
-        {!isPending && qdrantConfigured && isAdmin && (
+        {/* Syncing embeds the pairs with your own OpenAI key. */}
+        {!isPending && qdrantConfigured && (
           <button
             type="button"
             className="btn btn-outline"

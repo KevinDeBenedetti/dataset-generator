@@ -208,12 +208,49 @@ presented token and issues a successor in the same *family*. When the access
 token expires, the frontend transparently calls `/auth/refresh` on the first
 `401` and replays the request, so users aren't logged out at the TTL boundary.
 
-Replaying an already-rotated refresh token is treated as theft: the **entire
-family is revoked**, forcing a fresh login on every device that held a token
-from it. `POST /auth/logout` revokes the family server-side and clears both
-cookies. If `AUTH_REFRESH_COOKIE_NAME` is customised, mirror it to the frontend
-via `NEXT_PUBLIC_REFRESH_COOKIE_NAME` (as with `NEXT_PUBLIC_AUTH_COOKIE_NAME`)
-so the Next.js proxy (`apps/next/proxy.ts`) recognises a renewable session.
+Rotation is **atomic** (a conditional `UPDATE`, so two concurrent requests
+can't both consume one token). Replaying an already-rotated refresh token is
+treated as theft: the **entire family is revoked**, forcing a fresh login on
+every device that held a token from it — except within
+`AUTH_REFRESH_REUSE_GRACE_SECONDS` (default 10) of the rotation, where a second
+tab or the Next server racing the first is answered with its own successor
+instead (never for a token revoked by logout or by a replay; `0` disables the
+grace). `POST /auth/logout` revokes the family server-side and clears both
+cookies.
+
+The cookie names are `AUTH_COOKIE_NAME` / `AUTH_REFRESH_COOKIE_NAME`. The Next.js
+proxy (`apps/next/proxy.ts`) reads the **same two variables at runtime** to
+recognise a renewable session (no rebuild needed). Their default is
+`access_token` / `refresh_token` in development and `__Host-access_token` /
+`__Host-refresh_token` everywhere else.
+
+### Production hardening
+
+Outside `ENVIRONMENT=development` the server **refuses to start** unless the
+configuration is safe, and lists every problem at once (`Config.production_problems`):
+`AUTH_COOKIE_SECURE=true`, `__Host-` cookie names, an explicit `DATABASE_URL`
+(there is no fallback to the local dev database), `SESSION_SECRET_KEY` set and
+different from `AUTH_SECRET_KEY`, and an https `FRONTEND_URL`. Also, outside
+development: `/docs` and `/openapi.json` are off (`DOCS_ENABLED`), email/password
+login is off (`ENABLE_LOCAL_LOGIN`; accounts sign in through SSO), and every
+response carries security headers (HSTS, `nosniff`, `frame-ancestors 'none'`,
+`no-store` on `/auth`). State-changing requests from a foreign browser `Origin`
+are refused (CSRF), and `/auth/refresh` and the SSO start are throttled per IP
+(`AUTH_REFRESH_MAX_PER_MINUTE`, `AUTH_SSO_MAX_PER_MINUTE`). The OAuth state cookie
+is signed with its own `SESSION_SECRET_KEY` and lives ten minutes.
+
+Health probes: `GET /health` is liveness (never touches the database) and
+`GET /ready` is readiness (`SELECT 1`; 503 while Postgres is down). Migrations
+run under a Postgres advisory lock, and `RUN_MIGRATIONS_ON_STARTUP=false` leaves
+them to a deployment step (a Kubernetes pre-upgrade Job).
+
+Topology: **one public host** — the ingress sends `/api/*` to the API (stripping
+the prefix) and everything else to Next. There is no CORS to configure, the
+cookies are host-only, `NEXT_PUBLIC_API_BASE_URL` stays unset (it defaults to the
+same-origin `/api` in production), and the SSO callbacks to register are
+`https://<host>/api/auth/<provider>/callback`. Behind an ingress set
+`FORWARDED_ALLOW_IPS` so the rate limiters see the real client address. The Next
+server sets a per-request `Content-Security-Policy` with a nonce in production.
 
 Login via **Infomaniak OIDC** is enabled only when the following are all set
 (routes return `503` otherwise). Register a client with Infomaniak and add:
@@ -235,6 +272,127 @@ Auth endpoints: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`,
 > rotation and theft detection, login throttling and its Redis backend, the OIDC
 > account-resolution rules, every auth env var and a troubleshooting section —
 > see [docs/authentication.md](docs/authentication.md).
+
+### Sign-in (Infomaniak, GitHub) and roles
+
+Users sign in with **Infomaniak** (OpenID Connect) or **GitHub** (OAuth App);
+email + password is a development convenience (`ENABLE_LOCAL_LOGIN`). Both flows
+use state + PKCE (S256); Infomaniak's ID token and nonce are checked by Authlib.
+The login page only shows the providers that are configured (`GET /auth/providers`).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | _(empty)_ | Infomaniak. Callback: `https://<host>/api/auth/infomaniak/callback` (the older `/auth/oidc/callback` still works). |
+| `OIDC_REDIRECT_URI` | `http://localhost:8000/auth/oidc/callback` | The callback URL registered with Infomaniak. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | _(empty)_ | A GitHub **OAuth App** (github.com/settings/developers). Scopes `read:user user:email`. |
+| `GITHUB_REDIRECT_URI` | `http://localhost:8000/auth/github/callback` | Its callback URL, e.g. `https://<host>/api/auth/github/callback`. |
+| `ADMIN_EMAILS` | _(empty)_ | Comma-separated. These (verified) emails are made admin at sign-in, may sign up even when sign-up is closed, and receive the data parked on the `system` user. |
+| `ALLOW_SIGNUP` | `true` | Whether a first SSO sign-in creates an account. |
+| `ALLOWED_EMAIL_DOMAINS` | _(empty)_ | Restrict sign-ups to these email domains. |
+| `SSO_TRUSTED_EMAIL_PROVIDERS` | `infomaniak,github` | Providers whose *verified* email may attach a sign-in to an existing account with that email. |
+
+Account linking (`services/identities.py`): a sign-in is matched on the
+provider's stable id (`provider` + `subject` — GitHub's numeric user id, never
+the login). A new identity joins an existing account only when the provider
+says the email is **verified** and is trusted, or when the signed-in user links
+it from **Settings → Sign-in methods**. An unverified email never links and
+never creates an account. The last sign-in method can't be removed.
+**Sign out everywhere** revokes every refresh token and refuses every access
+token issued before it; a deactivated account is refused on its next request.
+Security events (sign-up, link, promotion…) are written to `audit_log`.
+
+Break-glass, from inside the deployment: `python -m server.cli promote-admin you@example.com`.
+
+### Job workers and quotas
+
+The API never runs a dataset job: it **queues** it (a `job_runs` row,
+`queued`), and a worker executes it — `python -m server.worker` (the `worker`
+service in `docker-compose.yml`; `make dev-local` runs one inside the API with
+`EMBEDDED_WORKER=true`). Workers claim with `FOR UPDATE SKIP LOCKED`, so any
+number can run side by side. The worker reads the run owner's own keys when it
+starts the run; nothing secret is stored in the queue.
+
+A running job heart-beats; if its worker dies (crash, `kill -9`, node lost) the
+run becomes **interrupted** after `WORKER_STALE_SECONDS` — never re-run on its
+own, since it may already have spent model quota or published. SIGTERM drains:
+the worker stops claiming and lets its current runs finish for
+`WORKER_DRAIN_SECONDS`. Queued and running runs can be cancelled from the Jobs
+page. Publishing a draft is atomic: a double click publishes once.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WORKER_CONCURRENCY` | `1` | Runs one worker process executes at once. |
+| `WORKER_POLL_SECONDS` / `WORKER_HEARTBEAT_SECONDS` | `2` / `10` | Queue polling and heartbeat periods. |
+| `WORKER_STALE_SECONDS` | `120` | Heartbeat age after which a running job is marked interrupted. |
+| `WORKER_DRAIN_SECONDS` | `25` | Grace on SIGTERM (keep below the pod's `terminationGracePeriodSeconds`). |
+| `EMBEDDED_WORKER` | `false` | Also run a worker inside the API process (single-process local runs). |
+| `QUOTA_ACTIVE_RUNS` | `2` | Queued + running runs per user (`0` = unlimited). |
+| `QUOTA_RUNS_PER_DAY` | `20` | Runs a user may start in 24 h. |
+| `QUOTA_DATASETS` | `50` | Datasets per user. |
+
+### Backoffice (admins)
+
+`/admin` (sidebar **Backoffice**, admins only — every `/admin` API route requires
+the admin role, and `tests/api/test_admin.py` walks them all):
+
+- **Users** — email, sign-in methods, role, status, dates, *counts* of datasets,
+  pairs and runs, and which kinds of keys are saved. Never dataset names or
+  content, settings values or keys; no impersonation. Change a role, disable
+  (signs the user out at once), delete (cascade + Qdrant collections; their
+  Hugging Face repos stay). The last active admin and `ADMIN_EMAILS` accounts
+  can't be demoted, disabled or deleted.
+- **Audit log** — sign-ups, links, role changes, deletions, platform changes.
+- **Platform** — `allow_signup`, `allowed_email_domains`, `allowed_llm_hosts`,
+  `allow_custom_base_url`. A value set here overrides its env var; *Reset* goes
+  back to the env default. Replicas pick changes up within ~15 s.
+- **Overview** — accounts, activity, datasets, pairs, runs of the last 30 days.
+
+Every user can download their data (**Settings → Your data**, a zip of datasets
+and settings without keys) and delete their account.
+
+### Per-user data (tenancy)
+
+Every dataset, job run, model default and quality-rule set belongs to a user;
+another user's resource answers **404** (never 403, which would confirm it exists).
+A dataset name is unique *per user*, and each user may have one active run per job.
+New datasets use the Qdrant collection `<prefix>ds_<dataset id>`; datasets that
+predate this keep the collection they already had.
+
+Upgrading a single-user install: the migration gives all existing data to the
+oldest active admin, or, if there is none yet, to an inactive `system` account.
+Hand that data to a real account once it exists (run it inside the server
+container or pod):
+
+```bash
+python -m server.cli claim-legacy --email you@example.com
+```
+
+The tenancy guarantees are enforced by `tests/api/test_tenant_isolation.py`, which
+walks every route of the app and fails when a new one is not classified.
+
+### Your own keys (per-user credentials)
+
+Each user enters their own OpenAI key, Claude token, Hugging Face token and GitHub
+details under **Settings**. Secrets are encrypted at rest (AES-256-GCM, bound to
+the user and the kind of secret), only ever sent to their own provider, and
+**write-only**: no route returns one, administrators included. Non-secret
+settings (namespace, dataset repos, GitHub username, an OpenAI-compatible base
+URL) are stored in clear.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SECRETS_ENCRYPTION_KEYS` | _(required in production)_ | Key ring `id:key,id:key` (first encrypts, all decrypt). Generate an entry with `python -m server.cli gen-key`. **Back it up apart from the database** — losing it means every user re-enters their keys. Rotate: prepend a new key, run `python -m server.cli rewrap-secrets`, drop the old one. Development derives a key from `AUTH_SECRET_KEY`. |
+| `ALLOW_ENV_CREDENTIALS` | `true` in development, `false` otherwise | Fill what a user hasn't entered from the server's own `OPENAI_API_KEY`, `HF_TOKEN`… A local convenience; production refuses to start with it on. |
+| `ENABLE_CLAUDE_PROVIDER` | `true` in development and CI | The Claude-subscription provider runs **only in local development and in CI** (`GITHUB_ACTIONS`/`CI`). A deployed server never offers it: the Models page, the Settings keys and the defaults drop it (a saved `claude:` default falls back to the qa model), and production refuses to start with the variable set. |
+| `ALLOWED_LLM_HOSTS` | _(empty)_ | Extra hosts (besides `api.openai.com`) a user's OpenAI-compatible base URL may point to. Default only — editable in the backoffice. |
+| `ALLOW_CUSTOM_BASE_URL` | `false` | Let users point at any public https endpoint. Default only — editable in the backoffice. |
+
+Every outbound request to a user-chosen address goes through `core/net.py`: https
+only, public addresses only (no loopback, private, link-local or cluster names),
+connection pinned to the validated address, no redirects followed. The Claude CLI
+runs with a scrubbed environment in a throwaway directory, so the server's own
+secrets are never visible to it. The scheduled GitHub Actions jobs keep using the
+env vars (`Credentials.from_env()`).
 
 ### Dev log console
 

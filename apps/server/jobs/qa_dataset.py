@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
 from server.core.config import _env, config
+from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
     GitHubProfile,
@@ -180,7 +181,7 @@ class CompletionRequest:
 CompletionFn = Callable[[CompletionRequest], Awaitable[str]]
 
 
-def provider_completion(model_ref: str) -> CompletionFn:
+def provider_completion(model_ref: str, creds: Credentials) -> CompletionFn:
     """CompletionFn over the provider registry, for the ``model_ref`` model.
 
     A failed call degrades to '' so the retry-on-empty logic handles it.
@@ -193,6 +194,7 @@ def provider_completion(model_ref: str) -> CompletionFn:
                 ProviderRequest(
                     system=req.system, user=req.user, max_tokens=req.max_tokens
                 ),
+                creds,
             )
         except ProviderError as exc:
             logger.warning("%s query failed: %s", model_ref, exc)
@@ -1163,7 +1165,9 @@ Each line of `train.jsonl` is one record:
     return "\n".join(front) + "\n" + body
 
 
-def publish_qa_dataset(dataset: QADataset, username: str, repo_id: str) -> dict:
+def publish_qa_dataset(
+    creds: Credentials, dataset: QADataset, username: str, repo_id: str
+) -> dict:
     """Push ``train.jsonl``, ``review.jsonl``, ``manifest.json`` and ``README.md``
     to a private dataset in one commit — the manifest is what the next run
     diffs against, so it must never land without the pairs it describes."""
@@ -1179,11 +1183,11 @@ def publish_qa_dataset(dataset: QADataset, username: str, repo_id: str) -> dict:
     if not dataset.pairs:
         raise JobError("generated 0 pairs — refusing to publish an empty dataset")
 
-    api = _api()
+    api = _api(creds)
     try:
         # A bare "github-qa" would 404 on commit — complete it with the namespace
         # (also fixes drafts stored before this was done at generation time).
-        repo_id = qualify_repo_id(repo_id)
+        repo_id = qualify_repo_id(creds, repo_id)
     except HuggingFaceNotConfiguredError as exc:
         raise JobError(str(exc)) from exc
     ensure_private_dataset_repo(api, repo_id)
@@ -1246,6 +1250,7 @@ class Draft:
 
 
 async def generate(
+    creds: Credentials,
     complete: Optional[CompletionFn] = None,
     max_repos: Optional[int] = None,
     full_refresh: Optional[bool] = None,
@@ -1270,56 +1275,58 @@ async def generate(
     """
     if full_refresh is None:
         full_refresh = _env("QA_FULL_REFRESH", "false").lower() in ("1", "true", "yes")
-    username = _env("GITHUB_USERNAME")
+    username = creds.github_username
     if not username:
-        raise JobError("GITHUB_USERNAME is required")
+        raise JobError("Your GitHub username is required (set it in Settings)")
     model_ref = model_ref or config.qa_job_model
     provider_name, model = parse_ref(model_ref)
     try:
         provider = get_provider(provider_name)
     except ProviderError as exc:
         raise JobError(str(exc)) from exc
-    if complete is None and not provider.configured():
+    if complete is None and not provider.configured(creds):
         raise JobError(
-            f"{' or '.join(provider.missing_env())} is required to run {model_ref}"
+            f"{' or '.join(provider.missing(creds))} is required to run {model_ref}"
         )
 
-    repo_id = _env("HF_QA_DATASET_REPO")
+    repo_id = creds.hf_qa_repo
     if require_hub:
-        if not _env("HF_TOKEN"):
-            raise JobError("HF_TOKEN is required")
+        if not creds.has(HF_TOKEN):
+            raise JobError("Your Hugging Face token is required (add it in Settings)")
         if not repo_id:
-            raise JobError("HF_QA_DATASET_REPO is required (e.g. 'kevindb/github-qa')")
+            raise JobError(
+                "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
+            )
 
         from server.services.huggingface import _api
 
         try:
-            await asyncio.to_thread(_api().whoami)
+            await asyncio.to_thread(_api(creds).whoami)
         except Exception as exc:
-            raise JobError(f"HF_TOKEN rejected by Hugging Face: {exc}") from exc
+            raise JobError(f"Hugging Face rejected your token: {exc}") from exc
 
-    if repo_id and _env("HF_TOKEN"):
+    if repo_id and creds.has(HF_TOKEN):
         from server.services.huggingface import (
             HuggingFaceNotConfiguredError,
             qualify_repo_id,
         )
 
         try:
-            repo_id = await asyncio.to_thread(qualify_repo_id, repo_id)
+            repo_id = await asyncio.to_thread(qualify_repo_id, creds, repo_id)
         except HuggingFaceNotConfiguredError as exc:
             raise JobError(str(exc)) from exc
 
     previous = PreviousState()
     if full_refresh:
         logger.info("full refresh: ignoring the previously published version")
-    elif repo_id and _env("HF_TOKEN"):
+    elif repo_id and creds.has(HF_TOKEN):
         from server.services.huggingface import _api
 
-        previous = await asyncio.to_thread(load_previous_state, _api(), repo_id)
+        previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
     embedder = await asyncio.to_thread(get_local_embedder)
 
-    complete = complete or provider_completion(model_ref)
-    client = CorpusGitHubClient(_env("GITHUB_TOKEN") or None)
+    complete = complete or provider_completion(model_ref, creds)
+    client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
     try:
         logger.info("fetching GitHub snapshot for %s…", username)
         snapshot, fetch_errors = await fetch_snapshot(client, username)
@@ -1344,16 +1351,19 @@ async def generate(
     return Draft(dataset, username, repo_id, full_refresh, model_ref)
 
 
-async def publish(draft: Draft) -> dict:
+async def publish(creds: Credentials, draft: Draft) -> dict:
     """Publish a draft to its Hugging Face repo (see :func:`publish_qa_dataset`)."""
     if not draft.repo_id:
-        raise JobError("HF_QA_DATASET_REPO is required (e.g. 'kevindb/github-qa')")
+        raise JobError(
+            "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
+        )
     return await asyncio.to_thread(
-        publish_qa_dataset, draft.dataset, draft.username, draft.repo_id
+        publish_qa_dataset, creds, draft.dataset, draft.username, draft.repo_id
     )
 
 
 async def run(
+    creds: Credentials,
     complete: Optional[CompletionFn] = None,
     max_repos: Optional[int] = None,
     dry_run: bool = False,
@@ -1364,6 +1374,7 @@ async def run(
     and CI path, in one go. A dry run needs no HF_TOKEN/HF_QA_DATASET_REPO;
     without them it can't read the published version, so it is a full run."""
     draft = await generate(
+        creds,
         complete,
         max_repos=max_repos,
         full_refresh=full_refresh,
@@ -1372,14 +1383,14 @@ async def run(
     )
     if dry_run:
         return {"repo": draft.repo_id, "url": None, **draft.stats(), "dry_run": True}
-    result = await publish(draft)
+    result = await publish(creds, draft)
     return {**result, **draft.stats(), "dry_run": False}
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        result = asyncio.run(run())
+        result = asyncio.run(run(Credentials.from_env()))
     except JobError as exc:
         print(f"qa_dataset: {exc}", file=sys.stderr)
         return 1

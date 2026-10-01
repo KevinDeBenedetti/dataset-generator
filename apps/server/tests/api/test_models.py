@@ -1,5 +1,7 @@
 """Tests for the /models API (providers, per-role defaults, test call)."""
 
+from server.api.deps import get_credentials
+from server.tests.creds import FULL, make_creds
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -17,8 +19,11 @@ DEFAULTS = {
 
 def test_list_models(client: TestClient, monkeypatch):
     monkeypatch.setattr(config, "available_models", ["gpt-4o-mini"])
-    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # This user only has an OpenAI key.
+    overrides = client.app.dependency_overrides  # ty: ignore[unresolved-attribute]
+    overrides[get_credentials] = lambda: make_creds(
+        openai_api_key="sk-user-0000000000000000", base_url_trusted=True
+    )
     with patch("server.api.models.get_model_defaults", return_value=DEFAULTS):
         response = client.get("/models")
 
@@ -30,11 +35,13 @@ def test_list_models(client: TestClient, monkeypatch):
     assert providers["openai"]["configured"] is True
     assert [m["ref"] for m in providers["openai"]["models"]] == ["openai:gpt-4o-mini"]
     assert providers["claude"]["configured"] is False
-    assert providers["claude"]["missing_env"] == ["CLAUDE_CODE_OAUTH_TOKEN"]
+    assert providers["claude"]["missing"] == [
+        "your Claude token (`claude setup-token`) or Anthropic API key"
+    ]
     assert "claude:claude-sonnet-5" in [m["ref"] for m in providers["claude"]["models"]]
 
 
-def test_put_defaults(client: TestClient):
+def test_put_defaults(client: TestClient, owner):
     with (
         patch("server.api.models.update_model_defaults") as update,
         patch("server.api.models.get_model_defaults", return_value=DEFAULTS),
@@ -43,7 +50,7 @@ def test_put_defaults(client: TestClient):
             "/models/defaults", json={"defaults": {"qa": "claude:claude-sonnet-5"}}
         )
     assert response.status_code == 200
-    update.assert_called_once_with({"qa": "claude:claude-sonnet-5"})
+    update.assert_called_once_with(owner.id, {"qa": "claude:claude-sonnet-5"}, FULL)
     assert response.json()["defaults"] == DEFAULTS
 
 

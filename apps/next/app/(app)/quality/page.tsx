@@ -15,7 +15,6 @@ import {
   useScoreQA,
   useUpdateQualityRules,
 } from '@/hooks'
-import { useIsAdmin } from '@/hooks/use-auth'
 
 const DEFAULT_SIMILARITY_THRESHOLD = 0.8
 const DUPLICATES_PAGE_SIZE = 5
@@ -44,7 +43,6 @@ export default function QualityPage() {
   // rejection at generation). Editable here; saved via PUT /quality-rules.
   const rulesQuery = useQualityRules()
   const updateRulesMutation = useUpdateQualityRules()
-  const isAdmin = useIsAdmin()
   const [draftRules, setDraftRules] = useState<{
     min_answer_words: number
     reject_below_confidence: number
@@ -372,7 +370,7 @@ export default function QualityPage() {
                   <button
                     className="btn btn-outline btn-sm"
                     type="button"
-                    disabled={!isAdmin || scoreMutation.isPending}
+                    disabled={scoreMutation.isPending}
                     onClick={() => scoreMutation.mutate(selectedDataset)}
                   >
                     <Icon
@@ -383,7 +381,6 @@ export default function QualityPage() {
                       ? 'Scoring…'
                       : `Score ${stats.total_count - stats.scored_count} unscored pair(s) with the LLM`}
                   </button>
-                  {!isAdmin && <span className="hint">Only an admin can score pairs.</span>}
                 </div>
               )}
             {scoreMutation.isError && (
@@ -534,7 +531,7 @@ export default function QualityPage() {
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleSaveRules}
-                disabled={!isAdmin || updateRulesMutation.isPending}
+                disabled={updateRulesMutation.isPending}
               >
                 <Icon
                   name={updateRulesMutation.isPending ? 'loader' : 'check'}
@@ -542,9 +539,6 @@ export default function QualityPage() {
                 />
                 {updateRulesMutation.isPending ? 'Saving…' : 'Save rules'}
               </button>
-            )}
-            {rulesDirty && !isAdmin && (
-              <p className="hint">Only an admin can save the quality rules.</p>
             )}
             {updateRulesMutation.isError && (
               <p className="hint" style={{ color: 'var(--destructive)' }}>
@@ -675,8 +669,7 @@ export default function QualityPage() {
                     </button>
                     <button
                       className="btn btn-outline btn-sm"
-                      disabled={!isAdmin || resolvePairMutation.isPending}
-                      title={isAdmin ? undefined : 'Admin only'}
+                      disabled={resolvePairMutation.isPending}
                       onClick={() => handleResolvePair(pair.record2_id, pair.question2)}
                     >
                       <Icon name="check" />
@@ -684,8 +677,7 @@ export default function QualityPage() {
                     </button>
                     <button
                       className="btn btn-outline btn-sm"
-                      disabled={!isAdmin || resolvePairMutation.isPending}
-                      title={isAdmin ? undefined : 'Admin only'}
+                      disabled={resolvePairMutation.isPending}
                       onClick={() => handleResolvePair(pair.record1_id, pair.question1)}
                     >
                       <Icon name="check" />

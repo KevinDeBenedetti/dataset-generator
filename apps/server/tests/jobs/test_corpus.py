@@ -22,7 +22,10 @@ from server.jobs.corpus import (
     write_jsonl,
 )
 from server.jobs.github_snapshot import RepoDoc, deterministic_id
+from server.tests.creds import make_creds
 from server.tests.jobs.conftest import b64
+
+CREDS = make_creds(hf_token="hf_000000000000")
 
 # Golden output of the Go/TS builders: ids and text are both contractual.
 GO_OUTPUT = [
@@ -274,9 +277,9 @@ async def test_export_refuses_truncated_split(github, tmp_path):
 
 def test_push_requires_a_complete_export(tmp_path):
     with pytest.raises(JobError, match="does not exist"):
-        push_corpus(tmp_path / "missing", "ns/kb")
+        push_corpus(CREDS, tmp_path / "missing", "ns/kb")
     with pytest.raises(JobError, match="no manifest.json"):
-        push_corpus(tmp_path, "ns/kb")
+        push_corpus(CREDS, tmp_path, "ns/kb")
 
 
 def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
@@ -289,7 +292,7 @@ def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
     api.whoami.return_value = {"name": "kevin"}
     api.repo_info.return_value = MagicMock(private=True)
     with patch("server.services.huggingface._api", return_value=api):
-        url = push_corpus(tmp_path, "ns/kb", "abcdef1234")
+        url = push_corpus(CREDS, tmp_path, "ns/kb", "abcdef1234")
 
     assert url == "https://huggingface.co/datasets/ns/kb"
     api.create_repo.assert_called_once_with(
@@ -305,8 +308,8 @@ def test_push_rejects_bad_token(tmp_path):
     api = MagicMock()
     api.whoami.side_effect = RuntimeError("401")
     with patch("server.services.huggingface._api", return_value=api):
-        with pytest.raises(JobError, match="HF_TOKEN rejected"):
-            push_corpus(tmp_path, "ns/kb")
+        with pytest.raises(JobError, match="rejected your token"):
+            push_corpus(CREDS, tmp_path, "ns/kb")
     api.upload_folder.assert_not_called()
 
 
@@ -322,7 +325,7 @@ def test_push_completes_a_bare_repo_name(tmp_path):
     api.whoami.return_value = {"name": "kevin"}
     api.repo_info.return_value = MagicMock(private=True)
     with patch("server.services.huggingface._api", return_value=api):
-        url = push_corpus(tmp_path, "kb")
+        url = push_corpus(CREDS, tmp_path, "kb")
 
     # The bare name would 404 on commit: it is pushed to <account>/kb.
     assert url == "https://huggingface.co/datasets/kevin/kb"
