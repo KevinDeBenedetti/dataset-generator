@@ -17,15 +17,9 @@ os.environ["SEMANTIC_ENABLED"] = "false"
 # names; outside development the app turns the former off and prefixes the
 # latter with __Host- (see Config), so pin the test-suite values.
 os.environ["ENABLE_LOCAL_LOGIN"] = "true"
-# Existing tests drive providers through the env; the per-user paths are tested
-# explicitly with their own flags.
-os.environ["ALLOW_ENV_CREDENTIALS"] = "true"
-os.environ["ENABLE_CLAUDE_PROVIDER"] = "true"
 # The Claude provider exists in development and CI only; the suite runs as CI
 # (GitHub Actions sets it anyway). Production behaviour is tested explicitly.
 os.environ["CI"] = "true"
-os.environ["AUTH_COOKIE_NAME"] = "access_token"
-os.environ["AUTH_REFRESH_COOKIE_NAME"] = "refresh_token"
 
 import pytest
 from contextlib import contextmanager
@@ -328,6 +322,19 @@ def client_for(test_db: Session, datasets_db):
     for test_client, test_app in opened:
         test_client.__exit__(None, None, None)
         test_app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _plain_session_cookies(monkeypatch):
+    """The suite talks to the app over plain http (TestClient): outside
+    development the cookies would be Secure and ``__Host-`` prefixed, which an
+    http client never sends back. Production cookie behaviour is tested in
+    test_app_hardening.py with its own settings."""
+    from server.core.config import config
+
+    monkeypatch.setattr(config, "auth_cookie_name", "access_token")
+    monkeypatch.setattr(config, "auth_refresh_cookie_name", "refresh_token")
+    monkeypatch.setattr(config, "auth_cookie_secure", False)
 
 
 @pytest.fixture(autouse=True)

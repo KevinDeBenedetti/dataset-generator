@@ -30,7 +30,7 @@ def _sso_config(monkeypatch):
     monkeypatch.setattr(
         config, "github_redirect_uri", "http://testserver/auth/github/callback"
     )
-    monkeypatch.setattr(config, "oidc_issuer", "")
+    monkeypatch.setattr(config, "infomaniak_issuer", "")
     monkeypatch.setattr(config, "frontend_url", FRONT)
     monkeypatch.setattr(config, "allow_signup", True)
     monkeypatch.setattr(config, "admin_emails_raw", "")
@@ -222,9 +222,9 @@ def test_the_legacy_oidc_routes_still_reach_infomaniak(web, monkeypatch):
             }
         }
     )
-    monkeypatch.setattr(config, "oidc_issuer", "https://login.infomaniak.com")
-    monkeypatch.setattr(config, "oidc_client_id", "cid")
-    monkeypatch.setattr(config, "oidc_client_secret", "secret")
+    monkeypatch.setattr(config, "infomaniak_issuer", "https://login.infomaniak.com")
+    monkeypatch.setattr(config, "infomaniak_client_id", "cid")
+    monkeypatch.setattr(config, "infomaniak_client_secret", "secret")
     monkeypatch.setattr("server.api.auth.get_client", lambda provider: client)
 
     response = web.get("/auth/oidc/callback?code=c&state=s", follow_redirects=False)

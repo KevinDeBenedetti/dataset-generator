@@ -88,9 +88,12 @@ hooks = [
 # ===============================
 [[repos]]
 repo = "local"
+# `bun install` first: apps/next/node_modules is often missing on the host (the
+# dev stack keeps its own in a Docker volume, `make clean` deletes it). With the
+# lockfile and a warm cache it is a near no-op.
 hooks = [
-  { id = "oxlint-next", name = "🔍 Oxlint (Next.js)", entry = "bash -c 'cd apps/next && bun run lint:fix'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs)$''', pass_filenames = false },
-  { id = "oxfmt-next", name = "🎨 Oxfmt (Next.js)", entry = "bash -c 'cd apps/next && bun run format'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs|css|json)$''', pass_filenames = false },
+  { id = "oxlint-next", name = "🔍 Oxlint (Next.js)", entry = "bash -c 'cd apps/next && bun install --frozen-lockfile --silent && bun run lint:fix'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs)$''', pass_filenames = false },
+  { id = "oxfmt-next", name = "🎨 Oxfmt (Next.js)", entry = "bash -c 'cd apps/next && bun install --frozen-lockfile --silent && bun run format'", language = "system", files = '''^apps/next/.*\.(ts|tsx|js|jsx|mjs|css|json)$''', pass_filenames = false },
 ]
 
 # ===============================

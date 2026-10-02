@@ -3,8 +3,7 @@ import { notFound } from 'next/navigation'
 import { AdminGuard, AdminTabs } from '@/components/admin/admin-shell'
 
 // Where the server-side check reaches the API (inside the cluster / compose).
-const API_INTERNAL_URL =
-  process.env.API_INTERNAL_URL || process.env.API_INTERNAL_BASE_URL || 'http://localhost:8000'
+const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://localhost:8000'
 
 // UX only — the API refuses every /admin call from a non-admin anyway. A
 // signed-in non-admin gets a plain 404 here; an expired access token (the

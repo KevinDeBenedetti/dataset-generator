@@ -108,10 +108,3 @@ def database_ready() -> bool:
         return True
     except Exception:  # noqa: BLE001 — any failure means "not ready"
         return False
-
-
-def create_db_and_tables():
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception:
-        raise

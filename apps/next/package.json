@@ -17,7 +17,7 @@
     "pretypecheck": "bun run api:generate",
     "pretest": "bun run api:generate",
     "api:generate": "bun install --cwd openapi-codegen --frozen-lockfile && openapi-codegen/node_modules/.bin/openapi-ts",
-    "api:watch": "bun install --cwd openapi-codegen --frozen-lockfile && OPENAPI_WATCH=1 OPENAPI_INPUT=\"${OPENAPI_INPUT:-${API_INTERNAL_BASE_URL:-${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}}/openapi.json}\" openapi-codegen/node_modules/.bin/openapi-ts"
+    "api:watch": "bun install --cwd openapi-codegen --frozen-lockfile && OPENAPI_WATCH=1 OPENAPI_INPUT=\"${OPENAPI_INPUT:-${API_INTERNAL_URL:-${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}}/openapi.json}\" openapi-codegen/node_modules/.bin/openapi-ts"
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.13.1",

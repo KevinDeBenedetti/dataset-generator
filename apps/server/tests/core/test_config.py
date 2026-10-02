@@ -1,22 +1,20 @@
-"""Tests for the configuration derived from the environment (CORS, env parsing)."""
+"""The configuration: what comes from the environment, what is derived from
+ENVIRONMENT, and the startup checks a production deployment must pass."""
 
+import re
 from dataclasses import replace
 
 import pytest
 
-from server.core.crypto import generate_key
-
 from server.core.config import Config, _env, config
+from server.core.crypto import generate_key
 
 
 class TestEnvBlankHandling:
     """A key present but blank must mean "use the default", not "".
 
-    `.env.example` ships keys with no value and `make env` copies it verbatim,
-    so blanks reach the app. `os.getenv` only defaults when a key is *absent*,
-    which let an empty AUTH_REFRESH_COOKIE_NAME reach `set_cookie(key="")` —
-    a CookieError, so every *successful* login became a 500 while a wrong
-    password still returned a normal 401.
+    `.env.example` ships optional keys with no value and `make env` copies it
+    verbatim; `os.getenv` only defaults when a key is *absent*.
     """
 
     def test_blank_falls_back_to_default(self, monkeypatch):
@@ -35,84 +33,34 @@ class TestEnvBlankHandling:
         monkeypatch.setenv("SOME_KEY", "actual")
         assert _env("SOME_KEY", "fallback") == "actual"
 
-    def test_blank_cookie_name_does_not_become_empty(self, monkeypatch):
-        """The exact regression: a blank cookie name must stay usable."""
-        monkeypatch.setenv("AUTH_REFRESH_COOKIE_NAME", "")
-        monkeypatch.setenv("AUTH_COOKIE_NAME", "")
-        monkeypatch.setenv("ENVIRONMENT", "development")
-
-        cfg = Config()
-
-        assert cfg.auth_refresh_cookie_name == "refresh_token"
-        assert cfg.auth_cookie_name == "access_token"
-
     @pytest.mark.parametrize(
-        "name",
-        [
-            "AUTH_TOKEN_TTL_SECONDS",
-            "AUTH_LOGIN_MAX_ATTEMPTS",
-            "AUTH_LOGIN_WINDOW_SECONDS",
-        ],
+        "name", ["QUOTA_ACTIVE_RUNS", "WORKER_CONCURRENCY", "WORKER_DRAIN_SECONDS"]
     )
     def test_blank_numeric_keys_do_not_crash_at_construction(self, monkeypatch, name):
         """`int("")` / `float("")` would raise before the app could even start."""
         monkeypatch.setenv(name, "")
-
-        cfg = Config()  # must not raise
-
-        assert cfg.auth_token_ttl_seconds >= 0
+        Config()  # must not raise
 
 
-def test_cors_allow_origins_defaults_to_frontend_url():
-    """With CORS_ALLOW_ORIGINS unset, the front-end origin is the only one."""
-    cfg = replace(
-        config,
-        cors_allow_origins_raw="",
-        frontend_url="https://app.example.com",
-    )
-
+def test_cors_allows_the_app_itself_only():
+    cfg = replace(config, frontend_url="https://app.example.com")
     assert cfg.cors_allow_origins == ["https://app.example.com"]
-
-
-def test_cors_allow_origins_never_wildcards():
-    """A credentialed API must not end up allowing every origin."""
-    cfg = replace(config, cors_allow_origins_raw="", frontend_url="")
-
-    assert cfg.cors_allow_origins == []
-    assert "*" not in cfg.cors_allow_origins
-
-
-def test_cors_allow_origins_parses_comma_separated_list():
-    cfg = replace(
-        config,
-        cors_allow_origins_raw="https://a.example.com, https://b.example.com ,",
-        frontend_url="https://ignored.example.com",
-    )
-
-    assert cfg.cors_allow_origins == [
-        "https://a.example.com",
-        "https://b.example.com",
-    ]
+    # A credentialed API must never end up allowing every origin.
+    empty = replace(config, frontend_url="")
+    assert empty.cors_allow_origins == [] and "*" not in empty.cors_allow_origins
 
 
 def test_cors_allow_origin_regex_is_none_outside_development():
-    cfg = replace(config, environment="production")
-
-    assert cfg.cors_allow_origin_regex is None
+    assert replace(config, environment="production").cors_allow_origin_regex is None
 
 
 def test_cors_allow_origin_regex_matches_any_localhost_port_in_development():
-    import re
-
-    cfg = replace(config, environment="development")
-    pattern = cfg.cors_allow_origin_regex
+    pattern = replace(config, environment="development").cors_allow_origin_regex
     assert pattern is not None
-
     assert re.match(pattern, "http://localhost:3020")
     assert re.match(pattern, "http://127.0.0.1:8020")
     assert re.match(pattern, "https://localhost")
-    # An attacker-controlled host that merely starts with "localhost" must not
-    # slip through (the pattern is anchored at the end).
+    # Anchored: a host that merely starts with "localhost" must not slip through.
     assert not re.match(pattern, "http://localhost.evil.com")
     assert not re.match(pattern, "https://evil.com")
 
@@ -134,151 +82,162 @@ class TestReasoningEffort:
         assert Config().openai_reasoning_effort == "high"
 
 
+def _config(monkeypatch, **env) -> Config:
+    """A Config built from a production environment, with overrides."""
+    base = {
+        "ENVIRONMENT": "production",
+        "AUTH_SECRET_KEY": "a" * 48,
+        "DATABASE_URL": "postgresql://u:p@db/app",
+        "FRONTEND_URL": "https://app.example.com",
+        "SECRETS_ENCRYPTION_KEYS": f"k1:{generate_key()}",
+        "GITHUB_CLIENT_ID": "gh",
+        "GITHUB_CLIENT_SECRET": "gh-secret",
+    }
+    for key in (
+        "CI",
+        "GITHUB_ACTIONS",
+        "INFOMANIAK_CLIENT_ID",
+        "INFOMANIAK_CLIENT_SECRET",
+        "API_PUBLIC_URL",
+        "ENABLE_LOCAL_LOGIN",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in {**base, **env}.items():
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+    return Config()
+
+
 class TestProductionHardening:
     """Startup refuses a configuration unsafe for real users."""
 
-    @staticmethod
-    def _prod(monkeypatch, **env):
-        base = {
-            "ENVIRONMENT": "production",
-            "AUTH_SECRET_KEY": "a" * 48,
-            "SESSION_SECRET_KEY": "b" * 48,
-            "AUTH_COOKIE_SECURE": "true",
-            "DATABASE_URL": "postgresql://u:p@db/app",
-            "FRONTEND_URL": "https://app.example.com",
-            "SECRETS_ENCRYPTION_KEYS": f"k1:{generate_key()}",
-            "ALLOW_ENV_CREDENTIALS": "false",
-            "GITHUB_CLIENT_ID": "gh",
-            "GITHUB_CLIENT_SECRET": "gh-secret",
-        }
-        for key in (
-            "CI",
-            "GITHUB_ACTIONS",
-            "ENABLE_CLAUDE_PROVIDER",
-            "OIDC_ISSUER",
-            "OIDC_CLIENT_ID",
-            "OIDC_CLIENT_SECRET",
-            "ALLOWED_LLM_HOSTS",
-            "AUTH_COOKIE_NAME",
-            "AUTH_REFRESH_COOKIE_NAME",
-            "DOCS_ENABLED",
-            "ENABLE_LOCAL_LOGIN",
-        ):
-            monkeypatch.delenv(key, raising=False)
-        for key, value in {**base, **env}.items():
-            if value is None:
-                monkeypatch.delenv(key, raising=False)
-            else:
-                monkeypatch.setenv(key, value)
-        return Config()
-
     def test_a_complete_production_config_is_accepted(self, monkeypatch):
-        cfg = self._prod(monkeypatch)
+        cfg = _config(monkeypatch)
         assert cfg.production_problems() == []
         cfg.ensure_production_config()  # does not raise
 
     def test_development_is_never_flagged(self, monkeypatch):
-        cfg = self._prod(
+        cfg = _config(
             monkeypatch,
             ENVIRONMENT="development",
-            AUTH_COOKIE_SECURE="false",
             DATABASE_URL=None,
-            SESSION_SECRET_KEY=None,
+            SECRETS_ENCRYPTION_KEYS=None,
+            GITHUB_CLIENT_SECRET=None,
         )
         assert cfg.production_problems() == []
 
     @pytest.mark.parametrize(
         "override, needle",
         [
-            ({"AUTH_COOKIE_SECURE": "false"}, "AUTH_COOKIE_SECURE"),
             ({"DATABASE_URL": None}, "DATABASE_URL"),
-            ({"SESSION_SECRET_KEY": None}, "SESSION_SECRET_KEY is required"),
-            ({"SESSION_SECRET_KEY": "a" * 48}, "must differ"),
             ({"FRONTEND_URL": "http://app.example.com"}, "FRONTEND_URL"),
-            ({"AUTH_COOKIE_NAME": "access_token"}, "AUTH_COOKIE_NAME"),
-            ({"AUTH_REFRESH_COOKIE_NAME": "refresh"}, "AUTH_REFRESH_COOKIE_NAME"),
             ({"SECRETS_ENCRYPTION_KEYS": None}, "SECRETS_ENCRYPTION_KEYS is required"),
             (
                 {"SECRETS_ENCRYPTION_KEYS": "k1:short"},
                 "SECRETS_ENCRYPTION_KEYS is invalid",
             ),
-            ({"ALLOW_ENV_CREDENTIALS": "true"}, "ALLOW_ENV_CREDENTIALS must be false"),
             ({"GITHUB_CLIENT_SECRET": None}, "No sign-in method"),
-            ({"ENABLE_CLAUDE_PROVIDER": "true"}, "development and CI only"),
         ],
     )
     def test_each_unsafe_setting_is_reported(self, monkeypatch, override, needle):
-        cfg = self._prod(monkeypatch, **override)
+        cfg = _config(monkeypatch, **override)
         problems = cfg.production_problems()
         assert any(needle in p for p in problems), problems
         with pytest.raises(RuntimeError, match=needle):
             cfg.ensure_production_config()
 
     def test_every_problem_is_listed_at_once(self, monkeypatch):
-        cfg = self._prod(
+        cfg = _config(monkeypatch, DATABASE_URL=None, SECRETS_ENCRYPTION_KEYS=None)
+        assert len(cfg.production_problems()) == 2
+
+    def test_infomaniak_alone_is_a_sign_in_method(self, monkeypatch):
+        cfg = _config(
             monkeypatch,
-            AUTH_COOKIE_SECURE="false",
-            DATABASE_URL=None,
-            SESSION_SECRET_KEY=None,
+            GITHUB_CLIENT_SECRET=None,
+            INFOMANIAK_CLIENT_ID="ik",
+            INFOMANIAK_CLIENT_SECRET="ik-secret",
         )
-        assert len(cfg.production_problems()) == 3
+        assert cfg.production_problems() == []
 
-    def test_production_defaults_keep_platform_keys_out_and_claude_off(
-        self, monkeypatch
-    ):
-        cfg = self._prod(monkeypatch, ALLOW_ENV_CREDENTIALS=None)
-        assert cfg.allow_env_credentials is False
-        assert cfg.enable_claude_provider is False
-        assert cfg.claude_provider_available is False
-        assert cfg.allow_custom_base_url is False
-        assert cfg.allowed_llm_hosts == ["api.openai.com"]
+    def test_local_login_alone_is_a_sign_in_method(self, monkeypatch):
+        cfg = _config(monkeypatch, GITHUB_CLIENT_SECRET=None, ENABLE_LOCAL_LOGIN="true")
+        assert cfg.production_problems() == []
 
-    def test_claude_never_runs_on_a_deployed_server_even_when_enabled(
-        self, monkeypatch
-    ):
-        cfg = self._prod(monkeypatch)
-        cfg.enable_claude_provider = True  # e.g. a forgotten env var
-        assert cfg.claude_provider_available is False
 
-    def test_claude_runs_in_ci_and_development(self, monkeypatch):
-        ci = self._prod(monkeypatch, GITHUB_ACTIONS="true")
-        assert ci.enable_claude_provider and ci.claude_provider_available
-        assert ci.production_problems() == []  # the CI job is not a deployment
-        dev = self._prod(monkeypatch, ENVIRONMENT="development", GITHUB_ACTIONS=None)
-        assert dev.claude_provider_available
+class TestDerivedFromEnvironment:
+    """What a deployment can't get wrong is not configurable: ENVIRONMENT decides."""
 
-    def test_allowed_llm_hosts_are_extended_from_the_env(self, monkeypatch):
-        cfg = self._prod(monkeypatch, ALLOWED_LLM_HOSTS="Gateway.Example.com, ,x.io")
-        assert cfg.allowed_llm_hosts == [
-            "api.openai.com",
-            "gateway.example.com",
-            "x.io",
-        ]
-
-    def test_production_defaults(self, monkeypatch):
-        cfg = self._prod(monkeypatch)
+    def test_production(self, monkeypatch):
+        cfg = _config(monkeypatch)
+        assert cfg.auth_cookie_secure is True
         assert cfg.auth_cookie_name == "__Host-access_token"
         assert cfg.auth_refresh_cookie_name == "__Host-refresh_token"
         assert cfg.session_cookie_name == "__Host-session"
         assert cfg.enable_local_login is False
         assert cfg.docs_enabled is False
+        # Users bring their own keys; the Claude subscription never runs.
+        assert cfg.allow_env_credentials is False
+        assert cfg.claude_provider_available is False
+        assert cfg.allowed_llm_hosts == ["api.openai.com"]
+        assert cfg.allow_custom_base_url is False
 
-    def test_development_defaults(self, monkeypatch):
-        cfg = self._prod(monkeypatch, ENVIRONMENT="development")
+    def test_development(self, monkeypatch):
+        cfg = _config(monkeypatch, ENVIRONMENT="development")
+        assert cfg.auth_cookie_secure is False
         assert cfg.auth_cookie_name == "access_token"
         assert cfg.session_cookie_name == "session"
         assert cfg.enable_local_login is True
         assert cfg.docs_enabled is True
+        assert cfg.allow_env_credentials is True
+        assert cfg.claude_provider_available is True
 
-    def test_flags_can_be_overridden(self, monkeypatch):
-        cfg = self._prod(monkeypatch, ENABLE_LOCAL_LOGIN="true", DOCS_ENABLED="true")
-        assert cfg.enable_local_login is True and cfg.docs_enabled is True
-        cfg = self._prod(
+    def test_claude_runs_in_ci_but_never_on_a_deployed_server(self, monkeypatch):
+        ci = _config(monkeypatch, GITHUB_ACTIONS="true")
+        assert ci.claude_provider_available
+        assert ci.production_problems() == []  # the CI job is not a deployment
+        deployed = _config(monkeypatch)
+        deployed.enable_claude_provider = True  # forced on: still unavailable
+        assert deployed.claude_provider_available is False
+
+    def test_local_login_can_be_switched(self, monkeypatch):
+        assert _config(monkeypatch, ENABLE_LOCAL_LOGIN="true").enable_local_login
+        dev = _config(
             monkeypatch, ENVIRONMENT="development", ENABLE_LOCAL_LOGIN="false"
         )
-        assert cfg.enable_local_login is False
+        assert dev.enable_local_login is False
 
-    def test_session_secret_falls_back_only_when_unset(self, monkeypatch):
-        cfg = self._prod(monkeypatch, SESSION_SECRET_KEY=None)
-        assert cfg.effective_session_secret == cfg.auth_secret_key
-        assert self._prod(monkeypatch).effective_session_secret == "b" * 48
+
+class TestPublicUrls:
+    """One API URL drives both SSO callbacks."""
+
+    def test_production_serves_the_api_under_the_app_host(self, monkeypatch):
+        cfg = _config(monkeypatch)
+        assert cfg.public_api_url == "https://app.example.com/api"
+        assert (
+            cfg.github_redirect_uri
+            == "https://app.example.com/api/auth/github/callback"
+        )
+        assert (
+            cfg.infomaniak_redirect_uri
+            == "https://app.example.com/api/auth/infomaniak/callback"
+        )
+
+    def test_an_explicit_api_url_wins(self, monkeypatch):
+        cfg = _config(monkeypatch, API_PUBLIC_URL="http://localhost:8020/")
+        assert cfg.public_api_url == "http://localhost:8020"
+        assert cfg.github_redirect_uri == "http://localhost:8020/auth/github/callback"
+
+    def test_development_defaults_to_the_local_api(self, monkeypatch):
+        cfg = _config(monkeypatch, ENVIRONMENT="development")
+        assert cfg.public_api_url == "http://localhost:8000"
+
+
+def test_the_sso_state_cookie_key_is_derived_never_the_jwt_key(monkeypatch):
+    cfg = _config(monkeypatch)
+    assert cfg.effective_session_secret != cfg.auth_secret_key
+    assert len(cfg.effective_session_secret) == 64
+    # Rotating AUTH_SECRET_KEY rotates it too.
+    other = _config(monkeypatch, AUTH_SECRET_KEY="z" * 48)
+    assert other.effective_session_secret != cfg.effective_session_secret

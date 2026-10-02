@@ -94,12 +94,15 @@ class SsoProvider:
 def _register_infomaniak(oauth: OAuth) -> None:
     oauth.register(
         name="infomaniak",
-        client_id=config.oidc_client_id,
-        client_secret=config.oidc_client_secret,
+        client_id=config.infomaniak_client_id,
+        client_secret=config.infomaniak_client_secret,
         server_metadata_url=(
-            config.oidc_issuer.rstrip("/") + "/.well-known/openid-configuration"
+            config.infomaniak_issuer.rstrip("/") + "/.well-known/openid-configuration"
         ),
-        client_kwargs={"scope": config.oidc_scopes, "code_challenge_method": "S256"},
+        client_kwargs={
+            "scope": config.infomaniak_scopes,
+            "code_challenge_method": "S256",
+        },
     )
 
 
@@ -123,9 +126,11 @@ PROVIDERS: Dict[str, SsoProvider] = {
         name="infomaniak",
         label="Infomaniak",
         configured=lambda: bool(
-            config.oidc_issuer and config.oidc_client_id and config.oidc_client_secret
+            config.infomaniak_issuer
+            and config.infomaniak_client_id
+            and config.infomaniak_client_secret
         ),
-        redirect_uri=lambda: config.oidc_redirect_uri,
+        redirect_uri=lambda: config.infomaniak_redirect_uri,
         register=_register_infomaniak,
         identity=_infomaniak_identity,
     ),

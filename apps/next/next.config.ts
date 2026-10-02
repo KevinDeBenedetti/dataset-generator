@@ -1,8 +1,7 @@
 import type { NextConfig } from 'next'
 
 // Where the API lives, for the /api rewrite below (server-side only).
-const API_INTERNAL_URL =
-  process.env.API_INTERNAL_URL || process.env.API_INTERNAL_BASE_URL || 'http://localhost:8000'
+const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://localhost:8000'
 
 const nextConfig: NextConfig = {
   /* config options here */

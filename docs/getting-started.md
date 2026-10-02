@@ -36,13 +36,13 @@ Services started by Docker Compose:
 
 | Service    | Role                                         | Host port                       |
 | ---------- | -------------------------------------------- | ------------------------------- |
-| `next`     | Web UI (Next.js)                             | `NEXT_PORT` (default `3000`)    |
-| `server`   | REST API (FastAPI)                           | `SERVER_PORT` (default `8000`)  |
+| `next`     | Web UI (Next.js)                             | `NEXT_PORT` (default `3020`)    |
+| `server`   | REST API (FastAPI)                           | `SERVER_PORT` (default `8020`)  |
+| `worker`   | Runs the queued dataset jobs                 | —                               |
 
-Ports are driven entirely by `.env` — set `NEXT_PORT` / `SERVER_PORT` (and point
-`NEXT_PUBLIC_API_BASE_URL` at the API's host port) when the defaults collide with
-another local stack. `make dev` prints the resolved URLs once every service is
-healthy, so use those rather than assuming the defaults.
+Set `NEXT_PORT` / `SERVER_PORT` in `.env` when the defaults collide with another
+local stack: compose derives the browser's API URL and the SSO callbacks from
+them. `make dev` prints the resolved URLs once every service is healthy.
 
 ## Generate a dataset
 
@@ -53,14 +53,14 @@ From the UI, open the **Generate** page and pick a source:
 
 Each step's model (cleaning, Q&A, vision) defaults to what is set on the
 **Models** page and can be overridden per generation. A model is a
-`"<provider>:<model>"` reference: `openai:…` (OpenAI-compatible API,
-`OPENAI_API_KEY`) or `claude:…` (Claude subscription through the Claude Agent
-SDK, `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`).
+`"<provider>:<model>"` reference: `openai:…` (OpenAI-compatible API, on the key
+saved in **Settings**) or, in local development and CI only, `claude:…` (Claude
+subscription through the Claude Agent SDK, a token from `claude setup-token`).
 
 Or via the API (replace the port with your `SERVER_PORT` if you changed it):
 
 ```bash
-curl -X POST http://localhost:8000/dataset/generate/url \
+curl -X POST http://localhost:8020/dataset/generate/url \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://docs.example.com/guide",
@@ -87,7 +87,7 @@ Set `HF_TOKEN` (a token with write access) in `.env`, then use **Export to
 Hugging Face** on a dataset's page — or call it directly:
 
 ```bash
-curl -X POST http://localhost:8000/dataset/my-dataset/export/huggingface
+curl -X POST http://localhost:8020/dataset/my-dataset/export/huggingface
 ```
 
 The dataset repo is always created **private**. If a repo with that id already

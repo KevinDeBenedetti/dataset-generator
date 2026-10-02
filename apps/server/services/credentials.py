@@ -5,10 +5,9 @@ explicitly to everything that calls a paid or private API — there is no
 process-wide "current key". Two sources:
 
 * :func:`resolve_credentials` — the signed-in user's own secrets and settings
-  (services/user_secrets.py). Where ``ALLOW_ENV_CREDENTIALS`` is on (development
-  only by default) a value the user hasn't entered falls back to the server's
-  env var; production never falls back, so a user who added no key gets
-  "not configured", never someone else's.
+  (services/user_secrets.py). In development only, a value the user hasn't
+  entered falls back to the server's env var; production never falls back, so
+  a user who added no key gets "not configured", never someone else's.
 * :meth:`Credentials.from_env` — the server's own env, for the scheduled CI jobs.
 
 Secrets are ``SecretStr``: they print as ``**********`` in logs, reprs and
@@ -119,8 +118,3 @@ def resolve_credentials(user_id: str) -> Credentials:
     if config.allow_env_credentials:
         creds = creds.filled_from(Credentials.from_env())
     return creds
-
-
-def env_credentials() -> Credentials:
-    """The credentials of an actor with no account: the CI cron entrypoints."""
-    return Credentials.from_env()

@@ -10,7 +10,7 @@ services:
       dockerfile: Dockerfile
       target: dev
       args:
-        APP_PORT: ${NEXT_PORT:-3000}
+        APP_PORT: ${NEXT_PORT:-3020}
       # Enable BuildKit for optimizations
       x-bake:
         cache-from:
@@ -22,21 +22,23 @@ services:
     # Bridge NEXT_PORT (project convention) to PORT, which `next dev -p` honours,
     # so a single variable drives the host mapping, container port, healthcheck and Next.
     environment:
-      PORT: ${NEXT_PORT:-3000}
+      PORT: ${NEXT_PORT:-3020}
       # Dev log console (DEBUG_LOGS=1 make dev). DEBUG_LOGS drives both the
       # server-side capture + SSE proxy and the client-side terminal widget.
       DEBUG_LOGS: ${DEBUG_LOGS:-}
       NEXT_PUBLIC_DEBUG_LOGS: ${DEBUG_LOGS:-}
-      # Server-to-server URL for the FastAPI SSE proxy (browser uses localhost).
-      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://server:8000}
+      # Server-to-server URL of the API (rewrites, admin check, SSE proxy).
+      API_INTERNAL_URL: http://server:8000
+      # The browser calls the API directly on its host port in development.
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${SERVER_PORT:-8020}
     ports:
-      - ${NEXT_HOST_PORT:-${NEXT_PORT:-3000}}:${NEXT_PORT:-3000}
+      - ${NEXT_PORT:-3020}:${NEXT_PORT:-3020}
     volumes:
       - ./apps/next:/app
       - next_node_modules:/app/node_modules
     healthcheck:
       test:
-        ["CMD", "curl", "-f", "http://localhost:${NEXT_PORT:-3000}/api/health"]
+        ["CMD", "curl", "-f", "http://localhost:${NEXT_PORT:-3020}/api/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -72,6 +74,11 @@ services:
       # Shared login rate-limiter store; in-network address. Override REDIS_URL
       # in .env to point at a managed Redis.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      # Local stack: development mode, URLs derived from the ports above.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:${NEXT_PORT:-3020}}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:${SERVER_PORT:-8020}}
       # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
       DEBUG_LOGS: ${DEBUG_LOGS:-}
       # Local embedding model (services/semantic.py), cached in the
@@ -88,7 +95,7 @@ services:
       dockerfile: ./apps/server/Dockerfile
       target: dev
       args:
-        APP_PORT: ${SERVER_PORT:-8000}
+        APP_PORT: ${SERVER_PORT:-8020}
       # Enable BuildKit for optimizations
       x-bake:
         cache-from:
@@ -96,7 +103,7 @@ services:
         cache-to:
           - type=local,dest=/tmp/.buildx-cache
     ports:
-      - "${SERVER_HOST_PORT:-${SERVER_PORT:-8000}}:8000"
+      - "${SERVER_PORT:-8020}:8000"
     volumes:
       - ./apps/server:/app/server
       - ./pyproject.toml:/app/pyproject.toml:ro
@@ -125,6 +132,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       FASTEMBED_CACHE_PATH: /app/.cache/fastembed
       RUN_MIGRATIONS_ON_STARTUP: "false"
     build:
@@ -132,7 +141,7 @@ services:
       dockerfile: ./apps/server/Dockerfile
       target: dev
       args:
-        APP_PORT: ${SERVER_PORT:-8000}
+        APP_PORT: ${SERVER_PORT:-8020}
     command: ["uv", "run", "--no-sync", "python", "-m", "server.worker"]
     volumes:
       - ./apps/server:/app/server

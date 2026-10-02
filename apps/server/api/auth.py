@@ -286,7 +286,7 @@ async def _start(request: Request, provider: SsoProvider) -> Response:
 
 
 # The Infomaniak routes registered before GitHub existed — kept so an already
-# configured OIDC_REDIRECT_URI keeps working. Declared before the
+# configured redirect URI (/auth/oidc/callback) keeps working. Declared before the
 # /{provider_name}/… routes, which would otherwise capture "oidc".
 @router.get("/oidc/login", include_in_schema=False)
 async def oidc_login(request: Request):
