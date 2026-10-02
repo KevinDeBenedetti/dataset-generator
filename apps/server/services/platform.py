@@ -1,11 +1,11 @@
-"""Platform-wide switches: a row in ``platform_settings`` overrides the env default.
+"""Platform-wide switches, set by admins in the backoffice (``platform_settings``).
 
-| key                     | type      | env default                |
-| ----------------------- | --------- | -------------------------- |
-| ``allow_signup``         | bool      | ``ALLOW_SIGNUP``            |
-| ``allowed_email_domains``| [str]     | ``ALLOWED_EMAIL_DOMAINS``   |
-| ``allowed_llm_hosts``    | [str]     | ``ALLOWED_LLM_HOSTS``       |
-| ``allow_custom_base_url``| bool      | ``ALLOW_CUSTOM_BASE_URL``   |
+| key                     | type  | default (no row)                 |
+| ----------------------- | ----- | -------------------------------- |
+| ``allow_signup``         | bool  | true — a first SSO sign-in creates an account |
+| ``allowed_email_domains``| [str] | [] — any domain                  |
+| ``allowed_llm_hosts``    | [str] | [] — api.openai.com only         |
+| ``allow_custom_base_url``| bool  | false                            |
 
 Values are cached for a few seconds per process (they are read on every model
 call); a change made on one replica reaches the others within that delay.
@@ -102,7 +102,7 @@ def _stored() -> Dict[str, Any]:
                 if row.key in SWITCHES:
                     values[row.key] = row.value
     except Exception as exc:  # noqa: BLE001 — a DB blip must not break model calls
-        logger.warning("Could not read platform settings, using env defaults: %s", exc)
+        logger.warning("Could not read platform settings, using the defaults: %s", exc)
         return {}
     _cache = (now, values)
     return values
@@ -127,7 +127,7 @@ def snapshot() -> List[Dict[str, Any]]:
 
 
 def update(db: Session, actor: User, changes: Dict[str, Any], ip: Optional[str] = None):
-    """Validate then store ``changes``; ``None`` resets a switch to its env default.
+    """Validate then store ``changes``; ``None`` resets a switch to its default.
     ValueError names the first invalid one."""
     validated: Dict[str, Any] = {}
     for key, value in changes.items():

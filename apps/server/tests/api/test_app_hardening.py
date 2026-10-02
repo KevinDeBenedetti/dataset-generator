@@ -16,7 +16,6 @@ def production(monkeypatch):
     monkeypatch.setattr(config, "docs_enabled", False)
     monkeypatch.setattr(config, "auth_cookie_secure", True)
     monkeypatch.setattr(config, "frontend_url", "https://app.example.com")
-    monkeypatch.setattr(config, "cors_allow_origins_raw", "")
     monkeypatch.setattr(config, "enable_local_login", False)
     return TestClient(create_app(), base_url="https://app.example.com")
 
@@ -96,13 +95,16 @@ class TestDevelopment:
         assert "strict-transport-security" not in response.headers
 
 
-def test_the_oauth_state_cookie_uses_the_session_secret_and_a_short_life(monkeypatch):
-    monkeypatch.setattr(config, "session_secret_key", "s" * 40)
+def test_the_oauth_state_cookie_uses_a_derived_key_and_a_short_life(monkeypatch):
     monkeypatch.setattr(config, "environment", "production")
+    monkeypatch.setattr(config, "auth_secret_key", "a" * 48)
     app = create_app()
     session = next(m for m in app.user_middleware if m.cls is SessionMiddleware)
-    assert session.kwargs["secret_key"] == "s" * 40
+    # Derived from AUTH_SECRET_KEY, never the JWT key itself.
+    assert session.kwargs["secret_key"] == config.effective_session_secret
     assert session.kwargs["secret_key"] != config.auth_secret_key
+    monkeypatch.setattr(config, "auth_secret_key", "b" * 48)
+    assert config.effective_session_secret != session.kwargs["secret_key"]
     assert session.kwargs["max_age"] == 600
     assert session.kwargs["session_cookie"] == "__Host-session"
 
@@ -124,8 +126,8 @@ class TestStartup:
 
     def test_unsafe_production_config_refuses_to_boot(self, quiet, monkeypatch):
         monkeypatch.setattr(config, "environment", "production")
-        monkeypatch.setattr(config, "auth_cookie_secure", False)
-        with pytest.raises(RuntimeError, match="AUTH_COOKIE_SECURE"):
+        monkeypatch.setattr(config, "secrets_encryption_keys_raw", "")
+        with pytest.raises(RuntimeError, match="SECRETS_ENCRYPTION_KEYS"):
             with TestClient(create_app()):
                 pass
         quiet.assert_not_called()  # it never got as far as the database

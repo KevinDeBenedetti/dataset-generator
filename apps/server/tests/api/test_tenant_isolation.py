@@ -51,7 +51,6 @@ def bob(test_db: Session) -> User:
 def _one_database(monkeypatch, datasets_db):
     """Job runs and collections open their own sessions: same test database."""
     monkeypatch.setattr("server.services.jobs.get_scoped_db", datasets_db)
-    monkeypatch.setattr("server.core.config.config.hf_token", "hf_test")
 
 
 @pytest.fixture

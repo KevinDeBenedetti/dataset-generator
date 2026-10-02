@@ -6,10 +6,10 @@ For an :class:`~server.services.sso.ExternalIdentity` coming back from a provide
 2. **Linking** (the user started the flow from Settings while signed in): the
    identity joins *that* account, unless it already belongs to another one.
 3. **Trusted email** — the provider says the email is verified *and* the
-   provider is in ``SSO_TRUSTED_EMAIL_PROVIDERS``: the account with that email
+   provider is a trusted one (Infomaniak, GitHub): the account with that email
    (this is how an existing password account starts using SSO). Audited.
 4. **Sign-up** — a new account, only with a verified email, when sign-up is
-   open (``ALLOW_SIGNUP``) and the domain allowed (``ALLOWED_EMAIL_DOMAINS``).
+   open and the domain allowed (backoffice platform switches).
    ``ADMIN_EMAILS`` can always sign up.
 
 An unverified email never links and never creates an account: otherwise anyone

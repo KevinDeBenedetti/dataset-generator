@@ -276,7 +276,9 @@ def fake_sdk(monkeypatch):
         ClaudeAgentOptions=lambda **kw: SimpleNamespace(**kw),
     )
     monkeypatch.setitem(sys.modules, "claude_agent_sdk", module)
-    monkeypatch.setenv("CLAUDE_CLI_PATH", "/usr/local/bin/claude")
+    monkeypatch.setattr(
+        claude_module, "_claude_binary", lambda: "/usr/local/bin/claude"
+    )
     return SimpleNamespace(calls=calls, outcome=outcome)
 
 

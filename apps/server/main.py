@@ -143,8 +143,8 @@ def create_app() -> FastAPI:
     # The session is carried by cookies, so CORS is credentialed and must name
     # the allowed origins explicitly: with allow_origins=["*"], Starlette answers
     # a credentialed request by reflecting the caller's origin, which would let
-    # any site read authenticated responses. Origins come from CORS_ALLOW_ORIGINS
-    # (or FRONTEND_URL); local dev additionally accepts any localhost port. In
+    # any site read authenticated responses. The only origin is FRONTEND_URL;
+    # local dev additionally accepts any localhost port. In
     # the single-host production topology the browser never sends a cross-origin
     # request, so this is inert there — but it stays strict, and narrow.
     app.add_middleware(

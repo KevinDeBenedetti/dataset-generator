@@ -3,14 +3,10 @@ import type { NextRequest } from 'next/server'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 
-// Names of the httpOnly auth cookies set by the API (see AUTH_COOKIE_NAME and
-// AUTH_REFRESH_COOKIE_NAME). Read at *runtime* on the server (not inlined at
-// build like NEXT_PUBLIC_*), so one image serves any environment. The defaults
-// mirror the API's: outside development the cookies carry the `__Host-` prefix.
-const AUTH_COOKIE =
-  process.env.AUTH_COOKIE_NAME || (IS_PROD ? '__Host-access_token' : 'access_token')
-const REFRESH_COOKIE =
-  process.env.AUTH_REFRESH_COOKIE_NAME || (IS_PROD ? '__Host-refresh_token' : 'refresh_token')
+// Names of the httpOnly auth cookies set by the API — the same rule as the
+// API's config: outside development they carry the `__Host-` prefix.
+const AUTH_COOKIE = IS_PROD ? '__Host-access_token' : 'access_token'
+const REFRESH_COOKIE = IS_PROD ? '__Host-refresh_token' : 'refresh_token'
 
 // Origin of an absolute API base URL, if one is configured (in the default
 // single-host production topology the API is same-origin under /api).

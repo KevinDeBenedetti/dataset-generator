@@ -19,8 +19,6 @@ function request(cookie?: string, path = '/dashboard') {
 
 describe('blank values fall back to the defaults', () => {
   it('proxy still recognises the default refresh cookie', async () => {
-    vi.stubEnv('AUTH_COOKIE_NAME', '')
-    vi.stubEnv('AUTH_REFRESH_COOKIE_NAME', '')
     const { proxy } = await import('./proxy')
 
     // Access cookie already expired: only the refresh cookie is left.
@@ -41,8 +39,6 @@ describe('blank values fall back to the defaults', () => {
 describe('production', () => {
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'production')
-    vi.stubEnv('AUTH_COOKIE_NAME', '')
-    vi.stubEnv('AUTH_REFRESH_COOKIE_NAME', '')
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', '')
   })
 
@@ -60,13 +56,6 @@ describe('production', () => {
     // The unprefixed dev names no longer count as a session.
     const denied = proxy(request('refresh_token=abc'))
     expect(denied.headers.get('location')).toContain('/login?from=%2Fdashboard')
-  })
-
-  it('cookie names can be overridden at runtime', async () => {
-    vi.stubEnv('AUTH_REFRESH_COOKIE_NAME', '__Host-custom')
-    const { proxy } = await import('./proxy')
-
-    expect(proxy(request('__Host-custom=abc')).headers.get('location')).toBeNull()
   })
 
   it('sends a per-request CSP whose nonce is also handed to the app', async () => {

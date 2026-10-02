@@ -34,7 +34,7 @@ setup:
 ## (FastAPI + Next.js logs streamed over SSE; toggle it with Ctrl-` in the UI).
 dev: env check-docker check-ports
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
-	n="$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}"; s="$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}"; \
+	n="$${NEXT_PORT:-3020}"; s="$${SERVER_PORT:-8020}"; \
 	printf '\n  \033[1;36m▶ Building & starting the stack — Ctrl-C stops it\033[0m\n'; \
 	printf '    (service URLs are shown below once every service is healthy)\n\n'; \
 	( \
@@ -62,13 +62,13 @@ check-docker:
 		exit 1; \
 	fi
 
-## Free dev ports (NEXT_HOST_PORT/NEXT_PORT, SERVER_HOST_PORT/SERVER_PORT, POSTGRES_HOST_PORT) if a crashed run left them bound.
+## Free dev ports (NEXT_PORT, SERVER_PORT, POSTGRES_HOST_PORT) if a crashed run left them bound.
 ## Releases this project's own containers via `compose down`; for anything else it
 ## diagnoses and aborts (it never kills the Docker daemon to "free" a port).
 check-ports:
 	@set -a; [ -f .env ] && . ./.env 2>/dev/null; set +a; \
 	docker compose down --remove-orphans >/dev/null 2>&1 || true; \
-	for p in "$${NEXT_HOST_PORT:-$${NEXT_PORT:-3000}}" "$${SERVER_HOST_PORT:-$${SERVER_PORT:-8000}}" "$${POSTGRES_HOST_PORT:-5452}"; do \
+	for p in "$${NEXT_PORT:-3020}" "$${SERVER_PORT:-8020}" "$${POSTGRES_HOST_PORT:-5452}"; do \
 		holder="$$(lsof -nP -iTCP:$$p -sTCP:LISTEN +c0 -F c 2>/dev/null | sed -n 's/^c//p' | head -n1)"; \
 		[ -z "$$holder" ] && continue; \
 		cname="$$(docker ps --filter "publish=$$p" --format '{{.Names}}' 2>/dev/null | head -n1)"; \

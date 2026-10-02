@@ -19,7 +19,6 @@ through the SDK's streaming-input mode, as ``image`` content blocks.
 
 import base64
 import logging
-import os
 import shutil
 import stat
 import tempfile
@@ -79,10 +78,7 @@ def _wrapper() -> str:
 
 
 def _claude_binary() -> str:
-    """The real Claude Code binary: CLAUDE_CLI_PATH, the SDK's bundled copy, or PATH."""
-    explicit = os.environ.get("CLAUDE_CLI_PATH", "").strip()
-    if explicit:
-        return explicit
+    """The real Claude Code binary: the SDK's bundled copy, else ``claude`` on PATH."""
     try:
         import claude_agent_sdk  # ty: ignore[unresolved-import]
 

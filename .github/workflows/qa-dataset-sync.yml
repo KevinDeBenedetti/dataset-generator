@@ -66,9 +66,9 @@ jobs:
           GITHUB_USERNAME: ${{ vars.DATASET_GITHUB_USERNAME || github.repository_owner }}
           GITHUB_TOKEN: ${{ secrets.DATASET_GITHUB_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
-          # Optional "<provider>:<model>" override (default: claude:$CLAUDE_MODEL).
-          QA_JOB_MODEL: ${{ vars.QA_JOB_MODEL }}
+          # "<provider>:<model>": the QA_JOB_MODEL repo variable, else
+          # claude:<CLAUDE_MODEL variable>, else the app default.
+          QA_JOB_MODEL: ${{ vars.QA_JOB_MODEL || (vars.CLAUDE_MODEL && format('claude:{0}', vars.CLAUDE_MODEL)) || '' }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_QA_DATASET_REPO: ${{ secrets.HF_QA_DATASET_REPO }}
           HF_QA_DATASET_LICENSE: ${{ vars.HF_QA_DATASET_LICENSE }}
