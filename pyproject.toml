@@ -10,7 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     # Capped below 3.0 until the provider (services/providers/openai.py) is
     # checked against the 3.x client.
-    "openai>=2.44.0,<3.0.0",
+    "openai>=3.22.1,<4.0.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
     "sqlalchemy>=2.0.40",
@@ -43,7 +43,7 @@ dev = [
     # Tests run against a real, throwaway Postgres container (there is no
     # embeddable Postgres, and the app is Postgres-only now), so Docker must be
     # reachable to run the suite.
-    "testcontainers[postgres]>=4.9.0",
+    "testcontainers[postgres]>=4.15.0",
     "ruff>=0.16.9",
     "ty>=0.0.84",
     "prek>=0.5.4",
