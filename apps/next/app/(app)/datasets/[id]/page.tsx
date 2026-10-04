@@ -102,7 +102,8 @@ export default function DatasetDetailPage() {
   const history = sourcesQuery.data?.history ?? []
 
   const totalPages = Math.ceil((qaResponse?.total_count ?? 0) / (qaResponse?.limit || PAGE_SIZE))
-  const now = Date.now()
+  // Read once per mount: relativeTime() is day-granular.
+  const [now] = useState(() => Date.now())
 
   const addSourceHref = `/generate?dataset=${encodeURIComponent(datasetName)}`
 

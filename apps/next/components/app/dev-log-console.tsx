@@ -85,6 +85,8 @@ export function DevLogConsole() {
     if (paused) return
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
+    // `logs` is not read here: a new line is what triggers the scroll.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [logs, paused])
 
   const clear = useCallback(() => setLogs([]), [])

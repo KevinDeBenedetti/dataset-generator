@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { usePlatform, useUpdatePlatform } from '@/hooks/use-admin'
 import type { PlatformSwitch } from '@/api/sdk'
@@ -9,9 +9,6 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
   const save = useUpdatePlatform()
   const isList = Array.isArray(item.value)
   const [text, setText] = useState(isList ? (item.value as string[]).join(', ') : '')
-  useEffect(() => {
-    if (Array.isArray(item.value)) setText((item.value as string[]).join(', '))
-  }, [item.value])
 
   const submit = (value: unknown) =>
     save.mutate(
@@ -95,7 +92,8 @@ export default function AdminPlatformPage() {
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {error && <p className="hint">{error.message}</p>}
         {(data?.settings ?? []).map((item) => (
-          <SwitchRow key={item.key} item={item} />
+          // Keyed by value: a saved change remounts the row with fresh input state.
+          <SwitchRow key={`${item.key}:${JSON.stringify(item.value)}`} item={item} />
         ))}
       </div>
     </div>

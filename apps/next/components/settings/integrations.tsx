@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import {
@@ -236,12 +236,22 @@ function SecretRow({ def, status }: { def: SecretDef; status?: SecretStatus }) {
 
 function SettingsFields({ defs }: { defs: SettingDef[] }) {
   const { data } = useSettings()
+  if (defs.length === 0) return null
+  // Keyed by the saved values: a save (or a reload) remounts the form with an
+  // empty draft, instead of resetting it from an effect.
+  return <SettingsForm key={JSON.stringify(data ?? {})} defs={defs} data={data} />
+}
+
+function SettingsForm({
+  defs,
+  data,
+}: {
+  defs: SettingDef[]
+  data: Partial<Record<SettingKey, string>> | undefined
+}) {
   const save = useSaveSettings()
   const [draft, setDraft] = useState<Partial<Record<SettingKey, string>>>({})
 
-  useEffect(() => setDraft({}), [data])
-
-  if (defs.length === 0) return null
   const current = (key: SettingKey) => draft[key] ?? data?.[key] ?? ''
   const dirty = defs.some(
     (d) => draft[d.key] !== undefined && draft[d.key] !== (data?.[d.key] ?? ''),

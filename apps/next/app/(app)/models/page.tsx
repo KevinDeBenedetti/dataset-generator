@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
@@ -110,12 +110,11 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
 export default function ModelsPage() {
   const modelsQuery = useModels(true)
   const updateMutation = useUpdateModelDefaults()
-  const [draft, setDraft] = useState<Record<string, string>>({})
+  // Only what the user has edited; everything else shows the saved defaults.
+  const [edits, setEdits] = useState<Record<string, string>>({})
 
   const defaults = modelsQuery.data?.defaults
-  useEffect(() => {
-    if (defaults) setDraft(defaults)
-  }, [defaults])
+  const draft: Record<string, string> = { ...defaults, ...edits }
 
   const changed = Object.entries(draft).filter(([role, ref]) => ref && defaults?.[role] !== ref)
 
@@ -183,7 +182,7 @@ export default function ModelsPage() {
                   <ModelSelect
                     id={`role-${role}`}
                     value={draft[role] ?? ''}
-                    onChange={(ref) => setDraft((d) => ({ ...d, [role]: ref }))}
+                    onChange={(ref) => setEdits((e) => ({ ...e, [role]: ref }))}
                     allowDefault={false}
                     disabled={updateMutation.isPending}
                     className="input"
