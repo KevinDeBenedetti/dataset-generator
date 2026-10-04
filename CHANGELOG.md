@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.1...v0.10.2) (2026-10-04)
+
+
+### Chores
+
+* **next:** refactor state management and update lockfiles ([05baa98](https://github.com/KevinDeBenedetti/dataset-generator/commit/05baa98fb7000d3019981c3e2b4a4b271462e071))
+
 ## [0.10.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.0...v0.10.1) (2026-10-04)
 
 
