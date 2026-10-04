@@ -113,6 +113,40 @@ With `RUN_MIGRATIONS_ON_STARTUP=false`, migrations are left to a deployment step
 losing it means every user re-enters their keys. Rotate by prepending a new key,
 running `python -m server.cli rewrap-secrets`, then dropping the old one.
 
+### Images and deployment
+
+`.github/workflows/images.yml` builds the production images (`target: prod`) and
+publishes them to GHCR: `ghcr.io/<owner>/dataset-generator-server` (the API **and**
+the job worker — same image, the worker just runs `python -m server.worker`) and
+`ghcr.io/<owner>/dataset-generator-next`. A `v*` tag (made when the release-please
+PR is merged on `main`) produces `:vX.Y.Z` and `:latest`; a manual run from
+`main` tags `:sha-<short>`. Nothing is built from other branches, and a tag that
+is not on `main` is refused. amd64 only unless the
+`IMAGE_PLATFORMS` repository variable says otherwise (`linux/amd64,linux/arm64`).
+A release is only deployable once that workflow is green — a tag without an image
+leaves the deployment's migration Job in `ImagePullBackOff`.
+
+What a deployment runs, from the server image:
+
+| Workload | Command | Probes |
+| --- | --- | --- |
+| API | *(image default)* uvicorn, `WEB_CONCURRENCY` workers | liveness `GET /health`, readiness `GET /ready` |
+| Worker | `python -m server.worker` | — (drains on SIGTERM) |
+| Migration Job | `python -m server.cli migrate` | runs once per release, before the pods roll |
+
+Set `RUN_MIGRATIONS_ON_STARTUP=false` on the API and the worker when a Job migrates.
+Containers run as uid 10001 and need no writable root filesystem. The local
+embedding model is baked into the server image; `HF_HUB_OFFLINE` must stay unset
+(uploads and token checks need the Hub). Leave `ENVIRONMENT` unset (= production),
+and do not set `ALLOW_ENV_CREDENTIALS` or `ENABLE_CLAUDE_PROVIDER`: they no longer
+exist — production never lends the server's keys and never offers Claude.
+
+Required in the deployment's secrets/config: `DATABASE_URL`, `AUTH_SECRET_KEY`,
+`SECRETS_ENCRYPTION_KEYS`, `FRONTEND_URL` (https), and at least one SSO pair
+(`INFOMANIAK_CLIENT_ID`/`SECRET` or `GITHUB_CLIENT_ID`/`SECRET`); recommended:
+`ADMIN_EMAILS`, `REDIS_URL`, `QDRANT_URL`, `FORWARDED_ALLOW_IPS`. The Next image
+needs only `API_INTERNAL_URL` (the API's in-cluster URL).
+
 ### Sign-in and roles
 
 Users sign in with **Infomaniak** (OpenID Connect) or **GitHub** (an OAuth App,

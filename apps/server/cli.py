@@ -1,5 +1,6 @@
 """Operator commands, run inside the deployment (``kubectl exec``, ``docker exec``):
 
+    python -m server.cli migrate            # apply the database migrations (a deploy step)
     python -m server.cli claim-legacy --email you@example.com
     python -m server.cli promote-admin you@example.com
     python -m server.cli gen-key            # a new SECRETS_ENCRYPTION_KEYS entry
@@ -34,6 +35,20 @@ def _claim_legacy(email: str) -> int:
         print(
             f"Assigned to {email}: " + ", ".join(f"{n} {k}" for k, n in counts.items())
         )
+    return 0
+
+
+def _migrate() -> int:
+    """Apply the Alembic migrations to DATABASE_URL, under the advisory lock.
+
+    What a Kubernetes pre-upgrade Job runs (with RUN_MIGRATIONS_ON_STARTUP=false
+    on the pods); idempotent, and safe to run twice at once.
+    """
+    from server.core.database import SQLALCHEMY_DATABASE_URL
+    from server.migrations.utils.db_utils import upgrade_db
+
+    upgrade_db(SQLALCHEMY_DATABASE_URL)
+    print("Database is up to date.")
     return 0
 
 
@@ -90,6 +105,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="give the data that predates per-user ownership to an account",
     )
     claim.add_argument("--email", required=True, help="the account that takes over")
+    commands.add_parser(
+        "migrate", help="apply the database migrations (what a deploy Job runs)"
+    )
     promote = commands.add_parser(
         "promote-admin", help="make an account admin (break-glass, audited)"
     )
@@ -105,6 +123,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "claim-legacy":
         return _claim_legacy(args.email)
+    if args.command == "migrate":
+        return _migrate()
     if args.command == "promote-admin":
         return _promote_admin(args.email)
     if args.command == "gen-key":
