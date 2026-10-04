@@ -1,24 +1,20 @@
 """QA generation agent.
 
-Runs as a single-node LangGraph graph whose node calls a model through the
-provider registry (services/providers) — the OpenAI-compatible API or the
-Claude subscription, picked by the model reference. The model is instructed
+One model call through the provider registry (services/providers) — the
+OpenAI-compatible API or the Claude subscription, picked by the model
+reference. The model is instructed
 to emit a JSON list of QA pairs, which we parse tolerantly ourselves (see
 ``_parse_qa_list``) rather than relying on structured output — reasoning-heavy
 / gpt-oss-style models can still truncate or wrap the JSON, and the diagnostic
 endpoint needs the raw text regardless of whether it parses.
-The graph is a placeholder for now (one node, no branching) but gives the
-agent room to grow into multi-step behaviour (retries, validation) later.
 """
 
-import functools
 import json
 import logging
 import re
 from collections import Counter
-from typing import List, Optional, TypedDict
+from typing import List, Optional
 
-from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ValidationError
 
 from server.core.config import config
@@ -208,53 +204,25 @@ def _parse_qa_list(text: str) -> List[QA]:
     return []
 
 
-class _AgentState(TypedDict):
-    text: str
-    target_language: str
-    model: str
-    raw_response: str
-
-
 class QAAgentService:
-    """Generate QA pairs via a single-node LangGraph graph over any provider."""
+    """Generate QA pairs from a text with any provider's model."""
 
     def __init__(self, creds: Credentials):
         self.creds = creds
 
-    async def _generate_node(self, state: _AgentState) -> dict:
-        prompt = (
-            f"Target language: {state['target_language']}\n\n"
-            f"Source text:\n{state['text']}"
-        )
+    async def _run(self, text: str, target_language: str, model: str) -> str:
+        """One completion; returns the model's raw response text."""
         result = await complete(
-            state["model"],
+            model,
             CompletionRequest(
                 system=QA_AGENT_INSTRUCTION,
-                user=prompt,
+                user=f"Target language: {target_language}\n\nSource text:\n{text}",
                 max_tokens=config.max_tokens_qa,
                 reasoning=True,
             ),
             self.creds,
         )
-        return {"raw_response": result.text.strip()}
-
-    @functools.cached_property
-    def _graph(self):
-        # ty (unlike pyright/mypy) doesn't accept a TypedDict class against
-        # StateGraph's StateT bound here; this is the documented langgraph
-        # usage (see langgraph.graph.StateGraph docs).
-        graph = StateGraph(_AgentState)  # ty: ignore[invalid-argument-type]
-        graph.add_node("generate", self._generate_node)
-        graph.add_edge(START, "generate")
-        graph.add_edge("generate", END)
-        return graph.compile()
-
-    async def _run(self, text: str, target_language: str, model: str) -> str:
-        """Run the graph once and return the model's raw response text."""
-        result = await self._graph.ainvoke(
-            {"text": text, "target_language": target_language, "model": model}
-        )
-        return result["raw_response"]
+        return result.text.strip()
 
     async def generate_qa(
         self,
