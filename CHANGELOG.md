@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.0...v0.10.1) (2026-10-04)
+
+
+### Chores
+
+* **core, env:** harden production defaults and refactor configuration ([8878aab](https://github.com/KevinDeBenedetti/dataset-generator/commit/8878aabac9870a1c361a126c8a3770f6c8354380))
+* **next:** remove unused dependencies and navigation menu component ([d303541](https://github.com/KevinDeBenedetti/dataset-generator/commit/d30354135e876210873d93377dc92db9e4689596))
+
 ## [0.10.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.9.0...v0.10.0) (2026-10-01)
 
 
