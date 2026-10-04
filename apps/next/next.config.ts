@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
 
+  // `next build` emits a self-contained server (.next/standalone) for the
+  // production image; `next dev` is unaffected.
+  output: 'standalone',
+
   // Same-origin API access: in production the browser calls `/api/*`. The
   // ingress normally routes that straight to the API before it reaches Next;
   // this rewrite is the fallback for a plain `next start` (and it never shadows

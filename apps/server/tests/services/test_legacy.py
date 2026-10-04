@@ -185,3 +185,16 @@ def test_rewrap_secrets_reports_counts(monkeypatch, test_db, capsys):
         lambda db: {"rewrapped": 0, "unchanged": 0, "failed": 1},
     )
     assert main(["rewrap-secrets"]) == 1  # a secret nobody could decrypt: non-zero
+
+
+def test_migrate_applies_the_migrations_to_the_configured_database(monkeypatch, capsys):
+    from unittest.mock import patch
+
+    monkeypatch.setattr(
+        "server.core.database.SQLALCHEMY_DATABASE_URL",
+        "postgresql+psycopg://u:p@db/app",
+    )
+    with patch("server.migrations.utils.db_utils.upgrade_db") as upgrade:
+        assert main(["migrate"]) == 0
+    upgrade.assert_called_once_with("postgresql+psycopg://u:p@db/app")
+    assert "up to date" in capsys.readouterr().out
