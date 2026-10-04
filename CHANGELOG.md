@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.2...v0.11.0) (2026-10-04)
+
+
+### Features
+
+* **deploy:** add CI workflow for building and publishing production Docker images ([a5d032a](https://github.com/KevinDeBenedetti/dataset-generator/commit/a5d032abb470bb2e17ba715e543215511130ff39))
+
 ## [0.10.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.1...v0.10.2) (2026-10-04)
 
 
