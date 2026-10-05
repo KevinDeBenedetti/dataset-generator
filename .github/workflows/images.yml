@@ -11,9 +11,11 @@ name: Images
 # * workflow_dispatch, run from `main`, tags the build :sha-<short>
 #   (to test a deployment before a release)
 #
-# The deployment (GitOps) pins the tag it wants: a version that has no image
-# here makes its migration Job fail on ImagePullBackOff — so the release is
-# only "done" when this workflow is green.
+# Deployment needs nothing from this repo: Renovate, on the infra repo, sees the
+# new vX.Y.Z on GHCR and opens (then automerges) one PR bumping the four
+# `image:` lines of infra/apps/dataset-generator. It only offers tags that exist
+# here — so the release is only "done" when this workflow is green, and a
+# workflow_dispatch build (sha-<short>) is never deployed.
 on:
   push:
     tags: ["v*"]
