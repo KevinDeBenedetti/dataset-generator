@@ -46,6 +46,7 @@ from server.jobs.github_snapshot import (
     gather_limited,
     split_slug,
 )
+from server.jobs.tech_stack import format_stack_entries, rank_stack, repo_technologies
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,9 @@ def build_github_repo_chunk(d: RepoData) -> Chunk:
         content=content.strip(),
         source="github",
         type="readme",
-        repo=d.url,
+        # The name, like every other split: the portfolio lists repos from
+        # this field, and a URL here showed each repo twice in that list.
+        repo=d.name,
         url=d.url,
     )
 
@@ -185,19 +188,32 @@ def build_knowledge_profile_chunks(snap: GitHubSnapshot) -> List[Chunk]:
             )
         )
 
-    techs = set()
-    for repo in snap.repos:
-        if repo.language:
-            techs.add(repo.language)
-        techs.update(t.strip() for t in repo.topics if t.strip())
-    if techs:
+    # Ranked rather than an alphabetical tag dump: "what is the main stack?"
+    # needs to know what is used everywhere vs. once, which a flat list hides.
+    stack = rank_stack(snap.repos)
+    if stack.languages or stack.tools or stack.tooling:
+        n = stack.total_projects
+        lines = [
+            f"Main technology stack of {name}, ranked by how many of their "
+            f"{n} public project{'s' if n > 1 else ''} use each technology."
+        ]
+        if stack.languages:
+            lines.append(
+                f"Programming languages: {format_stack_entries(stack.languages)}"
+            )
+        if stack.tools:
+            lines.append(
+                f"Frameworks, tools and platforms: {format_stack_entries(stack.tools)}"
+            )
+        if stack.tooling:
+            lines.append(
+                "Development tooling (linting, testing, migrations): "
+                f"{format_stack_entries(stack.tooling)}"
+            )
         chunks.append(
             Chunk(
                 id=deterministic_id("profile:derived_skills"),
-                content=(
-                    f"Technologies and programming languages used by {name} "
-                    f"across their projects: {', '.join(sorted(techs))}"
-                ),
+                content="\n".join(lines),
                 source="profile",
                 type="skills",
             )
@@ -208,7 +224,7 @@ def build_knowledge_profile_chunks(snap: GitHubSnapshot) -> List[Chunk]:
             continue
         parts = [f"Project: {repo.name}"]
         _line(parts, "Description", repo.description)
-        technologies = [t for t in [repo.language, *repo.topics] if t]
+        technologies = repo_technologies(repo)
         if technologies:
             parts.append(f"Technologies: {', '.join(technologies)}")
         if repo.url:
@@ -222,7 +238,7 @@ def build_knowledge_profile_chunks(snap: GitHubSnapshot) -> List[Chunk]:
                 content="\n".join(parts),
                 source="profile",
                 type="project",
-                repo=repo.url,
+                repo=repo.name,
                 url=repo.homepage or None,
             )
         )

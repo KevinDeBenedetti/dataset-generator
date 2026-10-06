@@ -43,6 +43,7 @@ from server.jobs.github_snapshot import (
     fetch_snapshot,
     gather_limited,
 )
+from server.jobs.tech_stack import format_stack_entries, main_entries, rank_stack
 from server.services.providers import (
     CompletionRequest as ProviderRequest,
     ProviderError,
@@ -208,7 +209,22 @@ def _token_budget(pairs: int) -> int:
     return min(1500, 400 + pairs * 150)
 
 
-def profile_pairs(profile: Optional[GitHubProfile], repo_count: int) -> List[QAPair]:
+MAX_PROFILE_STACK_LANGUAGES = 4
+MAX_PROFILE_STACK_TOOLS = 8
+MAX_PROFILE_PROJECTS = 8
+
+
+def profile_pairs(
+    profile: Optional[GitHubProfile],
+    repo_count: int,
+    repos: Sequence[RepoData] = (),
+) -> List[QAPair]:
+    """Deterministic pairs about the person, from GitHub data alone.
+
+    These are what visitors ask first — stack, projects, how to get in touch —
+    and no repo's README answers them, so they can't be left to the per-repo
+    LLM calls.
+    """
     if not profile or not profile.login:
         return []
     who = profile.name or profile.login
@@ -240,14 +256,56 @@ def profile_pairs(profile: Optional[GitHubProfile], repo_count: int) -> List[QAP
         pairs.append(pair(f"What is {who}'s website or blog?", profile.blog))
     if profile.twitter:
         pairs.append(pair(f"What is {who}'s X/Twitter handle?", f"@{profile.twitter}"))
-    pairs.append(
-        pair(
-            f"How many followers does {who} have on GitHub, and how many people "
-            "do they follow?",
-            f"{profile.followers} followers, {profile.following} following",
+
+    contact = [
+        f"by email at {profile.email}" if profile.email else "",
+        f"through their website {profile.blog}" if profile.blog else "",
+        f"on GitHub at {profile.html_url}" if profile.html_url else "",
+    ]
+    contact = [c for c in contact if c]
+    if contact:
+        pairs.append(
+            pair(f"How can I contact {who}?", f"You can reach {who} {_join(contact)}.")
         )
-    )
+
+    # Follower counts used to be a pair here: they change weekly and no visitor
+    # asks for them, so they only churned the dataset.
+    stack = rank_stack(list(repos))
+    if stack.languages or stack.tools:
+        languages = format_stack_entries(
+            main_entries(stack.languages, MAX_PROFILE_STACK_LANGUAGES)
+        )
+        tools = format_stack_entries(main_entries(stack.tools, MAX_PROFILE_STACK_TOOLS))
+        n = stack.total_projects
+        answer = (
+            f"Across their {n} public project{'s' if n > 1 else ''}, {who} mostly uses "
+        )
+        if languages and tools:
+            answer += f"{languages}, together with {tools}."
+        else:
+            answer += f"{languages or tools}."
+        pairs.append(pair(f"What is {who}'s main tech stack?", answer))
+
+    described = sorted(
+        (r for r in repos if r.description.strip()),
+        key=lambda r: (-r.stars, r.name.lower()),
+    )[:MAX_PROFILE_PROJECTS]
+    if described:
+        pairs.append(
+            pair(
+                f"What kind of projects has {who} built?",
+                "; ".join(
+                    f"{r.name}: {r.description.strip().rstrip('.')}" for r in described
+                )
+                + ".",
+            )
+        )
     return pairs
+
+
+def _join(items: List[str]) -> str:
+    """``a``, ``a or b``, ``a, b or c``."""
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} or {items[-1]}"
 
 
 def _extract_json_array(text: str) -> str:
@@ -371,6 +429,17 @@ def _system_prompt(subject: str, focus: str) -> str:
     )
 
 
+def _name_the_repo(repo: str) -> str:
+    """Each pair is retrieved alone, out of its repo's context: a question
+    saying "this project" matches nothing and can't be attributed. Most
+    generated questions used to read that way."""
+    return (
+        f'\n\nEvery question must name the repository "{repo}" explicitly '
+        f'(e.g. "What does {repo} use for …?") — never "this project", "the '
+        'repository" or "it".'
+    )
+
+
 def _guidance(avoid: Sequence[str], focus: Sequence[str]) -> str:
     """Prompt tail steering the LLM off known questions, onto uncovered topics."""
     blocks: List[str] = []
@@ -398,6 +467,11 @@ def overview_context(repo: RepoData) -> str:
         parts.append(f"Primary language: {repo.language}")
     if repo.topics:
         parts.append(f"Topics: {', '.join(repo.topics)}")
+    if repo.technologies:
+        parts.append(
+            "Technologies (from its dependency manifests): "
+            + ", ".join(repo.technologies)
+        )
     if repo.readme:
         parts.append(f"README (excerpt):\n{repo.readme[:1500]}")
     return "\n\n".join(parts)
@@ -422,7 +496,9 @@ async def overview_pairs(
             ),
             user=(
                 f"Generate {BASE_PAIRS_PER_REPO} distinct question/answer pairs "
-                f"from this context:\n\n{context}" + _guidance(avoid, focus)
+                f"from this context:\n\n{context}"
+                + _name_the_repo(repo.name)
+                + _guidance(avoid, focus)
             ),
             max_tokens=_token_budget(BASE_PAIRS_PER_REPO),
         ),
@@ -475,12 +551,16 @@ async def docs_batch_pairs(
                 "a GitHub repository's documentation",
                 "Cover concrete angles: usage, configuration, detailed behaviour "
                 "described in these files — one pair per notable point rather than "
-                "summarizing the whole file in a single question.",
+                "summarizing the whole file in a single question. Prefer what a "
+                "visitor evaluating the project would ask — what it does, how it "
+                "is designed, which notable choices it makes — over minor "
+                "settings such as a font name or a single default value.",
             ),
             user=(
                 f"Repository: {repo.name}\n\nGenerate {want} distinct "
                 f"question/answer pairs from this documentation:\n\n"
                 + context
+                + _name_the_repo(repo.name)
                 + _guidance(avoid, focus)
             ),
             max_tokens=_token_budget(want),
@@ -864,7 +944,7 @@ async def build_qa_dataset(
         pair.sources = keys
         (recheck if any(sources[k].changed for k in keys) else kept).append(pair)
 
-    profile = profile_pairs(snapshot.profile, len(snapshot.repos))
+    profile = profile_pairs(snapshot.profile, len(snapshot.repos), snapshot.repos)
     review: List[QAPair] = []
 
     def prepare() -> Tuple[SemanticIndex, List[_Task]]:

@@ -37,9 +37,44 @@ def test_profile_pairs(snapshot):
     assert pairs[0].answer == "@kevin"
     assert pairs[1].answer == "4 (excluding forks and archived repositories)"
     assert {p.category for p in pairs} == {"profile"}
-    assert pairs[-1].answer == "34 followers, 5 following"
+    assert pairs[-1].question == "How can I contact Kevin De Benedetti?"
+    assert pairs[-1].answer == (
+        "You can reach Kevin De Benedetti by email at k@example.com, through their "
+        "website https://kevindb.dev or on GitHub at https://github.com/kevin."
+    )
+    assert not any("followers" in p.question for p in pairs)
     assert len(pairs) == 8
     assert profile_pairs(None, 1) == []
+
+
+def test_profile_pairs_answer_stack_and_projects(snapshot):
+    repos = [
+        RepoData("site", "My site", stars=3, language="TypeScript", topics=["nuxt"]),
+        RepoData("api", "An API.", stars=5, language="Python", topics=["docker"]),
+        RepoData("infra", "", language="Shell", topics=["docker", "dotfiles"]),
+    ]
+    pairs = {p.question: p.answer for p in profile_pairs(snapshot.profile, 3, repos)}
+
+    assert pairs["What is Kevin De Benedetti's main tech stack?"] == (
+        "Across their 3 public projects, Kevin De Benedetti mostly uses Python "
+        "(1 project), Shell (1 project), TypeScript (1 project), together with "
+        "Docker (2 projects), Nuxt (1 project)."
+    )
+    # Most-starred first; a repo without a description says nothing here.
+    assert pairs["What kind of projects has Kevin De Benedetti built?"] == (
+        "api: An API; site: My site."
+    )
+
+
+async def test_generated_questions_must_name_their_repo(snapshot):
+    seen = []
+
+    async def complete(req):
+        seen.append(req.user)
+        return '[{"question":"What is portfolio?","answer":"A site."}]'
+
+    await qa_dataset.overview_pairs(complete, "m", snapshot.repos[0])
+    assert 'name the repository "portfolio" explicitly' in seen[0]
 
 
 @pytest.mark.parametrize(
@@ -154,7 +189,8 @@ async def test_build_qa_dataset_runs_overview_and_doc_batches(github, snapshot):
     assert "Generate 6 distinct" in requests[1].user
     assert "Generate 2 distinct" in requests[-1].user
     categories = [p.category for p in dataset.pairs]
-    assert categories.count("profile") == 8
+    # 7 profile facts + contact, then the stack and projects pairs (one repo).
+    assert categories.count("profile") == 10
     assert categories.count("overview") == 1
     assert categories.count("docs") == 2
     assert dataset.errors == []
@@ -256,8 +292,8 @@ async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
 
     assert result["dry_run"] is True
     assert result["url"] is None
-    # Deterministic profile pairs only (username, indexed-repo count, followers).
-    assert result["records"] == 3
+    # Deterministic profile pairs only (username, indexed-repo count).
+    assert result["records"] == 2
 
 
 async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
@@ -789,8 +825,9 @@ async def test_generate_without_hub_is_a_full_run(monkeypatch, github):
         "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
     ):
         draft = await qa_dataset.generate(creds, complete, require_hub=False)
-    assert draft.username == "kevin" and len(draft.dataset.pairs) == 3
-    assert draft.stats()["records"] == 3
+    # Username and indexed-repo count: no repos means no stack or projects pair.
+    assert draft.username == "kevin" and len(draft.dataset.pairs) == 2
+    assert draft.stats()["records"] == 2
 
 
 async def test_generate_requires_the_hub_by_default(monkeypatch):
