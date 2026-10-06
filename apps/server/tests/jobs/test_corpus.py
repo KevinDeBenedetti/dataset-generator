@@ -54,7 +54,8 @@ GO_OUTPUT = [
         "\n\nREADME:\n# Portfolio\nHello",
         "source": "github",
         "type": "readme",
-        "repo": "https://github.com/kevin/portfolio",
+        # The name, not the URL: the only field that departs from the Go output.
+        "repo": "portfolio",
         "url": "https://github.com/kevin/portfolio",
     },
 ]
@@ -98,16 +99,21 @@ def test_knowledge_profile_chunks(snapshot):
         "source": "profile",
         "type": "bio",
     }
+    # The language and its same-name topic count once; ranked, not a tag dump.
     assert skills.content == (
-        "Technologies and programming languages used by Kevin De Benedetti "
-        "across their projects: Go, go, next"
+        "Main technology stack of Kevin De Benedetti, ranked by how many of their "
+        "1 public project use each technology.\n"
+        "Programming languages: Go (1 project)\n"
+        "Frameworks, tools and platforms: Next.js (1 project)"
     )
+    assert skills.id == deterministic_id("profile:derived_skills")
     assert project.content == (
-        "Project: portfolio\nDescription: My site\nTechnologies: Go, go, next\n"
+        "Project: portfolio\nDescription: My site\nTechnologies: Go, Next.js\n"
         "GitHub: https://github.com/kevin/portfolio\nURL: https://kevindb.dev\n"
         "Status: active"
     )
     assert project.id == deterministic_id("profile:project:portfolio")
+    assert project.repo == "portfolio"
 
 
 def test_knowledge_profile_without_profile_or_skills(snapshot):

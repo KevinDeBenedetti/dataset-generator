@@ -7,6 +7,7 @@ read; the token only raises the rate limit from 60 to 5000 requests/hour.
 import asyncio
 import base64
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from urllib.parse import quote
 
 import httpx
 
+from server.jobs.tech_stack import detect_technologies
 from server.services.github import GitHubService
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,37 @@ MAX_README_CHARS = 3000
 
 DOC_EXTENSIONS = (".md", ".mdx", ".markdown", ".txt", ".rst")
 MAX_DOC_BYTES = 50 * 1024
+
+# Status badges: shields.io and friends, GitHub Actions workflow badges, codecov.
+_BADGE_URL = (
+    r"[^)\s\"]*(?:shields\.io|badgen\.net|badge\.svg|/badges?/|codecov\.io)[^)\s\"]*"
+)
+_BADGE = re.compile(
+    rf"\[!\[[^\]]*\]\({_BADGE_URL}\)\]\([^)]*\)"  # linked badge
+    rf"|!\[[^\]]*\]\({_BADGE_URL}\)"  # bare badge
+    rf"|<a\b[^>]*>\s*<img\b[^>]*src=\"{_BADGE_URL}\"[^>]*>\s*</a>"  # HTML linked
+    rf"|<img\b[^>]*src=\"{_BADGE_URL}\"[^>]*>",  # HTML bare
+    re.IGNORECASE,
+)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+# What a badge row leaves behind once its badges are gone.
+_EMPTY_WRAPPER = re.compile(r"^(?:\s|\||</?(?:p|div|a)\b[^>]*>)*$", re.IGNORECASE)
+
+
+def clean_readme(text: str) -> str:
+    """Drop status badges and HTML comments: they carry no knowledge, but eat
+    the README's character budget and add noise to its embedding."""
+    # Comments first: one spanning lines would shift the line-by-line pairing.
+    text = _HTML_COMMENT.sub("", text)
+    lines = []
+    for original in text.split("\n"):
+        line = _BADGE.sub("", original)
+        # Only drop a line the cleanup emptied — a blank line of the original
+        # README still separates its paragraphs.
+        if _EMPTY_WRAPPER.match(line) and not _EMPTY_WRAPPER.match(original):
+            continue
+        lines.append(line.rstrip())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def deterministic_id(key: str) -> str:
@@ -48,6 +81,8 @@ class RepoData:
     homepage: str = ""
     url: str = ""
     readme: str = ""
+    # Detected from the repo's dependency manifests (see jobs/tech_stack.py).
+    technologies: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -170,6 +205,7 @@ class CorpusGitHubClient(GitHubService):
             text = await self.get_readme(owner, repo) or ""
         except httpx.HTTPError:
             return ""
+        text = clean_readme(text)
         if len(text) > MAX_README_CHARS:
             return f"{text[:MAX_README_CHARS]}\n\n[README truncated]"
         return text
@@ -180,7 +216,8 @@ class CorpusGitHubClient(GitHubService):
         if resp.status_code != 200:
             self._raise_for(resp, f"github repo {owner}/{repo}")
         d = resp.json()
-        self._branches[f"{owner}/{repo}"] = d.get("default_branch") or "main"
+        branch = d.get("default_branch") or "main"
+        self._branches[f"{owner}/{repo}"] = branch
         return RepoData(
             name=d.get("name") or repo,
             description=d.get("description") or "",
@@ -190,6 +227,19 @@ class CorpusGitHubClient(GitHubService):
             homepage=d.get("homepage") or "",
             url=d.get("html_url") or "",
             readme=await self.fetch_readme(owner, repo),
+            technologies=await self.fetch_technologies(owner, repo, branch),
+        )
+
+    async def fetch_technologies(self, owner: str, repo: str, branch: str) -> List[str]:
+        """Best effort, like the README: a repo whose tree can't be read still
+        has its language and topics, so failures give []."""
+        try:
+            tree = await self.repo_tree(owner, repo, branch)
+        except (GitHubAPIError, httpx.HTTPError) as exc:
+            logger.warning("tech stack of %s/%s unavailable: %s", owner, repo, exc)
+            return []
+        return await detect_technologies(
+            tree, lambda path: self.file_content(owner, repo, path)
         )
 
     async def default_branch(self, owner: str, repo: str) -> str:

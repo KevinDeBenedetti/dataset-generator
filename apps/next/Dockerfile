@@ -81,6 +81,13 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# Debian security updates not yet folded into the node:22-slim tag (e.g.
+# perl-base CVE-2026-13221/-42496/-8376, CRITICAL in Trivy): apply them here
+# rather than wait for an upstream rebuild.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder --chown=1000:1000 /app/.next/standalone ./
 COPY --from=builder --chown=1000:1000 /app/.next/static ./.next/static
 COPY --from=builder --chown=1000:1000 /app/public ./public
