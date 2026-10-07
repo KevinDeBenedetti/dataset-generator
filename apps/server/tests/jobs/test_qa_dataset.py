@@ -21,6 +21,7 @@ from server.jobs.qa_dataset import (
     parse_pairs,
     profile_pairs,
     publish_qa_dataset,
+    repo_pairs,
     sanitize_pairs,
     to_jsonl,
 )
@@ -185,16 +186,52 @@ async def test_build_qa_dataset_runs_overview_and_doc_batches(github, snapshot):
     dataset = await build_qa_dataset(github.client(), snapshot, complete, "claude-x")
 
     # overview + 2 docs batches (3 + 1 files); the second batch got retried once.
-    assert "Generate 3 distinct" in requests[0].user
+    assert "Generate 4 distinct" in requests[0].user
     assert "Generate 6 distinct" in requests[1].user
     assert "Generate 2 distinct" in requests[-1].user
     categories = [p.category for p in dataset.pairs]
     # 7 profile facts + contact, then the stack and projects pairs (one repo).
     assert categories.count("profile") == 10
+    # Description, technologies and links of the one repo.
+    assert categories.count("repo") == 3
     assert categories.count("overview") == 1
     assert categories.count("docs") == 2
     assert dataset.errors == []
-    assert {p.model for p in dataset.pairs if p.category != "profile"} == {"claude-x"}
+    llm = [p for p in dataset.pairs if p.category in ("overview", "docs")]
+    assert {p.model for p in llm} == {"claude-x"}
+
+
+def test_repo_pairs_cover_description_stack_and_links():
+    repo = RepoData(
+        "app",
+        "A web app.",
+        language="TypeScript",
+        topics=["nextjs", "dotfiles"],
+        technologies=["Next.js", "Docker"],
+        homepage="https://app.dev",
+        url="https://github.com/kevin/app",
+    )
+    pairs = {p.question: p.answer for p in repo_pairs(repo)}
+    assert pairs == {
+        "What is app?": "A web app.",
+        "What technologies does app use?": (
+            "app is written in TypeScript and uses Next.js or Docker."
+        ),
+        "Where can I find app?": (
+            "app's source code is on GitHub at https://github.com/kevin/app, "
+            "and its website is https://app.dev."
+        ),
+    }
+    assert {p.category for p in repo_pairs(repo)} == {"repo"}
+    assert {p.confidence for p in repo_pairs(repo)} == {1.0}
+
+
+def test_repo_pairs_skip_what_the_repo_does_not_have():
+    assert repo_pairs(RepoData("")) == []
+    # No description, no stack, no url: nothing to say.
+    assert repo_pairs(RepoData("bare")) == []
+    only_lang = repo_pairs(RepoData("lib", language="Go"))
+    assert [p.answer for p in only_lang] == ["lib is written in Go."]
 
 
 async def test_build_qa_dataset_records_failed_repos(github, snapshot):
@@ -205,7 +242,35 @@ async def test_build_qa_dataset_records_failed_repos(github, snapshot):
     assert dataset.errors == [
         "portfolio (overview): LLM returned no usable pairs (empty or unparseable) after retry"
     ]
-    assert {p.category for p in dataset.pairs} == {"profile"}
+    # The LLM failed: only the deterministic pairs remain.
+    assert {p.category for p in dataset.pairs} == {"profile", "repo"}
+
+
+async def test_deterministic_pairs_are_rebuilt_not_carried_over(github, snapshot):
+    """A repo pair of the previous version must give way to its fresh answer
+    when the repo changed, instead of being kept because its question matches."""
+    stale = QAPair(
+        "What is portfolio?",
+        "An old description.",
+        "repo",
+        repo="portfolio",
+        confidence=1.0,
+        id="old",
+    )
+
+    async def complete(_req):
+        return ""
+
+    dataset = await build_qa_dataset(
+        github.client(),
+        snapshot,
+        complete,
+        "m",
+        previous=PreviousState([stale], {}),
+    )
+    answers = {p.question: p.answer for p in dataset.pairs}
+    assert answers["What is portfolio?"] == "My site"
+    assert dataset.kept == 0
 
 
 def test_dataset_card():
