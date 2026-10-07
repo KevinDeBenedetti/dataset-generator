@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.11.0...v0.12.0) (2026-10-07)
+
+
+### Features
+
+* **server:** introduce tech stack analysis and clean GitHub READMEs ([03994ec](https://github.com/KevinDeBenedetti/dataset-generator/commit/03994ecb30138926dfe4ca270dabe9cc3c1c3340))
+
 ## [0.11.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.10.2...v0.11.0) (2026-10-04)
 
 
