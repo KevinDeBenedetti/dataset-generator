@@ -43,7 +43,13 @@ from server.jobs.github_snapshot import (
     fetch_snapshot,
     gather_limited,
 )
-from server.jobs.tech_stack import format_stack_entries, main_entries, rank_stack
+from server.jobs.tech_stack import (
+    canonical,
+    format_stack_entries,
+    main_entries,
+    rank_stack,
+    repo_technologies,
+)
 from server.services.providers import (
     CompletionRequest as ProviderRequest,
     ProviderError,
@@ -65,11 +71,15 @@ from server.services.semantic import (
 logger = logging.getLogger(__name__)
 
 REPO_CONCURRENCY = 3
-BASE_PAIRS_PER_REPO = 3
+BASE_PAIRS_PER_REPO = 4
 DOCS_BATCH_SIZE = 3
 PAIRS_PER_DOC = 2
 DOCS_BATCH_CHAR_BUDGET = 6000
-MAX_DOCS_PER_REPO = 8
+# A repo with a docs/ folder used to get up to 8 files x 2 pairs, so a few
+# well-documented repos held most of the dataset while a repo with only a
+# README had three pairs. Capping the docs keeps a visitor's "what is X?" about
+# equally well covered whichever repo X is.
+MAX_DOCS_PER_REPO = 6
 MAX_DOC_CHARS = 3000
 
 # Targeted generation (see _guidance): how many existing questions a prompt
@@ -94,7 +104,9 @@ JSON_FORMAT_INSTRUCTION = (
     "answer."
 )
 
-CATEGORIES = ("profile", "overview", "docs")
+CATEGORIES = ("profile", "overview", "docs", "repo")
+# Pairs built from GitHub data alone: rebuilt every run, never carried over.
+DETERMINISTIC_CATEGORIES = ("profile", "repo")
 
 
 class JobError(RuntimeError):
@@ -303,6 +315,51 @@ def profile_pairs(
     return pairs
 
 
+def repo_pairs(repo: RepoData) -> List[QAPair]:
+    """Deterministic pairs about one repo, from its GitHub metadata.
+
+    "What is X?", "what is X built with?" and "where is X?" are the first things
+    a visitor asks about any project, and they should be answerable whatever the
+    size of X's README or docs — the LLM pairs cover the depth, these cover the
+    floor. Exact facts rather than model output, so confidence is 1.0.
+    """
+    name = repo.name.strip()
+    if not name:
+        return []
+
+    def pair(question: str, answer: str) -> QAPair:
+        return QAPair(
+            question=question,
+            answer=answer,
+            category="repo",
+            repo=name,
+            confidence=1.0,
+        )
+
+    pairs: List[QAPair] = []
+    if repo.description.strip():
+        pairs.append(pair(f"What is {name}?", repo.description.strip()))
+
+    techs = repo_technologies(repo)
+    if techs:
+        language = canonical(repo.language) if repo.language else ""
+        others = [t for t in techs if t != language]
+        if language and others:
+            answer = f"{name} is written in {language} and uses {_join(others)}."
+        elif language:
+            answer = f"{name} is written in {language}."
+        else:
+            answer = f"{name} uses {_join(others)}."
+        pairs.append(pair(f"What technologies does {name} use?", answer))
+
+    if repo.url:
+        answer = f"{name}'s source code is on GitHub at {repo.url}"
+        if repo.homepage:
+            answer += f", and its website is {repo.homepage}"
+        pairs.append(pair(f"Where can I find {name}?", answer + "."))
+    return pairs
+
+
 def _join(items: List[str]) -> str:
     """``a``, ``a or b``, ``a, b or c``."""
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} or {items[-1]}"
@@ -473,7 +530,10 @@ def overview_context(repo: RepoData) -> str:
             + ", ".join(repo.technologies)
         )
     if repo.readme:
-        parts.append(f"README (excerpt):\n{repo.readme[:1500]}")
+        # The whole README (already capped at MAX_README_CHARS): a short one is
+        # all the material a small repo has, and cutting it at 1500 left the
+        # LLM with half of the big ones too.
+        parts.append(f"README:\n{repo.readme}")
     return "\n\n".join(parts)
 
 
@@ -931,7 +991,7 @@ async def build_qa_dataset(
     kept: List[QAPair] = []
     recheck: List[QAPair] = []
     for pair in previous.pairs:
-        if pair.category == "profile" or pair.repo not in live:
+        if pair.category in DETERMINISTIC_CATEGORIES or pair.repo not in live:
             continue
         if pair.repo not in processed:
             kept.append(pair)
@@ -944,7 +1004,10 @@ async def build_qa_dataset(
         pair.sources = keys
         (recheck if any(sources[k].changed for k in keys) else kept).append(pair)
 
+    # Deterministic pairs go first in the sanitize pass and into the semantic
+    # index, so an LLM rephrasing of "What is X?" is dropped as a duplicate.
     profile = profile_pairs(snapshot.profile, len(snapshot.repos), snapshot.repos)
+    profile += [p for repo in snapshot.repos for p in repo_pairs(repo)]
     review: List[QAPair] = []
 
     def prepare() -> Tuple[SemanticIndex, List[_Task]]:
@@ -1068,7 +1131,7 @@ async def build_qa_dataset(
             manifest_sources[key] = previous.sources[key]
 
     pairs = existing + accepted
-    kept_count = sum(p.category != "profile" for p in existing)
+    kept_count = sum(p.category not in DETERMINISTIC_CATEGORIES for p in existing)
     logger.info(
         "%d pair(s): %d kept, %d new; %d dropped, %d rephrasing(s), %d to review, "
         "%d error(s)",
@@ -1211,18 +1274,19 @@ Each line of `train.jsonl` is one record:
 | `question` | string | Generated question, in English |
 | `answer` | string | Generated answer, in English |
 | `source` | string | Always `"github"` |
-| `category` | string | `profile`, `overview` (repo description/README), or `docs` (repo `docs/` folder) |
+| `category` | string | `profile` (the person), `repo` (a repo's description, stack and links), `overview` (repo README), or `docs` (repo `docs/` folder) |
 | `repo` | string | Repository name the pair was derived from — absent for `profile` pairs |
-| `model` | string | LLM that generated the pair — absent for `profile` pairs (deterministic, no LLM) |
-| `confidence` | number | 0–1: how well the source supports the answer, as reported by the LLM; 1.0 for `profile` pairs — absent when the model gave none |
-| `sources` | list | Source the pair was generated from (`<repo>::overview` or `<repo>::<doc path>`) — absent for `profile` pairs |
+| `model` | string | LLM that generated the pair — absent for `profile` and `repo` pairs (deterministic, no LLM) |
+| `confidence` | number | 0–1: how well the source supports the answer, as reported by the LLM; 1.0 for `profile` and `repo` pairs — absent when the model gave none |
+| `sources` | list | Source the pair was generated from (`<repo>::overview` or `<repo>::<doc path>`) — absent for `profile` and `repo` pairs |
 | `grounding` | number | Cosine similarity between the answer and the closest passage of its source — absent when not computed |
 
 ## Composition
 
 - **{len(pairs)} pairs** total across **{len(repos)} repositories**{dropped_note}.
-- {by_category["profile"]} from the GitHub profile (deterministic, no LLM), {by_category["overview"]} from repo
-  descriptions/READMEs, {by_category["docs"]} from `docs/` folders.
+- {by_category["profile"]} from the GitHub profile and {by_category["repo"]} from repo metadata (description,
+  stack, links; both deterministic, no LLM), {by_category["overview"]} from repo READMEs,
+  {by_category["docs"]} from `docs/` folders.
 - This version: {dataset.kept} pair(s) carried over from unchanged sources, {dataset.new} newly generated.
 - Deduplicated by normalized question text{semantic_note}; trivial or self-answering pairs dropped.
 {review_note}
