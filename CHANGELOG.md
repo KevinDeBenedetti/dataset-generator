@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.13.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.12.0...v0.13.0) (2026-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* unify dependency management and update versions
+
+### deps
+
+* unify dependency management and update versions ([ea9d76f](https://github.com/KevinDeBenedetti/dataset-generator/commit/ea9d76fa1c5c3d64435e33e2080ab41fce149008))
+
+
+### Features
+
+* **jobs:** add deterministic repo metadata pairs and cap docs per repo ([9c7316e](https://github.com/KevinDeBenedetti/dataset-generator/commit/9c7316e49090ffa985de278b98dc1a508641fe36))
+
+
+### Chores
+
+* **deps:** add Dependabot ignore rule for huggingface-hub 2.x ([4101d21](https://github.com/KevinDeBenedetti/dataset-generator/commit/4101d210305ea857aa93af2ec5c456109b52327a))
+* **deps:** upgrade Python and Next.js dependencies and add lockfile sync targets ([985e610](https://github.com/KevinDeBenedetti/dataset-generator/commit/985e61055321c4b7a01349b7c32ba0e7c3290a94))
+
 ## [0.12.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.11.0...v0.12.0) (2026-10-07)
 
 
