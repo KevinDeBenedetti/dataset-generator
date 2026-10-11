@@ -1,6 +1,6 @@
 PYTHONPATH := $(PWD)
 
-.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client precommit test test-ci models api-schema api-client api-check
+.PHONY: help env setup dev dev-local check-docker check-ports down reset logs clean lint lint-server lint-client lock lock-check outdated upgrade precommit test test-ci models api-schema api-client api-check
 .DEFAULT_GOAL := help
 
 SERVER_DIR := apps/server
@@ -127,6 +127,34 @@ lint-client:
 
 ## Run all linters (server + client).
 lint: lint-server lint-client
+
+## Resync both lockfiles (uv.lock, apps/next/bun.lock) with pyproject.toml and
+## package.json, without upgrading anything. Run it after editing a dependency
+## by hand, then commit the lockfiles — CI installs with frozen lockfiles.
+lock:
+	uv lock
+	cd $(NEXT_DIR) && bun install --lockfile-only
+
+## Fail if a lockfile is out of sync with its manifest (what CI would reject).
+lock-check:
+	uv lock --check
+	cd $(NEXT_DIR) && bun install --frozen-lockfile --dry-run >/dev/null
+	@printf '  \033[1;32m✓ Lockfiles are in sync.\033[0m\n'
+
+## Show available updates: Python direct deps (uv) and the Next.js client (bun).
+## Read-only. "latest" can be a major bump or blocked by a cap (huggingface-hub<2).
+outdated:
+	@printf '\n  \033[1;36m▶ Python (direct dependencies)\033[0m\n'
+	@uv tree --outdated --depth 1 | grep 'latest:' || echo "  all up to date"
+	@printf '\n  \033[1;36m▶ Next.js client\033[0m\n'
+	@cd $(NEXT_DIR) && bun outdated || true
+
+## Upgrade every dependency within its declared constraints and rewrite both
+## lockfiles. Review the diff, then run `make lint test` before committing.
+upgrade:
+	uv lock --upgrade
+	cd $(NEXT_DIR) && bun update
+	@printf '  \033[1;32m✓ Lockfiles upgraded — review the diff, then run make lint test.\033[0m\n'
 
 ## Run pre-commit hooks on all files.
 precommit:
