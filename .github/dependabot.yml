@@ -16,3 +16,9 @@ updates:
     directory: "."
     patterns: ["*"]
     multi-ecosystem-group: "weekly-all"
+    ignore:
+      # Pinned <2 in pyproject.toml: fastembed and tokenizers still require
+      # huggingface-hub<2, so Dependabot's 2.x bump is unresolvable. Drop this
+      # once they support 2.x (together with the pyproject cap).
+      - dependency-name: "huggingface-hub"
+        update-types: ["version-update:semver-major"]
