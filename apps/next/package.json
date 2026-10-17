@@ -20,21 +20,21 @@
     "api:watch": "bun install --cwd openapi-codegen --frozen-lockfile && OPENAPI_WATCH=1 OPENAPI_INPUT=\"${OPENAPI_INPUT:-${API_INTERNAL_URL:-${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}}/openapi.json}\" openapi-codegen/node_modules/.bin/openapi-ts"
   },
   "dependencies": {
-    "@radix-ui/react-accordion": "^1.2.21",
-    "@radix-ui/react-dropdown-menu": "^2.1.25",
-    "@radix-ui/react-scroll-area": "^1.3.0",
-    "@radix-ui/react-select": "^2.3.8",
-    "@radix-ui/react-separator": "^1.1.16",
-    "@radix-ui/react-slider": "^1.5.0",
-    "@radix-ui/react-slot": "^1.4.0",
-    "@tanstack/react-query": "^5.104.1",
+    "@radix-ui/react-accordion": "^1.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.2.1",
+    "@radix-ui/react-scroll-area": "^1.4.0",
+    "@radix-ui/react-select": "^2.4.1",
+    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-slider": "^1.6.1",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@tanstack/react-query": "^5.104.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "geist": "^1.7.2",
-    "lucide-react": "^1.55.0",
+    "lucide-react": "^1.57.0",
     "next": "16.3.8",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "zustand": "^5.0.15"
@@ -42,15 +42,15 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
     "tailwindcss": "^4.3.3",
     "tw-animate-css": "^1.4.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   }
 }
