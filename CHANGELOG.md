@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.13.0...v0.13.1) (2026-10-25)
+
+
+### Chores
+
+* **deps:** bump openai ([9d2ea6a](https://github.com/KevinDeBenedetti/dataset-generator/commit/9d2ea6af04b6570b3db19b9fbd875ce8a52902bb))
+* **deps:** bump the weekly-all group across 1 directory with 15 updates ([746a9d7](https://github.com/KevinDeBenedetti/dataset-generator/commit/746a9d76b0fedb0092012e5f206d3fa7c3652f1e))
+
 ## [0.13.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.12.0...v0.13.0) (2026-10-11)
 
 
