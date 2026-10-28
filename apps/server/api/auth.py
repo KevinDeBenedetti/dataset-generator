@@ -3,7 +3,7 @@ single sign-on (Infomaniak, GitHub) — login, account linking and callback."""
 
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -26,7 +26,13 @@ from server.services.auth import (
 )
 from server.services import audit, platform
 from server.services.identities import LoginRefused, resolve_login
-from server.services.sso import SsoError, SsoProvider, get_client, list_providers
+from server.services.sso import (
+    ExternalIdentity,
+    SsoError,
+    SsoProvider,
+    get_client,
+    list_providers,
+)
 from server.services.sso import get_provider as get_sso_provider
 from server.services.rate_limit import (
     login_rate_limiter,
@@ -316,6 +322,31 @@ async def sso_link(
     return await _start(request, provider)
 
 
+def _sign_in(
+    db: Session,
+    ext: ExternalIdentity,
+    link_user_id: Optional[str],
+    error_page: str,
+    ip: str,
+    provider_name: str,
+) -> Response:
+    """The database half of a callback (account resolution, session rows):
+    blocking, so :func:`_callback` runs it in the threadpool."""
+    link_to = db.get(User, link_user_id) if link_user_id else None
+    if link_user_id and (link_to is None or not link_to.is_active):
+        return _front("/login", error="session_expired")
+    try:
+        user = resolve_login(db, ext, link_to=link_to, ip=ip)
+    except LoginRefused as exc:
+        return _front(error_page, error=exc.code)
+
+    redirect = (
+        _front("/settings", linked=provider_name) if link_to else _front("/dashboard")
+    )
+    _set_session_cookies(redirect, db, user)
+    return redirect
+
+
 async def _callback(request: Request, provider: SsoProvider, db: Session) -> Response:
     link_user_id = request.session.pop(_LINK_SESSION_KEY, None)
     error_page = "/settings" if link_user_id else "/login"
@@ -329,19 +360,9 @@ async def _callback(request: Request, provider: SsoProvider, db: Session) -> Res
         logging.warning("%s sign-in failed: %s", provider.name, type(exc).__name__)
         return _front(error_page, error="sso_failed")
 
-    link_to = db.get(User, link_user_id) if link_user_id else None
-    if link_user_id and (link_to is None or not link_to.is_active):
-        return _front("/login", error="session_expired")
-    try:
-        user = resolve_login(db, ext, link_to=link_to, ip=_client_ip(request))
-    except LoginRefused as exc:
-        return _front(error_page, error=exc.code)
-
-    redirect = (
-        _front("/settings", linked=provider.name) if link_to else _front("/dashboard")
+    return await run_in_threadpool(
+        _sign_in, db, ext, link_user_id, error_page, _client_ip(request), provider.name
     )
-    _set_session_cookies(redirect, db, user)
-    return redirect
 
 
 @router.get("/{provider_name}/callback")

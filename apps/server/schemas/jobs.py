@@ -44,7 +44,7 @@ class JobRunRequest(BaseModel):
     )
     model_ref: Optional[str] = Field(
         None,
-        description='Model reference, e.g. "claude:claude-sonnet-5" (jobs using a '
+        description='Model reference, e.g. "claude:claude-sonnet-5-5" (jobs using a '
         "model only; default: the jobs role default)",
     )
 

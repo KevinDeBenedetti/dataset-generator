@@ -22,6 +22,7 @@ from server.services.datasets import (
     resolve_similarity_pair,
 )
 from server.services.huggingface import (
+    HuggingFaceImportTooLargeError,
     HuggingFaceNotConfiguredError,
     HuggingFaceRepoPublicError,
     export_dataset_to_hub,
@@ -47,9 +48,13 @@ router = APIRouter(
     tags=["dataset"],
 )
 
+# Plain ``def`` routes unless they await: the dataset services block (Postgres,
+# similarity passes over every pair, Hub uploads), so FastAPI runs them in its
+# threadpool instead of stalling the event loop for every other request.
+
 
 @router.post("/dataset", response_model=DatasetResponse)
-async def create_dataset(
+def create_dataset(
     name: str = Query(..., description="Name of the new dataset"),
     description: str = Query(None, description="Optional dataset description"),
     user: User = Depends(get_current_user),
@@ -65,7 +70,7 @@ async def create_dataset(
 
 
 @router.get("/dataset", response_model=Union[DatasetResponse, List[DatasetResponse]])
-async def get_all_datasets(
+def get_all_datasets(
     dataset_id: str = Query(
         None,
         description="Optional dataset name to get a specific dataset's details",
@@ -90,9 +95,7 @@ async def get_all_datasets(
 
 
 @router.get("/dataset/{dataset_name}/sources", response_model=DatasetSourcesResponse)
-async def get_dataset_sources(
-    dataset_name: str, user: User = Depends(get_current_user)
-):
+def get_dataset_sources(dataset_name: str, user: User = Depends(get_current_user)):
     """List the sources a dataset was built from, with its analysis history."""
     try:
         return get_dataset_sources_view(user.id, dataset_name)
@@ -104,9 +107,7 @@ async def get_dataset_sources(
 
 
 @router.get("/dataset/{dataset_name}/versions", response_model=DatasetVersionsResponse)
-async def get_dataset_versions(
-    dataset_name: str, user: User = Depends(get_current_user)
-):
+def get_dataset_versions(dataset_name: str, user: User = Depends(get_current_user)):
     """The dataset's version history (one entry per recorded generation)."""
     try:
         return list_dataset_versions(user.id, dataset_name)
@@ -163,6 +164,8 @@ async def import_huggingface_dataset(
         )
     except HuggingFaceNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except HuggingFaceImportTooLargeError as e:
+        raise HTTPException(status_code=413, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -174,7 +177,7 @@ async def import_huggingface_dataset(
     "/dataset/{dataset_name}/export/huggingface",
     response_model=HuggingFaceExportResponse,
 )
-async def export_to_huggingface(
+def export_to_huggingface(
     dataset_name: str,
     repo_id: str = Query(
         None,
@@ -202,7 +205,7 @@ async def export_to_huggingface(
 @router.post(
     "/dataset/{dataset_name}/duplicate", response_model=DuplicateDatasetResponse
 )
-async def duplicate_dataset(
+def duplicate_dataset(
     dataset_name: str,
     target_name: str = Query(
         None, description="Name of the copy (defaults to '<name>-copy')"
@@ -223,7 +226,7 @@ async def duplicate_dataset(
     "/dataset/{dataset_name}/analyze-similarities",
     response_model=SimilarityAnalysisResponse,
 )
-async def analyze_similarities(
+def analyze_similarities(
     dataset_name: str,
     threshold: float = Query(0.8, description="Similarity threshold"),
     user: User = Depends(get_current_user),
@@ -242,7 +245,7 @@ async def analyze_similarities(
     "/dataset/{dataset_name}/clean-similarities",
     response_model=CleanSimilarityResponse,
 )
-async def clean_similarities(
+def clean_similarities(
     dataset_name: str,
     threshold: float = Query(
         0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"
@@ -263,7 +266,7 @@ async def clean_similarities(
     "/dataset/{dataset_name}/resolve-pair",
     response_model=ResolvePairResponse,
 )
-async def resolve_pair(
+def resolve_pair(
     dataset_name: str,
     body: ResolvePairRequest,
     user: User = Depends(get_current_user),
@@ -288,7 +291,7 @@ async def resolve_pair(
     "/dataset/{dataset_name}",
     response_model=DeleteDatasetResponse,
 )
-async def delete_dataset(dataset_name: str, user: User = Depends(get_current_user)):
+def delete_dataset(dataset_name: str, user: User = Depends(get_current_user)):
     """Delete one of your datasets, its Q/A pairs and its Qdrant collection."""
     try:
         return delete_dataset_view(user.id, dataset_name)

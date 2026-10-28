@@ -4,6 +4,7 @@ import time
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.concurrency import run_in_threadpool
 
 from server.core.config import config
 from server.schemas.models import (
@@ -49,9 +50,8 @@ async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsR
                 "models": [asdict(m) for m in models],
             }
         )
-    return ModelsResponse(
-        providers=providers, defaults=get_model_defaults(user_id), roles=list(ROLES)
-    )
+    defaults = await run_in_threadpool(get_model_defaults, user_id)  # database
+    return ModelsResponse(providers=providers, defaults=defaults, roles=list(ROLES))
 
 
 @router.get("", response_model=ModelsResponse)
@@ -76,7 +76,7 @@ async def put_model_defaults(
 ) -> ModelsResponse:
     """Set your default model for one or more roles."""
     try:
-        update_model_defaults(user.id, body.defaults, creds)
+        await run_in_threadpool(update_model_defaults, user.id, body.defaults, creds)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return await _snapshot(False, user.id, creds)

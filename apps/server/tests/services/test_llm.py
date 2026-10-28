@@ -31,13 +31,13 @@ async def test_clean_text_calls_the_given_model():
         new=AsyncMock(return_value=CompletionResult("Cleaned text content")),
     ) as complete:
         result = await LLMService(FULL).clean_text(
-            "Dirty text", "claude:claude-sonnet-5"
+            "Dirty text", "claude:claude-sonnet-5-5"
         )
 
     assert result == "Cleaned text content"
     ref, req, creds = complete.call_args.args
     assert creds is FULL
-    assert ref == "claude:claude-sonnet-5"
+    assert ref == "claude:claude-sonnet-5-5"
     assert req.system == PromptManager.CLEANING_PROMPT
     assert req.user == "Dirty text"
 

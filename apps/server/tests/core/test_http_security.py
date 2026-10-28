@@ -1,10 +1,14 @@
-"""Security headers and the CSRF Origin check, on a minimal app."""
+"""Security headers, the CSRF Origin check and the body ceiling, on a minimal app."""
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from server.core.http_security import OriginCheckMiddleware, SecurityHeadersMiddleware
+from server.core.http_security import (
+    BodySizeLimitMiddleware,
+    OriginCheckMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 
 def _app(hsts=False, origins=("https://app.example.com",), regex=None):
@@ -117,3 +121,31 @@ class TestOriginCheck:
             ).status_code
             == 403
         )
+
+
+def _limited(limit: int = 16) -> TestClient:
+    app = FastAPI()
+
+    @app.post("/echo")
+    async def echo(request: Request):
+        return {"size": len(await request.body())}
+
+    app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=limit)
+    return TestClient(app)
+
+
+class TestBodySizeLimit:
+    def test_body_within_the_limit_passes(self):
+        response = _limited().post("/echo", content=b"x" * 16)
+        assert response.status_code == 200
+        assert response.json() == {"size": 16}
+
+    def test_declared_length_over_the_limit_is_refused_before_the_app(self):
+        response = _limited().post("/echo", content=b"x" * 17)
+        assert response.status_code == 413
+        assert "too large" in response.json()["detail"]
+
+    def test_body_without_a_length_is_cut_off_at_the_limit(self):
+        # A chunked body declares no Content-Length: it is counted as it streams.
+        response = _limited().post("/echo", content=iter([b"x" * 10, b"x" * 10]))
+        assert response.status_code == 413

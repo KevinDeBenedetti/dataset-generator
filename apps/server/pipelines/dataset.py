@@ -107,9 +107,12 @@ class DatasetPipeline:
         source_url = f"file://{filename}"
         qa_service = await self._qa_service(dataset_name)
 
-        # 1. Rasterise the file to one image per page.
+        # 1. Rasterise the file to one image per page — CPU-bound (PyMuPDF),
+        # so off the event loop, or every other request waits for it.
         t = time.perf_counter()
-        page_images = file_to_page_images(content, content_type, filename)
+        page_images = await asyncio.to_thread(
+            file_to_page_images, content, content_type, filename
+        )
         run.record(
             "rasterize",
             "Read file",
@@ -175,7 +178,11 @@ class DatasetPipeline:
         # 1. Fetch the page and strip it to text.
         t = time.perf_counter()
         page = await fetch_page(url)
-        raw_text = html_to_text(page.body) if page.is_html else page.body
+        raw_text = (
+            await asyncio.to_thread(html_to_text, page.body)  # up to 2 MB of HTML
+            if page.is_html
+            else page.body
+        )
         run.record(
             "fetch",
             "Fetch page",
@@ -215,13 +222,10 @@ class DatasetPipeline:
         )
 
     async def _qa_service(self, dataset_name: str) -> QAService:
-        qa_service = QAService(
-            self.owner_id,
-            dataset_name,
-            quality_rules=get_quality_rules(self.owner_id),
-        )
-        # DB read + embedding model load + one pass over the dataset's
-        # questions: off the event loop.
+        # DB reads + embedding model load + one pass over the dataset's
+        # questions: all off the event loop.
+        rules = await asyncio.to_thread(get_quality_rules, self.owner_id)
+        qa_service = QAService(self.owner_id, dataset_name, quality_rules=rules)
         await asyncio.to_thread(qa_service.prepare)
         return qa_service
 
@@ -253,7 +257,9 @@ class DatasetPipeline:
             qa_s += time.perf_counter() - t
 
             t = time.perf_counter()
-            text_stats = qa_service.process_qa_pairs(
+            # Embeddings (ONNX) and dedup queries: off the event loop.
+            text_stats = await asyncio.to_thread(
+                qa_service.process_qa_pairs,
                 qa_list=text_qa,
                 cleaned_text=text,
                 url=source_url,
@@ -297,7 +303,8 @@ class DatasetPipeline:
         if persist and config.persist_datasets:
             t = time.perf_counter()
             try:
-                persist_result = self._persist(
+                persist_result = await asyncio.to_thread(
+                    self._persist,
                     dataset_name=dataset_name,
                     items=run.items,
                     source_url=source_url,

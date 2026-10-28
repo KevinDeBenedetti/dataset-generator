@@ -19,7 +19,7 @@ router = APIRouter(
 
 
 @router.get("/{dataset_name}/stats", response_model=QAStatsResponse)
-async def get_qa_stats(
+def get_qa_stats(
     dataset_name: str,
     score_threshold: float = Query(
         0.8, ge=0.0, le=1.0, description="Validated/below split threshold"
@@ -89,7 +89,7 @@ async def score_qa(
 
 
 @router.get("/{dataset_name}", response_model=QAListResponse)
-async def get_qa_by_dataset(
+def get_qa_by_dataset(
     dataset_name: str,
     limit: Optional[int] = Query(
         10, ge=1, le=1000, description="Limit number of results"

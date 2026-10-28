@@ -451,6 +451,19 @@ def test_import_from_huggingface_missing_repo_returns_404(client: TestClient):
     assert response.status_code == 404
 
 
+def test_import_from_huggingface_too_large_returns_413(client: TestClient):
+    from server.services.huggingface import HuggingFaceImportTooLargeError
+
+    with patch(
+        "server.api.dataset.import_dataset_from_hub",
+        side_effect=HuggingFaceImportTooLargeError("'kevin/big' is too large"),
+    ):
+        response = client.post(
+            "/dataset/huggingface/import", params={"repo_id": "kevin/big"}
+        )
+    assert response.status_code == 413
+
+
 def test_import_from_huggingface_hub_failure_returns_502(client: TestClient):
     with patch(
         "server.api.dataset.import_dataset_from_hub",

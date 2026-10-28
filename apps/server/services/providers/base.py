@@ -1,7 +1,7 @@
 """Shared types for the model providers.
 
 A model is addressed by a *reference* ``"<provider>:<model id>"`` — e.g.
-``openai:gpt-4o-mini`` or ``claude:claude-sonnet-5``. A bare id (no prefix)
+``openai:gpt-4o-mini`` or ``claude:claude-sonnet-5-5``. A bare id (no prefix)
 means the OpenAI-compatible provider, so the ``OPENAI_*_MODEL`` values that
 predate providers keep working unchanged.
 """
@@ -75,7 +75,7 @@ class Provider(Protocol):
 
 
 def parse_ref(ref: str) -> Tuple[str, str]:
-    """``"claude:claude-sonnet-5"`` → ``("claude", "claude-sonnet-5")``.
+    """``"claude:claude-sonnet-5-5"`` → ``("claude", "claude-sonnet-5-5")``.
 
     A bare id belongs to :data:`DEFAULT_PROVIDER`. Only the first ``:`` splits,
     and only when the prefix is a known provider name — some OpenAI-compatible

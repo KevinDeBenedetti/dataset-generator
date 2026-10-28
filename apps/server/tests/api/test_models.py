@@ -11,9 +11,9 @@ from server.services.providers import CompletionResult, ProviderError
 
 DEFAULTS = {
     "cleaning": "openai:gpt-4o-mini",
-    "qa": "claude:claude-sonnet-5",
+    "qa": "claude:claude-sonnet-5-5",
     "vision": "openai:vlm",
-    "jobs": "claude:claude-sonnet-5",
+    "jobs": "claude:claude-sonnet-5-5",
 }
 
 
@@ -38,7 +38,9 @@ def test_list_models(client: TestClient, monkeypatch):
     assert providers["claude"]["missing"] == [
         "your Claude token (`claude setup-token`) or Anthropic API key"
     ]
-    assert "claude:claude-sonnet-5" in [m["ref"] for m in providers["claude"]["models"]]
+    assert "claude:claude-sonnet-5-5" in [
+        m["ref"] for m in providers["claude"]["models"]
+    ]
 
 
 def test_put_defaults(client: TestClient, owner):
@@ -47,10 +49,10 @@ def test_put_defaults(client: TestClient, owner):
         patch("server.api.models.get_model_defaults", return_value=DEFAULTS),
     ):
         response = client.put(
-            "/models/defaults", json={"defaults": {"qa": "claude:claude-sonnet-5"}}
+            "/models/defaults", json={"defaults": {"qa": "claude:claude-sonnet-5-5"}}
         )
     assert response.status_code == 200
-    update.assert_called_once_with(owner.id, {"qa": "claude:claude-sonnet-5"}, FULL)
+    update.assert_called_once_with(owner.id, {"qa": "claude:claude-sonnet-5-5"}, FULL)
     assert response.json()["defaults"] == DEFAULTS
 
 
@@ -66,13 +68,15 @@ def test_put_defaults_rejects_bad_ref(client: TestClient):
 
 def test_test_model_success(client: TestClient):
     with (
-        patch("server.api.models.validate_ref", return_value="claude:claude-sonnet-5"),
+        patch(
+            "server.api.models.validate_ref", return_value="claude:claude-sonnet-5-5"
+        ),
         patch(
             "server.api.models.complete",
             new=AsyncMock(return_value=CompletionResult("Hi!", {"output_tokens": 2})),
         ),
     ):
-        response = client.post("/models/test", json={"ref": "claude:claude-sonnet-5"})
+        response = client.post("/models/test", json={"ref": "claude:claude-sonnet-5-5"})
     body = response.json()
     assert response.status_code == 200
     assert (body["ok"], body["text"], body["usage"]) == (
@@ -85,13 +89,15 @@ def test_test_model_success(client: TestClient):
 
 def test_test_model_reports_provider_errors(client: TestClient):
     with (
-        patch("server.api.models.validate_ref", return_value="claude:claude-sonnet-5"),
+        patch(
+            "server.api.models.validate_ref", return_value="claude:claude-sonnet-5-5"
+        ),
         patch(
             "server.api.models.complete",
             new=AsyncMock(side_effect=ProviderError("rate limited")),
         ),
     ):
-        response = client.post("/models/test", json={"ref": "claude:claude-sonnet-5"})
+        response = client.post("/models/test", json={"ref": "claude:claude-sonnet-5-5"})
     assert response.status_code == 200
     assert response.json()["ok"] is False
     assert response.json()["error"] == "rate limited"

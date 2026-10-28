@@ -7,9 +7,10 @@ run stops at a draft, published later by :func:`publish_run` — exactly what
 was reviewed, never a regeneration.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
@@ -188,6 +189,19 @@ async def start_run(
     :class:`RunConflictError` when a run of this job is queued or running, and
     :class:`QuotaExceededError`.
     """
+    # The role default, the quotas and the insert all hit the database.
+    return await asyncio.to_thread(
+        _queue_run, owner_id, creds, job_id, options, model_ref
+    )
+
+
+def _queue_run(
+    owner_id: str,
+    creds: Credentials,
+    job_id: str,
+    options: Dict[str, Any],
+    model_ref: Optional[str],
+) -> Dict[str, Any]:
     spec = _spec(job_id)
     parsed = spec.options.model_validate(options or {})
     model = (
@@ -277,6 +291,28 @@ async def publish_run(
     Raises :class:`UnknownRunError`, :class:`RunConflictError` for a run
     without an unpublished draft, or the job's own ``JobError``.
     """
+    publisher, draft = await asyncio.to_thread(_take_draft, owner_id, run_id)
+    try:
+        result = await publisher(creds, draft, exclude, promote)
+    except BaseException:
+        # Synchronous on purpose: it must run even when the task is cancelled.
+        _update(run_id, status="succeeded")  # still publishable after a failure
+        raise
+    await asyncio.to_thread(
+        _update,
+        run_id,
+        status="published",
+        result=result.model_dump(mode="json"),
+        published_url=result.url,
+        published_at=_now(),
+    )
+    return await asyncio.to_thread(get_run, owner_id, run_id)
+
+
+def _take_draft(
+    owner_id: str, run_id: str
+) -> Tuple[Callable[..., Awaitable[Any]], Dict[str, Any]]:
+    """Claim a run's draft for publishing; returns its job's publisher and the draft."""
     with get_scoped_db() as db:
         row = _owned_row(db, owner_id, run_id)
         spec = JOBS.get(row.job_id)
@@ -291,18 +327,4 @@ async def publish_run(
         db.commit()
         if not taken:
             raise RunConflictError(f"This run is {row.status}, not ready to publish")
-        draft = row.draft
-
-    try:
-        result = await spec.publisher(creds, draft, exclude, promote)
-    except BaseException:
-        _update(run_id, status="succeeded")  # still publishable after a failure
-        raise
-    _update(
-        run_id,
-        status="published",
-        result=result.model_dump(mode="json"),
-        published_url=result.url,
-        published_at=_now(),
-    )
-    return get_run(owner_id, run_id)
+        return spec.publisher, row.draft

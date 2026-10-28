@@ -175,7 +175,7 @@ class TestProcessUrl:
             dataset_name="ds",
             target_language="en",
             model_cleaning="openai:clean",
-            model_qa="claude:claude-sonnet-5",
+            model_qa="claude:claude-sonnet-5-5",
             persist=False,
         )
 
@@ -186,7 +186,7 @@ class TestProcessUrl:
         assert (text, lang, qa_model) == (
             "Guide. Install it with make.",
             "en",
-            "claude:claude-sonnet-5",
+            "claude:claude-sonnet-5-5",
         )
         assert mock_qa_service.process_qa_pairs.call_args.kwargs["url"] == (
             "https://docs.example.com/guide"

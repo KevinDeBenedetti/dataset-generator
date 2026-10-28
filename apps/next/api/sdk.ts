@@ -14,8 +14,8 @@ import { client } from './gen/client.gen'
 //
 // Unset, it defaults to the same-origin `/api` in production (the ingress routes
 // it to the API — one image for any host, no CORS) and to the dev server on
-// localhost:8000 otherwise.
-const API_BASE_URL =
+// localhost:8000 otherwise. Exported so a page can say which API it failed to reach.
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
   (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:8000')
 

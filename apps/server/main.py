@@ -28,7 +28,11 @@ from server.services.auth import ensure_secret_is_safe, get_current_user
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal, database_ready
 from server.core.config import config
-from server.core.http_security import OriginCheckMiddleware, SecurityHeadersMiddleware
+from server.core.http_security import (
+    BodySizeLimitMiddleware,
+    OriginCheckMiddleware,
+    SecurityHeadersMiddleware,
+)
 from server.core.log_stream import broadcaster
 
 logger_module.setup_logging()
@@ -162,6 +166,13 @@ def create_app() -> FastAPI:
         cast(Any, OriginCheckMiddleware),
         allowed_origins=config.cors_allow_origins,
         allowed_origin_regex=config.cors_allow_origin_regex,
+    )
+    # DoS: refuse an oversized body before anything reads it. Added after the
+    # Origin check so it runs first, and before the headers so a 413 still
+    # carries them.
+    app.add_middleware(
+        cast(Any, BodySizeLimitMiddleware),
+        max_body_bytes=config.max_request_body_bytes,
     )
     app.add_middleware(
         cast(Any, SecurityHeadersMiddleware), hsts=config.auth_cookie_secure

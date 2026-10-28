@@ -22,7 +22,7 @@ import os
 import socket
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select, update
 
@@ -125,19 +125,29 @@ def _finish(run_id: str, worker: str, **fields: Any) -> None:
         db.commit()
 
 
-async def execute(run_id: str, worker: str) -> str:
-    """Run one claimed run to its end; returns the final status."""
-    from server.services.credentials import resolve_credentials
-
+def _load(run_id: str) -> Tuple[str, str, Dict[str, Any], Optional[str]]:
+    """``(owner_id, job_id, options, model_ref)`` of a claimed run."""
     with get_scoped_db() as db:
         row = db.get(JobRun, run_id)
         assert row is not None
-        owner_id, job_id = row.owner_id, row.job_id
-        options, model_ref = dict(row.options or {}), row.model_ref
+        return row.owner_id, row.job_id, dict(row.options or {}), row.model_ref
+
+
+async def execute(run_id: str, worker: str) -> str:
+    """Run one claimed run to its end; returns the final status.
+
+    Every database call goes through a thread: the loop also drives the other
+    runs of this worker and their heart-beats.
+    """
+    from server.services.credentials import resolve_credentials
+
+    owner_id, job_id, options, model_ref = await asyncio.to_thread(_load, run_id)
 
     spec = JOBS.get(job_id)
     if spec is None:
-        _finish(run_id, worker, status="failed", error=f"Unknown job '{job_id}'")
+        await asyncio.to_thread(
+            _finish, run_id, worker, status="failed", error=f"Unknown job '{job_id}'"
+        )
         return "failed"
 
     latest: Dict[str, Any] = {"value": None}
@@ -164,16 +174,26 @@ async def execute(run_id: str, worker: str) -> str:
                 await task
             except BaseException:  # noqa: BLE001 — cancellation is the point
                 pass
-            _finish(run_id, worker, status="cancelled", progress=None)
+            await asyncio.to_thread(
+                _finish, run_id, worker, status="cancelled", progress=None
+            )
             return "cancelled"
 
     try:
         outcome = task.result()
     except Exception as exc:  # noqa: BLE001 — recorded on the run, shown on the page
         logger.exception("Job %s run %s failed", job_id, run_id)
-        _finish(run_id, worker, status="failed", error=redact(str(exc)), progress=None)
+        await asyncio.to_thread(
+            _finish,
+            run_id,
+            worker,
+            status="failed",
+            error=redact(str(exc)),
+            progress=None,
+        )
         return "failed"
-    _finish(
+    await asyncio.to_thread(
+        _finish,
         run_id,
         worker,
         status="succeeded",

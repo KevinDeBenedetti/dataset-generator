@@ -17,7 +17,7 @@ dependencies = [
     "alembic>=1.20.0",
     "uvicorn[standard]>=0.54.0",
     "bcrypt>=5.0.0",
-    "authlib>=1.8.0",
+    "authlib>=1.9.1",
     # Signs Starlette's SessionMiddleware cookie (the SSO state).
     "itsdangerous>=2.2.0",
     "qdrant-client>=1.19.1",

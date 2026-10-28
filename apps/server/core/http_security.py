@@ -1,4 +1,5 @@
-"""HTTP hardening middlewares: security headers and a CSRF Origin check.
+"""HTTP hardening middlewares: security headers, a CSRF Origin check and a
+request body ceiling.
 
 Pure ASGI (not ``BaseHTTPMiddleware``) so streamed responses — the dev log
 console's SSE — pass through untouched.
@@ -8,6 +9,8 @@ import json
 import re
 from typing import Any, Awaitable, Callable, Iterable, Optional
 from urllib.parse import urlsplit
+
+from starlette.exceptions import HTTPException
 
 Scope = dict
 Receive = Callable[[], Awaitable[dict]]
@@ -21,6 +24,22 @@ def _header(scope: Scope, name: bytes) -> Optional[str]:
         if key == name:
             return value.decode("latin-1")
     return None
+
+
+async def _send_json(send: Send, status: int, payload: dict) -> None:
+    """A complete JSON answer, for a middleware that refuses the request."""
+    body = json.dumps(payload).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
 
 
 class SecurityHeadersMiddleware:
@@ -112,17 +131,47 @@ class OriginCheckMiddleware:
             if origin is not None and not self._allowed(
                 origin, _header(scope, b"host")
             ):
-                body = json.dumps({"detail": "Origin not allowed"}).encode()
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 403,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (b"content-length", str(len(body)).encode()),
-                        ],
-                    }
-                )
-                await send({"type": "http.response.body", "body": body})
+                await _send_json(send, 403, {"detail": "Origin not allowed"})
                 return
         await self.app(scope, receive, send)
+
+
+class BodySizeLimitMiddleware:
+    """Refuses request bodies larger than ``max_body_bytes`` with a 413.
+
+    Uvicorn accepts a body of any size, so without this one request could fill
+    the memory (an upload is read whole) or the disk (multipart spooling). A
+    declared ``Content-Length`` over the limit is answered before the app
+    runs; a body sent without one (chunked) is counted as it arrives and
+    ``receive()`` raises a 413 ``HTTPException`` at the limit, which FastAPI
+    re-raises from body parsing and turns into the response.
+    """
+
+    def __init__(self, app: Any, max_body_bytes: int) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+        self._detail = f"Request body too large (over {max_body_bytes} bytes)"
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        declared = _header(scope, b"content-length")
+        if declared is not None and declared.isdigit():
+            if int(declared) > self.max_body_bytes:
+                await _send_json(send, 413, {"detail": self._detail})
+                return
+
+        received = 0
+
+        async def limited_receive() -> dict:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_body_bytes:
+                    raise HTTPException(status_code=413, detail=self._detail)
+            return message
+
+        await self.app(scope, limited_receive, send)

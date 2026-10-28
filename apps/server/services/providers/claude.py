@@ -12,9 +12,11 @@ therefore runs the CLI through a small wrapper that starts it under ``env -i``
 with only PATH, a throwaway HOME/config directory and the caller's own token,
 in an empty temporary working directory that is deleted afterwards.
 
-Each call is a plain single-turn generation: no tools, no filesystem settings
-(never picking up a CLAUDE.md or hooks from the working directory). Images go
-through the SDK's streaming-input mode, as ``image`` content blocks.
+Each call is a plain single-turn generation: no built-in tool, no MCP server,
+no permission granted, no filesystem settings (never picking up a CLAUDE.md or
+hooks from the working directory), and the prompt delivered verbatim — the
+source text is untrusted, so no ``@path`` expansion and no slash command. Images
+go through the SDK's streaming-input mode, as ``image`` content blocks.
 """
 
 import base64
@@ -38,10 +40,10 @@ from server.services.providers.base import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODELS = ("claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5-20251001")
+DEFAULT_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
 
 
-# Tools the agent could otherwise reach; a plain completion needs none of them.
+# Backstop for a CLI that would ignore ``tools=[]``: a completion needs none.
 _BUILTIN_TOOLS = [
     "Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "MultiEdit",
     "Glob", "Grep", "WebFetch", "WebSearch", "Task", "TodoWrite", "NotebookEdit",
@@ -203,8 +205,16 @@ class ClaudeProvider:
             options = ClaudeAgentOptions(
                 model=model,
                 system_prompt=req.system or None,
-                allowed_tools=[],
+                # No built-in tool at all (``--tools ""``), whatever a newer CLI
+                # ships; nothing is pre-approved and anything else is denied.
+                tools=[],
                 disallowed_tools=_BUILTIN_TOOLS,
+                allowed_tools=[],
+                permission_mode="dontAsk",
+                # The source text is untrusted: no @path expansion, no slash
+                # command dispatch (honoured from Claude Code 2.1.248).
+                verbatim_prompts=True,
+                strict_mcp_config=True,
                 setting_sources=[],
                 max_turns=1,
                 cwd=str(workdir),

@@ -3,6 +3,7 @@ import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from server.core.config import config
 from server.api.deps import get_credentials
@@ -37,7 +38,11 @@ _RESPONSES: Dict[int | str, Dict[str, Any]] = {
 def _model(
     role: str, requested: Optional[str], user_id: str, creds: Credentials
 ) -> str:
-    """The request's model reference, else your role default — validated. 400 otherwise."""
+    """The request's model reference, else your role default — validated. 400 otherwise.
+
+    Reads the role default from the database: call it through
+    ``run_in_threadpool`` from the async routes.
+    """
     ref = resolve_model(role, requested, user_id=user_id)
     if not ref:
         raise HTTPException(
@@ -136,10 +141,20 @@ async def create_dataset_for_file(
     """Create a dataset from an uploaded PDF/image via a vision model."""
     start_time = time.time()
     language = _language(target_language)
-    model_qa_r = _model("qa", model_qa, user.id, creds)
-    model_vlm_r = _model("vision", model_vlm, user.id, creds)
+    model_qa_r = await run_in_threadpool(_model, "qa", model_qa, user.id, creds)
+    model_vlm_r = await run_in_threadpool(_model, "vision", model_vlm, user.id, creds)
 
-    content = await file.read()
+    # Refuse an oversized upload before holding it in memory: the size the
+    # multipart parser saw first, then a bounded read in case it reported none.
+    too_large = HTTPException(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        detail=f"The file is larger than {config.max_upload_bytes // (1024 * 1024)} MB",
+    )
+    if file.size is not None and file.size > config.max_upload_bytes:
+        raise too_large
+    content = await file.read(config.max_upload_bytes + 1)
+    if len(content) > config.max_upload_bytes:
+        raise too_large
     if not content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
@@ -197,8 +212,10 @@ async def create_dataset_for_url(
     """Create a dataset from a single web page."""
     start_time = time.time()
     language = _language(request.target_language)
-    model_cleaning = _model("cleaning", request.model_cleaning, user.id, creds)
-    model_qa = _model("qa", request.model_qa, user.id, creds)
+    model_cleaning = await run_in_threadpool(
+        _model, "cleaning", request.model_cleaning, user.id, creds
+    )
+    model_qa = await run_in_threadpool(_model, "qa", request.model_qa, user.id, creds)
 
     try:
         result = await DatasetPipeline(user.id, creds).process_url(
