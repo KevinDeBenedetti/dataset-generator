@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useAuthProviders, useLogin } from '@/hooks/use-auth'
-import { ssoUrl } from '@/api/sdk'
+import { API_BASE_URL, ssoUrl } from '@/api/sdk'
 
 // What the API's `?error=` codes mean (see apps/server/services/identities.py).
 const SSO_ERRORS: Record<string, string> = {
@@ -35,7 +35,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error] = useState(ssoError)
   const loginMutation = useLogin()
-  const { data: options, isPending } = useAuthProviders()
+  const {
+    data: options,
+    isPending,
+    isError,
+    error: optionsError,
+    isFetching,
+    refetch,
+  } = useAuthProviders()
   const providers = (options?.providers ?? []).filter((p) => p.configured)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,6 +68,28 @@ export default function LoginPage() {
             </p>
           )}
 
+          {/* The sign-in methods come from the API: say so while they load (retries
+              included) and when it can't be reached, instead of an empty card. */}
+          {isPending && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading sign-in options…
+            </p>
+          )}
+          {isError && (
+            <div className="flex flex-col gap-2" role="alert">
+              <p className="text-sm text-red-600">
+                Couldn&apos;t load the sign-in options from {API_BASE_URL}
+                {optionsError instanceof Error ? ` (${optionsError.message})` : ''}. Check that the
+                API is running, then retry.
+              </p>
+              <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+                {isFetching && <Loader2 className="size-4 animate-spin" />}
+                Retry
+              </Button>
+            </div>
+          )}
+
           {providers.map((provider) => (
             <Button
               key={provider.name}
@@ -73,7 +102,7 @@ export default function LoginPage() {
               Continue with {provider.label}
             </Button>
           ))}
-          {!isPending && providers.length === 0 && !options?.local_login && (
+          {options && providers.length === 0 && !options.local_login && (
             <p className="text-sm text-muted-foreground">No sign-in method is configured.</p>
           )}
 

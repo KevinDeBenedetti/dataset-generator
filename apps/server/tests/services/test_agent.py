@@ -124,13 +124,13 @@ async def test_node_calls_the_provider_registry():
         new=AsyncMock(return_value=CompletionResult(VALID_PAYLOAD)),
     ) as complete:
         items = await QAAgentService(FULL).generate_qa(
-            "Some source text", "fr", "claude:claude-sonnet-5"
+            "Some source text", "fr", "claude:claude-sonnet-5-5"
         )
 
     assert len(items) == 1
     ref, req, creds = complete.call_args.args
     assert creds is FULL
-    assert ref == "claude:claude-sonnet-5"
+    assert ref == "claude:claude-sonnet-5-5"
     assert req.system == QA_AGENT_INSTRUCTION
     assert "Target language: fr" in req.user and "Some source text" in req.user
     assert req.reasoning is True

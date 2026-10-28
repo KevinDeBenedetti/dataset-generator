@@ -21,9 +21,11 @@ import hashlib
 import json
 import logging
 import re
+import tempfile
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from server.core.config import config
 from server.services.credentials import HF_TOKEN, Credentials
 from server.services.datasets import (
     get_dataset_pairs,
@@ -44,6 +46,10 @@ class HuggingFaceNotConfiguredError(RuntimeError):
 
 class HuggingFaceRepoPublicError(RuntimeError):
     """Raised when the target repo already exists and is public."""
+
+
+class HuggingFaceImportTooLargeError(ValueError):
+    """Raised when a repo's data files exceed ``config.max_hub_import_bytes``."""
 
 
 def is_huggingface_configured(creds: Credentials) -> bool:
@@ -203,17 +209,38 @@ def _list_repo_files(creds: Credentials, repo_id: str) -> List[str]:
         raise ValueError(f"Hugging Face dataset repo '{repo_id}' not found")
 
 
-def _download_file(creds: Credentials, repo_id: str, filename: str) -> bytes:
+def _download_file(
+    creds: Credentials, repo_id: str, filename: str, max_bytes: int
+) -> bytes:
+    """A data file's bytes, refused when it is larger than ``max_bytes``.
+
+    The size is checked on the Hub's metadata before anything is fetched, then
+    on what arrived; the file lands in a throwaway cache, so imports never pile
+    up on the server's disk.
+    """
     from huggingface_hub import hf_hub_download
 
-    path = hf_hub_download(
-        repo_id=repo_id,
-        filename=filename,
-        repo_type="dataset",
-        token=_require_token(creds),
+    too_large = HuggingFaceImportTooLargeError(
+        f"'{repo_id}' is too large to import: its data files exceed "
+        f"{config.max_hub_import_bytes // (1024 * 1024)} MB"
     )
-    with open(path, "rb") as f:
-        return f.read()
+    [info] = _api(creds).get_paths_info(repo_id, [filename], repo_type="dataset")
+    size = getattr(info, "size", None)
+    if size is not None and size > max_bytes:
+        raise too_large
+    with tempfile.TemporaryDirectory(prefix="hf-import-") as cache_dir:
+        path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type="dataset",
+            token=_require_token(creds),
+            cache_dir=cache_dir,
+        )
+        with open(path, "rb") as f:
+            data = f.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise too_large
+    return data
 
 
 def _parquet_available() -> bool:
@@ -394,9 +421,11 @@ def import_dataset_from_hub(
     idempotent, and the existing analysis pipeline (duplicate detection, score
     stats, quality rules) then runs over it like any other dataset.
 
-    Raises :class:`HuggingFaceNotConfiguredError` without a token, and
-    ValueError (naming what was found) when the repo is unknown, has no
-    readable data file, or no row maps onto a Q/A pair.
+    Raises :class:`HuggingFaceNotConfiguredError` without a token,
+    :class:`HuggingFaceImportTooLargeError` when its data files exceed
+    ``config.max_hub_import_bytes``, and ValueError (naming what was found)
+    when the repo is unknown, has no readable data file, or no row maps onto a
+    Q/A pair.
     """
     _require_token(creds)
     local_name = dataset_name or repo_id.split("/")[-1]
@@ -416,8 +445,11 @@ def import_dataset_from_hub(
     items: List[Dict[str, Any]] = []
     columns: set[str] = set()
     skipped = 0
+    budget = config.max_hub_import_bytes  # shared by every data file
     for filename in data_files:
-        rows = _parse_rows(filename, _download_file(creds, repo_id, filename))
+        raw = _download_file(creds, repo_id, filename, budget)
+        budget -= len(raw)
+        rows = _parse_rows(filename, raw)
         logger.info("HF import %s: %s → %d row(s)", repo_id, filename, len(rows))
         for row in rows:
             columns.update(row.keys())
@@ -536,9 +568,13 @@ def ensure_private_dataset_repo(api: Any, repo_id: str) -> None:
         info = api.repo_info(repo_id, repo_type="dataset")
     except RepositoryNotFoundError:  # pragma: no cover — just created above
         info = None
-    if info is not None and getattr(info, "private", None) is False:
+    # Only a confirmed private repo is safe: an unknown visibility is refused
+    # like a public one.
+    private = getattr(info, "private", None) if info is not None else None
+    if private is not True:
+        state = "is public" if private is False else "has an unknown visibility"
         raise HuggingFaceRepoPublicError(
-            f"The Hugging Face repo '{repo_id}' already exists and is public. "
+            f"The Hugging Face repo '{repo_id}' already exists and {state}. "
             "Exporting would publish this dataset — make the repo private on "
             "the Hub, or export to a different repo id."
         )

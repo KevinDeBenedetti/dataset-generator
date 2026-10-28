@@ -1,16 +1,63 @@
 # TODO
 
-## Features
-- Deployment => Supervisor + CI-triggered dataset generation, to use the Claude subscription's tokens
-
 ## 🔴 En cours
 
 ## 🟡 À faire
-- [ ] CHORE: 10+ branches `dependabot/bun/apps/next/*` ouvertes sur le remote (react 19.2.7, radix-*, @hey-api/openapi-ts 0.98.2, eslint 10.x alors qu'eslint a été retiré au profit d'oxlint). À trier/fermer une fois la branche mergée, plutôt que de rebaser 10 PR sur un diff de 222 fichiers. (Non fait : la branche n'est pas mergée — la condition posée par la tâche elle-même — et l'API GitHub est injoignable depuis le bac à sable, `tls: failed to verify certificate`. Fermer des PR reste de toute façon une action sortante à décider par toi.)
+- [ ] FIX: [MEDIUM] Ne plus renvoyer le texte brut des exceptions dans les réponses 5xx : 21 routes répondent `detail=str(e)` ou `f"…{e}"` (apps/server/api/dataset.py:69 et 11 autres, collections.py:35/57/83, q_a.py:42/88/109, quality_rules.py:41, jobs.py:102, agent.py:80) — le client reçoit des erreurs SQLAlchemy, Hugging Face ou internes ; journaliser l'exception et répondre un message générique.
+- [ ] FIX: [MEDIUM] Borner la durée totale de récupération d'une page (apps/server/services/web.py:19) — `TIMEOUT_S` vaut pour chaque lecture : un serveur qui envoie un octet toutes les 14 s garde une génération ouverte des heures ; envelopper `fetch_page` dans `asyncio.timeout`.
+- [ ] FIX: [MEDIUM] Exclure tous les `.env*` des contextes Docker : `.dockerignore:36-38` ne vise que la racine (un `apps/server/.env` serait copié dans l'image par `COPY ./apps/server`) et `apps/next/.dockerignore:41-42` n'exclut que `.env.local`/`.env.*.local` ; passer à `**/.env*` + `!**/.env.example`, et ajouter `.claude/` à la racine.
+- [ ] FIX: [LOW] Borner les entrées : `url` et `dataset_name` sans `max_length` (apps/server/schemas/generate.py:27-28), `text` de `/agent/qa-test` (apps/server/api/agent.py:27), `threshold` sans `ge`/`le` sur analyze/clean-similarities (apps/server/api/dataset.py:231, 250) — avec un seuil de 0, clean-similarities supprime presque toutes les paires.
+- [ ] FIX: [LOW] Connexion locale en temps constant (apps/server/services/auth.py:281) — bcrypt ne tourne que si le compte existe : le temps de réponse révèle les emails inscrits quand `ENABLE_LOCAL_LOGIN` est actif.
+- [ ] FIX: [LOW] Mots de passe de plus de 72 octets tronqués en silence (apps/server/core/security.py:16, 24) alors que la docstring (ligne 4) annonce une protection — les refuser ou les pré-hacher.
+- [ ] FIX: [LOW] Demander une confirmation forte avant la suppression de compte (apps/server/api/me.py:216) — une session volée suffit à tout effacer.
+- [ ] FIX: [LOW] Versionner `apps/next/app/api/debug/logs/route.ts`, ignorée par la règle `logs` de `.gitignore:42` (la console de logs est cassée sur tout clone), et la limiter au développement (`NODE_ENV`) comme l'API — avec `DEBUG_LOGS` en production, elle diffuserait les logs du serveur Next sans authentification.
+- [ ] CHORE: [LOW] Ignorer tous les fichiers d'environnement : `.gitignore:116-120` ne couvre ni `.env.production` ni `.env.staging` ; remplacer par `.env*` + `!.env.example`.
+- [ ] CHORE: [LOW] Restreindre l'allowlist gitleaks aux jetons canaris (`.gitleaks.toml:15`) — tout `apps/server/tests/` est exempté, une vraie clé collée dans un test passerait le scan.
+- [ ] CHORE: [LOW] `fastapi[standard-no-fastapi-cloud-cli]` au lieu de `fastapi[standard]` (pyproject.toml:9) — l'image de production embarque fastapi-cloud-cli et sentry-sdk sans s'en servir.
+- [ ] FIX: Provider OpenAI : envoyer `max_completion_tokens` et omettre `temperature` pour les modèles de raisonnement (apps/server/services/providers/openai.py:166-167) — `max_tokens` est déprécié et refusé par les modèles o-series, qui rejettent aussi `temperature=0`, alors que le provider leur envoie déjà `reasoning_effort`.
+- [ ] CHORE: Mettre à jour les dépendances Python directes (`uv lock --upgrade`, puis `make lint test`) : fastapi 0.143 → 0.162, openai 3.26.1 → 3.37, qdrant-client 1.19.1 → 1.20, sqlalchemy 2.1.4 → 2.1.6, alembic 1.20.0 → 1.20.1, claude-agent-sdk 0.2.165 → 0.2.174 ; garder huggingface-hub < 2 tant que fastembed l'exige.
+- [ ] CHORE: Mettre à jour le front (`cd apps/next && bun update`) : @tanstack/react-query 5.104.5, geist 1.8.2, lucide-react 1.61, zustand 5.0.16, oxlint 1.89, vitest 5.0.5 ; puis retirer un à un les `overrides` d'apps/next/package.json et d'apps/next/openapi-codegen/package.json dès que `bun audit` reste propre sans eux.
+- [ ] CHORE: Runtimes : Python 3.13 → 3.14 (apps/server/Dockerfile:7, apps/server/.python-version, `python-version` de ci-cd.yml:45/85, dataset-sync.yml:52, qa-dataset-sync.yml:54) et Node 22 → 24 LTS (ci-cd.yml:59, `node:22-slim` d'apps/next/Dockerfile:74) — Python 3.13 ne reçoit plus que des correctifs de sécurité depuis le 2026-10-01, Node 26 devient LTS le 2026-10-28.
+- [ ] CHORE: Épingler les images : `ghcr.io/astral-sh/uv:latest` → `0.13.5` + digest (apps/server/Dockerfile:9), `oven/bun:1-slim` → `1.4.4-slim` (apps/next/Dockerfile:7), `qdrant/qdrant:latest` → `v1.20.0` et `redis:7-alpine` → `8-alpine` (docker-compose.yml:200, 215) — Redis 8.8+ apporte `INCREX` au limiteur de connexions (apps/server/services/rate_limit.py).
+- [ ] CHORE: pyproject.toml : déclarer `joserfc` et `cryptography`, importés directement (apps/server/services/auth.py, apps/server/core/crypto.py) mais tirés seulement par authlib ; renommer le projet `datasets` (ligne 2), homonyme de la bibliothèque Hugging Face ; corriger le commentaire « Capped below 3.0 » (ligne 11), le plafond est `<4.0.0`.
+- [ ] CHORE: Faire suivre les versions par release-please (`extra-files`) : pyproject.toml:3 (0.1.0), apps/next/package.json:3 (0.9.0) et apps/server/main.py:139 (0.0.1) ignorent les releases (0.13.1).
+- [ ] CHORE: Retirer les sections `[coverage:*]` de pytest.ini (à partir de la ligne 41) : coverage les ignore et lit `.coveragerc`.
+- [ ] CHORE: Durcir ruff : ajouter `S`, `B` et `ASYNC` à `select` (pyproject.toml:72), avec `extend-immutable-calls` pour `Depends`/`Query`/`File`/`Form`, puis corriger les findings (76 B904, 34 BLE001…).
+- [ ] CHORE: Ajouter gitleaks, zizmor et actionlint aux hooks de prek.toml — gitleaks ne tourne qu'en CI, zizmor et actionlint nulle part.
+- [ ] CHORE: Retirer le code mort : apps/server/scripts/run.sh, .github/release/release-please-config-prerelease.json et .github/release/release-please-manifest.json (référencés nulle part), et les SVG du gabarit create-next-app dans apps/next/public/.
+- [ ] DOCS: Restructurer README.md selon la skill readme (≤ 150 lignes, contre 334) en déplaçant Configuration, Production, Jobs et Storage dans des pages de docs/.
+
+## 🖐 Manuel — à faire toi-même, dans l'ordre
+
+### 1. Aujourd'hui — valider et publier `fix/security-review`
+- [ ] Lancer la suite complète avec Docker : `make test`. Le sandbox de l'agent n'a pas accès au socket Docker : 537 tests y passent, les 351 qui démarrent un Postgres jetable n'ont pas tourné. Succès : `0 failed`.
+- [ ] Rejouer la série : `sh .git/fix-security-review/apply.sh`. Pour chaque étape, le script montre les fichiers (et le diff si tu le demandes), puis ne committe qu'après ton « o » ; les hooks prek tournent sur chaque commit. Succès : `git log --format='%h %G? %an <%ae> %s' 47c8a6c..HEAD` liste 16 commits marqués `G`, tous `Kevin De Benedetti <contact@kevindb.dev>`, et `git status --porcelain` est vide.
+- [ ] Pousser la branche et ouvrir la PR vers main : `git push -u origin fix/security-review`, puis `gh pr create --base main`. Succès : tous les checks sont verts, y compris les nouveaux (audit bun, pip-audit, CodeQL, revue de dépendances).
+- [ ] Fusionner en local pour garder tes signatures : `git switch main && git merge --ff-only fix/security-review && git push origin main` (pas de squash ni de rebase depuis l'interface web : ils réécrivent les commits, qui perdent ta signature). Succès : release-please ouvre « chore(main): release 0.14.0 » (`fix(auth)!` vaut un bump mineur tant qu'on est en 0.x).
+- [ ] Fusionner la PR de release (auteur github-actions[bot], c'est voulu) : le job Images de ci-cd.yml construit alors v0.14.0. Succès : les images `:v0.14.0` sont sur GHCR et `gh attestation verify oci://ghcr.io/kevindebenedetti/dataset-generator-server:v0.14.0 -R KevinDeBenedetti/dataset-generator` réussit (idem pour `dataset-generator-next`).
+- [ ] Avant de déployer v0.14.0 : hors développement, l'inscription est désormais fermée par défaut. Si la prod comptait sur l'inscription ouverte, l'ouvrir dans le backoffice, onglet **Platform** (`allow_signup`). Succès : un premier sign-in SSO crée bien le compte — ou est refusé, si c'est ton choix.
+- [ ] (Optionnel) La release v0.13.1 n'a jamais eu d'images. Inutile si tu déploies v0.14.0 ; sinon, une fois la branche fusionnée : `gh workflow run images.yml -f tag=v0.13.1`. Succès : `:v0.13.1` apparaît sur GHCR, `:latest` ne bouge pas.
+
+### 2. Cette semaine — réglages GitHub
+- [ ] Appliquer la checklist « Repository settings » de SECURITY.md : signalement privé des vulnérabilités, alertes et mises à jour de sécurité Dependabot, setup par défaut de CodeQL désactivé, rulesets sur `main` et `v*.*.*`, permissions du `GITHUB_TOKEN`, approbation des PR de forks. Avec une PR obligatoire sur main, fusionner par « Create a merge commit », qui garde tes commits signés. Succès : l'onglet Security propose « Report a vulnerability » et le job CodeQL envoie son analyse sans erreur « default setup ».
+
+### 3. Lundi 2026-11-02 — premier passage de Dependabot avec la nouvelle config
+- [ ] Vérifier la PR groupée `weekly-all` : elle couvre désormais les actions GitHub et les images de base des Dockerfiles (montées Python/Node exclues), avec 7 jours de délai après chaque publication. L'appliquer en local (`git merge --squash`) pour qu'elle porte ton identité. Succès : pins SHA et commentaires de version déplacés ensemble, CI verte.
+
+### 4. Hygiène du dépôt
+- [ ] Supprimer le worktree d'agent et les branches locales périmées : leur dernier commit est déjà sur main sous un autre SHA (réécriture du 2026-10-25). `git worktree remove .claude/worktrees/agent-a4b6af504bd42a94d`, puis `git branch -D chore/simplify-env claude/remove-dead-code-old-config-3p0679 dev feat/add-hf-datasets feat/google-adk feat/qa-more-determinist feat/review-architecture fix/ci fix/ci-release fix/dependabot-hf-version fix/docs-ci fix/outdated-deps fix/prod-registry fix/release-pre-major-bump fix/renovate-workflow fix/update-deps worktree-agent-a4b6af504bd42a94d` et `git fetch --prune`. Succès : `git worktree list` ne montre plus que le dépôt, `git branch -a` plus aucune branche `dependabot/*`.
+- [ ] `docs/design-employeurs-tech-france` et `feat/design-review` pointent sur le même commit (a8c4d76) sur le remote : n'en garder qu'une. Succès : `git ls-remote --heads origin` ne liste plus qu'une des deux.
 
 ## 🟢 Idées / backlog
+- [ ] FEAT: Deployment => Supervisor + CI-triggered dataset generation, to use the Claude subscription's tokens
+- [ ] CHORE: Évaluer pymupdf 2.0 (majeure) et fastapi-redis-sdk 0.9 (plafonné `<0.9.0` dans pyproject.toml).
+- [ ] CHORE: Passer apps/server/core/net.py à httpx2, la pile HTTP d'openai 3.x, avant qu'openai 4 ne retire la compatibilité httpx.
+- [ ] CHORE: Publier un score OpenSSF Scorecard (workflow + badge), comme github-workflows.
 
 ## 🤖 Claude — recommandations
 
+## 🔒 Security audit
 
 ## ✅ Fait
+- [x] 2026-10-27 — FIX: Revue sécurité, bonnes pratiques et mises à jour (P0 + P1) en 16 commits sur `fix/security-review` : Next 16.4.3 (deux RCE critiques), Pillow 13, authlib 1.9.1, limites d'upload et de corps de requête, inscription fermée par défaut, travail bloquant hors de l'event loop, provider Claude sans outils, imports Hugging Face plafonnés, redirection après login, page de connexion qui dit pourquoi les options ne chargent pas, stack locale sur 127.0.0.1, images construites à chaque release avec provenance signée, actions épinglées par SHA, audits et CodeQL en CI, licence MIT et SECURITY.md.
+- [x] 2026-10-27 — CHORE: Branches `dependabot/*` du remote : il n'en reste aucune (vérifié avec `git ls-remote`), le tri prévu est sans objet.

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=JobsResponse)
-async def get_jobs(
+def get_jobs(
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
 ) -> JobsResponse:
@@ -68,7 +68,7 @@ async def post_job_run(
 
 
 @router.get("/runs/{run_id}", response_model=JobRunOut)
-async def get_job_run(run_id: str, user: User = Depends(get_current_user)) -> JobRunOut:
+def get_job_run(run_id: str, user: User = Depends(get_current_user)) -> JobRunOut:
     """A run's state: live progress while running, then its result and draft."""
     try:
         return JobRunOut(**get_run(user.id, run_id))
@@ -103,9 +103,7 @@ async def post_publish_run(
 
 
 @router.post("/runs/{run_id}/cancel", response_model=JobRunOut)
-async def post_cancel_run(
-    run_id: str, user: User = Depends(get_current_user)
-) -> JobRunOut:
+def post_cancel_run(run_id: str, user: User = Depends(get_current_user)) -> JobRunOut:
     """Cancel a queued run, or ask the worker to stop a running one."""
     try:
         return JobRunOut(**cancel_run(user.id, run_id))

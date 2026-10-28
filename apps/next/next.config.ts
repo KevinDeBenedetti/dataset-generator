@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
   // production image; `next dev` is unaffected.
   output: 'standalone',
 
+  // No page renders `next/image`, so the optimizer only adds attack surface:
+  // with it off, /_next/image answers 404 instead of running sharp on
+  // request-chosen input (GHSA-2464-fhr4-w9xw was an RCE in that path).
+  images: { unoptimized: true },
+
   // Same-origin API access: in production the browser calls `/api/*`. The
   // ingress normally routes that straight to the API before it reaches Next;
   // this rewrite is the fallback for a plain `next start` (and it never shadows

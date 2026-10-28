@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from server.models.user import User
 from server.api.deps import get_credentials
@@ -29,7 +30,7 @@ class QAAgentTestRequest(BaseModel):
     )
     model: Optional[str] = Field(
         None,
-        description='Model reference, e.g. "claude:claude-sonnet-5" '
+        description='Model reference, e.g. "claude:claude-sonnet-5-5" '
         "(defaults to the qa role default)",
     )
 
@@ -56,7 +57,12 @@ async def qa_agent_test(
     creds: Credentials = Depends(get_credentials),
 ) -> QAAgentTestResponse:
     try:
-        model = validate_ref(resolve_model("qa", request.model, user_id=user.id), creds)
+        # The role default comes from the database: resolve it off the loop.
+        model = await run_in_threadpool(
+            lambda: validate_ref(
+                resolve_model("qa", request.model, user_id=user.id), creds
+            )
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

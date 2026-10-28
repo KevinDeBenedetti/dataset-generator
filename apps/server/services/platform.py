@@ -2,7 +2,7 @@
 
 | key                     | type  | default (no row)                 |
 | ----------------------- | ----- | -------------------------------- |
-| ``allow_signup``         | bool  | true — a first SSO sign-in creates an account |
+| ``allow_signup``         | bool  | true in development, false elsewhere — a first SSO sign-in creates an account |
 | ``allowed_email_domains``| [str] | [] — any domain                  |
 | ``allowed_llm_hosts``    | [str] | [] — api.openai.com only         |
 | ``allow_custom_base_url``| bool  | false                            |

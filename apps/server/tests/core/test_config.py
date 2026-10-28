@@ -182,6 +182,8 @@ class TestDerivedFromEnvironment:
         assert cfg.claude_provider_available is False
         assert cfg.allowed_llm_hosts == ["api.openai.com"]
         assert cfg.allow_custom_base_url is False
+        # A public deployment creates no account until an admin opens sign-up.
+        assert cfg.allow_signup is False
 
     def test_development(self, monkeypatch):
         cfg = _config(monkeypatch, ENVIRONMENT="development")
@@ -192,6 +194,7 @@ class TestDerivedFromEnvironment:
         assert cfg.docs_enabled is True
         assert cfg.allow_env_credentials is True
         assert cfg.claude_provider_available is True
+        assert cfg.allow_signup is True
 
     def test_claude_runs_in_ci_but_never_on_a_deployed_server(self, monkeypatch):
         ci = _config(monkeypatch, GITHUB_ACTIONS="true")

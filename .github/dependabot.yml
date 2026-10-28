@@ -1,6 +1,8 @@
 version: 2
 
-# One weekly PR grouping every dependency update across all ecosystems.
+# One weekly PR grouping every dependency update across all ecosystems. A
+# release is only proposed once it is a week old (cooldown), so a hijacked
+# version yanked within days never lands; security updates are not delayed.
 multi-ecosystem-groups:
   weekly-all:
     schedule:
@@ -11,14 +13,40 @@ updates:
     directory: "apps/next/"
     patterns: ["*"]
     multi-ecosystem-group: "weekly-all"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "uv"
     directory: "."
     patterns: ["*"]
     multi-ecosystem-group: "weekly-all"
+    cooldown:
+      default-days: 7
     ignore:
       # Pinned <2 in pyproject.toml: fastembed and tokenizers still require
       # huggingface-hub<2, so Dependabot's 2.x bump is unresolvable. Drop this
       # once they support 2.x (together with the pyproject cap).
       - dependency-name: "huggingface-hub"
         update-types: ["version-update:semver-major"]
+
+  # The SHA-pinned actions: Dependabot moves the pin and its version comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-all"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "docker"
+    directories: ["/apps/server", "/apps/next"]
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-all"
+    cooldown:
+      default-days: 7
+    ignore:
+      # Python and Node runtime upgrades are deliberate (CI, the lockfiles and
+      # the images move together), not part of the weekly batch.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

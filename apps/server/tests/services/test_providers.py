@@ -31,7 +31,7 @@ from server.services.providers.openai import OpenAIProvider, check_base_url
 @pytest.mark.parametrize(
     "ref, expected",
     [
-        ("claude:claude-sonnet-5", ("claude", "claude-sonnet-5")),
+        ("claude:claude-sonnet-5-5", ("claude", "claude-sonnet-5-5")),
         ("openai:gpt-4o", ("openai", "gpt-4o")),
         ("gpt-4o", ("openai", "gpt-4o")),
         # A colon inside an OpenAI-compatible id isn't a provider prefix.
@@ -59,7 +59,7 @@ class TestValidateRef:
 
     def test_unconfigured_provider_says_what_to_add(self):
         with pytest.raises(ValueError, match="Claude token.*Settings"):
-            validate_ref("claude:claude-sonnet-5", NONE)
+            validate_ref("claude:claude-sonnet-5-5", NONE)
         with pytest.raises(ValueError, match="OpenAI API key"):
             validate_ref("openai:gpt-4o-mini", NONE)
 
@@ -68,13 +68,13 @@ class TestValidateRef:
         monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
         monkeypatch.setattr(config, "environment", "production")
         with pytest.raises(ValueError, match="development and CI"):
-            validate_ref("claude:claude-sonnet-5", FULL)
+            validate_ref("claude:claude-sonnet-5-5", FULL)
 
     def test_claude_models_override(self, monkeypatch):
         monkeypatch.setattr(config, "claude_models_raw", "claude-x, claude-y")
         assert validate_ref("claude:claude-y", FULL) == "claude:claude-y"
         with pytest.raises(ValueError):
-            validate_ref("claude:claude-sonnet-5", FULL)
+            validate_ref("claude:claude-sonnet-5-5", FULL)
 
     def test_empty_model(self):
         with pytest.raises(ValueError, match="no model id"):
@@ -284,7 +284,7 @@ def fake_sdk(monkeypatch):
 
 async def test_claude_text_completion(fake_sdk):
     result = await ClaudeProvider().complete(
-        "claude-sonnet-5", CompletionRequest(user="Hi", system="Sys"), FULL
+        "claude-sonnet-5-5", CompletionRequest(user="Hi", system="Sys"), FULL
     )
     assert result.text == "Bonjour"
     assert result.usage == {"output_tokens": 3, "total_cost_usd": 0.001}
@@ -292,17 +292,20 @@ async def test_claude_text_completion(fake_sdk):
     assert call["prompt"] == "Hi"
     opts = call["options"]
     assert (opts.model, opts.system_prompt, opts.allowed_tools, opts.max_turns) == (
-        "claude-sonnet-5",
+        "claude-sonnet-5-5",
         "Sys",
         [],
         1,
     )
     assert opts.setting_sources == []
+    # No tool, no MCP server, nothing pre-approved, the prompt taken verbatim.
+    assert opts.tools == [] and opts.permission_mode == "dontAsk"
+    assert opts.verbatim_prompts is True and opts.strict_mcp_config is True
 
 
 async def test_claude_images_use_streaming_input(fake_sdk):
     await ClaudeProvider().complete(
-        "claude-sonnet-5",
+        "claude-sonnet-5-5",
         CompletionRequest(user="Transcribe", images=[(b"img", "image/jpeg")]),
         FULL,
     )
@@ -365,7 +368,7 @@ async def test_claude_call_is_isolated_and_uses_only_the_callers_token(
 
     setattr(sys.modules["claude_agent_sdk"], "query", query)
     await ClaudeProvider().complete(
-        "claude-sonnet-5", CompletionRequest(user="u"), mine
+        "claude-sonnet-5-5", CompletionRequest(user="u"), mine
     )
 
     options = seen["options"]
@@ -432,9 +435,11 @@ def test_the_wrapper_starts_the_cli_with_a_scrubbed_environment(tmp_path, monkey
 
 
 async def test_complete_dispatches_on_prefix(fake_sdk):
-    result = await complete("claude:claude-sonnet-5", CompletionRequest(user="u"), FULL)
+    result = await complete(
+        "claude:claude-sonnet-5-5", CompletionRequest(user="u"), FULL
+    )
     assert result.text == "Bonjour"
-    assert fake_sdk.calls[0]["options"].model == "claude-sonnet-5"
+    assert fake_sdk.calls[0]["options"].model == "claude-sonnet-5-5"
 
 
 async def test_complete_wraps_unexpected_errors(monkeypatch):

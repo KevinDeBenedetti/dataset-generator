@@ -11,6 +11,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Read-only by default; the jobs that write say so.
+permissions:
+  contents: read
+
 jobs:
   security:
     name: Security
@@ -19,18 +23,24 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@3ada5a025acdb14dd240d2b09b9d472d6fef054d # v0.29.0
     with:
-      run-node-audit: false
-      run-python-audit: false
+      # A known high/critical vulnerability in the web UI's bun.lock, or any
+      # known one in uv.lock (pip-audit), fails the pipeline before the build.
+      run-node-audit: true
+      node-working-directory: apps/next
+      run-python-audit: true
       run-secret-scan: true
-      run-codeql: false
+      # Pull requests only: refuses a change that adds a vulnerable dependency.
+      run-dependency-review: true
+      run-codeql: true
+      codeql-languages: '["python", "javascript-typescript"]'
     # security.yml declares no caller secrets — nothing to pass.
 
   ci-python:
     name: CI Python (server)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@3ada5a025acdb14dd240d2b09b9d472d6fef054d # v0.29.0
     with:
       python-version: "3.13"
       working-directory: "."
@@ -44,7 +54,7 @@ jobs:
   ci-node:
     name: CI Node (next)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@4dd2b01e64a758b51bfd3d2395130cac8920a6b4 # v0.12.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@3ada5a025acdb14dd240d2b09b9d472d6fef054d # v0.29.0
     with:
       node-version: "22.20.0"
       working-directory: apps/next
@@ -68,11 +78,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.13"
           enable-cache: true
-      - run: uv sync
+      - run: uv sync --locked
       # Dumps the schema straight from the app (no server to boot) and diffs.
       # Fix with `make api-schema`, then commit.
       - run: make api-check
@@ -89,10 +101,25 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@v0.13.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@3ada5a025acdb14dd240d2b09b9d472d6fef054d # v0.29.0
     with:
       config-file: .github/release/release-please-config-release.json
       manifest-file: .github/release/.release-please-manifest.json
     # No token secret: release-please runs on GITHUB_TOKEN (needs "Allow GitHub
     # Actions to create and approve pull requests"; CI on the release PR waits
     # for "Approve workflows to run").
+
+  # A tag created with GITHUB_TOKEN triggers no workflow, so images.yml never
+  # sees the release-please tag: build the release's images from here.
+  images:
+    name: Images
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/images.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}

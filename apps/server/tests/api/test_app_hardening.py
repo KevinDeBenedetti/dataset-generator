@@ -63,6 +63,22 @@ class TestProduction:
         assert "TRACE" not in allowed and "*" not in allowed
 
 
+class TestRequestBodyCeiling:
+    def test_oversized_body_is_refused_before_any_handler(self, monkeypatch):
+        monkeypatch.setattr(config, "max_request_body_bytes", 64)
+        client = TestClient(create_app())
+
+        response = client.post(
+            "/auth/login",
+            content=b"{" + b" " * 64 + b"}",
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 413
+        # Refused inside the hardening stack: the answer keeps its headers.
+        assert response.headers["x-frame-options"] == "DENY"
+
+
 class TestProbes:
     def test_health_is_static_and_never_asks_the_database(self, production):
         with patch("server.main.database_ready", side_effect=AssertionError("db")):

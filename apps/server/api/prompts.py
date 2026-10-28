@@ -22,7 +22,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=PromptsResponse)
-async def list_prompts(user: User = Depends(get_current_user)) -> PromptsResponse:
+def list_prompts(user: User = Depends(get_current_user)) -> PromptsResponse:
     """Every LLM prompt shipped with the app, with where/how it is used."""
     models = get_model_defaults(user.id)
     prompts = [

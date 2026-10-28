@@ -119,6 +119,22 @@ class TestGenerateDatasetFromFile:
         assert response.status_code == 400
         assert "vision model" in response.json()["detail"].lower()
 
+    def test_file_over_the_upload_limit_returns_413(
+        self, mock_file_pipeline, monkeypatch
+    ):
+        from server.core.config import config
+
+        monkeypatch.setattr(config, "max_upload_bytes", 8)
+
+        response = client.post(
+            "/dataset/generate/file",
+            data={"dataset_name": "x"},
+            files={"file": ("doc.pdf", b"%PDF-1.4 too big", "application/pdf")},
+        )
+
+        assert response.status_code == 413
+        mock_file_pipeline.process_file.assert_not_called()
+
 
 @pytest.fixture
 def mock_url_pipeline():
@@ -167,13 +183,13 @@ class TestGenerateDatasetFromUrl:
             json={
                 "url": "https://docs.example.com",
                 "dataset_name": "x",
-                "model_qa": "claude:claude-sonnet-5",
+                "model_qa": "claude:claude-sonnet-5-5",
             },
         )
 
         assert response.status_code == 201
         kwargs = mock_url_pipeline.process_url.call_args.kwargs
-        assert kwargs["model_qa"] == "claude:claude-sonnet-5"
+        assert kwargs["model_qa"] == "claude:claude-sonnet-5-5"
 
     def test_refused_url_returns_400(self, mock_url_pipeline):
         from server.services.web import WebFetchError
@@ -211,7 +227,7 @@ class TestGenerateDatasetFromUrl:
             json={
                 "url": "https://docs.example.com",
                 "dataset_name": "x",
-                "model_qa": "claude:claude-sonnet-5",
+                "model_qa": "claude:claude-sonnet-5-5",
             },
         )
         assert response.status_code == 400

@@ -14,7 +14,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=QualityRulesResponse)
-async def read_quality_rules(
+def read_quality_rules(
     user: User = Depends(get_current_user),
 ) -> QualityRulesResponse:
     """Your generation-time quality rules (defaults when unset)."""
@@ -22,7 +22,7 @@ async def read_quality_rules(
 
 
 @router.put("", response_model=QualityRulesResponse)
-async def put_quality_rules(
+def put_quality_rules(
     body: QualityRulesUpdate, user: User = Depends(get_current_user)
 ) -> QualityRulesResponse:
     """Update your quality rules. Partial: omitted fields keep their current value.

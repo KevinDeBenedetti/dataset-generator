@@ -49,7 +49,9 @@ def jobs_model(monkeypatch):
     """The jobs role default, without a DB."""
     monkeypatch.setattr(
         "server.services.jobs.resolve_model",
-        lambda role, override=None, user_id=None: override or "claude:claude-sonnet-5",
+        lambda role, override=None, user_id=None: (
+            override or "claude:claude-sonnet-5-5"
+        ),
     )
     monkeypatch.setattr("server.services.jobs.validate_ref", lambda ref, creds: ref)
 
@@ -66,7 +68,7 @@ def _draft():
     dataset = QADataset(
         [kept, new1, new2], 0, [], kept=1, new=2, review=[held], new_ids=["n1", "n2"]
     )
-    return Draft(dataset, "kevin", "ns/qa", False, "claude:claude-sonnet-5")
+    return Draft(dataset, "kevin", "ns/qa", False, "claude:claude-sonnet-5-5")
 
 
 # --- catalogue ------------------------------------------------------------------
@@ -160,7 +162,7 @@ async def test_github_personal_publishes_the_reviewed_selection():
         "username": "kevin",
         "repo_id": "ns/qa",
         "full_refresh": False,
-        "model_ref": "claude:claude-sonnet-5",
+        "model_ref": "claude:claude-sonnet-5-5",
     }
     publisher = JOBS["github-personal"].publisher
     assert publisher is not None

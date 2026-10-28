@@ -36,7 +36,9 @@ class ModelDefaultsUpdate(BaseModel):
 
 
 class ModelTestRequest(BaseModel):
-    ref: str = Field(..., description='Model reference, e.g. "claude:claude-sonnet-5"')
+    ref: str = Field(
+        ..., description='Model reference, e.g. "claude:claude-sonnet-5-5"'
+    )
     prompt: str = Field(
         "Reply with one short sentence confirming you are reachable.",
         min_length=1,

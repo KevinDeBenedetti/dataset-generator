@@ -6,14 +6,18 @@ an already-public repo stops the export, and what the uploaded files contain.
 """
 
 import json
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+from server.core.config import config
 from server.tests.creds import FULL, NONE, make_creds  # noqa: F401
 from server.services import huggingface as hf
 from server.services.huggingface import (
     DATA_PATH_IN_REPO,
+    HuggingFaceImportTooLargeError,
     HuggingFaceNotConfiguredError,
     HuggingFaceRepoPublicError,
     export_dataset_to_hub,
@@ -258,6 +262,22 @@ def test_export_refuses_an_existing_public_repo(token, monkeypatch):
     assert fake.uploads == []
 
 
+def test_export_refuses_a_repo_of_unknown_visibility(token, monkeypatch):
+    # Only a repo the Hub confirms private is safe to upload into.
+    fake = FakeHfApi(existing_private=True)
+    monkeypatch.setattr(
+        fake, "repo_info", lambda repo_id, **kwargs: SimpleNamespace(private=None)
+    )
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
+
+    view, pairs = _stub_dataset([_pair("a", "Q1?")])
+    with view, pairs:
+        with pytest.raises(HuggingFaceRepoPublicError, match="unknown visibility"):
+            export_dataset_to_hub(OWNER, CREDS, "ds")
+
+    assert fake.uploads == []
+
+
 def test_export_accepts_an_existing_private_repo(token, monkeypatch):
     fake = FakeHfApi(existing_private=True)
     monkeypatch.setattr(hf, "_api", lambda creds: fake)
@@ -479,7 +499,9 @@ def _hub(files):
     return (
         patch.object(hf, "_list_repo_files", return_value=list(files)),
         patch.object(
-            hf, "_download_file", side_effect=lambda _creds, _repo, name: files[name]
+            hf,
+            "_download_file",
+            side_effect=lambda _creds, _repo, name, _max_bytes: files[name],
         ),
     )
 
@@ -700,3 +722,76 @@ def test_import_propagates_a_missing_repo(token):
     ):
         with pytest.raises(ValueError, match="not found"):
             import_dataset_from_hub(OWNER, CREDS, "kevin/nope")
+
+
+# --- import size limits ------------------------------------------------------
+
+
+def _hub_metadata(monkeypatch, size):
+    """A fake Hub whose metadata reports ``size`` bytes for every file."""
+    fake = SimpleNamespace(
+        get_paths_info=lambda repo_id, paths, repo_type: [
+            SimpleNamespace(path=path, size=size) for path in paths
+        ]
+    )
+    monkeypatch.setattr(hf, "_api", lambda creds: fake)
+
+
+def _fake_download(content: bytes, seen: dict):
+    def download(*, repo_id, filename, repo_type, token, cache_dir):
+        seen["cache_dir"] = cache_dir
+        path = Path(cache_dir) / filename
+        path.write_bytes(content)
+        return str(path)
+
+    return download
+
+
+def test_a_file_over_the_budget_is_refused_before_it_is_fetched(token, monkeypatch):
+    _hub_metadata(monkeypatch, size=11)
+    with patch("huggingface_hub.hf_hub_download") as download:
+        with pytest.raises(HuggingFaceImportTooLargeError, match="too large"):
+            hf._download_file(CREDS, "kevin/big", "train.jsonl", 10)
+    download.assert_not_called()
+
+
+def test_a_file_is_read_from_a_throwaway_cache(token, monkeypatch):
+    _hub_metadata(monkeypatch, size=5)
+    seen = {}
+    with patch(
+        "huggingface_hub.hf_hub_download", side_effect=_fake_download(b"hello", seen)
+    ):
+        assert hf._download_file(CREDS, "kevin/ds", "train.jsonl", 10) == b"hello"
+    assert not Path(seen["cache_dir"]).exists()  # nothing left on the disk
+
+
+def test_more_bytes_than_announced_are_refused(token, monkeypatch):
+    # The metadata is only a hint: what arrives is what counts.
+    _hub_metadata(monkeypatch, size=None)
+    seen = {}
+    with patch(
+        "huggingface_hub.hf_hub_download", side_effect=_fake_download(b"x" * 11, seen)
+    ):
+        with pytest.raises(HuggingFaceImportTooLargeError):
+            hf._download_file(CREDS, "kevin/ds", "train.jsonl", 10)
+
+
+def test_the_import_budget_is_shared_by_every_data_file(token, monkeypatch):
+    monkeypatch.setattr(config, "max_hub_import_bytes", 100)
+    row = _jsonl({"question": "Q?", "answer": "An answer long enough to keep."})
+    budgets = []
+
+    def download(_creds, _repo, name, max_bytes):
+        budgets.append(max_bytes)
+        return row
+
+    with (
+        patch.object(hf, "_list_repo_files", return_value=["a.jsonl", "b.jsonl"]),
+        patch.object(hf, "_download_file", side_effect=download),
+        patch.object(
+            hf, "save_generation", return_value={"created_count": 1, "version": 1}
+        ),
+    ):
+        import_dataset_from_hub(OWNER, CREDS, "kevin/my-ds")
+
+    assert budgets == [100, 100 - len(row)]

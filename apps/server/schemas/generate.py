@@ -38,7 +38,7 @@ class UrlGenerationRequest(BaseModel):
     )
     model_qa: Optional[str] = Field(
         None,
-        description='Model reference for QA generation, e.g. "claude:claude-sonnet-5" '
+        description='Model reference for QA generation, e.g. "claude:claude-sonnet-5-5" '
         "(default: the qa role default)",
     )
     similarity_threshold: float = Field(

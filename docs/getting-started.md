@@ -1,3 +1,7 @@
+---
+title: Getting Started
+---
+
 # Getting Started
 
 Dataset Generator mines uploaded files or GitHub repositories and turns
@@ -43,12 +47,15 @@ Services started by Docker Compose:
 Set `NEXT_PORT` / `SERVER_PORT` in `.env` when the defaults collide with another
 local stack: compose derives the browser's API URL and the SSO callbacks from
 them. `make dev` prints the resolved URLs once every service is healthy.
+Every host port is bound to `127.0.0.1`: the stack is not reachable from your
+network.
 
 ## Generate a dataset
 
 From the UI, open the **Generate** page and pick a source:
 
-- **File** — upload a PDF/image, transcribed page by page by the vision model
+- **File** — upload a PDF/image (up to 20 MB and 50 pages), transcribed page
+  by page by the vision model
 - **Web page** — one public URL (no crawling), reduced to text and cleaned
 
 Each step's model (cleaning, Q&A, vision) defaults to what is set on the
@@ -65,7 +72,7 @@ curl -X POST http://localhost:8020/dataset/generate/url \
   -d '{
     "url": "https://docs.example.com/guide",
     "dataset_name": "example_docs",
-    "model_qa": "claude:claude-sonnet-5"
+    "model_qa": "claude:claude-sonnet-5-5"
   }'
 ```
 
@@ -91,7 +98,9 @@ curl -X POST http://localhost:8020/dataset/my-dataset/export/huggingface
 ```
 
 The dataset repo is always created **private**. If a repo with that id already
-exists and is public, the export is refused rather than publishing your data.
+exists and the Hub does not confirm it is private, the export is refused rather
+than publishing your data. **Import from Hugging Face** reads at most 50 MB of
+data files per repo.
 
 ## Useful commands
 

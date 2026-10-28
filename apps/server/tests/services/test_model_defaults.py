@@ -25,7 +25,7 @@ def _env_models(monkeypatch):
     monkeypatch.setattr(config, "model_cleaning", "gpt-clean")
     monkeypatch.setattr(config, "model_qa", "gpt-qa")
     monkeypatch.setattr(config, "openai_vlm_model", "vlm")
-    monkeypatch.setattr(config, "qa_job_model", "claude:claude-sonnet-5")
+    monkeypatch.setattr(config, "qa_job_model", "claude:claude-sonnet-5-5")
     monkeypatch.setattr(config, "available_models", ["gpt-clean", "gpt-qa", "vlm"])
 
 
@@ -55,7 +55,7 @@ def test_env_defaults_are_normalized():
         "cleaning": "openai:gpt-clean",
         "qa": "openai:gpt-qa",
         "vision": "openai:vlm",
-        "jobs": "claude:claude-sonnet-5",
+        "jobs": "claude:claude-sonnet-5-5",
     }
 
 
@@ -70,9 +70,9 @@ def test_db_unreachable_falls_back_to_env(monkeypatch):
 
 
 def test_stored_defaults_override_env(db):
-    update_model_defaults(USER, {"qa": "claude:claude-sonnet-5"}, FULL)
+    update_model_defaults(USER, {"qa": "claude:claude-sonnet-5-5"}, FULL)
     defaults = get_model_defaults(USER)
-    assert defaults["qa"] == "claude:claude-sonnet-5"
+    assert defaults["qa"] == "claude:claude-sonnet-5-5"
     assert defaults["cleaning"] == "openai:gpt-clean"  # untouched role keeps env
 
     update_model_defaults(USER, {"qa": "gpt-qa"}, FULL)  # upsert, bare id normalized
@@ -95,9 +95,9 @@ def test_resolve_model_prefers_the_request(db):
 
 
 def test_each_user_has_their_own_defaults(db):
-    update_model_defaults(USER, {"qa": "claude:claude-sonnet-5"}, FULL)
+    update_model_defaults(USER, {"qa": "claude:claude-sonnet-5-5"}, FULL)
 
-    assert get_model_defaults(USER)["qa"] == "claude:claude-sonnet-5"
+    assert get_model_defaults(USER)["qa"] == "claude:claude-sonnet-5-5"
     assert get_model_defaults(OTHER)["qa"] == "openai:gpt-qa"  # env fallback
     assert resolve_model("qa", user_id=OTHER) == "openai:gpt-qa"
-    assert resolve_model("qa", user_id=USER) == "claude:claude-sonnet-5"
+    assert resolve_model("qa", user_id=USER) == "claude:claude-sonnet-5-5"

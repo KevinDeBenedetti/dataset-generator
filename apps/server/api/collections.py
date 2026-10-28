@@ -21,9 +21,12 @@ from server.schemas.collection import (
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
+# Plain ``def`` routes: Qdrant, the database and the embeddings all block, so
+# FastAPI runs these in its threadpool instead of on the event loop.
+
 
 @router.get("", response_model=CollectionsResponse)
-async def get_collections(user: User = Depends(get_current_user)):
+def get_collections(user: User = Depends(get_current_user)):
     """List the stored datasets as collections, annotated with their Qdrant status."""
     try:
         return list_collections(user.id)
@@ -37,7 +40,7 @@ async def get_collections(user: User = Depends(get_current_user)):
     response_model=QdrantSyncResponse,
     # Embeds every Q/A item with the caller's own OpenAI key.
 )
-async def push_collection_to_qdrant(
+def push_collection_to_qdrant(
     dataset_name: str,
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
@@ -55,7 +58,7 @@ async def push_collection_to_qdrant(
 
 
 @router.post("/{dataset_name}/search", response_model=CollectionSearchResponse)
-async def search_collection_endpoint(
+def search_collection_endpoint(
     dataset_name: str,
     body: CollectionSearchRequest,
     user: User = Depends(get_current_user),

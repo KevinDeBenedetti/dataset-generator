@@ -1,7 +1,6 @@
 # Dataset Generator
 
-[![CI](https://github.com/KevinDeBenedetti/dataset-generator/workflows/CI/badge.svg)](https://github.com/KevinDeBenedetti/dataset-generator/actions)
-[![codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator/graph/badge.svg)](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/KevinDeBenedetti/dataset-generator/ci-cd.yml?style=for-the-badge&label=CI%2FCD)](https://github.com/KevinDeBenedetti/dataset-generator/actions/workflows/ci-cd.yml) [![Release](https://img.shields.io/github/v/release/KevinDeBenedetti/dataset-generator?style=for-the-badge)](https://github.com/KevinDeBenedetti/dataset-generator/releases) [![License](https://img.shields.io/github/license/KevinDeBenedetti/dataset-generator?style=for-the-badge)](LICENSE)
 
 Automatic dataset generation tool for question-answer datasets with advanced export capabilities and LLM integration.
 
@@ -70,6 +69,7 @@ deployment can't get wrong follows from **`ENVIRONMENT`**.
 | --- | --- | --- |
 | Session cookies | plain names, http | `__Host-` prefixed, Secure (https only) |
 | Sign-in | SSO + email/password | SSO only (`ENABLE_LOCAL_LOGIN=true` to allow passwords) |
+| Sign-up | open | closed until an admin opens it (backoffice **Platform** tab) |
 | Model keys | a user's own, else the server's `OPENAI_API_KEY`, `HF_TOKEN`… | the user's own only |
 | Claude subscription provider | available (also in CI) | never offered |
 | `/docs`, `/openapi.json` | on | off |
@@ -85,10 +85,11 @@ deployment can't get wrong follows from **`ENVIRONMENT`**.
 local `.env` needs little more than your own keys. Host ports follow this
 project's dev lane (slot 2): web `3020`, API `8020`, Postgres `5452`, Qdrant
 `6353`, Redis `6399`; override with `NEXT_PORT`, `SERVER_PORT`,
-`POSTGRES_HOST_PORT`, `QDRANT_HOST_PORT`, `REDIS_HOST_PORT`.
+`POSTGRES_HOST_PORT`, `QDRANT_HOST_PORT`, `REDIS_HOST_PORT`. They are published
+on `127.0.0.1` only, and the web container gets none of the server's keys.
 
-`make dev-local` runs the API outside Docker (on `:8000`, with a worker inside
-the process) against the compose Postgres through its host port.
+`make dev-local` runs the API outside Docker (on `127.0.0.1:8000`, with a worker
+inside the process) against the compose Postgres through its host port.
 
 Dev accounts (`SEED_DEV_USERS=true`, development only): `admin@example.com` /
 `user@example.com`, passwords `DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD` (weak
@@ -118,13 +119,16 @@ running `python -m server.cli rewrap-secrets`, then dropping the old one.
 `.github/workflows/images.yml` builds the production images (`target: prod`) and
 publishes them to GHCR: `ghcr.io/<owner>/dataset-generator-server` (the API **and**
 the job worker — same image, the worker just runs `python -m server.worker`) and
-`ghcr.io/<owner>/dataset-generator-next`. A `v*` tag (made when the release-please
-PR is merged on `main`) produces `:vX.Y.Z` and `:latest`; a manual run from
-`main` tags `:sha-<short>`. Nothing is built from other branches, and a tag that
-is not on `main` is refused. amd64 only unless the
+`ghcr.io/<owner>/dataset-generator-next`. A release (the release-please PR merged
+on `main`) makes `ci-cd.yml` call it to produce `:vX.Y.Z` and `:latest`, as does a
+`v*` tag pushed by hand; a manual run from `main` tags `:sha-<short>`, or rebuilds
+a release with `gh workflow run images.yml -f tag=vX.Y.Z`. Nothing is built from
+other branches, and a tag that is not on `main` is refused. amd64 only unless the
 `IMAGE_PLATFORMS` repository variable says otherwise (`linux/amd64,linux/arm64`).
 A release is only deployable once that workflow is green — a tag without an image
-leaves the deployment's migration Job in `ImagePullBackOff`.
+leaves the deployment's migration Job in `ImagePullBackOff`. Each image gets a
+signed SLSA provenance attestation, stored by GitHub rather than in the registry:
+`gh attestation verify oci://ghcr.io/<owner>/dataset-generator-server:vX.Y.Z -R <owner>/dataset-generator`.
 
 What a deployment runs, from the server image:
 
@@ -175,8 +179,9 @@ content, settings values or keys. They change roles, disable (immediate sign-out
 and delete accounts (with their data and Qdrant collections; their Hugging Face
 repos stay). The **Platform** tab holds the switches that used to be env vars:
 open sign-up, allowed email domains, the OpenAI-compatible hosts users may use,
-any public endpoint. Every user can export their data and delete their account
-from **Settings → Your data**.
+any public endpoint. Outside development sign-up starts closed: open it there
+once the deployment is ready (`ADMIN_EMAILS` can always sign up). Every user can
+export their data and delete their account from **Settings → Your data**.
 
 ### Per-user data and keys
 
@@ -217,7 +222,8 @@ accepted). Three tables hold the datasets: `datasets`, `qa_pairs` (keyed by
 makes generation a pass-through (also per request: `persist`). Qdrant is optional
 (`QDRANT_URL`); `QDRANT_COLLECTION_PREFIX` lets environments share one instance.
 Hugging Face exports are always **private** repos — an export into an existing
-public repo is refused.
+repo the Hub does not confirm private is refused; an import reads at most 50 MB
+of data files.
 
 ## 🌍 Supported Languages
 
@@ -274,8 +280,8 @@ only) needs one too — the suite starts a throwaway Postgres.
 ### Coverage Reports
 
 - **Local**: After running tests, view `htmlcov/index.html` for detailed coverage report
-- **CI/CD**: Coverage reports are automatically generated and uploaded on every PR
-- **Codecov**: [View detailed coverage on Codecov](https://codecov.io/gh/KevinDeBenedetti/dataset-generator)
+- **CI/CD**: every push runs the suite with coverage, printed in the job log;
+  the job fails below the threshold
 
 Current coverage threshold: **70%** minimum required for CI to pass
 
@@ -310,3 +316,19 @@ A few details keep generation deterministic:
 - `openapi-ts.config.ts` sets `baseUrl: false` on the client plugin, so no base
   URL is baked into `client.gen.ts` from whatever input was used; `api/sdk.ts`
   supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.
+
+## Documentation
+
+Full documentation is available at **https://kevindebenedetti.github.io/dataset-generator/**.
+It is generated from the `docs/` directory and published by the docs hub, which picks up pushed changes within 12 hours.
+
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE). The server renders PDFs with
+[PyMuPDF](https://pymupdf.readthedocs.io/), licensed under the AGPL-3.0 (or a
+commercial license from Artifex): check its terms before running a modified
+version of this server as a network service.

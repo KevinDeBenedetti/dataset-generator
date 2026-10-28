@@ -130,7 +130,10 @@ class Config:
     # Providers whose *verified* email may attach a sign-in to an existing account.
     sso_trusted_email_providers_raw: str = "infomaniak,github"
     # Defaults of the backoffice platform switches (services/platform.py).
-    allow_signup: bool = True
+    # Sign-up starts closed outside development: on a public deployment a
+    # first SSO sign-in must not create an account until an admin opens it
+    # (ADMIN_EMAILS can always sign up).
+    allow_signup: bool = field(default_factory=_is_dev_env)
     allowed_email_domains_raw: str = ""
     allowed_llm_hosts_raw: str = ""
     allow_custom_base_url: bool = False
@@ -188,7 +191,7 @@ class Config:
     claude_models_raw: str = field(default_factory=lambda: _env("CLAUDE_MODELS", ""))
     # Model of the scheduled jobs when no default is saved (the CI runs DB-free).
     qa_job_model: str = field(
-        default_factory=lambda: _env("QA_JOB_MODEL", "claude:claude-sonnet-5")
+        default_factory=lambda: _env("QA_JOB_MODEL", "claude:claude-sonnet-5-5")
     )
 
     # --- Jobs ---------------------------------------------------------------
@@ -270,6 +273,21 @@ class Config:
     # Stream server logs into an in-browser console (/debug/logs). Never in
     # shared environments.
     debug_logs: bool = field(default_factory=lambda: _flag("DEBUG_LOGS", False))
+
+    # --- Uploads ------------------------------------------------------------
+    # Every page of an upload is rasterised and sent to the vision model, so
+    # these bound the work (and the memory) one request can cause.
+    max_upload_bytes: int = 20 * 1024 * 1024
+    max_upload_pages: int = 50
+    # A page is rendered at a lower zoom when needed to stay under this many
+    # pixels: a PDF may declare any page size (an A4 page at 2x is ~2 Mpx).
+    max_page_pixels: int = 16_000_000
+    # Ceiling for any request body, checked before the app reads it (uvicorn
+    # sets none): the largest legitimate body is an upload plus its framing.
+    max_request_body_bytes: int = 25 * 1024 * 1024
+    # A Hugging Face import downloads and parses a repo's data files in memory:
+    # together they may weigh this much.
+    max_hub_import_bytes: int = 50 * 1024 * 1024
 
     # --- Generation constants -----------------------------------------------
     max_tokens_cleaning: int = 3000
