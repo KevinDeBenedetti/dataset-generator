@@ -5,7 +5,9 @@ scanned/figure-heavy documents too — unlike a text-only PDF parser, which woul
 silently drop image-only pages.
 """
 
+import asyncio
 import math
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
 import pymupdf
@@ -22,6 +24,11 @@ PDF_TYPES = {"application/pdf", "application/x-pdf"}
 # Render PDF pages at 2x (~144 DPI): enough for the VLM to read body text without
 # ballooning the base64 image payload sent on every request.
 _PDF_ZOOM = 2.0
+
+# PyMuPDF does not support running on several threads, which "may cause
+# incorrect behaviour or even crash Python itself": uploads are rendered on
+# this single thread, never on the default pool where they would overlap.
+_RENDER_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pymupdf")
 
 
 def is_pdf(content_type: str, filename: str) -> bool:
@@ -63,6 +70,16 @@ def file_to_page_images(
     raise ValueError(
         f"Unsupported file type '{content_type or filename}'. "
         "Upload a PDF or an image (png, jpg, webp, gif)."
+    )
+
+
+async def render_page_images(
+    content: bytes, content_type: str, filename: str
+) -> List[PageImage]:
+    """:func:`file_to_page_images` on the rendering thread: off the event loop,
+    one file after the other."""
+    return await asyncio.get_running_loop().run_in_executor(
+        _RENDER_THREAD, file_to_page_images, content, content_type, filename
     )
 
 
