@@ -78,6 +78,27 @@ class TestRequestBodyCeiling:
         # Refused inside the hardening stack: the answer keeps its headers.
         assert response.headers["x-frame-options"] == "DENY"
 
+    def test_the_front_end_can_read_the_refusal(self, monkeypatch):
+        # Cross-origin (local dev, split hosts), a 413 without CORS headers
+        # reaches the UI as a bare network error instead of "too large".
+        monkeypatch.setattr(config, "max_request_body_bytes", 64)
+        monkeypatch.setattr(config, "frontend_url", "https://app.example.com")
+        client = TestClient(create_app())
+
+        response = client.post(
+            "/auth/login",
+            content=b"{" + b" " * 64 + b"}",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://app.example.com",
+            },
+        )
+
+        assert response.status_code == 413
+        assert (
+            response.headers["access-control-allow-origin"] == "https://app.example.com"
+        )
+
 
 class TestProbes:
     def test_health_is_static_and_never_asks_the_database(self, production):

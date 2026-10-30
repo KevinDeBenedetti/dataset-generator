@@ -144,6 +144,21 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if docs else None,
     )
 
+    # A middleware added later wraps the ones added before it, so it runs first.
+
+    # CSRF: refuse state-changing requests from a foreign browser origin.
+    app.add_middleware(
+        cast(Any, OriginCheckMiddleware),
+        allowed_origins=config.cors_allow_origins,
+        allowed_origin_regex=config.cors_allow_origin_regex,
+    )
+    # DoS: refuse an oversized body before anything reads it. Added after the
+    # Origin check so it runs first.
+    app.add_middleware(
+        cast(Any, BodySizeLimitMiddleware),
+        max_body_bytes=config.max_request_body_bytes,
+    )
+
     # The session is carried by cookies, so CORS is credentialed and must name
     # the allowed origins explicitly: with allow_origins=["*"], Starlette answers
     # a credentialed request by reflecting the caller's origin, which would let
@@ -151,6 +166,9 @@ def create_app() -> FastAPI:
     # local dev additionally accepts any localhost port. In
     # the single-host production topology the browser never sends a cross-origin
     # request, so this is inert there — but it stays strict, and narrow.
+    # Added after the refusals above so it wraps them: the allowed front-end can
+    # read a 413 instead of seeing a bare network error (a foreign origin still
+    # gets no Access-Control-Allow-Origin).
     app.add_middleware(
         cast(Any, CORSMiddleware),
         allow_origins=config.cors_allow_origins,
@@ -161,19 +179,7 @@ def create_app() -> FastAPI:
     )
     logger.info("CORS allowed origins: %s", config.cors_allow_origins or "(none)")
 
-    # CSRF: refuse state-changing requests from a foreign browser origin.
-    app.add_middleware(
-        cast(Any, OriginCheckMiddleware),
-        allowed_origins=config.cors_allow_origins,
-        allowed_origin_regex=config.cors_allow_origin_regex,
-    )
-    # DoS: refuse an oversized body before anything reads it. Added after the
-    # Origin check so it runs first, and before the headers so a 413 still
-    # carries them.
-    app.add_middleware(
-        cast(Any, BodySizeLimitMiddleware),
-        max_body_bytes=config.max_request_body_bytes,
-    )
+    # Last, so every answer carries them, the refusals above included.
     app.add_middleware(
         cast(Any, SecurityHeadersMiddleware), hsts=config.auth_cookie_secure
     )
