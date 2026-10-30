@@ -400,6 +400,32 @@ async def test_a_failed_publish_can_be_retried(db, monkeypatch):
     assert get_run(OWNER, run["id"])["status"] == "succeeded"
 
 
+async def test_a_publish_cancelled_after_its_claim_can_be_retried(db, monkeypatch):
+    # The request is cancelled (client gone, shutdown) as soon as the draft is
+    # claimed: the cancellation lands at publish_run's next await, which must
+    # already be inside the try that hands the run back.
+    run = await _finished_draft_run(monkeypatch, OWNER)
+    loop = asyncio.get_running_loop()
+    publishing = []
+    take_draft = jobs_service._take_draft
+
+    def claim_then_cancel(owner_id, run_id):
+        claimed = take_draft(owner_id, run_id)
+        loop.call_soon_threadsafe(publishing[0].cancel)
+        return claimed
+
+    monkeypatch.setattr(jobs_service, "_take_draft", claim_then_cancel)
+
+    async def never(creds, draft):
+        await asyncio.Event().wait()
+
+    with patch(f"{PREFIX}.qa_dataset_job.publish", new=never):
+        publishing.append(asyncio.create_task(publish_run(OWNER, FULL, run["id"])))
+        with pytest.raises(asyncio.CancelledError):
+            await publishing[0]
+    assert get_run(OWNER, run["id"])["status"] == "succeeded"
+
+
 async def test_failed_run_records_the_error(db, monkeypatch):
     async def runner(creds, options, model_ref, progress):
         raise qa_dataset.JobError("HF_TOKEN is required")
