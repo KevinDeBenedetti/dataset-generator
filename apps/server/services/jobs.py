@@ -291,7 +291,10 @@ async def publish_run(
     Raises :class:`UnknownRunError`, :class:`RunConflictError` for a run
     without an unpublished draft, or the job's own ``JobError``.
     """
-    publisher, draft = await asyncio.to_thread(_take_draft, owner_id, run_id)
+    # Synchronous on purpose, like the release below: a cancellation is
+    # delivered at an await, so none may sit between the claim and the try
+    # that hands the run back, or the run would stay 'publishing' for good.
+    publisher, draft = _take_draft(owner_id, run_id)
     try:
         result = await publisher(creds, draft, exclude, promote)
     except BaseException:
