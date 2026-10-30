@@ -276,12 +276,15 @@ class Config:
 
     # --- Uploads ------------------------------------------------------------
     # Every page of an upload is rasterised and sent to the vision model, so
-    # these bound the work (and the memory) one request can cause.
+    # these bound the work one request can cause, and its memory: the rendered
+    # pages are all held until the last one is transcribed.
     max_upload_bytes: int = 20 * 1024 * 1024
     max_upload_pages: int = 50
     # A page is rendered at a lower zoom when needed to stay under this many
-    # pixels: a PDF may declare any page size (an A4 page at 2x is ~2 Mpx).
-    max_page_pixels: int = 16_000_000
+    # pixels, since a PDF may declare any page size. A3 at 2x (~4 Mpx) still
+    # renders in full, and vision APIs scale larger images down anyway; at
+    # worst, 50 pages of incompressible content weigh ~630 MB as PNG.
+    max_page_pixels: int = 4_200_000
     # Ceiling for any request body, checked before the app reads it (uvicorn
     # sets none): the largest legitimate body is an upload plus its framing.
     max_request_body_bytes: int = 25 * 1024 * 1024
