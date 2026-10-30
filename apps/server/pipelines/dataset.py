@@ -7,7 +7,7 @@ from server.core.config import config
 from server.services.agent import QAAgentService
 from server.services.credentials import Credentials
 from server.services.datasets import save_generation
-from server.services.files import file_to_page_images
+from server.services.files import render_page_images
 from server.services.llm import LLMService
 from server.services.qa import QAService
 from server.services.quality_rules import get_quality_rules
@@ -108,11 +108,10 @@ class DatasetPipeline:
         qa_service = await self._qa_service(dataset_name)
 
         # 1. Rasterise the file to one image per page — CPU-bound (PyMuPDF),
-        # so off the event loop, or every other request waits for it.
+        # so off the event loop, or every other request waits for it; on the
+        # single thread PyMuPDF tolerates.
         t = time.perf_counter()
-        page_images = await asyncio.to_thread(
-            file_to_page_images, content, content_type, filename
-        )
+        page_images = await render_page_images(content, content_type, filename)
         run.record(
             "rasterize",
             "Read file",

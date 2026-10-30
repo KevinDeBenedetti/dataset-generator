@@ -49,18 +49,18 @@ class TestDatasetPipeline:
     """Tests for DatasetPipeline class"""
 
     @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.file_to_page_images")
+    @patch("server.pipelines.dataset.render_page_images", new_callable=AsyncMock)
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
     async def test_process_file_success(
         self,
         mock_qa_agent_service_class,
         mock_llm_service_class,
-        mock_file_to_images,
+        mock_render_pages,
         mock_qa_service,
     ):
         """process_file transcribes each page, generates QA and aggregates stats."""
-        mock_file_to_images.return_value = [
+        mock_render_pages.return_value = [
             ("doc.pdf p.1", b"img1", "image/png"),
             ("doc.pdf p.2", b"img2", "image/png"),
         ]
@@ -104,18 +104,18 @@ class TestDatasetPipeline:
         assert save_kwargs["url"] == "file://doc.pdf"
 
     @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.file_to_page_images")
+    @patch("server.pipelines.dataset.render_page_images", new_callable=AsyncMock)
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
     async def test_process_file_skips_pages_without_text(
         self,
         mock_qa_agent_service_class,
         mock_llm_service_class,
-        mock_file_to_images,
+        mock_render_pages,
         mock_qa_service,
     ):
         """A page the VLM can't transcribe is skipped (no QA generation/saving)."""
-        mock_file_to_images.return_value = [
+        mock_render_pages.return_value = [
             ("doc.pdf p.1", b"img1", "image/png"),
             ("doc.pdf p.2", b"img2", "image/png"),
         ]

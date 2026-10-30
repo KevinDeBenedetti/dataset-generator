@@ -1,12 +1,16 @@
 """Tests for the file → page-image ingestion helper."""
 
+import asyncio
 import struct
+import threading
+import time
 
 import pytest
 import pymupdf
 
 from server.core.config import config
-from server.services.files import file_to_page_images
+from server.services import files
+from server.services.files import file_to_page_images, render_page_images
 
 
 def _make_pdf(pages: int = 1, text: str = "Hello world") -> bytes:
@@ -96,6 +100,30 @@ def test_giant_page_is_rendered_within_the_pixel_budget(monkeypatch):
 
     width, height = _png_size(data)
     assert width * height <= 1_000_000 * 1.01  # rounding to whole pixels
+
+
+async def test_documents_are_rendered_one_at_a_time_on_one_thread(monkeypatch):
+    # PyMuPDF must never run on two threads at once: concurrent uploads queue
+    # up on a single rendering thread, which is not the event loop's.
+    running, overlaps, threads = [], [], set()
+
+    def render(content, filename):
+        overlaps.append(len(running))
+        running.append(filename)
+        threads.add(threading.current_thread())
+        time.sleep(0.02)
+        running.remove(filename)
+        return [(filename, b"png", "image/png")]
+
+    monkeypatch.setattr(files, "_pdf_to_images", render)
+
+    pages = await asyncio.gather(
+        *(render_page_images(b"%PDF", "application/pdf", f"{i}.pdf") for i in range(4))
+    )
+
+    assert [label for [(label, _, _)] in pages] == ["0.pdf", "1.pdf", "2.pdf", "3.pdf"]
+    assert overlaps == [0, 0, 0, 0]
+    assert len(threads) == 1 and threading.main_thread() not in threads
 
 
 def test_password_protected_pdf_is_refused():
