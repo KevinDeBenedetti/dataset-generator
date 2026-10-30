@@ -15,5 +15,8 @@ export function safeRedirectPath(
     return fallback
   }
   if (url.origin !== origin) return fallback
+  // The parsed path itself can start with `//` once its dot segments are
+  // resolved (`/..//evil.com`), and the browser would read that as a host.
+  if (url.pathname.startsWith('//')) return fallback
   return `${url.pathname}${url.search}${url.hash}`
 }
