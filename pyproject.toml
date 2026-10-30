@@ -6,27 +6,27 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "python-dotenv>=1.1.0",
-    "fastapi[standard]>=0.143.0",
+    "fastapi[standard]>=0.161.1",
     "httpx>=0.28.1",
     # Capped below 3.0 until the provider (services/providers/openai.py) is
     # checked against the 3.x client.
-    "openai>=3.26.1,<4.0.0",
+    "openai>=3.37.0,<4.0.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
-    "sqlalchemy>=2.1.4",
-    "alembic>=1.20.0",
+    "sqlalchemy>=2.1.6",
+    "alembic>=1.20.1",
     "uvicorn[standard]>=0.54.0",
     "bcrypt>=5.0.0",
     "authlib>=1.9.1",
     # Signs Starlette's SessionMiddleware cookie (the SSO state).
     "itsdangerous>=2.2.0",
-    "qdrant-client>=1.19.1",
+    "qdrant-client>=1.20.0",
     "redis>=8.1.0",
     # Redis' own FastAPI integration — backs the login rate limiter
     # (services/rate_limit.py). Alpha (0.x): pinned to a minor range so a
     # breaking 0.9 can't land silently on an auth-adjacent control.
-    "fastapi-redis-sdk>=0.8.1,<0.9.0",
-    "pymupdf>=1.28.2",
+    "fastapi-redis-sdk>=0.9.1,<0.10.0",
+    "pymupdf>=2.0",
     # Capped below 2.0: fastembed and tokenizers (every local embedding stack
     # needs the latter) still require huggingface-hub<2. Lift the cap once
     # they support 2.x.
@@ -44,21 +44,21 @@ dev = [
     # embeddable Postgres, and the app is Postgres-only now), so Docker must be
     # reachable to run the suite.
     "testcontainers[postgres]>=4.15.0",
-    "ruff>=0.17.0",
-    "ty>=0.0.86",
-    "prek>=0.5.5",
+    "ruff>=0.17.2",
+    "ty>=0.0.91",
+    "prek>=0.5.7",
     # starlette.testclient prefers httpx2 and warns (StarletteDeprecationWarning)
     # when it falls back to httpx — a warning slated to become an error. Only
     # TestClient needs it: the app's own HTTP calls (github, etc.)
     # still use the httpx pinned in the runtime dependencies above, and the two
     # install side by side under different module names.
-    "httpx2>=2.13.1",
+    "httpx2>=2.16.0",
 ]
 # Scheduled dataset jobs (server/jobs): the SDK bundles the Claude Code binary,
 # so it stays out of the default install. The server image and the
 # qa-dataset-sync workflow opt in with `uv sync --group jobs`.
 jobs = [
-    "claude-agent-sdk>=0.2.165",
+    "claude-agent-sdk>=0.2.173",
 ]
 
 [tool.uv]
