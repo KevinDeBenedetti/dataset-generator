@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.14.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.13.1...v0.14.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* outside development, sign-up is now closed by default: a first SSO sign-in no longer creates an account until an admin opens sign-up in the backoffice Platform tab (allow_signup).
+
+### docs
+
+* flag the security review's sign-up change as breaking ([1a5ef7c](https://github.com/KevinDeBenedetti/dataset-generator/commit/1a5ef7cb604bfac0e57a9206fc4b71788c17234e))
+
+
+### Bug Fixes
+
+* **deps:** upgrade joserfc to 1.7.7 (GHSA-9pg5-8c7x-5hfx) ([0b7342a](https://github.com/KevinDeBenedetti/dataset-generator/commit/0b7342a742cafc5cb0604867046351e46be53215))
+* **jobs:** never leave a run stuck in publishing after a cancelled request ([da99aed](https://github.com/KevinDeBenedetti/dataset-generator/commit/da99aed937c19f4286515c73a38c3595b79a4b27))
+* **next:** refuse dot-segment open redirects after login ([c72616d](https://github.com/KevinDeBenedetti/dataset-generator/commit/c72616d59903feaa95a581a59dfb006f996df638))
+* remove redundant code blocks from changes section ([e72a392](https://github.com/KevinDeBenedetti/dataset-generator/commit/e72a392122e7d3accb4a4f6836fdd0f7541fa3e4))
+* **server:** cap a rendered page at about 4 megapixels ([df3e3c8](https://github.com/KevinDeBenedetti/dataset-generator/commit/df3e3c806306305d1e815da60da49b9bda63831e))
+* **server:** let the front-end read oversized-body refusals ([62ace0f](https://github.com/KevinDeBenedetti/dataset-generator/commit/62ace0f9005445149f3c8c4e96871c6f1b6bfee7))
+* **server:** render uploaded PDFs on a single thread ([08c9f3c](https://github.com/KevinDeBenedetti/dataset-generator/commit/08c9f3c22ee68d21dfc76259d47a5ba44914d1d5))
+
+
+### Chores
+
+* rename the project to dataset-generator ([8d020f9](https://github.com/KevinDeBenedetti/dataset-generator/commit/8d020f940ced84bd4967c52da778288bf4beb89b))
+
 ## [0.13.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.13.0...v0.13.1) (2026-10-25)
 
 
