@@ -1,5 +1,5 @@
 [project]
-name = "datasets"
+name = "dataset-generator"
 version = "0.1.0"
 description = "A collection of datasets powered by FastAPI."
 readme = "README.md"
