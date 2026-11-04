@@ -17,6 +17,7 @@ from server.api import (
     collections,
     dataset,
     generate,
+    hub,
     jobs,
     models,
     q_a,
@@ -238,6 +239,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(generate.router, dependencies=auth_required)
     app.include_router(dataset.router, dependencies=auth_required)
+    app.include_router(hub.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
     app.include_router(models.router, dependencies=auth_required)
     app.include_router(agent.router, dependencies=auth_required)

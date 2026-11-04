@@ -35,7 +35,7 @@ function GenerateContent() {
         <p className="text-center text-sm text-muted-foreground -mt-2">
           The new pairs are appended to{' '}
           <Link
-            href={`/datasets/${encodeURIComponent(presetDataset)}`}
+            href={`/drafts/${encodeURIComponent(presetDataset)}`}
             className="underline font-medium"
           >
             {presetDataset}

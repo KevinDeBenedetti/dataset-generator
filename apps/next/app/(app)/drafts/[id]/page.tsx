@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 // The design's detail-page styles (.qa, .ver, .tabpane) live with the static
 // mockup; this is the real, data-backed page wearing the same skin.
 import './dataset.css'
@@ -12,6 +12,7 @@ import { QAList, PaginationWrapper, DatasetSearch } from '@/components/dataset'
 import { useDatasets, useDatasetSources, useExportToHuggingFace } from '@/hooks'
 import { useQAByDataset } from '@/hooks/use-qa'
 import { relativeTime } from '@/lib/utils'
+import { datasetHref } from '@/components/hub'
 import type { DatasetAnalysis, DatasetSource } from '@/api/types'
 
 const PAGE_SIZE = 10
@@ -77,8 +78,9 @@ function analysisDetail(analysis: DatasetAnalysis): string {
   return parts.join(' · ')
 }
 
-export default function DatasetDetailPage() {
+export default function DraftDetailPage() {
   const params = useParams()
+  const router = useRouter()
   // Datasets are keyed by their name (URL-encoded in the route).
   const datasetName = decodeURIComponent(params.id as string)
 
@@ -111,17 +113,18 @@ export default function DatasetDetailPage() {
   const handleExportToHub = async () => {
     try {
       const result = await hfExport.mutateAsync({ datasetName })
-      toast.success(`Exported ${result.pairs_exported} pair(s) to ${result.repo_id}`, {
+      // Published: from now on the dataset lives on the Hub, its page reads it there.
+      toast.success(`Published ${result.pairs_exported} pair(s) to ${result.repo_id}`, {
         description: 'The dataset repo is private.',
         action: {
-          label: 'Open',
-          onClick: () => window.open(result.url, '_blank', 'noopener,noreferrer'),
+          label: 'View dataset',
+          onClick: () => router.push(datasetHref(result.repo_id)),
         },
       })
     } catch (err) {
       // The server refuses to upload into an existing public repo (409) — that
       // message tells the user how to proceed, so surface it as-is.
-      toast.error(err instanceof Error ? err.message : 'Export to Hugging Face failed')
+      toast.error(err instanceof Error ? err.message : 'Publishing to Hugging Face failed')
     }
   }
 
@@ -130,12 +133,12 @@ export default function DatasetDetailPage() {
   return (
     <div className="dd-page">
       <Link
-        href="/datasets"
+        href="/drafts"
         className="btn btn-ghost btn-sm"
         style={{ margin: '-4px 0 14px', paddingLeft: 6 }}
       >
         <Icon name="chevronLeft" />
-        Datasets
+        Drafts
       </Link>
 
       <div className="page-head">
@@ -148,6 +151,9 @@ export default function DatasetDetailPage() {
               <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {datasetName}
                 {latestVersion != null && <span className="tag">v{latestVersion}</span>}
+                <span className="badge badge-warning" title="Not on Hugging Face yet">
+                  Draft
+                </span>
               </h1>
               <p className="page-sub" style={{ marginTop: 3 }}>
                 {qaResponse?.total_count ?? '—'} Q/A pairs · {sources.length} source(s) ·{' '}
@@ -175,10 +181,10 @@ export default function DatasetDetailPage() {
             type="button"
             onClick={handleExportToHub}
             disabled={hfExport.isPending}
-            title="Export to the Hugging Face Hub as a private dataset repo"
+            title="Publish to the Hugging Face Hub as a private dataset repo"
           >
             <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
-            {hfExport.isPending ? 'Exporting…' : 'Export to Hugging Face'}
+            {hfExport.isPending ? 'Publishing…' : 'Publish to Hugging Face'}
           </button>
           <Link className="btn btn-primary" href={addSourceHref}>
             <Icon name="plus" />

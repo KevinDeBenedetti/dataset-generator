@@ -6,7 +6,7 @@ Automatic dataset generation tool for question-answer datasets with advanced exp
 
 ## 🎯 Objective
 
-Create quality datasets for training AI models by mining uploaded files and GitHub repositories, generating contextualized question-answer pairs. Datasets are stored in PostgreSQL and can be exported to multiple formats.
+Create quality datasets for training AI models by mining uploaded files, web pages and GitHub repositories, generating contextualized question-answer pairs. Hugging Face is the source of truth: generated pairs wait as drafts in PostgreSQL until you review and publish them to your account as private dataset repos, and the **Datasets** section reads them back from the Hub.
 
 ## ⚡ Quick Start
 
@@ -24,7 +24,8 @@ make dev
 This project is designed with a modular architecture that separates concerns into distinct components:
 
 - **LLM Client**: Interaction with language models to generate question-answer pairs
-- **Data Manager**: Data management and dataset storage with multiple export formats
+- **Data Manager**: Drafts (generated, not yet published) in PostgreSQL, with multiple export formats
+- **Hub reader**: Reads published datasets from Hugging Face at a pinned commit — rows, statistics, files and versions
 - **Pipeline**: Orchestration of the complete dataset generation process
 - **Export Module**: Advanced dataset export to various formats (JSON, JSONL, CSV) and dataset copies
 
@@ -35,7 +36,8 @@ This project is designed with a modular architecture that separates concerns int
 - **Model providers**: every call (cleaning, Q&A, vision, jobs) runs on the user's own OpenAI-compatible key — or, in local development and CI, on a Claude subscription (Claude Agent SDK); per-step defaults are set on the **Models** page
 - **AI-Powered QA Generation**: Leverage state-of-the-art LLMs for intelligent question-answer pair creation
 - **Multi-language Support**: Generate datasets in French, English, Spanish, and German
-- **Versioned storage**: datasets are created/updated in PostgreSQL at generation time, with DVC-like versioning — each generation is recorded as a numbered run (`v1`, `v2`, …) and pairs are idempotent by content hash
+- **Hugging Face as the source of truth**: the **Datasets** section reads every published dataset from the Hub with your own token — a data table with search, filters and sort, the rendered card, per-column statistics, files, and the version history with row-level diffs ([details](https://kevindebenedetti.github.io/dataset-generator/datasets))
+- **Drafts**: each generation lands as a draft in PostgreSQL, recorded as a numbered run (`v1`, `v2`, …) with pairs idempotent by content hash, until it is reviewed and published
 - **Multiple Export Formats**: JSON, CSV, JSONL, and platform-specific formats
 - **Quality Control**: Automated validation and filtering of generated content
 - **Batch Processing**: Efficient handling of large-scale data generation
@@ -47,12 +49,12 @@ This project is designed with a modular architecture that separates concerns int
 2. **Cleaning**: Processing and normalizing text to extract relevant content (per page)
 3. **QA Generation**: Creating high-quality question-answer pairs via LLMs with configurable prompts
 4. **Quality Assurance**: Automated validation, semantic deduplication (local multilingual sentence embeddings) and answer-grounding checks of generated datasets
-5. **Versioning & Export**: Automatic save at generation time (versioned runs), plus multi-format export
-6. **Storage**: Persistent storage with metadata tracking and version control
+5. **Review**: The generation is saved as a draft (a numbered run) under **Drafts**
+6. **Publish**: The reviewed draft is pushed to Hugging Face as a private dataset repo, then browsed from the Hub under **Datasets**
 
 ## 📊 Export Options
 
-- **Hugging Face Hub**: Push a dataset to your account as a **private** dataset repo
+- **Hugging Face Hub**: Publish a reviewed draft to your account as a **private** dataset repo — the dataset's home from then on
 - **Qdrant**: Optional vector store for semantic search over a dataset
 - **JSON/JSONL**: Standard formats for data interchange
 - **CSV**: Tabular format for analysis and review
@@ -215,15 +217,19 @@ The scheduled GitHub Actions jobs run the same code on the server's own keys
 
 ### Storage
 
+Published datasets live on Hugging Face, the source of truth: the **Datasets**
+section reads them from the Hub with each user's own token, loading a split of at
+most 50 MB, cached per commit. Hugging Face exports are always **private** repos —
+an export into an existing repo the Hub does not confirm private is refused; an
+import reads at most 50 MB of data files.
+
 PostgreSQL is the only database (`postgres://` / `postgresql://` URLs are
-accepted). Three tables hold the datasets: `datasets`, `qa_pairs` (keyed by
-`(dataset_id, content hash)`, so re-running a generation is idempotent) and
-`dataset_runs` (one numbered version per generation). `PERSIST_DATASETS=false`
-makes generation a pass-through (also per request: `persist`). Qdrant is optional
-(`QDRANT_URL`); `QDRANT_COLLECTION_PREFIX` lets environments share one instance.
-Hugging Face exports are always **private** repos — an export into an existing
-repo the Hub does not confirm private is refused; an import reads at most 50 MB
-of data files.
+accepted). Drafts — generated, not yet published — live in three tables:
+`datasets`, `qa_pairs` (keyed by `(dataset_id, content hash)`, so re-running a
+generation is idempotent) and `dataset_runs` (one numbered version per
+generation). `PERSIST_DATASETS=false` makes generation a pass-through (also per
+request: `persist`). Qdrant is optional (`QDRANT_URL`);
+`QDRANT_COLLECTION_PREFIX` lets environments share one instance.
 
 ## 🌍 Supported Languages
 

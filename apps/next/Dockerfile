@@ -48,8 +48,11 @@ EXPOSE ${APP_PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD ["sh", "-c", "curl -f http://localhost:${PORT:-3000}/api/health || exit 1"]
 
-# Use bun dev directly without reinstalling
-CMD ["bun", "run", "dev"]
+# Install from the lockfile, then start. docker-compose.yml mounts a named
+# volume over /app/node_modules, and that volume outlives image rebuilds: a
+# package added since it was created would be missing ("Module not found")
+# until installed by hand. With nothing to install this takes about a second.
+CMD ["sh", "-c", "bun install --frozen-lockfile && exec bun run dev"]
 
 # =============================================================================
 # Stage: builder

@@ -587,28 +587,6 @@
         }
       }
     },
-    "/dataset/huggingface": {
-      "get": {
-        "tags": [
-          "dataset"
-        ],
-        "summary": "List your Hugging Face dataset repos",
-        "description": "List the Hugging Face Hub dataset repos of the account your token belongs to.",
-        "operationId": "get_huggingface_datasets_dataset_huggingface_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HuggingFaceDatasetsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/dataset/huggingface/import": {
       "post": {
         "tags": [
@@ -962,6 +940,773 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeleteDatasetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "List your Hub datasets",
+        "description": "The dataset repos of your Hugging Face account or one of its organizations,\nprivate ones included, most recently updated first.",
+        "operationId": "get_hub_datasets_hub_datasets_get",
+        "parameters": [
+          {
+            "name": "author",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 96
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your namespaces (default: your own)",
+              "title": "Author"
+            },
+            "description": "One of your namespaces (default: your own)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDatasetList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "A Hub dataset at one revision",
+        "description": "Metadata, card, files, tables (configs and splits) and refs of a dataset,\nall read at one commit (``sha``).",
+        "operationId": "get_hub_dataset_hub_datasets__owner___name__get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Branch, tag or commit sha (default branch if empty)",
+              "title": "Revision"
+            },
+            "description": "Branch, tag or commit sha (default branch if empty)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDatasetDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}/rows": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "A page of rows, with search, filters and sort",
+        "description": "One page of a split. Long text cells are cut (``truncated_cells``).",
+        "operationId": "get_hub_rows_hub_datasets__owner___name__rows_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Branch, tag or commit sha (default branch if empty)",
+              "title": "Revision"
+            },
+            "description": "Branch, tag or commit sha (default branch if empty)"
+          },
+          {
+            "name": "config",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Config name",
+              "title": "Config"
+            },
+            "description": "Config name"
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Split name",
+              "title": "Split"
+            },
+            "description": "Split name"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "length",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Length"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive text search, nested fields included",
+              "title": "Q"
+            },
+            "description": "Case-insensitive text search, nested fields included"
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON list, e.g. [{\"column\": \"category\", \"op\": \"eq\", \"value\": \"docs\"}]",
+              "title": "Filters"
+            },
+            "description": "JSON list, e.g. [{\"column\": \"category\", \"op\": \"eq\", \"value\": \"docs\"}]"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Column to sort by",
+              "title": "Sort"
+            },
+            "description": "Column to sort by"
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "asc",
+              "title": "Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubRows"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}/row": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "One full row",
+        "description": "A row with every cell in full.",
+        "operationId": "get_hub_row_hub_datasets__owner___name__row_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          },
+          {
+            "name": "row_idx",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Position of the row in the split",
+              "title": "Row Idx"
+            },
+            "description": "Position of the row in the split"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Branch, tag or commit sha (default branch if empty)",
+              "title": "Revision"
+            },
+            "description": "Branch, tag or commit sha (default branch if empty)"
+          },
+          {
+            "name": "config",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Config name",
+              "title": "Config"
+            },
+            "description": "Config name"
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Split name",
+              "title": "Split"
+            },
+            "description": "Split name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubFullRow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}/statistics": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "Per-column statistics of a split",
+        "description": "Types, nulls, length and value distributions, labels and duplicates.",
+        "operationId": "get_hub_statistics_hub_datasets__owner___name__statistics_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Branch, tag or commit sha (default branch if empty)",
+              "title": "Revision"
+            },
+            "description": "Branch, tag or commit sha (default branch if empty)"
+          },
+          {
+            "name": "config",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Config name",
+              "title": "Config"
+            },
+            "description": "Config name"
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Split name",
+              "title": "Split"
+            },
+            "description": "Split name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubStatistics"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}/commits": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "The dataset's versions (commits)",
+        "description": "Newest first. Every commit is a version of the dataset.",
+        "operationId": "get_hub_commits_hub_datasets__owner___name__commits_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCommits"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hub/datasets/{owner}/{name}/compare": {
+      "get": {
+        "tags": [
+          "hub"
+        ],
+        "summary": "What changed in a split between two versions",
+        "description": "Rows added, removed and changed, matched by ``id`` when every row has a\nunique one, else by content.",
+        "operationId": "get_hub_compare_hub_datasets__owner___name__compare_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "User or organization on the Hub",
+              "title": "Owner"
+            },
+            "description": "User or organization on the Hub"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 96,
+              "description": "Dataset repo name",
+              "title": "Name"
+            },
+            "description": "Dataset repo name"
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "description": "Older revision",
+              "title": "Base"
+            },
+            "description": "Older revision"
+          },
+          {
+            "name": "head",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Newer revision (default branch if empty)",
+              "title": "Head"
+            },
+            "description": "Newer revision (default branch if empty)"
+          },
+          {
+            "name": "config",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Config name",
+              "title": "Config"
+            },
+            "description": "Config name"
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Split name",
+              "title": "Split"
+            },
+            "description": "Split name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCompare"
                 }
               }
             }
@@ -3810,6 +4555,1101 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HubBooleanCounts": {
+        "properties": {
+          "true": {
+            "type": "integer",
+            "title": "True"
+          },
+          "false": {
+            "type": "integer",
+            "title": "False"
+          }
+        },
+        "type": "object",
+        "required": [
+          "true",
+          "false"
+        ],
+        "title": "HubBooleanCounts"
+      },
+      "HubCard": {
+        "properties": {
+          "markdown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Markdown",
+            "description": "README body without its YAML header; null without a card"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "title": "HubCard"
+      },
+      "HubCategories": {
+        "properties": {
+          "distinct": {
+            "type": "integer",
+            "title": "Distinct"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/HubCategoryValue"
+            },
+            "type": "array",
+            "title": "Values"
+          },
+          "other_count": {
+            "type": "integer",
+            "title": "Other Count",
+            "description": "Rows holding a value outside the top ones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "distinct",
+          "values",
+          "other_count"
+        ],
+        "title": "HubCategories"
+      },
+      "HubCategoryValue": {
+        "properties": {
+          "value": {
+            "title": "Value"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "HubCategoryValue"
+      },
+      "HubChangedRow": {
+        "properties": {
+          "before": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Before"
+          },
+          "after": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "HubChangedRow"
+      },
+      "HubColumnStats": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "null_count": {
+            "type": "integer",
+            "title": "Null Count"
+          },
+          "lengths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubNumericSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Characters per value (strings) or items per value (lists)"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubNumericSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "booleans": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubBooleanCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubCategories"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Value counts, when the values are repeated labels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "kind",
+          "count",
+          "null_count"
+        ],
+        "title": "HubColumnStats"
+      },
+      "HubCommit": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Authors"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "message",
+          "authors"
+        ],
+        "title": "HubCommit"
+      },
+      "HubCommits": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "commits": {
+            "items": {
+              "$ref": "#/components/schemas/HubCommit"
+            },
+            "type": "array",
+            "title": "Commits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "total",
+          "commits"
+        ],
+        "title": "HubCommits"
+      },
+      "HubCompare": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "base": {
+            "type": "string",
+            "title": "Base",
+            "description": "Commit compared from"
+          },
+          "head": {
+            "type": "string",
+            "title": "Head",
+            "description": "Commit compared to"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "'id' when rows were matched by id, else 'content'"
+          },
+          "base_rows": {
+            "type": "integer",
+            "title": "Base Rows"
+          },
+          "head_rows": {
+            "type": "integer",
+            "title": "Head Rows"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "removed": {
+            "type": "integer",
+            "title": "Removed"
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged"
+          },
+          "added_examples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Added Examples"
+          },
+          "removed_examples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Removed Examples"
+          },
+          "changed_examples": {
+            "items": {
+              "$ref": "#/components/schemas/HubChangedRow"
+            },
+            "type": "array",
+            "title": "Changed Examples"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "config",
+          "split",
+          "base",
+          "head",
+          "key",
+          "base_rows",
+          "head_rows",
+          "added",
+          "removed",
+          "changed",
+          "unchanged",
+          "added_examples",
+          "removed_examples",
+          "changed_examples"
+        ],
+        "title": "HubCompare"
+      },
+      "HubDatasetDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Full 'namespace/name' repo id on the Hub"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private"
+          },
+          "gated": {
+            "title": "Gated",
+            "description": "False, or the gating mode ('auto'/'manual')"
+          },
+          "disabled": {
+            "type": "boolean",
+            "title": "Disabled",
+            "default": false
+          },
+          "downloads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloads",
+            "description": "Downloads in the last 30 days"
+          },
+          "downloads_all_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloads All Time"
+          },
+          "likes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Likes"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "pretty_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretty Name",
+            "description": "From the dataset card, if set"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "size_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Category"
+          },
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count",
+            "description": "Files in the repo (any revision)"
+          },
+          "used_storage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Storage",
+            "description": "Repo size in bytes"
+          },
+          "sha": {
+            "type": "string",
+            "title": "Sha",
+            "description": "The commit everything on the page was read at"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision",
+            "description": "The revision asked for"
+          },
+          "card": {
+            "$ref": "#/components/schemas/HubCard"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/HubFile"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/HubView"
+            },
+            "type": "array",
+            "title": "Views"
+          },
+          "refs": {
+            "$ref": "#/components/schemas/HubRefs"
+          },
+          "max_view_bytes": {
+            "type": "integer",
+            "title": "Max View Bytes",
+            "description": "Largest table the viewer loads"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "private",
+          "sha",
+          "card",
+          "files",
+          "views",
+          "refs",
+          "max_view_bytes"
+        ],
+        "title": "HubDatasetDetail",
+        "description": "A dataset repo at one commit: metadata, card, files and tables."
+      },
+      "HubDatasetList": {
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace",
+            "description": "The namespace listed"
+          },
+          "namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Namespaces",
+            "description": "Every namespace the token can list: account, orgs, saved one"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/HuggingFaceDataset"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "namespaces",
+          "total",
+          "datasets"
+        ],
+        "title": "HubDatasetList"
+      },
+      "HubDuplicates": {
+        "properties": {
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "duplicate_rows": {
+            "type": "integer",
+            "title": "Duplicate Rows",
+            "description": "Rows repeating an earlier row's value (case and spaces ignored)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "column",
+          "duplicate_rows"
+        ],
+        "title": "HubDuplicates"
+      },
+      "HubFeature": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Arrow type, e.g. string, double, list<item: string>"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "string, number, bool, list, object, datetime, binary, null or other"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "kind"
+        ],
+        "title": "HubFeature"
+      },
+      "HubFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size",
+            "description": "Bytes; null when the Hub didn't say"
+          },
+          "lfs": {
+            "type": "boolean",
+            "title": "Lfs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "lfs"
+        ],
+        "title": "HubFile"
+      },
+      "HubFullRow": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "sha": {
+            "type": "string",
+            "title": "Sha"
+          },
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "row_idx": {
+            "type": "integer",
+            "title": "Row Idx"
+          },
+          "row": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Row"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "sha",
+          "config",
+          "split",
+          "row_idx",
+          "row"
+        ],
+        "title": "HubFullRow"
+      },
+      "HubHistogramBin": {
+        "properties": {
+          "start": {
+            "type": "number",
+            "title": "Start"
+          },
+          "end": {
+            "type": "number",
+            "title": "End"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "count"
+        ],
+        "title": "HubHistogramBin"
+      },
+      "HubNumericSummary": {
+        "properties": {
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median"
+          },
+          "histogram": {
+            "items": {
+              "$ref": "#/components/schemas/HubHistogramBin"
+            },
+            "type": "array",
+            "title": "Histogram"
+          }
+        },
+        "type": "object",
+        "title": "HubNumericSummary"
+      },
+      "HubQAColumns": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "HubQAColumns",
+        "description": "Which columns hold the question, the answer and the context."
+      },
+      "HubRef": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "target_commit": {
+            "type": "string",
+            "title": "Target Commit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "target_commit"
+        ],
+        "title": "HubRef"
+      },
+      "HubRefs": {
+        "properties": {
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/HubRef"
+            },
+            "type": "array",
+            "title": "Branches"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/HubRef"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "title": "HubRefs"
+      },
+      "HubRow": {
+        "properties": {
+          "row_idx": {
+            "type": "integer",
+            "title": "Row Idx",
+            "description": "Position of the row in the split"
+          },
+          "row": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Row"
+          },
+          "truncated_cells": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Truncated Cells",
+            "description": "Columns cut short; GET .../row for all of it"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_idx",
+          "row"
+        ],
+        "title": "HubRow"
+      },
+      "HubRows": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "sha": {
+            "type": "string",
+            "title": "Sha"
+          },
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/HubFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "qa": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubQAColumns"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/HubRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "num_rows_total": {
+            "type": "integer",
+            "title": "Num Rows Total",
+            "description": "Rows in the split"
+          },
+          "num_rows_matched": {
+            "type": "integer",
+            "title": "Num Rows Matched",
+            "description": "Rows left after search and filters"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "length": {
+            "type": "integer",
+            "title": "Length"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "sha",
+          "config",
+          "split",
+          "features",
+          "rows",
+          "num_rows_total",
+          "num_rows_matched",
+          "offset",
+          "length"
+        ],
+        "title": "HubRows"
+      },
+      "HubStatistics": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "sha": {
+            "type": "string",
+            "title": "Sha"
+          },
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "num_rows": {
+            "type": "integer",
+            "title": "Num Rows"
+          },
+          "num_columns": {
+            "type": "integer",
+            "title": "Num Columns"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/HubColumnStats"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "qa": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubQAColumns"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duplicates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubDuplicates"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "sha",
+          "config",
+          "split",
+          "num_rows",
+          "num_columns",
+          "columns"
+        ],
+        "title": "HubStatistics"
+      },
+      "HubView": {
+        "properties": {
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "num_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Bytes"
+          },
+          "extra": {
+            "type": "boolean",
+            "title": "Extra",
+            "description": "A data file outside the dataset's declared splits",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "config",
+          "split",
+          "files"
+        ],
+        "title": "HubView",
+        "description": "One table of the dataset: a config's split, or an extra data file."
+      },
       "HuggingFaceDataset": {
         "properties": {
           "id": {
@@ -4012,32 +5852,6 @@
         ],
         "title": "HuggingFaceDataset",
         "description": "One dataset repo owned by the configured Hugging Face account.\n\nMirrors ``huggingface_hub.DatasetInfo`` (fetched with ``full=True``), plus\nthe handful of dataset-card fields (``pretty_name``, ``language``,\n``license``, ``size_category``) worth surfacing without asking the caller\nto parse the card's YAML front matter themselves."
-      },
-      "HuggingFaceDatasetsResponse": {
-        "properties": {
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "datasets": {
-            "items": {
-              "$ref": "#/components/schemas/HuggingFaceDataset"
-            },
-            "type": "array",
-            "title": "Datasets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "namespace",
-          "total",
-          "datasets"
-        ],
-        "title": "HuggingFaceDatasetsResponse"
       },
       "HuggingFaceExportResponse": {
         "properties": {

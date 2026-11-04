@@ -9,12 +9,12 @@ import {
   cleanSimilarities,
   resolvePair,
   exportDatasetToHuggingFace,
-  getHuggingFaceDatasets,
   importHuggingFaceDataset,
 } from '@/api/sdk'
 import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
 import { DATASET_ALL_RUNS_QUERY_KEY } from './use-dataset-versions'
+import { HUB_QUERY_KEY } from './use-hub'
 
 // The /generate form can mine two kinds of source; the mutation branches on it.
 // Model fields are "<provider>:<model>" references; null = the role default.
@@ -110,20 +110,8 @@ export function useGenerateDataset() {
   })
 }
 
-export const HUGGINGFACE_DATASETS_QUERY_KEY = ['huggingface-datasets']
-
-// The dataset repos already on the Hub for the configured account — shown
-// alongside the app's own datasets so a user can see what's already exported.
-// Not configured (no HF_TOKEN) is a normal, expected state, so don't retry it.
-export function useHuggingFaceDatasets() {
-  return useQuery({
-    queryKey: HUGGINGFACE_DATASETS_QUERY_KEY,
-    queryFn: getHuggingFaceDatasets,
-    retry: false,
-  })
-}
-
-// Push a dataset to the Hugging Face Hub (always a private dataset repo).
+// Publish a draft to the Hugging Face Hub (always a private dataset repo).
+// The Hub is the source of truth: every Hub view is stale once it lands.
 export function useExportToHuggingFace() {
   const queryClient = useQueryClient()
 
@@ -131,7 +119,7 @@ export function useExportToHuggingFace() {
     mutationFn: ({ datasetName, repoId }: { datasetName: string; repoId?: string | null }) =>
       exportDatasetToHuggingFace(datasetName, repoId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: HUGGINGFACE_DATASETS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: [HUB_QUERY_KEY] })
     },
   })
 }
