@@ -36,6 +36,10 @@ updates:
     multi-ecosystem-group: "weekly-all"
     cooldown:
       default-days: 7
+    # github-workflows bumps come with each of its releases, as a pull request
+    # its propagate-release job opens: Dependabot would only duplicate them.
+    ignore:
+      - dependency-name: "KevinDeBenedetti/github-workflows*"
 
   - package-ecosystem: "docker"
     directories: ["/apps/server", "/apps/next"]
