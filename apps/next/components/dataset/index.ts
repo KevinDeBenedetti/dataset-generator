@@ -1,6 +1,5 @@
 export { DatasetGenerate } from './dataset-generate'
 export { DatasetsTable } from './datasets-table'
-export { HuggingFaceDatasets } from './huggingface-datasets'
 export { DatasetSearch } from './dataset-search'
 export { QAList } from './qa-list'
 export { QAItem } from './qa-item'

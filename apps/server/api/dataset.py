@@ -27,14 +27,12 @@ from server.services.huggingface import (
     HuggingFaceRepoPublicError,
     export_dataset_to_hub,
     import_dataset_from_hub,
-    list_user_datasets,
 )
 from server.schemas.dataset import (
     DatasetResponse,
     DatasetSourcesResponse,
     DatasetVersionsResponse,
     DuplicateDatasetResponse,
-    HuggingFaceDatasetsResponse,
     HuggingFaceExportResponse,
     HuggingFaceImportResponse,
     SimilarityAnalysisResponse,
@@ -116,26 +114,6 @@ def get_dataset_versions(dataset_name: str, user: User = Depends(get_current_use
     except Exception as e:
         logging.error(f"Error fetching versions for {dataset_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get(
-    "/dataset/huggingface",
-    response_model=HuggingFaceDatasetsResponse,
-    summary="List your Hugging Face dataset repos",
-)
-async def get_huggingface_datasets(creds: Credentials = Depends(get_credentials)):
-    """List the Hugging Face Hub dataset repos of the account your token belongs to."""
-    try:
-        # list_user_datasets is a fully synchronous, blocking call (Hub HTTP
-        # request) — run it off the event loop thread so one slow Hub lookup
-        # doesn't stall every other concurrent request on the single uvicorn
-        # worker.
-        return await run_in_threadpool(list_user_datasets, creds)
-    except HuggingFaceNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error listing Hugging Face datasets: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"Hugging Face lookup failed: {e}")
 
 
 @router.post(

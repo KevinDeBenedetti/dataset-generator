@@ -10,6 +10,7 @@ import { toggleTheme } from '@/lib/utils'
 const LABELS: Record<string, string> = {
   '/dashboard': 'Overview',
   '/datasets': 'Datasets',
+  '/drafts': 'Drafts',
   '/generate': 'Generate',
   '/jobs': 'Jobs',
   '/quality': 'Quality control',

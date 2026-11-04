@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useDatasets, useHuggingFaceDatasets } from '@/hooks'
+import { useDatasets, useHubDatasets } from '@/hooks'
 import { useCurrentUser, useLogout } from '@/hooks/use-auth'
 import { cn, initialsFor } from '@/lib/utils'
 import pkg from '@/package.json'
@@ -28,6 +28,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
       { icon: 'database', label: 'Datasets', href: '/datasets' },
+      { icon: 'fileText', label: 'Drafts', href: '/drafts' },
       { icon: 'sparkles', label: 'Generate', href: '/generate' },
       { icon: 'activity', label: 'Jobs', href: '/jobs' },
     ],
@@ -50,23 +51,20 @@ export function AppSidebar() {
   const pathname = usePathname() ?? ''
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
-  // Real dataset count for the Datasets nav badge. Uses the same source as the
-  // /datasets page so the badge matches what's listed there; the
-  // shared react-query cache means no extra request.
-  const { data: datasets } = useDatasets()
-  const datasetCount = datasets?.length
+  // Published datasets live on Hugging Face, drafts in the app: each badge
+  // uses the same query (and cache) as its page, so the counts always agree.
+  const { data: drafts } = useDatasets()
+  const { data: hfData, isPending: hfPending, error: hfError } = useHubDatasets()
 
   const counts: Record<string, string | undefined> = {
-    '/datasets': datasetCount != null ? String(datasetCount) : undefined,
+    '/datasets': hfData ? String(hfData.total) : undefined,
+    '/drafts': drafts?.length ? String(drafts.length) : undefined,
   }
 
-  // Real Hugging Face connection status for the "Delivery" group — same query
-  // (and cache) the /datasets page and dashboard already use. No HF_TOKEN
-  // configured surfaces as an error there, which here reads as "Off" rather
-  // than being hidden, since this is a status row, not a data listing.
-  const { data: hfData, isPending: hfPending, error: hfError } = useHuggingFaceDatasets()
+  // Hugging Face connection status: no token reads as "Off" rather than being
+  // hidden, since this is a status row, not a data listing.
   const hfConnected = !hfPending && !hfError
-  const hfStatusLabel = hfPending ? '…' : hfConnected ? `${hfData?.total ?? 0} synced` : 'Off'
+  const hfStatusLabel = hfPending ? '…' : hfConnected ? 'Connected' : 'Off'
 
   const { data: user } = useCurrentUser()
   const logoutMutation = useLogout()

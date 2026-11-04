@@ -15,6 +15,7 @@ from server.api import (
     collections,
     dataset,
     generate,
+    hub,
     jobs,
     models,
     q_a,
@@ -31,6 +32,7 @@ def _build_protected_app(test_db):
     app = FastAPI()
     auth_required = [Depends(get_current_user)]
     app.include_router(dataset.router, dependencies=auth_required)
+    app.include_router(hub.router, dependencies=auth_required)
     app.include_router(generate.router, dependencies=auth_required)
     app.include_router(collections.router, dependencies=auth_required)
     app.include_router(quality_rules.router, dependencies=auth_required)
@@ -62,6 +64,8 @@ def test_protected_routes_reject_anonymous(test_db):
     )
     assert client.get("/jobs").status_code == 401
     assert client.get("/models").status_code == 401
+    assert client.get("/hub/datasets").status_code == 401
+    assert client.get("/hub/datasets/kevin/qa/rows").status_code == 401
 
 
 def test_protected_routes_allow_authenticated(test_db):

@@ -26,7 +26,7 @@ export function DatasetsTable({ datasets }: DatasetsTableProps) {
   return (
     <div className="border rounded-lg overflow-x-auto">
       <Table className="w-full">
-        <TableCaption>{datasets.length} dataset(s)</TableCaption>
+        <TableCaption>{datasets.length} draft(s)</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
@@ -40,10 +40,10 @@ export function DatasetsTable({ datasets }: DatasetsTableProps) {
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
               <TableCell className="font-medium">
-                {/* Datasets are keyed by name — the detail route takes that
+                {/* Drafts are keyed by name — the detail route takes that
                     name, URL-encoded. */}
                 <Link
-                  href={`/datasets/${encodeURIComponent(dataset.name)}`}
+                  href={`/drafts/${encodeURIComponent(dataset.name)}`}
                   className="hover:underline"
                 >
                   {dataset.name}

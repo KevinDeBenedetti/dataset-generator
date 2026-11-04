@@ -7,7 +7,7 @@ import {
   useAnalyzeDataset,
   useCleanDataset,
   useDatasets,
-  useHuggingFaceDatasets,
+  useHubDatasets,
   useImportHuggingFaceDataset,
   useQAStats,
   useQualityRules,
@@ -73,7 +73,7 @@ export default function QualityPage() {
   // Datasets that only exist on the Hub so far (not already analyzable
   // locally) — offered in the selector as an "import, then analyze" action,
   // since analysis (duplicates, stats, rules) only ever runs over local Q/A.
-  const { data: hfDatasetsData, isPending: hfDatasetsPending } = useHuggingFaceDatasets()
+  const { data: hfDatasetsData, isPending: hfDatasetsPending } = useHubDatasets()
   const importHfMutation = useImportHuggingFaceDataset()
   const localDatasetNames = useMemo(() => new Set(datasets?.map((d) => d.name)), [datasets])
   const importableHfDatasets = useMemo(

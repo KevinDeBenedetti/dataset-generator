@@ -4,20 +4,27 @@ title: Getting Started
 
 # Getting Started
 
-Dataset Generator mines uploaded files or GitHub repositories and turns
-them into question/answer datasets via LLMs, with versioned storage and
-multi-format export.
+Dataset Generator mines uploaded files, web pages or GitHub repositories and
+turns them into question/answer datasets via LLMs. Hugging Face is the source of
+truth: a dataset is generated as a draft, reviewed, then published to the Hub,
+where the app reads it back.
 
 ## Prerequisites
 
 - Docker Desktop (the stack runs with Docker Compose)
 - An OpenAI-compatible API key for the LLM calls
+- A Hugging Face access token with write access, to publish datasets and
+  browse them in the **Datasets** section
 
+Where the data lives:
 
-Datasets, their Q/A pairs and their version history live in the PostgreSQL that
-`make dev` starts — no external service to configure. Set `PERSIST_DATASETS=false`
-to make generation a pass-through instead (the pairs come back in the API
-response and nothing is stored).
+| Data                   | Store                                       | Shown in     |
+| ---------------------- | ------------------------------------------- | ------------ |
+| Drafts (not published) | The PostgreSQL that `make dev` starts       | **Drafts**   |
+| Published datasets     | Your Hugging Face account, as private repos | **Datasets** |
+
+Set `PERSIST_DATASETS=false` to make generation a pass-through instead (the
+pairs come back in the API response and no draft is stored).
 
 ## Setup
 
@@ -38,11 +45,11 @@ same command works on the first run and every day after.
 
 Services started by Docker Compose:
 
-| Service    | Role                                         | Host port                       |
-| ---------- | -------------------------------------------- | ------------------------------- |
-| `next`     | Web UI (Next.js)                             | `NEXT_PORT` (default `3020`)    |
-| `server`   | REST API (FastAPI)                           | `SERVER_PORT` (default `8020`)  |
-| `worker`   | Runs the queued dataset jobs                 | —                               |
+| Service  | Role                         | Host port                      |
+| -------- | ---------------------------- | ------------------------------ |
+| `next`   | Web UI (Next.js)             | `NEXT_PORT` (default `3020`)   |
+| `server` | REST API (FastAPI)           | `SERVER_PORT` (default `8020`) |
+| `worker` | Runs the queued dataset jobs | —                              |
 
 Set `NEXT_PORT` / `SERVER_PORT` in `.env` when the defaults collide with another
 local stack: compose derives the browser's API URL and the SSO callbacks from
@@ -86,21 +93,24 @@ review, then *Publish to Hugging Face* pushes exactly that draft to
 `GET /jobs/runs/{run_id}`, `POST /jobs/runs/{run_id}/publish`.
 
 Each page/document goes through the same pipeline: read/transcribe → clean →
-QA generation → deduplication → save (a new version).
+QA generation → deduplication → save (a new version of the draft).
 
-## Exporting to Hugging Face
+## Publishing to Hugging Face
 
-Set `HF_TOKEN` (a token with write access) in `.env`, then use **Export to
-Hugging Face** on a dataset's page — or call it directly:
+Add your Hugging Face token (write access) in **Settings**, open the draft
+under **Drafts**, review its pairs, then use **Publish to Hugging Face** — or
+call it directly:
 
 ```bash
 curl -X POST http://localhost:8020/dataset/my-dataset/export/huggingface
 ```
 
 The dataset repo is always created **private**. If a repo with that id already
-exists and the Hub does not confirm it is private, the export is refused rather
-than publishing your data. **Import from Hugging Face** reads at most 50 MB of
-data files per repo.
+exists and the Hub does not confirm it is private, publishing is refused rather
+than making your data public. Once published, the dataset appears under
+**Datasets**, read from the Hub: see [Datasets on Hugging Face](./datasets.md).
+**Import from Hugging Face** (on the **Quality control** page) reads at most
+50 MB of data files per repo.
 
 ## Useful commands
 
@@ -108,14 +118,30 @@ data files per repo.
 make help       # list every target with its description
 make dev        # start the stack (foreground, live logs)
 make down       # stop and remove the containers
-make reset      # purge the venv/node_modules volumes and rebuild (after a dependency change)
+make reset      # delete every volume (the database included) and rebuild
 make logs       # stream logs from all containers
 make clean      # remove containers, caches, lockfiles and virtualenvs
 make dev-local  # run the API alone with uvicorn --reload, no Docker
 make test       # run the test suite with an HTML coverage report
 ```
 
+::: warning A front-end dependency changed
+`/app/node_modules` lives in the `next_node_modules` volume, which outlives image
+rebuilds, so the `next` container installs the packages of `bun.lock` each time
+it starts. If a page still reports `Module not found` after a dependency change,
+restart that container, the database stays untouched:
+
+```sh
+docker compose restart next
+```
+
+Images built before this start-up install don't have it: run
+`docker compose exec next bun install` once, then the restart above.
+:::
+
 ## Going further
 
+- [Datasets on Hugging Face](./datasets.md) — browsing, statistics and versions
+  of the published datasets
 - [Project README](https://github.com/KevinDeBenedetti/dataset-generator#readme) —
   architecture, features, authentication and full configuration reference
