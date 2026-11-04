@@ -23,7 +23,6 @@ from server.services.huggingface import (
     export_dataset_to_hub,
     import_dataset_from_hub,
     is_huggingface_configured,
-    list_user_datasets,
     qualify_repo_id,
     resolve_repo_id,
     slugify,
@@ -39,76 +38,19 @@ class FakeRepoInfo:
         self.private = private
 
 
-class FakeCardData:
-    def __init__(self, **fields):
-        self._fields = fields
-
-    def to_dict(self):
-        return dict(self._fields)
-
-
-class FakeSibling:
-    def __init__(self, rfilename):
-        self.rfilename = rfilename
-
-
-class FakeDatasetInfo:
-    def __init__(
-        self,
-        id,
-        private=False,
-        downloads=0,
-        likes=0,
-        last_modified=None,
-        author=None,
-        gated=False,
-        disabled=False,
-        downloads_all_time=None,
-        tags=None,
-        description=None,
-        siblings=None,
-        used_storage=None,
-        sha=None,
-        created_at=None,
-        card_data=None,
-    ):
-        self.id = id
-        self.private = private
-        self.downloads = downloads
-        self.likes = likes
-        self.last_modified = last_modified
-        self.author = author
-        self.gated = gated
-        self.disabled = disabled
-        self.downloads_all_time = downloads_all_time
-        self.tags = tags
-        self.description = description
-        self.siblings = siblings
-        self.used_storage = used_storage
-        self.sha = sha
-        self.created_at = created_at
-        self.card_data = card_data
-
-
 class FakeHfApi:
     """Stand-in for HfApi: records calls, never touches the network."""
 
-    def __init__(self, *, existing_private=None, whoami_name="kevin", datasets=None):
+    def __init__(self, *, existing_private=None, whoami_name="kevin"):
         # None → the repo doesn't exist yet; True/False → it does, with that
         # visibility (what create_repo(exist_ok=True) silently leaves alone).
         self.existing_private = existing_private
         self.whoami_name = whoami_name
         self.created: list[dict] = []
         self.uploads: list[dict] = []
-        self._datasets = datasets if datasets is not None else []
-        self.list_datasets_calls: list[dict] = []
 
     def whoami(self):
         return {"name": self.whoami_name}
-
-    def list_datasets(self, **kwargs):
-        self.list_datasets_calls.append(kwargs)
-        return iter(self._datasets)
 
     def create_repo(self, repo_id, **kwargs):
         self.created.append({"repo_id": repo_id, **kwargs})
@@ -338,139 +280,6 @@ def test_uploaded_jsonl_keeps_non_ascii_readable(token, api):
     assert "Où est la gare ?" in body
 
 
-# --- listing -------------------------------------------------------------
-
-
-def test_list_user_datasets_not_configured_without_a_token():
-    with pytest.raises(HuggingFaceNotConfiguredError, match="Settings"):
-        list_user_datasets(NONE)
-
-
-def test_list_user_datasets_uses_the_token_account(token, monkeypatch):
-    fake = FakeHfApi(
-        datasets=[
-            FakeDatasetInfo("kevin/ds-a"),
-            FakeDatasetInfo("kevin/ds-b", private=True),
-        ]
-    )
-    monkeypatch.setattr(hf, "_api", lambda creds: fake)
-
-    result = list_user_datasets(CREDS)
-
-    assert result["namespace"] == "kevin"
-    assert result["total"] == 2
-    assert [d["id"] for d in result["datasets"]] == ["kevin/ds-a", "kevin/ds-b"]
-    assert result["datasets"][0]["url"] == "https://huggingface.co/datasets/kevin/ds-a"
-    assert result["datasets"][1]["private"] is True
-    assert fake.list_datasets_calls[0]["author"] == "kevin"
-    # Asks for everything the Hub knows, not just the default summary fields.
-    assert fake.list_datasets_calls[0]["full"] is True
-
-
-def test_list_user_datasets_surfaces_full_metadata(token, monkeypatch):
-    from datetime import datetime, timezone
-
-    created = datetime(2026, 1, 2, tzinfo=timezone.utc)
-    modified = datetime(2026, 2, 3, tzinfo=timezone.utc)
-    fake = FakeHfApi(
-        datasets=[
-            FakeDatasetInfo(
-                "kevin/ds-a",
-                author="kevin",
-                downloads=42,
-                downloads_all_time=1000,
-                likes=7,
-                gated="auto",
-                tags=["synthetic", "question-answering"],
-                description="Q/A pairs scraped from docs.",
-                siblings=[FakeSibling("README.md"), FakeSibling("data/train.jsonl")],
-                used_storage=123456,
-                sha="abc123",
-                created_at=created,
-                last_modified=modified,
-                card_data=FakeCardData(
-                    pretty_name="Docs QA",
-                    language=["fr"],
-                    license="mit",
-                    size_categories=["1K<n<10K"],
-                ),
-            )
-        ]
-    )
-    monkeypatch.setattr(hf, "_api", lambda creds: fake)
-
-    row = list_user_datasets(CREDS)["datasets"][0]
-
-    assert row["author"] == "kevin"
-    assert row["downloads"] == 42
-    assert row["downloads_all_time"] == 1000
-    assert row["likes"] == 7
-    assert row["gated"] == "auto"
-    assert row["tags"] == ["synthetic", "question-answering"]
-    assert row["description"] == "Q/A pairs scraped from docs."
-    assert row["file_count"] == 2
-    assert row["used_storage"] == 123456
-    assert row["sha"] == "abc123"
-    assert row["created_at"] == created.isoformat()
-    assert row["last_modified"] == modified.isoformat()
-    assert row["pretty_name"] == "Docs QA"
-    assert row["language"] == ["fr"]
-    assert row["license"] == "mit"
-    assert row["size_category"] == "1K<n<10K"
-
-
-def test_list_user_datasets_handles_no_card(token, monkeypatch):
-    fake = FakeHfApi(
-        datasets=[FakeDatasetInfo("kevin/ds-a", card_data=None, siblings=None)]
-    )
-    monkeypatch.setattr(hf, "_api", lambda creds: fake)
-
-    row = list_user_datasets(CREDS)["datasets"][0]
-
-    assert row["pretty_name"] is None
-    assert row["language"] is None
-    assert row["license"] is None
-    assert row["size_category"] is None
-    assert row["file_count"] is None
-    assert row["tags"] == []
-    assert row["gated"] is False
-
-
-def test_list_user_datasets_normalizes_a_multi_value_license(token, monkeypatch):
-    """A list-valued `license` (a real, documented card pattern for datasets
-    combining sources) must come back as a plain string: the schema types
-    `HuggingFaceDataset.license` as `Optional[str]`, and a raw list there would
-    fail response-model validation for the *whole* listing endpoint — after
-    list_user_datasets(CREDS) already succeeded — taking every dataset down with it."""
-    fake = FakeHfApi(
-        datasets=[
-            FakeDatasetInfo(
-                "kevin/ds-a",
-                card_data=FakeCardData(license=["mit", "cc-by-4.0"]),
-            )
-        ]
-    )
-    monkeypatch.setattr(hf, "_api", lambda creds: fake)
-
-    row = list_user_datasets(CREDS)["datasets"][0]
-
-    assert row["license"] == "mit, cc-by-4.0"
-    assert isinstance(row["license"], str)
-
-
-def test_list_user_datasets_uses_the_configured_namespace(token, monkeypatch):
-    fake = FakeHfApi(datasets=[])
-    monkeypatch.setattr(hf, "_api", lambda creds: fake)
-
-    result = list_user_datasets(
-        make_creds(hf_token="hf_test_token", hf_namespace="my-org")
-    )
-
-    assert result["namespace"] == "my-org"
-    assert result["total"] == 0
-    assert fake.list_datasets_calls[0]["author"] == "my-org"
-
-
 def test_dataset_card_points_the_viewer_at_the_data_file(token, api):
     view, pairs = _stub_dataset([_pair("a", "Q1?")], target_language="fr")
     with view, pairs:
@@ -566,12 +375,11 @@ def test_import_finds_a_data_file_outside_data_dir(token):
     assert [i["question"] for i in items] == ["Q1?"]
 
 
-def test_import_ignores_dataset_metadata_files(token, monkeypatch):
+def test_import_ignores_dataset_metadata_files(token):
     """`dataset_infos.json` ranks as `.json`, which outranks `.parquet` in the
     extension-priority pick — without excluding known metadata filenames it
     would be picked instead of the real data shard, and the import would fail
     with "no row maps onto a Q/A pair" even though the repo is fine."""
-    monkeypatch.setattr(hf, "_parquet_available", lambda: True)
     files = {
         "dataset_infos.json": b'{"default": {"description": "not data"}}',
         "data/train-00000-of-00001.parquet": b"parquet-bytes",
@@ -589,9 +397,8 @@ def test_import_ignores_dataset_metadata_files(token, monkeypatch):
     )
 
 
-def test_pick_data_files_excludes_known_metadata_filenames(monkeypatch):
+def test_pick_data_files_excludes_known_metadata_filenames():
     """Unit-level check on the picker itself, including a non-root path."""
-    monkeypatch.setattr(hf, "_parquet_available", lambda: True)
     files = [
         "dataset_infos.json",
         "some/dir/dataset_dict.json",
@@ -698,13 +505,12 @@ def test_import_reads_every_split_and_merges_duplicates(token):
     assert sorted(i["question"] for i in items) == ["Q1?", "Q2?"]
 
 
-def test_import_without_a_readable_file_lists_the_repo(token, monkeypatch):
-    monkeypatch.setattr(hf, "_parquet_available", lambda: False)
-    listing, download = _hub({"README.md": b"", "data/train-00000.parquet": b""})
+def test_import_without_a_readable_file_lists_the_repo(token):
+    listing, download = _hub({"README.md": b"", "images/cat.png": b""})
     with listing, download:
-        with pytest.raises(ValueError, match="pyarrow") as exc:
+        with pytest.raises(ValueError, match="no readable data file") as exc:
             import_dataset_from_hub(OWNER, CREDS, "kevin/my-ds")
-    assert "data/train-00000.parquet" in str(exc.value)
+    assert "images/cat.png" in str(exc.value)
 
 
 def test_import_with_no_mappable_row_lists_the_columns(token):

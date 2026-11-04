@@ -66,10 +66,7 @@ export function RecentRuns() {
             {runs.map((run) => (
               <tr key={`${run.dataset}-${run.run_name ?? run.version}`}>
                 <td>
-                  <Link
-                    href={`/datasets/${encodeURIComponent(run.dataset)}`}
-                    className="cell-title"
-                  >
+                  <Link href={`/drafts/${encodeURIComponent(run.dataset)}`} className="cell-title">
                     {run.dataset}
                   </Link>
                 </td>

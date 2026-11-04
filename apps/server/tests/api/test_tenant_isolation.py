@@ -109,8 +109,18 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/auth/me"),
     ("POST", "/dataset"),
     ("GET", "/dataset"),
-    ("GET", "/dataset/huggingface"),
     ("POST", "/dataset/huggingface/import"),
+    # The Hub viewer: the repo lives on Hugging Face and is read with the
+    # caller's own token, so the Hub decides who sees what (a repo the token
+    # can't read is a 404). tests/services/test_hub.py checks that a split
+    # cached for one user is never served to a token the Hub refuses.
+    ("GET", "/hub/datasets"),
+    ("GET", "/hub/datasets/{owner}/{name}"),
+    ("GET", "/hub/datasets/{owner}/{name}/rows"),
+    ("GET", "/hub/datasets/{owner}/{name}/row"),
+    ("GET", "/hub/datasets/{owner}/{name}/statistics"),
+    ("GET", "/hub/datasets/{owner}/{name}/commits"),
+    ("GET", "/hub/datasets/{owner}/{name}/compare"),
     ("POST", "/dataset/generate/file"),
     ("POST", "/dataset/generate/url"),
     ("GET", "/collections"),

@@ -292,6 +292,17 @@ class Config:
     # together they may weigh this much.
     max_hub_import_bytes: int = 50 * 1024 * 1024
 
+    # --- Hub viewer (services/hub.py) ------------------------------------------
+    # The in-app viewer loads a whole split into memory as an Arrow table: a
+    # split whose data files weigh more is refused, with a link to the Hub.
+    max_hub_view_bytes: int = 50 * 1024 * 1024
+    # Loaded splits are kept per commit (immutable, so never stale) until the
+    # tables together weigh this much; the least recently read goes first.
+    hub_cache_bytes: int = 256 * 1024 * 1024
+    # How long a resolved revision (repo metadata, commit sha, the caller's
+    # access to it) is reused for the same token before the Hub is asked again.
+    hub_resolve_ttl_seconds: float = 30.0
+
     # --- Generation constants -----------------------------------------------
     max_tokens_cleaning: int = 3000
     max_tokens_qa: int = 4000

@@ -492,24 +492,6 @@ async def _run_on_calling_thread(fn, *args, **kwargs):
     return fn(*args, **kwargs)
 
 
-def test_get_huggingface_datasets_offloads_to_a_threadpool(client: TestClient):
-    fake = {"namespace": "kevin", "total": 0, "datasets": []}
-    with (
-        patch(
-            "server.api.dataset.run_in_threadpool",
-            new=AsyncMock(side_effect=_run_on_calling_thread),
-        ) as run_in_threadpool_mock,
-        patch(
-            "server.api.dataset.list_user_datasets", return_value=fake
-        ) as list_user_datasets_mock,
-    ):
-        response = client.get("/dataset/huggingface")
-
-    assert response.status_code == 200
-    assert response.json() == fake
-    run_in_threadpool_mock.assert_called_once_with(list_user_datasets_mock, FULL)
-
-
 def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient, owner):
     fake = {
         "dataset_name": "my_dataset",

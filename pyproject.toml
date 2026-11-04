@@ -33,6 +33,10 @@ dependencies = [
     "huggingface-hub>=1.3.0,<2.0.0",
     # Local sentence embeddings (services/semantic.py): ONNX Runtime, no torch.
     "fastembed>=0.9.0",
+    # The Hub dataset viewer (services/hub.py): reads a split's JSONL/CSV/
+    # Parquet files into a columnar table, then searches, filters, sorts and
+    # profiles it without turning every row into a Python dict.
+    "pyarrow>=26.0.0",
 ]
 
 [dependency-groups]

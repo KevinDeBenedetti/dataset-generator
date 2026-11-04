@@ -79,6 +79,13 @@ client.interceptors.response.use(async (response, request, options) => {
   })
 })
 import type {
+  HubCommits,
+  HubCompare,
+  HubDatasetDetail,
+  HubDatasetList,
+  HubFullRow,
+  HubRows,
+  HubStatistics,
   DatasetResponse,
   DatasetSourcesResponse,
   HuggingFaceExportResponse,
@@ -547,48 +554,153 @@ export async function exportDatasetToHuggingFace(
   return response.data as unknown as HuggingFaceExportResponse
 }
 
-export interface HuggingFaceDataset {
-  id: string
-  url: string
-  author: string | null
-  private: boolean
-  /** false, or the gating mode ('auto' | 'manual') */
-  gated: boolean | string
-  disabled: boolean
-  /** Downloads in the last 30 days */
-  downloads: number | null
-  downloads_all_time: number | null
-  likes: number | null
-  tags: string[]
-  description: string | null
-  pretty_name: string | null
-  language: string[] | null
-  license: string | null
-  size_category: string | null
-  file_count: number | null
-  /** Repo size in bytes */
-  used_storage: number | null
-  sha: string | null
-  created_at: string | null
-  last_modified: string | null
-}
+// ── Hub viewer (/hub/*): datasets read from Hugging Face ─────────────────────
+// Hugging Face is the source of truth for published datasets: these read
+// them through the API, with the user's own token, pinned to a commit.
 
-export interface HuggingFaceDatasetsResponse {
-  namespace: string
-  total: number
-  datasets: HuggingFaceDataset[]
-}
+/** An API failure that keeps its HTTP status, so a page can tell "not
+ * connected" (503) from "too large" (413) or "not found" (404). */
+export class ApiError extends Error {
+  readonly status: number | undefined
 
-// List the Hugging Face Hub dataset repos owned by the configured account
-// (same namespace `exportDatasetToHuggingFace` writes to).
-export async function getHuggingFaceDatasets(): Promise<HuggingFaceDatasetsResponse> {
-  const response = await client.get<HuggingFaceDatasetsResponse>({
-    url: '/dataset/huggingface',
-  })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch Hugging Face datasets'))
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
   }
-  return response.data as unknown as HuggingFaceDatasetsResponse
+}
+
+/** The HTTP status of an error thrown by these wrappers, if it had one. */
+export function errorStatus(error: unknown): number | undefined {
+  return error instanceof ApiError ? error.status : undefined
+}
+
+/** A dataset's address on the Hub: `owner/name`. */
+export interface HubRepoRef {
+  owner: string
+  name: string
+}
+
+/** Which table of a dataset to read, and at which revision. */
+export interface HubSplitQuery {
+  revision?: string | null
+  config?: string | null
+  split?: string | null
+}
+
+export type HubFilterOp =
+  | 'eq'
+  | 'ne'
+  | 'lt'
+  | 'lte'
+  | 'gt'
+  | 'gte'
+  | 'contains'
+  | 'null'
+  | 'not_null'
+
+export interface HubRowFilter {
+  column: string
+  op: HubFilterOp
+  value?: string | number | boolean | null
+}
+
+export interface HubRowsQuery extends HubSplitQuery {
+  offset?: number
+  length?: number
+  q?: string | null
+  filters?: HubRowFilter[]
+  sort?: string | null
+  order?: 'asc' | 'desc'
+}
+
+function hubPath(repo: HubRepoRef, suffix = ''): string {
+  return `/hub/datasets/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}${suffix}`
+}
+
+// Empty values are left out, so the server applies its defaults.
+function toQuery(params: Record<string, string | number | null | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
+  }
+  const text = search.toString()
+  return text ? `?${text}` : ''
+}
+
+async function hubGet<T>(url: string, fallback: string): Promise<T> {
+  const response = await client.get<T>({ url })
+  if (response.error) {
+    throw new ApiError(getErrorMessage(response.error, fallback), response.response?.status)
+  }
+  return response.data as unknown as T
+}
+
+// The dataset repos of one of your namespaces (default: your own account).
+export function getHubDatasets(author?: string | null): Promise<HubDatasetList> {
+  return hubGet(`/hub/datasets${toQuery({ author })}`, 'Failed to list your Hugging Face datasets')
+}
+
+export function getHubDataset(
+  repo: HubRepoRef,
+  revision?: string | null,
+): Promise<HubDatasetDetail> {
+  return hubGet(hubPath(repo, toQuery({ revision })), 'Failed to load the dataset')
+}
+
+export function getHubRows(repo: HubRepoRef, query: HubRowsQuery): Promise<HubRows> {
+  const params = toQuery({
+    revision: query.revision,
+    config: query.config,
+    split: query.split,
+    offset: query.offset,
+    length: query.length,
+    q: query.q,
+    filters: query.filters?.length ? JSON.stringify(query.filters) : null,
+    sort: query.sort,
+    order: query.sort ? query.order : null,
+  })
+  return hubGet(hubPath(repo, `/rows${params}`), 'Failed to load the rows')
+}
+
+export function getHubRow(
+  repo: HubRepoRef,
+  rowIdx: number,
+  query: HubSplitQuery,
+): Promise<HubFullRow> {
+  const params = toQuery({
+    row_idx: rowIdx,
+    revision: query.revision,
+    config: query.config,
+    split: query.split,
+  })
+  return hubGet(hubPath(repo, `/row${params}`), 'Failed to load the row')
+}
+
+export function getHubStatistics(repo: HubRepoRef, query: HubSplitQuery): Promise<HubStatistics> {
+  const params = toQuery({ revision: query.revision, config: query.config, split: query.split })
+  return hubGet(hubPath(repo, `/statistics${params}`), 'Failed to compute the statistics')
+}
+
+export function getHubCommits(repo: HubRepoRef): Promise<HubCommits> {
+  return hubGet(hubPath(repo, '/commits'), 'Failed to load the history')
+}
+
+export interface HubCompareQuery {
+  base: string
+  head?: string | null
+  config?: string | null
+  split?: string | null
+}
+
+export function getHubCompare(repo: HubRepoRef, query: HubCompareQuery): Promise<HubCompare> {
+  const params = toQuery({
+    base: query.base,
+    head: query.head,
+    config: query.config,
+    split: query.split,
+  })
+  return hubGet(hubPath(repo, `/compare${params}`), 'Failed to compare the versions')
 }
 
 export interface HuggingFaceImportResponse {

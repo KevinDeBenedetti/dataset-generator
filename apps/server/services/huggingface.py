@@ -1,7 +1,7 @@
 """Export a stored dataset to the Hugging Face Hub, as a private dataset repo.
 
-Postgres stays the source of truth; the Hub is an export target. One export
-writes two files to the repo:
+Reading datasets back from the Hub (the Datasets section) lives in
+services/hub.py. One export writes two files to the repo:
 
 * ``data/train.jsonl`` — one Q/A pair per line, the format fine-tuning tooling
   and the Hub's dataset viewer both read directly;
@@ -123,61 +123,7 @@ def _card_metadata(card_data: Any) -> Dict[str, Any]:
     }
 
 
-def list_user_datasets(creds: Credentials) -> Dict[str, Any]:
-    """The Hub dataset repos owned by the configured account, newest first.
-
-    Uses the token's own namespace (the namespace saved in Settings, or the token's account),
-    same as :func:`resolve_repo_id` — so this lists exactly the account an
-    export would land in, private repos included. Fetches ``full=True`` so the
-    response carries everything the Hub knows about each repo (card metadata,
-    tags, storage size, gated status, …), not just the default summary fields.
-    """
-    _require_token(creds)
-    api = _api(creds)
-    namespace = creds.hf_namespace or api.whoami().get("name")
-    if not namespace:
-        raise HuggingFaceNotConfiguredError(
-            "Could not determine the Hugging Face namespace. Set your Hugging Face "
-            "namespace in Settings (your user or organization name)."
-        )
-
-    datasets = list(
-        api.list_datasets(
-            author=namespace,
-            sort="last_modified",
-            full=True,
-            token=creds.secret(HF_TOKEN),
-        )
-    )
-    rows = [
-        {
-            "id": d.id,
-            "url": f"https://huggingface.co/datasets/{d.id}",
-            "author": getattr(d, "author", None),
-            "private": bool(getattr(d, "private", False)),
-            "gated": getattr(d, "gated", None) or False,
-            "disabled": bool(getattr(d, "disabled", False)),
-            "downloads": getattr(d, "downloads", None),
-            "downloads_all_time": getattr(d, "downloads_all_time", None),
-            "likes": getattr(d, "likes", None),
-            "tags": getattr(d, "tags", None) or [],
-            "description": getattr(d, "description", None),
-            "file_count": (
-                len(d.siblings) if getattr(d, "siblings", None) is not None else None
-            ),
-            "used_storage": getattr(d, "used_storage", None),
-            "sha": getattr(d, "sha", None),
-            "created_at": _json_safe(getattr(d, "created_at", None)),
-            "last_modified": _json_safe(getattr(d, "last_modified", None)),
-            **_card_metadata(getattr(d, "card_data", None)),
-        }
-        for d in datasets
-    ]
-    return {"namespace": namespace, "total": len(rows), "datasets": rows}
-
-
-# Tabular formats the import can read, most specific first. Parquet needs
-# pyarrow, which is not a dependency — it is only tried when importable.
+# Tabular formats the import can read, most specific first.
 _DATA_EXTENSIONS = (".jsonl", ".json", ".csv", ".parquet")
 
 # Column names seen in the wild for each side of a pair, in priority order.
@@ -243,14 +189,6 @@ def _download_file(
     return data
 
 
-def _parquet_available() -> bool:
-    try:
-        import pyarrow.parquet  # ty: ignore[unresolved-import]  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def _pick_data_files(files: List[str]) -> List[str]:
     """The data files to import: every file of the best readable format.
 
@@ -263,10 +201,7 @@ def _pick_data_files(files: List[str]) -> List[str]:
     candidates = [
         f for f in files if f.rsplit("/", 1)[-1].lower() not in _NON_DATA_FILENAMES
     ]
-    readable = [
-        ext for ext in _DATA_EXTENSIONS if ext != ".parquet" or _parquet_available()
-    ]
-    for ext in readable:
+    for ext in _DATA_EXTENSIONS:
         picked = sorted(f for f in candidates if f.lower().endswith(ext))
         if picked:
             return picked
@@ -279,7 +214,7 @@ def _parse_rows(filename: str, raw: bytes) -> List[Dict[str, Any]]:
     if lower.endswith(".parquet"):
         import io
 
-        import pyarrow.parquet as pq  # ty: ignore[unresolved-import]
+        import pyarrow.parquet as pq
 
         return pq.read_table(io.BytesIO(raw)).to_pylist()
 
@@ -414,8 +349,7 @@ def import_dataset_from_hub(
 ) -> Dict[str, Any]:
     """Pull a Hub dataset repo's Q/A pairs into local storage.
 
-    Finds the repo's data files itself (JSONL, JSON, CSV — Parquet when pyarrow
-    is installed) rather than assuming the layout :func:`export_dataset_to_hub`
+    Finds the repo's data files itself (JSONL, JSON, CSV, Parquet) rather than assuming the layout :func:`export_dataset_to_hub`
     writes, maps the usual column namings onto question/answer/context, and
     upserts the pairs into a local dataset by content hash — re-importing is
     idempotent, and the existing analysis pipeline (duplicate detection, score
@@ -433,11 +367,8 @@ def import_dataset_from_hub(
     files = _list_repo_files(creds, repo_id)
     data_files = _pick_data_files(files)
     if not data_files:
-        hint = ""
-        if any(f.lower().endswith(".parquet") for f in files):
-            hint = " (its data is Parquet, which needs the pyarrow package)"
         raise ValueError(
-            f"'{repo_id}' has no readable data file{hint}. "
+            f"'{repo_id}' has no readable data file. "
             f"Files in the repo: {', '.join(files) or '(none)'}"
         )
 
