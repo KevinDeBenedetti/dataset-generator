@@ -31,19 +31,61 @@ from sqlalchemy.orm import sessionmaker, Session
 from server.core.database import Base, get_db, normalize_database_url
 
 
+def _refused_connection():
+    """What a test that uses a database without asking for one gets: the error
+    CI gets, where nothing listens on the default database's port."""
+    import psycopg
+
+    raise psycopg.OperationalError(
+        "no ambient database in tests: ask for the datasets_db fixture "
+        "(tests/conftest.py) to get the per-test database"
+    )
+
+
+def _bind_sessions(monkeypatch, engine) -> None:
+    """Point ``get_db`` and ``get_scoped_db`` at ``engine``.
+
+    Bound at the source, ``server.core.database``: every module that opens its
+    own session reaches this engine, whenever and however it imported the
+    helper — no list of modules to keep in step.
+    """
+    from server.core import database
+
+    factory = sessionmaker(
+        autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
+    )
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(database, "Session", factory)
+
+
 @pytest.fixture(autouse=True)
 def _no_ambient_database(monkeypatch):
-    """Keep tests off the database named in the developer's ``.env``.
+    """Keep every test off the database the environment names.
 
-    Role model defaults and job runs are read through
-    ``server.core.database.get_scoped_db``, whose engine is built from the
-    environment at import. A test that doesn't inject a database would silently
-    read *that* one — and pass or fail depending on what is stored there (a
-    ``claude:`` default set on the Models page, say). Both services degrade to
-    their env fallbacks when the database is unreachable, so make it so; tests
-    that need a database override this with their own ``get_scoped_db``.
+    The app's engine is built at import from DATABASE_URL, else the dev
+    stack's Postgres on localhost:5452. A test that reached it would read — or
+    write — the developer's own data, and pass on a machine where that
+    database is up while CI, where nothing listens there, fails. So the engine
+    and the session factories of ``server.core.database`` refuse every
+    connection, as CI does: a test that uses a database without asking for
+    one fails the same way everywhere. ``datasets_db`` binds them to the
+    per-test database.
+
+    Role model defaults, job runs and collections stay unreachable even then:
+    they degrade to their env fallbacks, and the tests that exercise them hand
+    them a database of their own.
     """
     from contextlib import contextmanager
+
+    from server.core import database
+
+    # main.py, cli.py and scripts import the original factory by name: the
+    # object itself is rebound too, so their sessions are refused as well.
+    original_engine, original_factory = database.engine, database.SessionLocal
+    refused = create_engine("postgresql+psycopg://", creator=_refused_connection)
+    monkeypatch.setattr(database, "engine", refused)
+    _bind_sessions(monkeypatch, refused)
+    original_factory.configure(bind=refused)
 
     @contextmanager
     def unreachable():
@@ -56,6 +98,8 @@ def _no_ambient_database(monkeypatch):
         "server.services.collections.get_scoped_db",
     ):
         monkeypatch.setattr(target, unreachable)
+    yield
+    original_factory.configure(bind=original_engine)
 
 
 @pytest.fixture(scope="session")
@@ -153,13 +197,14 @@ def test_db(test_engine) -> Generator[Session, None, None]:
 
 @pytest.fixture(scope="function")
 def datasets_db(monkeypatch, test_engine):
-    """Point the dataset service at the per-test database.
+    """Point every session the app opens on its own at the per-test database.
 
-    ``services.datasets`` opens its own sessions through ``get_scoped_db``
-    (it is called from the pipeline too, outside any request), so overriding
-    the ``get_db`` dependency isn't enough to keep it off the developer's real
-    database — this rebinds the scoped session itself.
+    Services open sessions through ``get_scoped_db`` outside any request (the
+    pipeline, the jobs, the draft checks), so overriding the ``get_db``
+    dependency isn't enough: the factories behind both helpers are bound to
+    the per-test engine, whatever module calls them.
     """
+    _bind_sessions(monkeypatch, test_engine)
     TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
     @contextmanager

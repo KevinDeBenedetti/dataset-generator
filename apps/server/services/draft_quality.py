@@ -12,10 +12,11 @@ and held-out pairs, every pair of a file or web page draft. Two checks:
 
 from typing import Any, Dict, List
 
+from server.core.database import get_scoped_db
 from server.models.job_run import JobRun
 from server.services.datasets import _similar_pairs
 from server.services.drafts import GENERATION_JOB_ID
-from server.services.jobs import RunConflictError, _owned_row, get_scoped_db
+from server.services.jobs import RunConflictError, _owned_row
 from server.services.quality_rules import get_quality_rules, rejection_reason
 
 # The duplicate check compares every pair with every other: bounded so a big
