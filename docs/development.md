@@ -13,6 +13,12 @@ session and the schema is recreated around each test. To reuse an already-runnin
 Postgres instead (and skip the container), point `TEST_DATABASE_URL` at it —
 be aware the suite drops and recreates its tables there.
 
+A test never reaches the app's own database (`DATABASE_URL`, else the dev
+stack's Postgres on port 5452): its connections are refused, as in CI, unless
+it asks for the per-test database with the `datasets_db` fixture
+(`apps/server/tests/conftest.py`). A service that opens its own sessions
+imports `get_scoped_db` from `server.core.database`, which a test enforces.
+
 ```sh
 # Run tests with coverage (HTML report in htmlcov/index.html)
 make test
