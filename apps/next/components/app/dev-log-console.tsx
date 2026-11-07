@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal, X, Trash2, Pause, Play } from 'lucide-react'
+import { debugLogsEnabled } from '@/lib/debug-flag'
 import { cn } from '@/lib/utils'
 
 /**
@@ -9,12 +10,11 @@ import { cn } from '@/lib/utils'
  * `/api/debug/logs` (SSE) into an in-browser terminal.
  *
  * Rendered only when NEXT_PUBLIC_DEBUG_LOGS is set (wired from DEBUG_LOGS in
- * docker-compose). Toggle with Ctrl+` (like the VS Code terminal) or the
- * floating button.
+ * docker-compose) and in development, where the route exists. Toggle with
+ * Ctrl+` (like the VS Code terminal) or the floating button.
  */
 
-const debugFlag = (process.env.NEXT_PUBLIC_DEBUG_LOGS ?? '').toLowerCase()
-const ENABLED = debugFlag !== '' && debugFlag !== '0' && debugFlag !== 'false' && debugFlag !== 'no'
+const ENABLED = debugLogsEnabled(process.env.NEXT_PUBLIC_DEBUG_LOGS, process.env.NODE_ENV)
 
 const MAX_LINES = 1000
 

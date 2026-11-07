@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+import bcrypt
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import sessionmaker
@@ -67,6 +68,13 @@ class TestToken:
     def test_decode_invalid_token_returns_none(self):
         assert decode_access_token("not.a.jwt") is None
 
+    def test_only_a_sign_in_time_is_stamped(self, test_db):
+        user = create_user(test_db, email="t@example.com", password="pw")
+        claims = decode_access_token(create_access_token(user, auth_time=1234))
+        assert claims is not None and claims["auth_time"] == 1234
+        claims = decode_access_token(create_access_token(user))
+        assert claims is not None and "auth_time" not in claims
+
     def test_decode_expired_token_returns_none(self, test_db, monkeypatch):
         user = create_user(test_db, email="exp@example.com", password="pw")
         # Issue a token that expired one hour ago.
@@ -95,6 +103,45 @@ class TestAuthenticateUser:
             oidc_sub="sub-1",
         )
         assert authenticate_user(test_db, "oidc@example.com", "anything") is None
+
+    def test_an_inactive_account_cannot_log_in(self, test_db):
+        user = create_user(test_db, email="off@example.com", password="right")
+        user.is_active = False
+        test_db.commit()
+        assert authenticate_user(test_db, "off@example.com", "right") is None
+
+    def test_every_attempt_costs_one_bcrypt_check(self, test_db, monkeypatch):
+        """The same work whatever the account: the response time doesn't tell
+        which emails are registered."""
+        create_user(test_db, email="a@example.com", password="right")
+        create_user(
+            test_db,
+            email="oidc@example.com",
+            provider=AuthProvider.OIDC,
+            oidc_sub="sub-1",
+        )
+        off = create_user(test_db, email="off@example.com", password="right")
+        off.is_active = False
+        test_db.commit()
+        checks = []
+        real_checkpw = bcrypt.checkpw
+
+        def counting_checkpw(password, hashed):
+            checks.append(hashed)
+            return real_checkpw(password, hashed)
+
+        monkeypatch.setattr(bcrypt, "checkpw", counting_checkpw)
+        attempts = [
+            ("nobody@example.com", "x"),
+            ("oidc@example.com", "x"),
+            ("off@example.com", "right"),
+            ("a@example.com", "wrong"),
+            ("a@example.com", "right"),
+        ]
+        for email, password in attempts:
+            checks.clear()
+            authenticate_user(test_db, email, password)
+            assert len(checks) == 1, email
 
 
 class TestDependencies:

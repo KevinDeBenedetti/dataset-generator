@@ -1,9 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { cancelJobRun, getJobRun, getJobs, publishJobRun, startJobRun } from '@/api/sdk'
+import {
+  cancelJobRun,
+  type DraftSelection,
+  getDraftChecks,
+  getDrafts,
+  getJobRun,
+  getJobs,
+  publishJobRun,
+  startJobRun,
+} from '@/api/sdk'
 import type { JobRunOut } from '@/api/types'
 
 export const JOBS_QUERY_KEY = ['jobs']
-const JOB_RUN_QUERY_KEY = 'job-run'
+export const DRAFTS_QUERY_KEY = ['drafts']
+
+/** A draft's near-duplicates and rule failures (computed by the server). */
+export function useDraftChecks(runId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['draft-checks', runId],
+    queryFn: () => getDraftChecks(runId),
+    enabled,
+    staleTime: Infinity,
+  })
+}
+
+/** Your drafts waiting for a review (file, web page and recipe runs). */
+export function useDrafts() {
+  return useQuery({ queryKey: DRAFTS_QUERY_KEY, queryFn: getDrafts })
+}
+export const JOB_RUN_QUERY_KEY = 'job-run'
 
 // The dataset job catalogue, with each job's options schema, config status
 // and latest run.
@@ -46,11 +71,13 @@ export function useStartJobRun(jobId: string) {
 export function usePublishJobRun(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (selection: { exclude: string[]; promote: string[] }) =>
-      publishJobRun(runId, selection),
+    mutationFn: (selection: DraftSelection) => publishJobRun(runId, selection),
     onSuccess: (run: JobRunOut) => {
       queryClient.setQueryData([JOB_RUN_QUERY_KEY, run.id], run)
       queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: DRAFTS_QUERY_KEY })
+      // The dataset changed on the Hub.
+      queryClient.invalidateQueries({ queryKey: ['hub'] })
     },
   })
 }

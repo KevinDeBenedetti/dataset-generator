@@ -89,8 +89,8 @@ export function proxy(request: NextRequest) {
 
 // Run on everything except Next internals, the API-proxy route and static
 // assets. The trailing extension group excludes files served from `public/`
-// (file.svg, globe.svg, …) so unauthenticated asset requests are served
-// instead of being redirected to /login.
+// (images, fonts, …) so unauthenticated asset requests are served instead
+// of being redirected to /login.
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|bmp|woff|woff2|ttf|otf|eot|txt|xml|json|webmanifest|map)$).*)',

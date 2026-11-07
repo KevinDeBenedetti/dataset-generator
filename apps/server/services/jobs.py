@@ -125,6 +125,8 @@ def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
 
     out = []
     for spec in JOBS.values():
+        if not spec.listed:
+            continue
         missing = spec.missing(creds) + _model_missing(spec, default_model, creds)
         out.append(
             {
@@ -284,9 +286,11 @@ async def publish_run(
     run_id: str,
     exclude: Sequence[str] = (),
     promote: Sequence[str] = (),
+    edits: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """Publish a run's reviewed draft: ``exclude`` drops new pairs, ``promote``
-    moves pairs from the review list into the export.
+    moves pairs from the review list into the export, ``edits`` rewrites new
+    or promoted pairs (id → question and answer).
 
     Raises :class:`UnknownRunError`, :class:`RunConflictError` for a run
     without an unpublished draft, or the job's own ``JobError``.
@@ -295,12 +299,17 @@ async def publish_run(
     # delivered at an await, so none may sit between the claim and the try
     # that hands the run back, or the run would stay 'publishing' for good.
     publisher, draft = _take_draft(owner_id, run_id)
+    # Heart-beats while the publisher runs, so a publication that dies with its
+    # process (queue.reap_stale hands the run back) is told apart from a long one.
+    beat = asyncio.get_running_loop().create_task(_beat_while_publishing(run_id))
     try:
-        result = await publisher(creds, draft, exclude, promote)
+        result = await publisher(creds, draft, exclude, promote, edits or {})
     except BaseException:
         # Synchronous on purpose: it must run even when the task is cancelled.
+        beat.cancel()
         _update(run_id, status="succeeded")  # still publishable after a failure
         raise
+    beat.cancel()
     await asyncio.to_thread(
         _update,
         run_id,
@@ -325,9 +334,27 @@ def _take_draft(
         taken = db.execute(
             update(JobRun)
             .where(JobRun.id == run_id, JobRun.status == "succeeded")
-            .values(status="publishing")
+            .values(status="publishing", heartbeat_at=_now())
         ).rowcount
         db.commit()
         if not taken:
             raise RunConflictError(f"This run is {row.status}, not ready to publish")
         return spec.publisher, row.draft
+
+
+async def _beat_while_publishing(run_id: str) -> None:
+    """Refresh the run's heartbeat every ``worker_heartbeat_seconds`` while its
+    draft is being published."""
+    while True:
+        await asyncio.sleep(config.worker_heartbeat_seconds)
+        await asyncio.to_thread(_touch_publishing, run_id)
+
+
+def _touch_publishing(run_id: str) -> None:
+    with get_scoped_db() as db:
+        db.execute(
+            update(JobRun)
+            .where(JobRun.id == run_id, JobRun.status == "publishing")
+            .values(heartbeat_at=_now())
+        )
+        db.commit()

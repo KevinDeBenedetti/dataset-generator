@@ -1,5 +1,6 @@
 """Single-page fetch for the URL source: HTML→text, SSRF guard, size/type limits."""
 
+import asyncio
 import socket
 
 import httpx
@@ -136,3 +137,22 @@ async def test_http_error_status(resolve):
 async def test_unresolvable_host(resolve):
     with pytest.raises(WebFetchError, match="resolve"):
         await fetch_page("https://nowhere.invalid/", _client(lambda req: None))
+
+
+async def test_a_page_trickling_in_is_cut_off(resolve, monkeypatch):
+    """Each read is quick enough, the whole fetch is not."""
+    monkeypatch.setattr(web, "TOTAL_TIMEOUT_S", 0.2)
+
+    async def trickle():
+        for _ in range(100):
+            await asyncio.sleep(0.05)
+            yield b"x"
+
+    client = _client(
+        lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, content=trickle()
+        )
+    )
+
+    with pytest.raises(WebFetchError, match="took longer than 0 s"):
+        await fetch_page("https://docs.example.com/slow", client=client)

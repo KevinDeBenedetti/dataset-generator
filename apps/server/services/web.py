@@ -6,6 +6,7 @@ otherwise non-public address (SSRF) — re-checked on every redirect hop — and
 caps both the wait and the body size.
 """
 
+import asyncio
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -17,6 +18,10 @@ import httpx
 from server.core import net
 
 TIMEOUT_S = 15.0
+# The whole fetch — every redirect hop and the body. TIMEOUT_S bounds each
+# read only: a server sending a byte every 14 s would otherwise hold a
+# generation open for hours.
+TOTAL_TIMEOUT_S = 45.0
 MAX_BYTES = 2 * 1024 * 1024
 MAX_REDIRECTS = 5
 _TEXT_TYPES = ("text/html", "application/xhtml+xml", "text/plain", "text/markdown")
@@ -49,8 +54,19 @@ async def fetch_page(url: str, client: Optional[httpx.AsyncClient] = None) -> Pa
     """GET ``url`` (following up to :data:`MAX_REDIRECTS` checked redirects).
 
     Raises :class:`WebFetchError` for a refused/unreachable URL, a non-text
-    content type, an HTTP error status or a body over :data:`MAX_BYTES`.
+    content type, an HTTP error status, a body over :data:`MAX_BYTES` or a
+    fetch longer than :data:`TOTAL_TIMEOUT_S`.
     """
+    try:
+        async with asyncio.timeout(TOTAL_TIMEOUT_S):
+            return await _fetch(url, client)
+    except TimeoutError as exc:
+        raise WebFetchError(
+            f"{url.strip()} took longer than {TOTAL_TIMEOUT_S:.0f} s to send the page"
+        ) from exc
+
+
+async def _fetch(url: str, client: Optional[httpx.AsyncClient]) -> Page:
     own = client is None
     # Each hop is validated up front and again at connect time, pinned to the
     # address that passed (a DNS answer that changes in between is refused).

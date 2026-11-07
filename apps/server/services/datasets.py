@@ -64,8 +64,6 @@ def _to_dataset_view(
         "qa_sources_count": qa_count,
         "version": version,
         "created_at": _iso(dataset.created_at),
-        # Internal: which Qdrant collection holds it (None = the default name).
-        "qdrant_collection": dataset.qdrant_collection,
     }
 
 
@@ -165,7 +163,7 @@ def create_dataset(
 
 
 def delete_dataset(owner_id: str, dataset_name: str) -> Dict[str, Any]:
-    """Delete a dataset, its pairs and its history, and drop its Qdrant collection.
+    """Delete a dataset, its pairs and its history.
 
     Raises ValueError when the dataset doesn't exist.
     """
@@ -177,24 +175,12 @@ def delete_dataset(owner_id: str, dataset_name: str) -> Dict[str, Any]:
             )
             or 0
         )
-        # Resolved before the row is gone: it names the collection to drop.
-        from server.services.qdrant import default_collection_name
-
-        collection = default_collection_name(dataset.id, dataset.qdrant_collection)
         # The pairs and runs go with it (FK ON DELETE CASCADE).
         db.delete(dataset)
         db.commit()
 
-    # Cascade outside the DB: drop the Qdrant collection (best-effort, lazy import).
-    from server.services.qdrant import delete_collection
-
-    qdrant_dropped = delete_collection(collection)
-
     return {
-        "message": (
-            f"Deleted dataset '{dataset_name}' and its {deleted} Q/A pair(s)"
-            + (" and dropped its Qdrant collection." if qdrant_dropped else ".")
-        ),
+        "message": f"Deleted dataset '{dataset_name}' and its {deleted} Q/A pair(s).",
         "dataset_id": dataset_name,
         "records_deleted": deleted,
     }
@@ -843,7 +829,7 @@ def clean_similarities_view(
 
 
 def get_dataset_pairs(owner_id: str, dataset_name: str) -> List[Dict[str, Any]]:
-    """Every pair of a dataset, for the dedup pool and the Qdrant sync.
+    """Every pair of a dataset, for the dedup pool and the export.
 
     Returns an empty list for an unknown dataset: both callers treat "nothing
     stored yet" and "no such dataset" the same way (a first generation into a

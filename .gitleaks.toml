@@ -10,7 +10,9 @@ paths = [
 ]
 
 [[allowlists]]
-description = "Server tests: fake keys and canary tokens (sk-canary-…, hf_Canary…) that exist to prove secrets never leak from the API, logs or the database — none is a real credential"
-paths = [
-  '''(^|/)apps/server/tests/''',
+description = "The canary tokens of the server tests (sk-canary-…, hf_Canary…), made to prove secrets never leak from the API, logs or the database: only those shapes are exempt — no path, so a real key pasted into a test is still caught"
+regexTarget = "secret"
+regexes = [
+  '''^sk-canary-[0-9A-Za-z]+$''',
+  '''^hf_Canary[0-9A-Za-z]+$''',
 ]

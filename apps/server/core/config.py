@@ -12,7 +12,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Public (it is in this file), so it may only ever sign tokens in development.
-DEV_AUTH_SECRET = "dev-insecure-secret-change-me"
+DEV_AUTH_SECRET = "dev-insecure-secret-change-me"  # noqa: S105 — public, dev only
 
 
 def _env(name: str, default: str = "") -> str:
@@ -57,6 +57,13 @@ def _flag(name: str, default: bool) -> bool:
 def _reasoning_effort() -> str:
     value = _env("OPENAI_REASONING_EFFORT", "low").strip().lower()
     return "" if value in ("off", "false", "0", "no", "disabled") else value
+
+
+# The largest upload (api/generate.py bounds its read to this), and the room a
+# request body gets beyond it: the multipart framing and the other form fields,
+# which also covers the largest JSON bodies (a draft's edits).
+_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+_REQUEST_FRAMING_BYTES = 5 * 1024 * 1024
 
 
 @dataclass
@@ -156,6 +163,10 @@ class Config:
     # Short-lived access token; the session lives on in the rotated refresh token.
     auth_token_ttl_seconds: int = 15 * 60
     auth_refresh_token_ttl_seconds: int = 14 * 24 * 3600
+    # Deleting the account needs a sign-in this recent (``require_recent_login``):
+    # a stolen session is not enough. Below the access token's lifetime, since a
+    # refreshed token carries no sign-in time.
+    auth_reauth_max_age_seconds: int = 10 * 60
     auth_issuer: str = "datasetgen"
     auth_audience: str = "datasetgen-api"
     # Two tabs refreshing at once present the same single-use token: within this
@@ -174,11 +185,10 @@ class Config:
     # Models the OpenAI provider offers (per role), on each user's own key.
     openai_llm_model: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
     openai_vlm_model: str = field(default_factory=lambda: _env("OPENAI_VLM_MODEL", ""))
-    openai_embedding_model: str = field(
-        default_factory=lambda: _env("OPENAI_EMBEDDING_MODEL", "")
-    )
     # "low" keeps reasoning models from spending their budget thinking;
-    # OPENAI_REASONING_EFFORT=off for models that reject the parameter (gpt-4o*).
+    # OPENAI_REASONING_EFFORT=off for models that reject the parameter (gpt-4o*):
+    # set, the request takes the reasoning models' shape (max_completion_tokens,
+    # no temperature — services/providers/openai.py).
     openai_reasoning_effort: str = field(default_factory=lambda: _reasoning_effort())
     # Fill what a user hasn't entered from the server's own keys (OPENAI_API_KEY,
     # HF_TOKEN…): development only — production never lends its keys.
@@ -222,18 +232,13 @@ class Config:
     quota_datasets: int = field(
         default_factory=lambda: int(_env("QUOTA_DATASETS", "50"))
     )
+    # Dataset recipes per user (services/recipes.py): rows of a few KB each.
+    quota_recipes: int = 50
 
     # --- Storage ------------------------------------------------------------
     # Store generated pairs and version each generation; off = pass-through.
     persist_datasets: bool = field(
         default_factory=lambda: _flag("PERSIST_DATASETS", True)
-    )
-    # Qdrant (vector search): enabled when QDRANT_URL is set.
-    qdrant_url: str = field(default_factory=lambda: _env("QDRANT_URL", ""))
-    qdrant_api_key: str = field(default_factory=lambda: _env("QDRANT_API_KEY", ""))
-    # Lets several environments share one Qdrant.
-    qdrant_collection_prefix: str = field(
-        default_factory=lambda: _env("QDRANT_COLLECTION_PREFIX", "dataset_")
     )
 
     # --- Local embeddings (services/semantic.py) ----------------------------
@@ -276,18 +281,19 @@ class Config:
 
     # --- Uploads ------------------------------------------------------------
     # Every page of an upload is rasterised and sent to the vision model, so
-    # these bound the work one request can cause, and its memory: the rendered
-    # pages are all held until the last one is transcribed.
-    max_upload_bytes: int = 20 * 1024 * 1024
+    # these bound the work one request can cause (one page is rendered at a
+    # time, so the memory is one page's).
+    max_upload_bytes: int = _MAX_UPLOAD_BYTES
     max_upload_pages: int = 50
     # A page is rendered at a lower zoom when needed to stay under this many
     # pixels, since a PDF may declare any page size. A3 at 2x (~4 Mpx) still
-    # renders in full, and vision APIs scale larger images down anyway; at
-    # worst, 50 pages of incompressible content weigh ~630 MB as PNG.
+    # renders in full, and vision APIs scale larger images down anyway; a page
+    # of incompressible content weighs ~12 MB as PNG while it is transcribed.
     max_page_pixels: int = 4_200_000
     # Ceiling for any request body, checked before the app reads it (uvicorn
-    # sets none): the largest legitimate body is an upload plus its framing.
-    max_request_body_bytes: int = 25 * 1024 * 1024
+    # sets none): the largest legitimate body is an upload plus its framing,
+    # derived from the upload limit so the two can't drift apart.
+    max_request_body_bytes: int = _MAX_UPLOAD_BYTES + _REQUEST_FRAMING_BYTES
     # A Hugging Face import downloads and parses a repo's data files in memory:
     # together they may weigh this much.
     max_hub_import_bytes: int = 50 * 1024 * 1024
@@ -302,6 +308,19 @@ class Config:
     # How long a resolved revision (repo metadata, commit sha, the caller's
     # access to it) is reused for the same token before the Hub is asked again.
     hub_resolve_ttl_seconds: float = 30.0
+
+    # --- Vector collections (services/collections.py) --------------------------
+    # A split of a Hub dataset embedded with a local model into Qdrant, then
+    # searched and tested from the app. Off until QDRANT_URL is set.
+    qdrant_url: str = field(default_factory=lambda: _env("QDRANT_URL", ""))
+    qdrant_api_key: str = field(default_factory=lambda: _env("QDRANT_API_KEY", ""))
+    # Lets several environments share one Qdrant.
+    qdrant_collection_prefix: str = field(
+        default_factory=lambda: _env("QDRANT_COLLECTION_PREFIX", "dataset_")
+    )
+    # Collections per user. Each holds one vector per row of its split, and the
+    # split is bounded by max_hub_view_bytes: it is read the viewer's way.
+    quota_collections: int = 20
 
     # --- Generation constants -----------------------------------------------
     max_tokens_cleaning: int = 3000

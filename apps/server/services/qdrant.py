@@ -1,373 +1,207 @@
-"""Push a dataset's Q/A pairs into a Qdrant collection as embeddings.
+"""Qdrant, the vector store behind the collections (services/collections.py).
 
-A "collection" in the UI is a stored dataset projected into Qdrant: each Q/A
-pair becomes a point whose vector is the embedding of its question + answer +
-context, with the original fields kept in the payload for retrieval.
+Off until ``QDRANT_URL`` is set: every call then raises
+:class:`QdrantNotConfiguredError`, which the routes answer with a 503. The
+client is built on first use, once per process, so an absent or unreachable
+Qdrant never stops the app from booting; tests swap :func:`get_client` for
+qdrant-client's in-memory mode.
 
-Datasets are read from Postgres (the source of truth); Qdrant is the optional
-vector store, which degrades to a clear 503 when not configured/reachable.
+Point ids are row positions in the collection's split (unsigned integers, as
+Qdrant requires), and vectors are compared by cosine.
 """
 
 import logging
-import re
-import uuid
-from typing import Any, Dict, List, Optional, Protocol
+import threading
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, TypeVar
+
+import numpy as np
 
 from server.core.config import config
-from server.services.datasets import (
-    get_dataset_pairs,
-    get_dataset_view,
-    list_datasets_view,
-)
-from server.services.credentials import Credentials
-from server.services.llm import LLMService
 
 logger = logging.getLogger(__name__)
 
-# Q/A pairs are embedded in batches rather than one `embeddings.create` call
-# for the whole dataset — a large dataset could otherwise exceed the
-# embedding endpoint's per-request token/size limit.
-_EMBED_BATCH_SIZE = 100
+T = TypeVar("T")
 
-
-class Embedder(Protocol):
-    """Anything that can turn texts into vectors (LLMService satisfies this)."""
-
-    def embed_texts(
-        self, texts: List[str], model: Optional[str] = None
-    ) -> List[List[float]]: ...
+# (point id, cosine), most similar first.
+Hit = Tuple[int, float]
 
 
 class QdrantNotConfiguredError(RuntimeError):
-    """Raised when a Qdrant operation is attempted without configuration."""
+    """Collections need a Qdrant, and QDRANT_URL is unset."""
 
 
-def is_qdrant_configured() -> bool:
-    """True when a Qdrant URL is set (the API key is optional)."""
+class QdrantUnavailableError(RuntimeError):
+    """Qdrant didn't answer, or refused the request (logged with its reason)."""
+
+
+NOT_CONFIGURED = (
+    "Vector collections need a Qdrant: set QDRANT_URL (and QDRANT_API_KEY when "
+    "it requires one)."
+)
+
+
+def is_configured() -> bool:
     return bool(config.qdrant_url)
 
 
-def default_collection_name(dataset_id: str, stored: Optional[str] = None) -> str:
-    """The Qdrant collection holding a dataset's embeddings.
+_lock = threading.Lock()
+_client: Any = None
+_client_key: Optional[Tuple[str, str]] = None
 
-    Named after the dataset's immutable id — never its (user-chosen, non-unique
-    across users) name, whose slug could collide between two owners. A dataset
-    that predates owners keeps the ``<prefix><slug>`` collection recorded in
-    ``datasets.qdrant_collection`` (``stored``), so nothing is re-embedded.
+
+def get_client() -> Any:
+    """The process-wide client (thread-safe), or QdrantNotConfiguredError."""
+    global _client, _client_key
+    if not is_configured():
+        raise QdrantNotConfiguredError(NOT_CONFIGURED)
+    key = (config.qdrant_url, config.qdrant_api_key)
+    with _lock:
+        if _client is None or _client_key != key:
+            # Imported here: the package pulls in grpc, which the app only
+            # needs once collections are used.
+            from qdrant_client import QdrantClient
+
+            # No version check: it is a request to a server that may be down,
+            # made while holding the lock (docker-compose.yml pins the image).
+            _client = QdrantClient(
+                url=config.qdrant_url,
+                api_key=config.qdrant_api_key or None,
+                timeout=30,
+                check_compatibility=False,
+            )
+            _client_key = key
+        return _client
+
+
+def _call(what: str, fn: Callable[[Any], T]) -> T:
+    """``fn(client)``, its failures turned into QdrantUnavailableError.
+
+    The client's own message (a URL, a response body) is logged, not passed on.
     """
-    return stored or f"{config.qdrant_collection_prefix}ds_{dataset_id}"
-
-
-def legacy_collection_name(dataset_name: str) -> str:
-    """The pre-owner collection name (``<prefix><slug>``) — for the migration and
-    for tests; new datasets never use it."""
-    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", dataset_name.strip().lower()).strip("_")
-    return f"{config.qdrant_collection_prefix}{slug or 'unnamed'}"
-
-
-def get_dataset_collection(owner_id: str, dataset_name: str) -> str:
-    """The collection of one of ``owner_id``'s datasets.
-
-    Raises ValueError for a dataset the owner doesn't have — which is also what
-    another user's dataset looks like.
-    """
-    dataset = get_dataset_view(owner_id, dataset_name)
-    if dataset is None:
-        raise ValueError(f"Dataset '{dataset_name}' not found")
-    return default_collection_name(dataset["id"], dataset.get("qdrant_collection"))
-
-
-def get_qdrant_client() -> Any:
-    """Build a Qdrant client, or raise QdrantNotConfiguredError.
-
-    The import is lazy so the package being absent degrades to a 503 instead of
-    crashing app startup.
-    """
-    if not is_qdrant_configured():
-        raise QdrantNotConfiguredError(
-            "Qdrant is not configured. Set QDRANT_URL (and optionally "
-            "QDRANT_API_KEY) to enable collections."
-        )
+    client = get_client()
     try:
-        from qdrant_client import QdrantClient
-    except ImportError as exc:  # pragma: no cover - defensive, dep is declared
-        raise QdrantNotConfiguredError(
-            "qdrant-client is not installed in this environment."
-        ) from exc
-
-    return QdrantClient(
-        url=config.qdrant_url,
-        api_key=config.qdrant_api_key or None,
-    )
-
-
-def _point_id(qa_id: str) -> str:
-    """Map a Q/A id to a valid Qdrant point id.
-
-    Qdrant only accepts an unsigned integer or a UUID as a point id, but Q/A ids
-    are SHA-256 hex digests. Derive a deterministic UUID from the digest (the
-    original id is kept in the payload as ``qa_id``). Deterministic → re-syncing
-    overwrites the same point, so the sync stays idempotent.
-    """
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, qa_id))
+        return fn(client)
+    except QdrantNotConfiguredError:
+        raise
+    except Exception as exc:
+        logger.warning("Qdrant: %s failed: %s", what, exc)
+        raise QdrantUnavailableError(
+            f"Qdrant didn't answer while {what}. Check that it is running and "
+            "reachable at QDRANT_URL."
+        ) from None
 
 
-def _item_fields(item: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalise a stored Q/A pair into the fields kept in the point payload."""
-    return {
-        "qa_id": item.get("id"),
-        "dataset_name": item.get("dataset_name"),
-        "question": item.get("question", ""),
-        "answer": item.get("answer", ""),
-        "context": item.get("context", ""),
-        "source_url": item.get("source_url", ""),
-        "confidence": item.get("confidence", 1.0),
-    }
+def collection_name(collection_id: str) -> str:
+    """The Qdrant collection of a ``vector_collections`` row: its id, never a
+    user-chosen name, behind the deployment's prefix."""
+    return f"{config.qdrant_collection_prefix}c_{collection_id}"
 
 
-def _item_to_text(item: Dict[str, Any]) -> str:
-    """Flatten a Q/A item into the text that gets embedded."""
-    f = _item_fields(item)
-    parts = [f["question"], f["answer"], f["context"]]
-    return "\n\n".join(part for part in parts if part).strip()
+def exists(name: str) -> bool:
+    return _call("checking a collection", lambda c: bool(c.collection_exists(name)))
 
 
-def _embed_in_batches(llm_service: Embedder, texts: List[str]) -> List[List[float]]:
-    """Embed ``texts`` in fixed-size batches (``_EMBED_BATCH_SIZE``), preserving order."""
-    vectors: List[List[float]] = []
-    for i in range(0, len(texts), _EMBED_BATCH_SIZE):
-        vectors.extend(llm_service.embed_texts(texts[i : i + _EMBED_BATCH_SIZE]))
-    return vectors
+def recreate(name: str, size: int) -> None:
+    """An empty collection of ``size``-dimension cosine vectors, replacing any."""
+    from qdrant_client import models
 
-
-def delete_collection(name: str) -> bool:
-    """Drop a Qdrant collection (best-effort).
-
-    Returns True if a collection was dropped, False if Qdrant is unconfigured,
-    the collection doesn't exist, or the drop failed. Never raises — used as a
-    cascade when a dataset is deleted, which must not fail on Qdrant issues.
-    """
-    if not is_qdrant_configured():
-        return False
-    try:
-        client = get_qdrant_client()
+    def run(client: Any) -> None:
         if client.collection_exists(name):
             client.delete_collection(name)
-            logger.info("Dropped Qdrant collection %s", name)
-            return True
-    except Exception as exc:
-        logger.warning("Could not drop Qdrant collection %s: %s", name, exc)
-    return False
-
-
-def get_collection_status(
-    client: Any, collection_name: str
-) -> Optional[Dict[str, Any]]:
-    """Return ``{exists, points_count}`` for a collection, or None on error.
-
-    Best-effort: a transient Qdrant failure must not break listing datasets, so
-    callers treat None as "unknown".
-    """
-    try:
-        if not client.collection_exists(collection_name):
-            return {"exists": False, "points_count": 0}
-        info = client.get_collection(collection_name)
-        # points_count can be None right after creation; coerce to 0.
-        count = getattr(info, "points_count", None) or 0
-        return {"exists": True, "points_count": count}
-    except Exception as exc:
-        logger.warning("Qdrant status check failed for %s: %s", collection_name, exc)
-        return None
-
-
-def sync_dataset_to_qdrant(
-    owner_id: str,
-    dataset_name: str,
-    creds: Credentials,
-    llm_service: Optional[Embedder] = None,
-    client: Any = None,
-    items: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]:
-    """Embed every Q/A pair of a dataset and upsert them into Qdrant.
-
-    Reads the pairs from Postgres (unless ``items`` is injected for testing),
-    creates the collection (sized from the first embedding) if needed, then
-    upserts one point per item keyed by a deterministic UUID of the item id so
-    re-syncing is idempotent. ``llm_service``/``client`` are injectable too.
-
-    Raises ValueError for an empty/unknown dataset and QdrantNotConfiguredError
-    when Qdrant isn't wired up.
-    """
-    from qdrant_client import models as qmodels
-
-    # Raises ValueError for a dataset the owner doesn't have.
-    collection_name = get_dataset_collection(owner_id, dataset_name)
-    if items is None:
-        items = get_dataset_pairs(owner_id, dataset_name)
-    if not items:
-        raise ValueError(f"Dataset '{dataset_name}' has no Q/A pairs to sync")
-
-    llm_service = llm_service or LLMService(creds)
-    client = client or get_qdrant_client()
-
-    texts = [_item_to_text(it) for it in items]
-    vectors = _embed_in_batches(llm_service, texts)
-    if len(vectors) != len(items):
-        raise RuntimeError(
-            f"Embedding count mismatch: {len(vectors)} vectors for {len(items)} items"
-        )
-
-    vector_size = len(vectors[0])
-    if not client.collection_exists(collection_name):
         client.create_collection(
-            collection_name=collection_name,
-            vectors_config=qmodels.VectorParams(
-                size=vector_size, distance=qmodels.Distance.COSINE
+            collection_name=name,
+            vectors_config=models.VectorParams(
+                size=size, distance=models.Distance.COSINE
             ),
         )
-        logger.info(
-            "Created Qdrant collection %s (dim=%d)", collection_name, vector_size
-        )
 
-    points = [
-        qmodels.PointStruct(
-            id=_point_id(str(it["id"])),
-            vector=vector,
-            payload=_item_fields(it),
-        )
-        for it, vector in zip(items, vectors)
+    _call("creating a collection", run)
+    logger.info("Qdrant: created %s (%d dimensions)", name, size)
+
+
+def upsert(
+    name: str, ids: Sequence[int], vectors: np.ndarray, payloads: List[Dict[str, Any]]
+) -> None:
+    from qdrant_client import models
+
+    batch = models.Batch(
+        ids=[int(i) for i in ids],
+        vectors=np.asarray(vectors, dtype=np.float32).tolist(),
+        payloads=payloads,
+    )
+    _call(
+        "storing vectors",
+        lambda c: c.upsert(collection_name=name, points=batch, wait=True),
+    )
+
+
+def count(name: str) -> int:
+    return _call(
+        "counting points",
+        lambda c: int(c.count(collection_name=name, exact=True).count),
+    )
+
+
+def search(
+    name: str, vector: np.ndarray, limit: int, score_threshold: Optional[float] = None
+) -> List[Tuple[int, float, Dict[str, Any]]]:
+    """The ``limit`` points closest to ``vector``, with their payloads."""
+    response = _call(
+        "searching",
+        lambda c: c.query_points(
+            collection_name=name,
+            query=np.asarray(vector, dtype=np.float32).tolist(),
+            limit=limit,
+            score_threshold=score_threshold,
+            with_payload=True,
+        ),
+    )
+    return [(int(p.id), float(p.score), dict(p.payload or {})) for p in response.points]
+
+
+def search_batch(name: str, vectors: np.ndarray, limit: int) -> List[List[Hit]]:
+    """Per vector, the ids and scores of its ``limit`` closest points."""
+    from qdrant_client import models
+
+    requests = [
+        models.QueryRequest(query=v.tolist(), limit=limit, with_payload=False)
+        for v in np.asarray(vectors, dtype=np.float32)
     ]
-    client.upsert(collection_name=collection_name, points=points)
-
-    logger.info(
-        "Synced %d points to Qdrant collection %s", len(points), collection_name
+    responses = _call(
+        "searching",
+        lambda c: c.query_batch_points(collection_name=name, requests=requests),
     )
-    return {
-        "dataset_name": dataset_name,
-        "collection_name": collection_name,
-        "points_upserted": len(points),
-        "vector_size": vector_size,
-    }
+    return [[(int(p.id), float(p.score)) for p in r.points] for r in responses]
 
 
-def search_collection(
-    owner_id: str,
-    dataset_name: str,
-    creds: Credentials,
-    query: str,
-    limit: int = 10,
-    score_threshold: Optional[float] = None,
-    llm_service: Optional[Embedder] = None,
-    client: Any = None,
-) -> Dict[str, Any]:
-    """Embed ``query`` and return the most similar Q/A points from the dataset's
-    Qdrant collection.
+def retrieve(name: str, ids: Sequence[int]) -> Dict[int, Dict[str, Any]]:
+    """The payloads of the points among ``ids`` that exist."""
+    points = _call(
+        "reading points",
+        lambda c: c.retrieve(
+            collection_name=name,
+            ids=[int(i) for i in ids],
+            with_payload=True,
+            with_vectors=False,
+        ),
+    )
+    return {int(p.id): dict(p.payload or {}) for p in points}
 
-    The counterpart to :func:`sync_dataset_to_qdrant`: that ingests, this reads.
-    ``llm_service``/``client`` are injectable for testing. Raises
-    QdrantNotConfiguredError when Qdrant isn't wired up and ValueError when the
-    query is empty or the collection hasn't been synced yet.
+
+def drop(name: str) -> bool:
+    """Delete a collection, best effort: True when one was dropped.
+
+    Never raises — it runs after the row is gone (a deleted collection or
+    account), which a Qdrant outage must not undo.
     """
-    query = (query or "").strip()
-    if not query:
-        raise ValueError("Search query must not be empty")
-
-    # Raises ValueError for a dataset the owner doesn't have.
-    collection_name = get_dataset_collection(owner_id, dataset_name)
-    llm_service = llm_service or LLMService(creds)
-    client = client or get_qdrant_client()
-
-    if not client.collection_exists(collection_name):
-        raise ValueError(
-            f"Collection for dataset '{dataset_name}' does not exist yet — "
-            "sync it to Qdrant first"
-        )
-
-    query_vector = llm_service.embed_texts([query])[0]
-    response = client.query_points(
-        collection_name=collection_name,
-        query=query_vector,
-        limit=limit,
-        score_threshold=score_threshold,
-        with_payload=True,
-    )
-    # query_points returns a QueryResponse with .points; tolerate a bare list too.
-    points = getattr(response, "points", response)
-
-    results: List[Dict[str, Any]] = []
-    for point in points:
-        payload = getattr(point, "payload", None) or {}
-        results.append(
-            {
-                "qa_id": payload.get("qa_id"),
-                "question": payload.get("question", ""),
-                "answer": payload.get("answer", ""),
-                "context": payload.get("context", ""),
-                "source_url": payload.get("source_url", ""),
-                "confidence": payload.get("confidence"),
-                "score": getattr(point, "score", None),
-            }
-        )
-
-    logger.info(
-        "Searched Qdrant collection %s (%d hit(s))", collection_name, len(results)
-    )
-    return {
-        "dataset_name": dataset_name,
-        "collection_name": collection_name,
-        "query": query,
-        "count": len(results),
-        "results": results,
-    }
-
-
-def list_collections(owner_id: str) -> Dict[str, Any]:
-    """List the stored datasets as collections, annotated with their Qdrant status.
-
-    ``qdrant_configured`` tells the UI whether the "Add to Qdrant" action is
-    available; when configured, each dataset is annotated with ``in_qdrant``
-    and ``points_count`` (best-effort; left null if Qdrant can't be reached).
-    """
-    datasets = list_datasets_view(owner_id)
-    qdrant_configured = is_qdrant_configured()
-
-    client = None
-    if qdrant_configured:
-        try:
-            client = get_qdrant_client()
-        except Exception as exc:
-            logger.warning("Could not build Qdrant client for listing: %s", exc)
-            client = None
-
-    collections: List[Dict[str, Any]] = []
-    for dataset in datasets:
-        name = dataset["name"]
-        collection_name = default_collection_name(
-            dataset["id"], dataset.get("qdrant_collection")
-        )
-        in_qdrant: Optional[bool] = None
-        points_count: Optional[int] = None
-        if client is not None:
-            status = get_collection_status(client, collection_name)
-            if status is not None:
-                in_qdrant = status["exists"]
-                points_count = status["points_count"] if status["exists"] else 0
-        collections.append(
-            {
-                "id": dataset.get("id"),
-                "name": name,
-                "description": dataset.get("description"),
-                "target_language": dataset.get("target_language"),
-                "qa_sources_count": dataset.get("qa_sources_count"),
-                "created_at": dataset.get("created_at"),
-                "collection_name": collection_name,
-                "in_qdrant": in_qdrant,
-                "points_count": points_count,
-            }
-        )
-
-    return {
-        "qdrant_configured": qdrant_configured,
-        "total": len(collections),
-        "collections": collections,
-    }
+    if not is_configured():
+        return False
+    try:
+        client = get_client()
+        if client.collection_exists(name):
+            client.delete_collection(name)
+            logger.info("Qdrant: dropped %s", name)
+            return True
+    except Exception as exc:  # noqa: BLE001 — best effort, see above
+        logger.warning("Qdrant: could not drop %s: %s", name, exc)
+    return False

@@ -2,6 +2,7 @@
 single sign-on (Infomaniak, GitHub) — login, account linking and callback."""
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import urlencode
@@ -116,8 +117,12 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
 
 
 def _set_session_cookies(response: Response, db: Session, user: User) -> None:
-    """Issue the access JWT + a fresh refresh-token family for ``user``."""
-    _set_auth_cookie(response, create_access_token(user))
+    """Issue the access JWT + a fresh refresh-token family for ``user``.
+
+    Called by the sign-ins only (password, SSO callback): the access token is
+    dated with the sign-in time, which a refresh never copies.
+    """
+    _set_auth_cookie(response, create_access_token(user, auth_time=int(time.time())))
     _set_refresh_cookie(response, issue_refresh_token(db, user))
 
 

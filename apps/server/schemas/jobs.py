@@ -83,6 +83,10 @@ class DraftPreview(BaseModel):
     review: List[DraftPair] = Field(
         ..., description="Held out: answer far from its source (off by default)"
     )
+    removed: List[DraftPair] = Field(
+        default_factory=list,
+        description="Published pairs this draft no longer has: publishing deletes them",
+    )
 
 
 class JobRunOut(BaseModel):
@@ -107,10 +111,51 @@ class JobRunOut(BaseModel):
     cancel_requested: bool = False
 
 
+class DraftSummary(BaseModel):
+    id: str = Field(..., description="The run holding the draft")
+    job: str
+    title: str
+    target_repo: Optional[str] = None
+    created_at: datetime
+    new: int = Field(..., description="Pairs the draft adds")
+
+
+class DraftsOut(BaseModel):
+    drafts: List[DraftSummary]
+
+
+class DraftDuplicate(BaseModel):
+    first: str
+    second: str
+    similarity: float = Field(..., description="Question similarity, 0-1")
+
+
+class DraftChecks(BaseModel):
+    threshold: float
+    checked: int = Field(..., description="Pairs compared for duplicates")
+    total: int = Field(..., description="Pairs the review decides on")
+    duplicates: List[DraftDuplicate]
+    flagged: Dict[str, str] = Field(
+        default_factory=dict, description="Pair id → the quality rule it fails"
+    )
+
+
+class PairEdit(BaseModel):
+    """A pair rewritten by the reviewer."""
+
+    question: str = Field(..., min_length=1, max_length=2_000)
+    answer: str = Field(..., min_length=1, max_length=10_000)
+
+
 class PublishRequest(BaseModel):
     exclude: List[str] = Field(
         default_factory=list, description="Ids of new pairs to leave out"
     )
     promote: List[str] = Field(
         default_factory=list, description="Ids of review pairs to include"
+    )
+    edits: Dict[str, PairEdit] = Field(
+        default_factory=dict,
+        max_length=1_000,
+        description="New or promoted pairs rewritten by the reviewer, by id",
     )

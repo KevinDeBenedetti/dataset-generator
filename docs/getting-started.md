@@ -59,11 +59,16 @@ network.
 
 ## Generate a dataset
 
-From the UI, open the **Generate** page and pick a source:
+From the UI, open the **Generate** page, name the Hugging Face dataset the
+pairs go to (an existing one or a new one), and pick a source:
 
 - **File** — upload a PDF/image (up to 20 MB and 50 pages), transcribed page
   by page by the vision model
 - **Web page** — one public URL (no crawling), reduced to text and cleaned
+
+The pairs become a draft listed under **Drafts**: nothing reaches Hugging Face
+before you review it. A dataset's page offers **Add data**, which opens this
+form with that dataset filled in.
 
 Each step's model (cleaning, Q&A, vision) defaults to what is set on the
 **Models** page and can be overridden per generation. A model is a
@@ -78,10 +83,16 @@ curl -X POST http://localhost:8020/dataset/generate/url \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://docs.example.com/guide",
-    "dataset_name": "example_docs",
+    "dataset_name": "Example docs",
+    "target_repo": "your-namespace/example-docs",
     "model_qa": "claude:claude-sonnet-5-5"
   }'
 ```
+
+The response's `draft_run_id` is the draft to review.
+
+To build a dataset from chosen GitHub repos, README and `docs/` files, use a
+recipe on the **GitHub** page: see [GitHub recipes](./github.md).
 
 Recurring sources — your GitHub profile and repos, the knowledge corpus — are
 **jobs** (`apps/server/jobs/registry.py`): they run on their GitHub Actions
@@ -98,12 +109,15 @@ QA generation → deduplication → save (a new version of the draft).
 ## Publishing to Hugging Face
 
 Add your Hugging Face token (write access) in **Settings**, open the draft
-under **Drafts**, review its pairs, then use **Publish to Hugging Face** — or
-call it directly:
+under **Drafts**, review it — leave pairs out, edit a question or an answer —
+then use **Publish to Hugging Face**. The reviewed pairs are merged into the
+dataset's `data/train.jsonl` by id, in one commit with its card. API:
+`GET /jobs/drafts`, `GET /jobs/runs/{run_id}` and
+`POST /jobs/runs/{run_id}/publish` (`exclude`, `edits`).
 
-```bash
-curl -X POST http://localhost:8020/dataset/my-dataset/export/huggingface
-```
+Local drafts generated before this review existed stay under **Drafts** until a
+later release: publish each one (**Publish to Hugging Face**, or
+`POST /dataset/{name}/export/huggingface`) or delete it.
 
 The dataset repo is always created **private**. If a repo with that id already
 exists and the Hub does not confirm it is private, publishing is refused rather
@@ -143,5 +157,14 @@ Images built before this start-up install don't have it: run
 
 - [Datasets on Hugging Face](./datasets.md) — browsing, statistics and versions
   of the published datasets
-- [Project README](https://github.com/KevinDeBenedetti/dataset-generator#readme) —
-  architecture, features, authentication and full configuration reference
+- [GitHub recipes](./github.md) — choosing the GitHub sources of a dataset
+- [Vector collections](./collections.md) — embedding a split into Qdrant,
+  searching it and testing its retrieval
+- [Configuration](./configuration.md) — `.env`, what `ENVIRONMENT` decides, the
+  local stack's ports and dev accounts
+- [Production](./production.md) — one public host, encryption keys, images and
+  deployment
+- [Accounts, roles and keys](./accounts.md) — SSO sign-in, admins, per-user keys
+- [Jobs](./jobs.md) and [Storage](./storage.md) — the worker, quotas, where the
+  data lives
+- [Development](./development.md) — tests, git hooks, the API contract

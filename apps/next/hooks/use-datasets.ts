@@ -23,7 +23,8 @@ interface GenerateCommon {
   targetLanguage: string | null
   similarityThreshold: number
   modelQa?: string | null
-  persist?: boolean
+  // The Hugging Face dataset the draft publishes to.
+  targetRepo: string
 }
 
 export type GenerateParams =
@@ -74,7 +75,7 @@ export function useGenerateDataset() {
           similarityThreshold: params.similarityThreshold,
           modelQa: params.modelQa,
           modelVlm: params.modelVlm,
-          persist: params.persist,
+          targetRepo: params.targetRepo,
         })
       }
 
@@ -85,7 +86,7 @@ export function useGenerateDataset() {
         similarity_threshold: params.similarityThreshold,
         model_cleaning: params.modelCleaning,
         model_qa: params.modelQa,
-        persist: params.persist,
+        target_repo: params.targetRepo,
       })
     },
     onMutate: (params) => {
@@ -102,6 +103,8 @@ export function useGenerateDataset() {
       // and history, and the recent-runs list, are stale as soon as it lands.
       queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
       queryClient.invalidateQueries({ queryKey: [DATASET_ALL_RUNS_QUERY_KEY] })
+      // The generation is a new draft to review.
+      queryClient.invalidateQueries({ queryKey: ['drafts'] })
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to generate dataset')

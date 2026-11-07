@@ -11,6 +11,13 @@
         { "type": "fix", "section": "Bug Fixes" },
         { "type": "chore", "section": "Chores", "hidden": false },
         { "type": "refactor", "section": "Code Refactoring", "hidden": false }
+      ],
+      "extra-files": [
+        { "type": "toml", "path": "pyproject.toml", "jsonpath": "$.project.version" },
+        { "type": "toml", "path": "uv.lock", "jsonpath": "$.package[?(@.name.value=='dataset-generator')].version" },
+        { "type": "json", "path": "apps/next/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/next/openapi.json", "jsonpath": "$.info.version" },
+        "apps/server/main.py"
       ]
     }
   }

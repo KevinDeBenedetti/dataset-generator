@@ -80,6 +80,17 @@ class TestValidateRef:
         with pytest.raises(ValueError, match="no model id"):
             validate_ref("claude:", FULL)
 
+    def test_a_retired_claude_model_means_its_successor(self):
+        # Saved before the catalogue moved on: still valid, as the successor.
+        assert (
+            validate_ref("claude:claude-sonnet-5", FULL) == "claude:claude-sonnet-5-5"
+        )
+        assert (
+            validate_ref("claude:claude-haiku-4-5-20251001", FULL)
+            == "claude:claude-haiku-5-5"
+        )
+        assert normalize_ref("claude:claude-sonnet-5") == "claude:claude-sonnet-5-5"
+
 
 # --- OpenAI -------------------------------------------------------------------
 
@@ -120,6 +131,9 @@ async def test_openai_text_completion(monkeypatch):
         {"role": "user", "content": "Hi"},
     ]
     assert "reasoning_effort" not in kwargs
+    # The classic shape, which every OpenAI-compatible endpoint takes.
+    assert kwargs["max_tokens"] == 4000 and kwargs["temperature"] == config.temperature
+    assert "max_completion_tokens" not in kwargs
 
 
 async def test_openai_image_payload(monkeypatch):
@@ -139,11 +153,20 @@ async def test_openai_image_payload(monkeypatch):
 
 @pytest.mark.parametrize("effort, sent", [("low", True), ("", False)])
 async def test_openai_reasoning_effort(monkeypatch, effort, sent):
+    """With an effort, the request takes the reasoning models' shape: the
+    budget as max_completion_tokens and no temperature (the o-series and gpt-5
+    refuse max_tokens and any temperature but theirs). Off, the classic one."""
     provider, client, _ = _openai_provider(monkeypatch)
     monkeypatch.setattr(config, "openai_reasoning_effort", effort)
-    await provider.complete("m", CompletionRequest(user="u", reasoning=True), FULL)
+    await provider.complete(
+        "m", CompletionRequest(user="u", reasoning=True, max_tokens=1234), FULL
+    )
     kwargs = client.chat.completions.create.call_args.kwargs
     assert ("reasoning_effort" in kwargs) is sent
+    assert ("max_completion_tokens" in kwargs) is sent
+    assert ("max_tokens" in kwargs) is not sent
+    assert ("temperature" in kwargs) is not sent
+    assert kwargs.get("max_completion_tokens", kwargs.get("max_tokens")) == 1234
 
 
 async def test_openai_unconfigured():
@@ -361,12 +384,14 @@ async def test_claude_call_is_isolated_and_uses_only_the_callers_token(
     seen = {}
 
     async def query(prompt, options):
-        seen["cwd_existed"] = os.path.isdir(options.cwd)
-        seen["config_existed"] = os.path.isdir(options.env["CLAUDE_CONFIG_DIR"])
+        seen["cwd_existed"] = os.path.isdir(options.cwd)  # noqa: ASYNC240 — a test
+        seen["config_existed"] = os.path.isdir(  # noqa: ASYNC240 — a test
+            options.env["CLAUDE_CONFIG_DIR"]
+        )
         seen["options"] = options
         yield _ResultMessage()
 
-    setattr(sys.modules["claude_agent_sdk"], "query", query)
+    monkeypatch.setattr(sys.modules["claude_agent_sdk"], "query", query)
     await ClaudeProvider().complete(
         "claude-sonnet-5-5", CompletionRequest(user="u"), mine
     )
@@ -382,8 +407,8 @@ async def test_claude_call_is_isolated_and_uses_only_the_callers_token(
     assert options.cli_path.endswith("claude-isolated")
     # A throwaway working and config directory, gone afterwards.
     assert seen["cwd_existed"] and seen["config_existed"]
-    assert not os.path.exists(options.cwd)
-    assert not os.path.exists(env["CLAUDE_CONFIG_DIR"])
+    assert not os.path.exists(options.cwd)  # noqa: ASYNC240 — a test
+    assert not os.path.exists(env["CLAUDE_CONFIG_DIR"])  # noqa: ASYNC240 — a test
 
 
 async def test_claude_errors_are_scrubbed_of_tokens(fake_sdk):
@@ -411,7 +436,7 @@ def test_the_wrapper_starts_the_cli_with_a_scrubbed_environment(tmp_path, monkey
             str(fake),
         ),
     }
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603 — runs the wrapper the test just built
         [claude_module._wrapper(), "--print", "hi there"],
         env=env,
         capture_output=True,

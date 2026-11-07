@@ -73,12 +73,6 @@ def _png_size(data: bytes) -> tuple[int, int]:
     return width, height
 
 
-def test_file_over_the_size_limit_is_refused(monkeypatch):
-    monkeypatch.setattr(config, "max_upload_bytes", 10)
-    with pytest.raises(ValueError, match="larger than"):
-        file_to_page_images(b"x" * 11, "image/png", "big.png")
-
-
 def test_pdf_over_the_page_limit_is_refused(monkeypatch):
     monkeypatch.setattr(config, "max_upload_pages", 2)
     with pytest.raises(ValueError, match="3 pages"):
@@ -118,8 +112,8 @@ def test_common_page_sizes_keep_the_full_zoom(size):
 
 
 def test_a_page_beyond_a3_is_scaled_down_by_default():
-    # Every rendered page is held until the upload is transcribed, and vision
-    # APIs scale large images down anyway: by default no page exceeds ~4 Mpx.
+    # Vision APIs scale large images down anyway: by default no page exceeds
+    # ~4 Mpx, which also bounds what a page costs while it is transcribed.
     pdf = _pdf_with_page(2000, 2000)  # 16 Mpx at the 2x zoom
 
     [(_, data, _)] = file_to_page_images(pdf, "application/pdf", "poster.pdf")
@@ -133,7 +127,7 @@ async def test_documents_are_rendered_one_at_a_time_on_one_thread(monkeypatch):
     # up on a single rendering thread, which is not the event loop's.
     running, overlaps, threads = [], [], set()
 
-    def render(content, filename):
+    def render(content, content_type, filename):
         overlaps.append(len(running))
         running.append(filename)
         threads.add(threading.current_thread())
@@ -141,7 +135,7 @@ async def test_documents_are_rendered_one_at_a_time_on_one_thread(monkeypatch):
         running.remove(filename)
         return [(filename, b"png", "image/png")]
 
-    monkeypatch.setattr(files, "_pdf_to_images", render)
+    monkeypatch.setattr(files, "file_to_page_images", render)
 
     pages = await asyncio.gather(
         *(render_page_images(b"%PDF", "application/pdf", f"{i}.pdf") for i in range(4))

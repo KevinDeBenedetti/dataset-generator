@@ -84,9 +84,10 @@ check-ports:
 		exit 1; \
 	done
 
-## Run the FastAPI server locally with hot-reload (no Docker).
+## Run the FastAPI server locally with hot-reload (no Docker), on the project's
+## API port (SERVER_PORT, 8020): the one the front-end and the SSO callbacks expect.
 dev-local: env
-	cd apps && EMBEDDED_WORKER=true uv run uvicorn --host 127.0.0.1 server.main:app --reload --reload-dir server
+	cd apps && EMBEDDED_WORKER=true uv run uvicorn --host 127.0.0.1 --port $${SERVER_PORT:-8020} server.main:app --reload --reload-dir server
 
 ## Stop and remove all containers (no-op if the Docker daemon is not running).
 down:
@@ -95,7 +96,7 @@ down:
 ## Purge persistent volumes (server venv + node_modules) and rebuild.
 ## Use after a dependency change: `make dev` keeps the volumes, so a stale
 ## venv would otherwise mask the new lockfile (e.g. an old litellm lingering).
-## WARNING: -v also drops postgres_data, qdrant_storage and redis_data — the
+## WARNING: -v also drops postgres_data and redis_data — the
 ## application database (users, refresh tokens, quality rules) is destroyed and
 ## rebuilt from migrations on the next `make dev`.
 reset: check-docker
@@ -150,7 +151,9 @@ outdated:
 	@cd $(NEXT_DIR) && bun outdated || true
 
 ## Upgrade every dependency within its declared constraints and rewrite both
-## lockfiles. Review the diff, then run `make lint test` before committing.
+## lockfiles. Releases younger than a week are skipped (`exclude-newer` in
+## pyproject.toml, `minimumReleaseAge` in apps/next/bunfig.toml: the dependabot
+## cooldown). Review the diff, then run `make lint test` before committing.
 upgrade:
 	uv lock --upgrade
 	cd $(NEXT_DIR) && bun update

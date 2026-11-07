@@ -1,0 +1,453 @@
+/* ============================================================
+   The GitHub page: account, recipe, repos and a repo's panel.
+   Shares the hub-* classes of datasets/hub.css.
+   ============================================================ */
+
+.gh-page > .card {
+  margin-bottom: 16px;
+}
+
+/* ---------- Account ---------- */
+.gh-account {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  flex-wrap: wrap;
+}
+.gh-avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+  flex: none;
+}
+.gh-account-text {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gh-account-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.gh-account-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+}
+.gh-quota {
+  text-align: right;
+}
+.gh-quota-val {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.gh-quota.is-low .gh-quota-val {
+  color: var(--warning);
+}
+
+/* ---------- Recipe ---------- */
+.gh-recipe {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.gh-recipe-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.gh-recipe-row > .field {
+  flex: 1;
+  min-width: 200px;
+}
+.gh-recipe-pick {
+  flex: 1.2;
+}
+.gh-inline {
+  display: flex;
+  gap: 8px;
+}
+.gh-recipe-foot {
+  align-items: center;
+}
+.gh-recipe-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.gh-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gh-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+}
+.gh-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.gh-run .btn {
+  align-self: flex-start;
+}
+.gh-run-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 13.5px;
+}
+.gh-new-recipe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+.gh-new-recipe > .field {
+  flex: 1;
+  min-width: 220px;
+}
+.gh-new-actions {
+  display: flex;
+  gap: 8px;
+  align-self: flex-end;
+  padding-bottom: 22px;
+}
+.input[aria-invalid='true'] {
+  border-color: var(--destructive);
+}
+
+/* ---------- Layout ---------- */
+.gh-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.gh-layout.has-panel {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+@media (max-width: 1100px) {
+  .gh-layout.has-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Repos ---------- */
+.gh-repos {
+  padding: 16px;
+}
+.gh-repos-tools {
+  margin-bottom: 10px;
+}
+.gh-lang {
+  width: auto;
+  min-width: 150px;
+}
+.gh-repos-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.gh-repos-filters .hint {
+  margin-left: auto;
+}
+.gh-repo-list {
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+}
+.gh-repo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.gh-repo:last-child {
+  border-bottom: none;
+}
+.gh-repo.is-open {
+  background: color-mix(in oklch, var(--muted) 60%, transparent);
+}
+.gh-repo-check {
+  margin-top: 3px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  flex: none;
+}
+.gh-repo-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.gh-repo-main:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.gh-repo-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.gh-repo-desc {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gh-repo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.gh-repo-picked {
+  color: var(--info);
+  font-weight: 500;
+}
+
+/* ---------- Repo panel ---------- */
+.gh-panel {
+  position: sticky;
+  top: calc(56px + 16px);
+  max-height: calc(100dvh - 56px - 32px);
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 1100px) {
+  .gh-panel {
+    position: static;
+    max-height: none;
+  }
+}
+.gh-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+.gh-panel-actions {
+  display: flex;
+  gap: 2px;
+}
+.gh-panel-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  padding: 0 18px 12px;
+}
+.gh-panel-tabs {
+  margin: 0 18px 12px;
+  align-self: flex-start;
+  max-width: calc(100% - 36px);
+  overflow-x: auto;
+}
+.gh-panel-body {
+  padding: 0 18px 18px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.gh-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gh-model-input {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.gh-readme,
+.gh-doc-body {
+  padding: 0;
+  font-size: 13.5px;
+}
+.gh-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gh-docs-mode {
+  align-self: flex-start;
+}
+.gh-doc-list {
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+}
+.gh-doc-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.gh-doc-list li:last-child {
+  border-bottom: none;
+}
+.gh-doc-list li.is-open {
+  background: color-mix(in oklch, var(--muted) 60%, transparent);
+}
+.gh-doc-list input {
+  accent-color: var(--primary);
+}
+.gh-doc-path {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  color: inherit;
+  cursor: pointer;
+  word-break: break-all;
+}
+.gh-doc-path:hover {
+  text-decoration: underline;
+}
+.gh-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+/* ---------- Draft review ---------- */
+.gh-pairs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 80px;
+}
+.gh-pair {
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gh-pair.is-out {
+  opacity: 0.55;
+}
+.gh-pair-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.gh-pair-head input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+}
+.gh-pair-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.gh-pair-q {
+  font-weight: 600;
+  font-size: 14px;
+}
+.gh-pair-a {
+  font-size: 13.5px;
+  white-space: pre-wrap;
+}
+.gh-pair-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gh-pair-edit .gh-pair-actions {
+  margin-left: 0;
+}
+.tag.gh-low {
+  color: var(--warning);
+  border-color: color-mix(in oklch, var(--warning) 40%, transparent);
+}
+.gh-errors {
+  list-style: disc;
+  padding: 10px 18px 14px 34px;
+  font-size: 12.5px;
+}
+.gh-run-review {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.gh-publish-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in oklch, var(--background) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.gh-dupes {
+  list-style: none;
+  padding: 6px 18px 12px;
+}
+.gh-dupes li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.gh-dupes li:last-child {
+  border-bottom: none;
+}
+.gh-dupe-q {
+  flex: 1;
+  min-width: 0;
+}

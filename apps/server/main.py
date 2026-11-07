@@ -17,11 +17,13 @@ from server.api import (
     collections,
     dataset,
     generate,
+    github,
     hub,
     jobs,
     models,
     q_a,
     prompts,
+    recipes,
     me,
     quality_rules,
 )
@@ -137,7 +139,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Datasets Generator API",
         description="API to generate datasets from web scraping",
-        version="0.0.1",
+        version="0.14.0",  # x-release-please-version
         lifespan=lifespan,
         # The interactive docs advertise every route to anyone: development only.
         docs_url="/docs" if docs else None,
@@ -240,10 +242,12 @@ def create_app() -> FastAPI:
     app.include_router(generate.router, dependencies=auth_required)
     app.include_router(dataset.router, dependencies=auth_required)
     app.include_router(hub.router, dependencies=auth_required)
+    app.include_router(collections.router, dependencies=auth_required)
+    app.include_router(github.router, dependencies=auth_required)
+    app.include_router(recipes.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
     app.include_router(models.router, dependencies=auth_required)
     app.include_router(agent.router, dependencies=auth_required)
-    app.include_router(collections.router, dependencies=auth_required)
     app.include_router(quality_rules.router, dependencies=auth_required)
     app.include_router(me.router, dependencies=auth_required)
     app.include_router(admin.router, dependencies=auth_required)

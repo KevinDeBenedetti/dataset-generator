@@ -78,7 +78,7 @@ async def put_model_defaults(
     try:
         await run_in_threadpool(update_model_defaults, user.id, body.defaults, creds)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return await _snapshot(False, user.id, creds)
 
 
@@ -94,7 +94,7 @@ async def test_model(
     try:
         ref = validate_ref(body.ref, creds)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     started = time.perf_counter()
     try:
         result = await complete(

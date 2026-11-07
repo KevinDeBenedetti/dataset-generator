@@ -3,6 +3,9 @@
 * ``account.json`` — email, role, dates, linked sign-in providers;
 * ``settings.json`` — integration settings, model defaults, quality rules,
   and *which* keys are saved (not their values);
+* ``recipes.json`` — the dataset recipes (target repo and GitHub sources);
+* ``collections.json`` — the vector collections: the split each is built from,
+  its columns, model and latest retrieval test (the vectors are derived data);
 * ``datasets/<name>.jsonl`` — every Q/A pair of each dataset.
 """
 
@@ -16,10 +19,12 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from server.models.user import User
+from server.services.collections import list_collections
 from server.services.datasets import get_dataset_pairs, list_datasets_view
 from server.services.identities import list_identities
 from server.services.model_defaults import get_model_defaults
 from server.services.quality_rules import get_quality_rules
+from server.services.recipes import list_recipes
 from server.services.user_secrets import get_settings, secret_statuses
 
 
@@ -73,6 +78,10 @@ def build_export(db: Session, user: User) -> bytes:
                     "quality_rules": get_quality_rules(user.id),
                 }
             ),
+        )
+        archive.writestr("recipes.json", _json(list_recipes(db, user.id)))
+        archive.writestr(
+            "collections.json", _json(list_collections(db, user.id)["collections"])
         )
         taken: set = set()
         for dataset in list_datasets_view(user.id):

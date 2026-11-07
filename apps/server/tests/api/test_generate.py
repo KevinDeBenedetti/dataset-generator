@@ -191,6 +191,33 @@ class TestGenerateDatasetFromUrl:
         kwargs = mock_url_pipeline.process_url.call_args.kwargs
         assert kwargs["model_qa"] == "claude:claude-sonnet-5-5"
 
+    def test_the_role_defaults_are_read_once_per_request(
+        self, mock_url_pipeline, monkeypatch
+    ):
+        # Two roles to resolve, one read of the defaults (one database session).
+        from server.api import generate as generate_api
+
+        reads = []
+        real = generate_api.get_model_defaults
+
+        def counting(user_id=None):
+            reads.append(user_id)
+            return real(user_id)
+
+        monkeypatch.setattr(generate_api, "get_model_defaults", counting)
+        mock_url_pipeline.process_url.return_value = self._pipeline_result()
+
+        response = client.post(
+            "/dataset/generate/url",
+            json={"url": "https://docs.example.com/guide", "dataset_name": "web-ds"},
+        )
+
+        assert response.status_code == 201
+        assert len(reads) == 1
+        kwargs = mock_url_pipeline.process_url.call_args.kwargs
+        assert kwargs["model_cleaning"] == "openai:gpt-4o-mini"
+        assert kwargs["model_qa"] == "openai:gpt-4o-mini"
+
     def test_refused_url_returns_400(self, mock_url_pipeline):
         from server.services.web import WebFetchError
 
@@ -233,3 +260,70 @@ class TestGenerateDatasetFromUrl:
         assert response.status_code == 400
         assert "Claude token" in response.json()["detail"]
         assert "Settings" in response.json()["detail"]
+
+
+class TestGenerationDrafts:
+    """With a target_repo, a generation is kept as a draft to review."""
+
+    def test_a_url_generation_becomes_a_draft(self, mock_url_pipeline):
+        mock_url_pipeline.process_url.return_value = {
+            "qa_pairs": [{"question": "What is it?", "answer": "A guide."}],
+            "items": [{"id": "h1", "question": "What is it?", "answer": "A guide."}],
+            "dataset_id": "web-ds",
+            "pages_crawled": 1,
+            "steps": [],
+        }
+        with patch(
+            "server.api.generate.create_generation_draft", return_value="run-7"
+        ) as keep:
+            response = client.post(
+                "/dataset/generate/url",
+                json={
+                    "url": "https://docs.example.com/guide",
+                    "dataset_name": "Docs",
+                    "target_repo": "kevin/docs-qa",
+                },
+            )
+
+        assert response.status_code == 201, response.text
+        assert response.json()["draft_run_id"] == "run-7"
+        # No local dataset: the draft replaces it.
+        assert mock_url_pipeline.process_url.call_args.kwargs["persist"] is False
+        args, kwargs = keep.call_args
+        assert args[2:] == (
+            "kevin/docs-qa",
+            [{"id": "h1", "question": "What is it?", "answer": "A guide."}],
+        )
+        assert kwargs["kind"] == "web" and kwargs["title"] == "Docs"
+
+    def test_no_pair_means_no_draft(self, mock_url_pipeline):
+        mock_url_pipeline.process_url.return_value = {
+            "qa_pairs": [],
+            "items": [],
+            "dataset_id": "web-ds",
+            "steps": [],
+        }
+        with patch("server.api.generate.create_generation_draft") as keep:
+            response = client.post(
+                "/dataset/generate/url",
+                json={
+                    "url": "https://docs.example.com/guide",
+                    "dataset_name": "Docs",
+                    "target_repo": "kevin/docs-qa",
+                },
+            )
+        assert response.status_code == 201
+        assert response.json()["draft_run_id"] is None
+        keep.assert_not_called()
+
+    def test_an_invalid_target_repo_is_refused(self, mock_url_pipeline):
+        response = client.post(
+            "/dataset/generate/url",
+            json={
+                "url": "https://docs.example.com/guide",
+                "dataset_name": "Docs",
+                "target_repo": "not a repo",
+            },
+        )
+        assert response.status_code == 422
+        mock_url_pipeline.process_url.assert_not_called()

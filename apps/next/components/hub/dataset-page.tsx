@@ -170,6 +170,20 @@ function Header({
       </div>
       <div className="page-actions hub-head-actions">
         <RevisionPicker repo={repo} detail={detail} state={state} update={update} />
+        <Link
+          className="btn btn-outline"
+          href={`/generate?target=${encodeURIComponent(detail.id)}`}
+        >
+          <Icon name="plus" />
+          Add data
+        </Link>
+        <Link
+          className="btn btn-outline"
+          href={`/collections?repo=${encodeURIComponent(detail.id)}`}
+        >
+          <Icon name="boxes" />
+          Build a collection
+        </Link>
         <button type="button" className="btn btn-outline" onClick={copySnippet}>
           <Icon name="terminal" />
           Use in Python

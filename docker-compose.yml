@@ -78,6 +78,7 @@ services:
       # Shared login rate-limiter store; in-network address. Override REDIS_URL
       # in .env to point at a managed Redis.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Vector collections (services/collections.py), in-network.
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       # Local stack: development mode, URLs derived from the ports above.
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -136,6 +137,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # The worker builds the collections: it embeds and stores the vectors.
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       FASTEMBED_CACHE_PATH: /app/.cache/fastembed
@@ -190,14 +192,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # Qdrant vector store. The server reaches it over the compose network at
-  # http://qdrant:6333 (set QDRANT_URL accordingly). The REST API / dashboard is
-  # also published to the host on the project's slot-2 port (6353) so you can
-  # browse http://localhost:6353/dashboard. No healthcheck: the qdrant image has
-  # no curl/wget, so the server just waits for the container to start.
+  # Qdrant: the vector store of the collections (services/collections.py). The
+  # server and the worker reach it at http://qdrant:6333; its REST API and
+  # dashboard are published to the host on the project's slot-2 port (6353):
+  # http://localhost:6353/dashboard. Pinned by tag and digest, in step with
+  # qdrant-client in uv.lock. No healthcheck: the image has no curl or wget, so
+  # the server waits for the container to start.
   qdrant:
     container_name: qdrant
-    image: ${QDRANT_IMAGE:-qdrant/qdrant:latest}
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.20.0@sha256:9bfc89f9914fc14876a88c05270685921a55b8877b254a98bcc1cc2f0a424cd2}
     restart: always
     expose:
       - "6333"
@@ -210,9 +213,10 @@ services:
   # uvicorn workers/replicas). The server reaches it in-network at
   # redis://redis:6379. Published to the host on the project's slot-2 Redis port
   # (6399) for inspection. Persistence is on (appendonly) via the volume.
+  # Redis 8.8+ counts the attempts with INCREX (services/rate_limit.py).
   redis:
     container_name: redis
-    image: ${REDIS_IMAGE:-redis:7-alpine}
+    image: ${REDIS_IMAGE:-redis:8-alpine}
     restart: always
     command: ["redis-server", "--appendonly", "yes"]
     expose:

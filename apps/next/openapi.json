@@ -3,7 +3,7 @@
   "info": {
     "title": "Datasets Generator API",
     "description": "API to generate datasets from web scraping",
-    "version": "0.0.1"
+    "version": "0.14.0"
   },
   "paths": {
     "/auth/login": {
@@ -306,22 +306,22 @@
               }
             }
           },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -368,22 +368,22 @@
               }
             }
           },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -775,11 +775,13 @@
             "required": false,
             "schema": {
               "type": "number",
-              "description": "Similarity threshold",
+              "maximum": 1,
+              "minimum": 0.5,
+              "description": "Similarity threshold (0.5-1.0)",
               "default": 0.8,
               "title": "Threshold"
             },
-            "description": "Similarity threshold"
+            "description": "Similarity threshold (0.5-1.0)"
           }
         ],
         "responses": {
@@ -830,11 +832,13 @@
             "required": false,
             "schema": {
               "type": "number",
-              "description": "Similarity threshold to detect duplicates (0.0-1.0)",
+              "maximum": 1,
+              "minimum": 0.5,
+              "description": "Similarity threshold to detect duplicates (0.5-1.0)",
               "default": 0.8,
               "title": "Threshold"
             },
-            "description": "Similarity threshold to detect duplicates (0.0-1.0)"
+            "description": "Similarity threshold to detect duplicates (0.5-1.0)"
           }
         ],
         "responses": {
@@ -920,7 +924,7 @@
           "dataset"
         ],
         "summary": "Delete Dataset",
-        "description": "Delete one of your datasets, its Q/A pairs and its Qdrant collection.",
+        "description": "Delete one of your datasets and its Q/A pairs.",
         "operationId": "delete_dataset_dataset__dataset_name__delete",
         "parameters": [
           {
@@ -1724,6 +1728,716 @@
         }
       }
     },
+    "/collections": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Your vector collections",
+        "description": "Your collections, most recently changed first, with the embedding models\na collection can use and whether Qdrant is set up.",
+        "operationId": "get_collections_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Create a collection from a split",
+        "description": "Pin the split at its latest commit (or ``revision``) and queue its build:\na worker embeds every row. Poll ``GET /collections/{id}`` for progress.",
+        "operationId": "post_collection_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collection_id}": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "One collection",
+        "operationId": "get_collection_collections__collection_id__get",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Delete a collection",
+        "description": "Deletes the collection and its vectors; the dataset stays on the Hub.",
+        "operationId": "delete_collection_collections__collection_id__delete",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collection_id}/build": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Build a collection again",
+        "description": "Re-embed the split at the dataset's latest commit (or ``revision``):\nthe collection's vectors are replaced.",
+        "operationId": "build_collection_collections__collection_id__build_post",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionBuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collection_id}/search": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Search a collection",
+        "description": "The rows closest to the query, embedded with the collection's model.",
+        "operationId": "search_collection_collections__collection_id__search_post",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collection_id}/evaluate": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Test a collection's retrieval",
+        "description": "Sampled rows ask with their query column; a row whose own point comes\nback first is a hit. Saved as the collection's latest test.",
+        "operationId": "evaluate_collection_collections__collection_id__evaluate_post",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionEvaluateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionEvaluation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github/profile": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Your GitHub account",
+        "description": "Your public profile and what is left of the API quota.",
+        "operationId": "get_github_profile_github_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubProfileOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github/repos": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Your public repos",
+        "description": "Every public repo of your account, most recently updated first, with\nwhether a generation would take it (not a fork, not archived).",
+        "operationId": "get_github_repos_github_repos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubReposOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github/repos/{owner}/{repo}": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "summary": "A repo as a generation sees it",
+        "description": "The README cleaned and cut as the model sees it, the ``docs/`` files, the\ndetected stack and the exact overview text sent to the model.",
+        "operationId": "get_github_repo_github_repos__owner___repo__get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 39,
+              "description": "The account the repo belongs to (yours)",
+              "title": "Owner"
+            },
+            "description": "The account the repo belongs to (yours)"
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Repository name",
+              "title": "Repo"
+            },
+            "description": "Repository name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubRepoDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github/repos/{owner}/{repo}/doc": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "summary": "A docs/ file as the model reads it",
+        "description": "One Markdown or text file under ``docs/``, cut where a generation cuts it.",
+        "operationId": "get_github_doc_github_repos__owner___repo__doc_get",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 39,
+              "description": "The account the repo belongs to (yours)",
+              "title": "Owner"
+            },
+            "description": "The account the repo belongs to (yours)"
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Repository name",
+              "title": "Repo"
+            },
+            "description": "Repository name"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Path under docs/",
+              "title": "Path"
+            },
+            "description": "Path under docs/"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubDocContent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Your dataset recipes",
+        "description": "Your recipes, most recently edited first.",
+        "operationId": "get_recipes_recipes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipesOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Create a recipe",
+        "operationId": "post_recipe_recipes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "One recipe",
+        "operationId": "get_recipe_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Replace a recipe",
+        "description": "Saves the whole recipe: the GitHub page sends it after every toggle.",
+        "operationId": "put_recipe_recipes__recipe_id__put",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Delete a recipe",
+        "description": "Deletes the recipe only: its Hugging Face dataset stays.",
+        "operationId": "delete_recipe_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}/run": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Generate a draft from a recipe",
+        "description": "Queue a generation of the recipe as it is now (a worker runs it): poll\nGET /jobs/runs/{id}, review the draft, then POST /jobs/runs/{id}/publish.",
+        "operationId": "run_recipe_recipes__recipe_id__run_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/q_a/{dataset_name}/stats": {
       "get": {
         "tags": [
@@ -1748,8 +2462,8 @@
             "required": false,
             "schema": {
               "type": "number",
-              "maximum": 1.0,
-              "minimum": 0.0,
+              "maximum": 1,
+              "minimum": 0,
               "description": "Validated/below split threshold",
               "default": 0.8,
               "title": "Score Threshold"
@@ -2092,124 +2806,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QAAgentTestResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/collections": {
-      "get": {
-        "tags": [
-          "collections"
-        ],
-        "summary": "Get Collections",
-        "description": "List the stored datasets as collections, annotated with their Qdrant status.",
-        "operationId": "get_collections_collections_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/collections/{dataset_name}/qdrant": {
-      "post": {
-        "tags": [
-          "collections"
-        ],
-        "summary": "Push Collection To Qdrant",
-        "description": "Embed a dataset's Q/A pairs and upsert them into Qdrant.",
-        "operationId": "push_collection_to_qdrant_collections__dataset_name__qdrant_post",
-        "parameters": [
-          {
-            "name": "dataset_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Dataset Name"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QdrantSyncResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/collections/{dataset_name}/search": {
-      "post": {
-        "tags": [
-          "collections"
-        ],
-        "summary": "Search Collection Endpoint",
-        "description": "Embed the query and return the most similar Q/A pairs from the collection.",
-        "operationId": "search_collection_endpoint_collections__dataset_name__search_post",
-        "parameters": [
-          {
-            "name": "dataset_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Dataset Name"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionSearchRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionSearchResponse"
                 }
               }
             }
@@ -2582,7 +3178,7 @@
           "me"
         ],
         "summary": "Delete Me",
-        "description": "Delete your account and everything you own. Your Hugging Face repos stay.",
+        "description": "Delete your account and everything you own. Your Hugging Face repos stay.\n\nNeeds a sign-in from the last few minutes (403 otherwise): a stolen\nsession alone can't erase the account.",
         "operationId": "delete_me_me_delete",
         "responses": {
           "204": {
@@ -3044,6 +3640,28 @@
         }
       }
     },
+    "/jobs/drafts": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Drafts",
+        "description": "Your drafts waiting for a review (file, web page and recipe runs).",
+        "operationId": "get_drafts_jobs_drafts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/runs/{run_id}": {
       "get": {
         "tags": [
@@ -3070,6 +3688,61 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/runs/{run_id}/checks": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Draft Checks",
+        "description": "Near-duplicate pairs and quality-rule failures of a draft, for its review.",
+        "operationId": "get_draft_checks_jobs_runs__run_id__checks_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1,
+              "minimum": 0.5,
+              "default": 0.85,
+              "title": "Threshold"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftChecks"
                 }
               }
             }
@@ -3490,6 +4163,8 @@
           },
           "dataset_name": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Dataset Name"
           },
           "target_language": {
@@ -3529,8 +4204,8 @@
           },
           "similarity_threshold": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Similarity Threshold",
             "default": 0.85
           },
@@ -3538,6 +4213,20 @@
             "type": "boolean",
             "title": "Persist",
             "default": true
+          },
+          "target_repo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 193,
+                "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Repo",
+            "description": "Hugging Face dataset to publish to: the pairs become a draft"
           }
         },
         "type": "object",
@@ -3629,7 +4318,334 @@
         ],
         "title": "CleanSimilarityResponse"
       },
-      "Collection": {
+      "CollectionBuildRequest": {
+        "properties": {
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision",
+            "description": "Branch, tag or sha; default: latest"
+          }
+        },
+        "type": "object",
+        "title": "CollectionBuildRequest"
+      },
+      "CollectionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "repo_id": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Repo Id",
+            "description": "namespace/name on the Hub"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision",
+            "description": "Branch, tag or sha; default: latest"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
+          },
+          "text_columns": {
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Text Columns",
+            "description": "Joined into the embedded text"
+          },
+          "query_column": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Column",
+            "description": "What the retrieval test asks with (the question)"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Default: the first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "repo_id",
+          "text_columns"
+        ],
+        "title": "CollectionCreate"
+      },
+      "CollectionEvaluateRequest": {
+        "properties": {
+          "sample": {
+            "type": "integer",
+            "maximum": 500,
+            "minimum": 10,
+            "title": "Sample",
+            "description": "Rows to test",
+            "default": 100
+          },
+          "k": {
+            "type": "integer",
+            "maximum": 50,
+            "minimum": 1,
+            "title": "K",
+            "default": 10
+          },
+          "query_column": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Column",
+            "description": "Default: the collection's query column"
+          }
+        },
+        "type": "object",
+        "title": "CollectionEvaluateRequest"
+      },
+      "CollectionEvaluation": {
+        "properties": {
+          "query_column": {
+            "type": "string",
+            "title": "Query Column"
+          },
+          "sample": {
+            "type": "integer",
+            "title": "Sample",
+            "description": "Rows asked for"
+          },
+          "queries": {
+            "type": "integer",
+            "title": "Queries",
+            "description": "Rows tested: sampled, with a query"
+          },
+          "k": {
+            "type": "integer",
+            "title": "K"
+          },
+          "hit_at_1": {
+            "type": "number",
+            "title": "Hit At 1",
+            "description": "Share of rows whose point came first"
+          },
+          "hit_at_k": {
+            "type": "number",
+            "title": "Hit At K",
+            "description": "Share of rows whose point was in the top k"
+          },
+          "mrr": {
+            "type": "number",
+            "title": "Mrr",
+            "description": "Mean reciprocal rank (0 past k)"
+          },
+          "trivial": {
+            "type": "boolean",
+            "title": "Trivial",
+            "description": "The query column is embedded too: every row finds itself"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "title": "Evaluated At"
+          },
+          "misses": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMiss"
+            },
+            "type": "array",
+            "title": "Misses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_column",
+          "sample",
+          "queries",
+          "k",
+          "hit_at_1",
+          "hit_at_k",
+          "mrr",
+          "trivial",
+          "model",
+          "revision",
+          "evaluated_at",
+          "misses"
+        ],
+        "title": "CollectionEvaluation",
+        "description": "A retrieval test: sampled rows ask with their query column."
+      },
+      "CollectionHit": {
+        "properties": {
+          "row_idx": {
+            "type": "integer",
+            "title": "Row Idx",
+            "description": "Position of the row in the split"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Cosine similarity to the query"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The embedded text"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_idx",
+          "score",
+          "text",
+          "fields"
+        ],
+        "title": "CollectionHit"
+      },
+      "CollectionMiss": {
+        "properties": {
+          "row_idx": {
+            "type": "integer",
+            "title": "Row Idx"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank",
+            "description": "Rank of its own point; null past k"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected",
+            "description": "Its own point's embedded text"
+          },
+          "top_row_idx": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Row Idx"
+          },
+          "top_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Score"
+          },
+          "top_text": {
+            "type": "string",
+            "title": "Top Text",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_idx",
+          "query",
+          "expected"
+        ],
+        "title": "CollectionMiss",
+        "description": "A sampled row whose own point didn't come back first."
+      },
+      "CollectionOut": {
         "properties": {
           "id": {
             "type": "string",
@@ -3639,7 +4655,31 @@
             "type": "string",
             "title": "Name"
           },
-          "description": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision",
+            "description": "Commit sha the vectors are built from"
+          },
+          "config": {
+            "type": "string",
+            "title": "Config"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "text_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Text Columns"
+          },
+          "query_column": {
             "anyOf": [
               {
                 "type": "string"
@@ -3648,9 +4688,22 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Query Column"
           },
-          "target_language": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "building",
+              "ready",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "error": {
             "anyOf": [
               {
                 "type": "string"
@@ -3659,9 +4712,31 @@
                 "type": "null"
               }
             ],
-            "title": "Target Language"
+            "title": "Error"
           },
-          "qa_sources_count": {
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id",
+            "description": "The latest build's job run"
+          },
+          "vector_size": {
             "anyOf": [
               {
                 "type": "integer"
@@ -3670,33 +4745,19 @@
                 "type": "null"
               }
             ],
-            "title": "Qa Sources Count"
+            "title": "Vector Size"
           },
-          "created_at": {
+          "rows_total": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Created At"
-          },
-          "collection_name": {
-            "type": "string",
-            "title": "Collection Name"
-          },
-          "in_qdrant": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "In Qdrant"
+            "title": "Rows Total",
+            "description": "Rows in the split"
           },
           "points_count": {
             "anyOf": [
@@ -3707,170 +4768,175 @@
                 "type": "null"
               }
             ],
-            "title": "Points Count"
+            "title": "Points Count",
+            "description": "Rows embedded (empty ones are skipped)"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields",
+            "description": "Columns kept in each point's payload"
+          },
+          "qdrant_collection": {
+            "type": "string",
+            "title": "Qdrant Collection",
+            "description": "The collection's name in Qdrant"
+          },
+          "evaluation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionEvaluation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "collection_name"
+          "repo_id",
+          "revision",
+          "config",
+          "split",
+          "text_columns",
+          "model",
+          "status",
+          "qdrant_collection",
+          "created_at",
+          "updated_at"
         ],
-        "title": "Collection",
-        "description": "A dataset projected as a vector collection.\n\nCarries the dataset fields plus its Qdrant status. ``in_qdrant`` /\n``points_count`` are null when Qdrant is unconfigured or unreachable."
+        "title": "CollectionOut"
+      },
+      "CollectionProgress": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done",
+            "default": 0
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "CollectionProgress"
+      },
+      "CollectionSearchOut": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "took_ms": {
+            "type": "integer",
+            "title": "Took Ms"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "took_ms",
+          "hits"
+        ],
+        "title": "CollectionSearchOut"
       },
       "CollectionSearchRequest": {
         "properties": {
           "query": {
             "type": "string",
+            "maxLength": 2000,
             "minLength": 1,
-            "title": "Query",
-            "description": "Natural-language query"
+            "title": "Query"
           },
           "limit": {
             "type": "integer",
-            "maximum": 100.0,
-            "minimum": 1.0,
+            "maximum": 50,
+            "minimum": 1,
             "title": "Limit",
-            "description": "Max number of hits",
             "default": 10
           },
           "score_threshold": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "maximum": 1,
+                "minimum": -1
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Score Threshold",
-            "description": "Minimum similarity score (0–1) to include a hit"
+            "title": "Score Threshold"
           }
         },
         "type": "object",
         "required": [
           "query"
         ],
-        "title": "CollectionSearchRequest",
-        "description": "Semantic search over a dataset's Qdrant collection."
+        "title": "CollectionSearchRequest"
       },
-      "CollectionSearchResponse": {
-        "properties": {
-          "dataset_name": {
-            "type": "string",
-            "title": "Dataset Name"
-          },
-          "collection_name": {
-            "type": "string",
-            "title": "Collection Name"
-          },
-          "query": {
-            "type": "string",
-            "title": "Query"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          },
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionSearchResult"
-            },
-            "type": "array",
-            "title": "Results"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_name",
-          "collection_name",
-          "query",
-          "count",
-          "results"
-        ],
-        "title": "CollectionSearchResponse"
-      },
-      "CollectionSearchResult": {
-        "properties": {
-          "qa_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Qa Id"
-          },
-          "question": {
-            "type": "string",
-            "title": "Question"
-          },
-          "answer": {
-            "type": "string",
-            "title": "Answer"
-          },
-          "context": {
-            "type": "string",
-            "title": "Context"
-          },
-          "source_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Url"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          }
-        },
-        "type": "object",
-        "required": [
-          "question",
-          "answer",
-          "context"
-        ],
-        "title": "CollectionSearchResult"
-      },
-      "CollectionsResponse": {
+      "CollectionsOut": {
         "properties": {
           "qdrant_configured": {
             "type": "boolean",
             "title": "Qdrant Configured"
           },
-          "total": {
+          "quota": {
             "type": "integer",
-            "title": "Total"
+            "title": "Quota",
+            "description": "Collections per user (0 = unlimited)"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingModelOut"
+            },
+            "type": "array",
+            "title": "Models"
           },
           "collections": {
             "items": {
-              "$ref": "#/components/schemas/Collection"
+              "$ref": "#/components/schemas/CollectionOut"
             },
             "type": "array",
             "title": "Collections"
@@ -3879,10 +4945,11 @@
         "type": "object",
         "required": [
           "qdrant_configured",
-          "total",
+          "quota",
+          "models",
           "collections"
         ],
-        "title": "CollectionsResponse"
+        "title": "CollectionsOut"
       },
       "DatasetAnalysis": {
         "properties": {
@@ -4084,6 +5151,18 @@
             ],
             "title": "Persisted",
             "description": "Summary of the stored version (dataset name, version, run) when the pairs were saved at generation time"
+          },
+          "draft_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Run Id",
+            "description": "The draft to review, when a target_repo was given"
           }
         },
         "type": "object",
@@ -4361,6 +5440,71 @@
         ],
         "title": "DeleteDatasetResponse"
       },
+      "DraftChecks": {
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "checked": {
+            "type": "integer",
+            "title": "Checked",
+            "description": "Pairs compared for duplicates"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Pairs the review decides on"
+          },
+          "duplicates": {
+            "items": {
+              "$ref": "#/components/schemas/DraftDuplicate"
+            },
+            "type": "array",
+            "title": "Duplicates"
+          },
+          "flagged": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Flagged",
+            "description": "Pair id → the quality rule it fails"
+          }
+        },
+        "type": "object",
+        "required": [
+          "threshold",
+          "checked",
+          "total",
+          "duplicates"
+        ],
+        "title": "DraftChecks"
+      },
+      "DraftDuplicate": {
+        "properties": {
+          "first": {
+            "type": "string",
+            "title": "First"
+          },
+          "second": {
+            "type": "string",
+            "title": "Second"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity",
+            "description": "Question similarity, 0-1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first",
+          "second",
+          "similarity"
+        ],
+        "title": "DraftDuplicate"
+      },
       "DraftPair": {
         "properties": {
           "id": {
@@ -4468,6 +5612,14 @@
             "type": "array",
             "title": "Review",
             "description": "Held out: answer far from its source (off by default)"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/DraftPair"
+            },
+            "type": "array",
+            "title": "Removed",
+            "description": "Published pairs this draft no longer has: publishing deletes them"
           }
         },
         "type": "object",
@@ -4477,6 +5629,69 @@
           "review"
         ],
         "title": "DraftPreview"
+      },
+      "DraftSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The run holding the draft"
+          },
+          "job": {
+            "type": "string",
+            "title": "Job"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "target_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Repo"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "description": "Pairs the draft adds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job",
+          "title",
+          "created_at",
+          "new"
+        ],
+        "title": "DraftSummary"
+      },
+      "DraftsOut": {
+        "properties": {
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/DraftSummary"
+            },
+            "type": "array",
+            "title": "Drafts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "drafts"
+        ],
+        "title": "DraftsOut"
       },
       "DuplicateDatasetResponse": {
         "properties": {
@@ -4511,6 +5726,52 @@
         ],
         "title": "DuplicateDatasetResponse"
       },
+      "EmbeddingModelOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dimensions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions"
+          },
+          "size_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Mb",
+            "description": "Download size, roughly"
+          },
+          "languages": {
+            "type": "string",
+            "title": "Languages"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "languages",
+          "description"
+        ],
+        "title": "EmbeddingModelOut"
+      },
       "ErrorResponse": {
         "properties": {
           "detail": {
@@ -4541,6 +5802,475 @@
           "detail": "Model 'invalid-model' not in available models: ['gpt-3.5-turbo', 'gpt-4']",
           "error_code": "INVALID_MODEL"
         }
+      },
+      "GitHubDocContent": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "Cut at max_chars, as the model reads it"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "max_chars": {
+            "type": "integer",
+            "title": "Max Chars"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content",
+          "truncated",
+          "max_chars"
+        ],
+        "title": "GitHubDocContent"
+      },
+      "GitHubDocEntry": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "readable": {
+            "type": "boolean",
+            "title": "Readable",
+            "description": "Under the size a generation reads"
+          },
+          "selected_by_default": {
+            "type": "boolean",
+            "title": "Selected By Default",
+            "description": "Read by a generation that picks no docs file itself"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size",
+          "readable",
+          "selected_by_default"
+        ],
+        "title": "GitHubDocEntry"
+      },
+      "GitHubLimits": {
+        "properties": {
+          "readme_chars": {
+            "type": "integer",
+            "title": "Readme Chars"
+          },
+          "doc_chars": {
+            "type": "integer",
+            "title": "Doc Chars"
+          },
+          "doc_bytes": {
+            "type": "integer",
+            "title": "Doc Bytes"
+          },
+          "docs_per_repo": {
+            "type": "integer",
+            "title": "Docs Per Repo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "readme_chars",
+          "doc_chars",
+          "doc_bytes",
+          "docs_per_repo"
+        ],
+        "title": "GitHubLimits"
+      },
+      "GitHubProfileOut": {
+        "properties": {
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "blog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blog"
+          },
+          "html_url": {
+            "type": "string",
+            "title": "Html Url"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "public_repos": {
+            "type": "integer",
+            "title": "Public Repos"
+          },
+          "followers": {
+            "type": "integer",
+            "title": "Followers"
+          },
+          "following": {
+            "type": "integer",
+            "title": "Following"
+          },
+          "rate_limit": {
+            "$ref": "#/components/schemas/GitHubRateLimit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login",
+          "html_url",
+          "public_repos",
+          "followers",
+          "following",
+          "rate_limit"
+        ],
+        "title": "GitHubProfileOut"
+      },
+      "GitHubRateLimit": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Requests per hour the quota allows"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "reset_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset At",
+            "description": "When the quota resets (ISO 8601)"
+          },
+          "authenticated": {
+            "type": "boolean",
+            "title": "Authenticated",
+            "description": "True when a GitHub token raises the quota (60 → 5000)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limit",
+          "remaining",
+          "authenticated"
+        ],
+        "title": "GitHubRateLimit"
+      },
+      "GitHubRepoDetail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "stars": {
+            "type": "integer",
+            "title": "Stars"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "homepage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Homepage"
+          },
+          "html_url": {
+            "type": "string",
+            "title": "Html Url"
+          },
+          "default_branch": {
+            "type": "string",
+            "title": "Default Branch"
+          },
+          "readme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readme",
+            "description": "Cleaned and cut as the model sees it; null without one"
+          },
+          "readme_truncated": {
+            "type": "boolean",
+            "title": "Readme Truncated"
+          },
+          "technologies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Technologies",
+            "description": "Detected from the dependency manifests"
+          },
+          "docs": {
+            "items": {
+              "$ref": "#/components/schemas/GitHubDocEntry"
+            },
+            "type": "array",
+            "title": "Docs"
+          },
+          "model_input": {
+            "type": "string",
+            "title": "Model Input",
+            "description": "The exact overview text sent to the model"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/GitHubLimits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "full_name",
+          "stars",
+          "html_url",
+          "default_branch",
+          "readme_truncated",
+          "docs",
+          "model_input",
+          "limits"
+        ],
+        "title": "GitHubRepoDetail"
+      },
+      "GitHubRepoSummary": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "stars": {
+            "type": "integer",
+            "title": "Stars"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "fork": {
+            "type": "boolean",
+            "title": "Fork"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "eligible": {
+            "type": "boolean",
+            "title": "Eligible",
+            "description": "What a generation takes: public, not a fork, not archived"
+          },
+          "pushed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushed At"
+          },
+          "html_url": {
+            "type": "string",
+            "title": "Html Url"
+          },
+          "homepage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Homepage"
+          },
+          "default_branch": {
+            "type": "string",
+            "title": "Default Branch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "full_name",
+          "stars",
+          "fork",
+          "archived",
+          "eligible",
+          "html_url",
+          "default_branch"
+        ],
+        "title": "GitHubRepoSummary"
+      },
+      "GitHubReposOut": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/GitHubRepoSummary"
+            },
+            "type": "array",
+            "title": "Repos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "total",
+          "repos"
+        ],
+        "title": "GitHubReposOut"
       },
       "HTTPValidationError": {
         "properties": {
@@ -6529,6 +8259,29 @@
         ],
         "title": "ModelsResponse"
       },
+      "PairEdit": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "PairEdit",
+        "description": "A pair rewritten by the reviewer."
+      },
       "PipelineStep": {
         "properties": {
           "key": {
@@ -6805,6 +8558,15 @@
             "type": "array",
             "title": "Promote",
             "description": "Ids of review pairs to include"
+          },
+          "edits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PairEdit"
+            },
+            "type": "object",
+            "maxProperties": 1000,
+            "title": "Edits",
+            "description": "New or promoted pairs rewritten by the reviewer, by id"
           }
         },
         "type": "object",
@@ -6814,6 +8576,7 @@
         "properties": {
           "text": {
             "type": "string",
+            "maxLength": 20000,
             "minLength": 1,
             "title": "Text",
             "description": "Source text to feed the agent"
@@ -6943,8 +8706,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -7074,7 +8837,7 @@
           },
           "count": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Count",
             "description": "Number of scored items in the bucket"
           }
@@ -7198,46 +8961,18 @@
         "title": "QAStatsResponse",
         "description": "Aggregated confidence-score statistics over a whole dataset.\n\nComputed server-side over every active item so the quality page doesn't\nhave to sample a capped page of Q&A items client-side."
       },
-      "QdrantSyncResponse": {
-        "properties": {
-          "dataset_name": {
-            "type": "string",
-            "title": "Dataset Name"
-          },
-          "collection_name": {
-            "type": "string",
-            "title": "Collection Name"
-          },
-          "points_upserted": {
-            "type": "integer",
-            "title": "Points Upserted"
-          },
-          "vector_size": {
-            "type": "integer",
-            "title": "Vector Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_name",
-          "collection_name",
-          "points_upserted",
-          "vector_size"
-        ],
-        "title": "QdrantSyncResponse"
-      },
       "QualityRulesResponse": {
         "properties": {
           "min_answer_words": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Min Answer Words",
             "description": "Minimum answer length in words (0 = no minimum)"
           },
           "reject_below_confidence": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Reject Below Confidence",
             "description": "Confidence below which pairs are rejected"
           },
@@ -7275,7 +9010,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0.0
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -7287,8 +9022,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -7311,6 +9046,213 @@
         "type": "object",
         "title": "QualityRulesUpdate",
         "description": "Partial update — only the provided fields change."
+      },
+      "RecipeIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "target_repo": {
+            "type": "string",
+            "maxLength": 193,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Target Repo",
+            "description": "Hugging Face repo it publishes to ('namespace/name' or 'name')"
+          },
+          "include_profile": {
+            "type": "boolean",
+            "title": "Include Profile",
+            "description": "Add the GitHub profile facts",
+            "default": true
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeSource"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Sources"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = the jobs default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "target_repo"
+        ],
+        "title": "RecipeIn"
+      },
+      "RecipeOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "target_repo": {
+            "type": "string",
+            "maxLength": 193,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Target Repo",
+            "description": "Hugging Face repo it publishes to ('namespace/name' or 'name')"
+          },
+          "include_profile": {
+            "type": "boolean",
+            "title": "Include Profile",
+            "description": "Add the GitHub profile facts",
+            "default": true
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeSource"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Sources"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = the jobs default"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRunRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recipe's most recent generation, if any"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "target_repo",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecipeOut"
+      },
+      "RecipeRunRequest": {
+        "properties": {
+          "full_refresh": {
+            "type": "boolean",
+            "title": "Full Refresh",
+            "description": "Ignore the published version and regenerate every source",
+            "default": false
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model for this run; null = the recipe's"
+          }
+        },
+        "type": "object",
+        "title": "RecipeRunRequest"
+      },
+      "RecipeSource": {
+        "properties": {
+          "repo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,100}$",
+            "title": "Repo",
+            "description": "Repo name"
+          },
+          "readme": {
+            "type": "boolean",
+            "title": "Readme",
+            "description": "Generate from its README and metadata",
+            "default": true
+          },
+          "docs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs",
+            "description": "docs/ files to generate from; null = the default pick, [] = none"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo"
+        ],
+        "title": "RecipeSource",
+        "description": "One repo of the recipe and what of it feeds the dataset."
+      },
+      "RecipesOut": {
+        "properties": {
+          "recipes": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeOut"
+            },
+            "type": "array",
+            "title": "Recipes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "title": "RecipesOut"
       },
       "RemovedRecord": {
         "properties": {
@@ -7624,11 +9566,14 @@
         "properties": {
           "url": {
             "type": "string",
+            "maxLength": 2048,
             "title": "Url",
             "description": "http(s) URL of the page to mine"
           },
           "dataset_name": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Dataset Name",
             "description": "Name of the dataset to create or extend"
           },
@@ -7670,8 +9615,8 @@
           },
           "similarity_threshold": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Similarity Threshold",
             "description": "Question similarity at or above which a pair is a duplicate (0.0-1.0): embedding cosine across the dataset when the local model is available, else a lexical ratio within the same source",
             "default": 0.85
@@ -7681,6 +9626,20 @@
             "title": "Persist",
             "description": "Store the generated pairs and record a version at generation time",
             "default": true
+          },
+          "target_repo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 193,
+                "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Repo",
+            "description": "Hugging Face dataset to publish to ('namespace/name' or 'name'): the pairs become a draft to review, not a local dataset"
           }
         },
         "type": "object",

@@ -9,7 +9,6 @@ os.environ["OPENAI_API_KEY"] = "test-api-key"
 os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
 os.environ["OPENAI_LLM_MODEL"] = "gpt-4o-mini"
 os.environ["OPENAI_VLM_MODEL"] = "mistral-small-3.1-24b-instruct-2503"
-os.environ["OPENAI_EMBEDDING_MODEL"] = "text-embedding-3-small"
 # Never download the local embedding model in tests: code paths that use it
 # take an injected fake embedder (see tests/services/test_semantic.py).
 os.environ["SEMANTIC_ENABLED"] = "false"
@@ -54,6 +53,7 @@ def _no_ambient_database(monkeypatch):
     for target in (
         "server.services.model_defaults.get_scoped_db",
         "server.services.jobs.get_scoped_db",
+        "server.services.collections.get_scoped_db",
     ):
         monkeypatch.setattr(target, unreachable)
 
@@ -197,14 +197,21 @@ def _build_test_app(
         collections,
         dataset,
         generate,
+        github,
+        hub,
         jobs,
         models,
         q_a,
         prompts,
         me,
         quality_rules,
+        recipes,
     )
-    from server.services.auth import get_current_user, require_admin
+    from server.services.auth import (
+        get_current_user,
+        require_admin,
+        require_recent_login,
+    )
 
     # Create test app without lifespan to avoid migration issues
     test_app = FastAPI(
@@ -226,12 +233,15 @@ def _build_test_app(
     test_app.include_router(dataset.router)
     test_app.include_router(q_a.router)
     test_app.include_router(models.router)
-    test_app.include_router(collections.router)
     test_app.include_router(quality_rules.router)
     test_app.include_router(me.router)
     test_app.include_router(admin.router)
     test_app.include_router(prompts.router)
     test_app.include_router(jobs.router)
+    test_app.include_router(hub.router)
+    test_app.include_router(github.router)
+    test_app.include_router(recipes.router)
+    test_app.include_router(collections.router)
 
     @test_app.get("/")
     async def root():
@@ -262,6 +272,7 @@ def _build_test_app(
     if acting_user is not None:
         test_app.dependency_overrides[get_current_user] = lambda: acting_user
         test_app.dependency_overrides[require_admin] = lambda: acting_user
+        test_app.dependency_overrides[require_recent_login] = lambda: acting_user
     else:
         # Auth tests: get_current_user stays real, but the admin-only routes
         # still need a caller that passes their gate.
@@ -335,20 +346,6 @@ def _plain_session_cookies(monkeypatch):
     monkeypatch.setattr(config, "auth_cookie_name", "access_token")
     monkeypatch.setattr(config, "auth_refresh_cookie_name", "refresh_token")
     monkeypatch.setattr(config, "auth_cookie_secure", False)
-
-
-@pytest.fixture(autouse=True)
-def _no_ambient_qdrant(monkeypatch):
-    """Keep tests off the Qdrant named in the developer's ``.env``.
-
-    With ``QDRANT_URL`` set, any route that lists or drops collections builds a
-    real client and tries to reach it (hence the "Failed to obtain server
-    version" warning). Tests that exercise Qdrant inject a fake client or set
-    the URL themselves.
-    """
-    from server.core.config import config
-
-    monkeypatch.setattr(config, "qdrant_url", "")
 
 
 @pytest.fixture(autouse=True)

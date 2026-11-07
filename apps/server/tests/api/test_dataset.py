@@ -108,7 +108,7 @@ def test_get_dataset_by_name_not_found(client: TestClient):
 
 
 def test_delete_dataset(client: TestClient):
-    """Test deleting a dataset (pairs + Qdrant cascade)."""
+    """Test deleting a dataset and its pairs."""
     result = {
         "message": "Deleted 2 item(s) from 'my_dataset'.",
         "dataset_id": "my_dataset",
@@ -334,12 +334,18 @@ _ENDPOINT_IDS = [view for view, _ in _ENDPOINTS]
 
 
 @pytest.mark.parametrize("view,call", _ENDPOINTS, ids=_ENDPOINT_IDS)
-def test_unexpected_service_error_returns_500(client: TestClient, view, call):
-    with patch(f"server.api.dataset.{view}", side_effect=RuntimeError("boom")):
+def test_unexpected_service_error_returns_500(client: TestClient, view, call, caplog):
+    with patch(
+        f"server.api.dataset.{view}",
+        side_effect=RuntimeError("boom: SELECT * FROM qa_pairs"),
+    ):
         response = call(client)
 
     assert response.status_code == 500
-    assert "boom" in response.json()["detail"]
+    # What failed, in words — never the exception, which is logged instead.
+    detail = response.json()["detail"]
+    assert "failed" in detail and "boom" not in detail and "SELECT" not in detail
+    assert "boom: SELECT" in caplog.text
 
 
 # --- Hugging Face export -----------------------------------------------------
@@ -517,3 +523,30 @@ def test_import_from_huggingface_offloads_to_a_threadpool(client: TestClient, ow
     run_in_threadpool_mock.assert_called_once_with(
         import_dataset_from_hub_mock, owner.id, FULL, "kevin/my_dataset", None
     )
+
+
+@pytest.mark.parametrize("threshold", ["0", "0.2", "1.5"])
+def test_a_threshold_out_of_range_is_refused(client: TestClient, threshold):
+    with patch("server.api.dataset.clean_similarities_view") as clean:
+        response = client.post(
+            "/dataset/d/clean-similarities", params={"threshold": threshold}
+        )
+    assert response.status_code == 422
+    clean.assert_not_called()
+
+
+def test_generation_inputs_are_bounded(client: TestClient):
+    too_long_name = {"url": "https://example.com", "dataset_name": "x" * 101}
+    assert client.post("/dataset/generate/url", json=too_long_name).status_code == 422
+    too_long_url = {"url": "https://example.com/" + "a" * 2048, "dataset_name": "d"}
+    assert client.post("/dataset/generate/url", json=too_long_url).status_code == 422
+
+
+def test_the_agent_text_is_bounded():
+    from pydantic import ValidationError
+
+    from server.api.agent import QAAgentTestRequest
+
+    with pytest.raises(ValidationError):
+        QAAgentTestRequest(text="x" * 20_001)
+    assert QAAgentTestRequest(text="x" * 20_000).text

@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from server.core.config import DEV_AUTH_SECRET, config
 from server.core.database import get_db
-from server.core.security import verify_password
+from server.core.security import hash_password, verify_password
 from server.models.user import RefreshToken, User, UserRole
 from server.services.users import get_user_by_email
 
@@ -79,8 +79,13 @@ def _warn_if_dev_secret() -> None:
         )
 
 
-def create_access_token(user: User) -> str:
-    """Issue a signed JWT for ``user``."""
+def create_access_token(user: User, *, auth_time: Optional[int] = None) -> str:
+    """Issue a signed JWT for ``user``.
+
+    ``auth_time`` (seconds since the epoch) is given by a sign-in only, never
+    by a refresh: it dates the user's last proof of identity, which
+    ``require_recent_login`` checks.
+    """
     _warn_if_dev_secret()
     now = int(time.time())
     claims = {
@@ -92,6 +97,8 @@ def create_access_token(user: User) -> str:
         "iat": now,
         "exp": now + config.auth_token_ttl_seconds,
     }
+    if auth_time is not None:
+        claims["auth_time"] = auth_time
     return jwt.encode({"alg": _ALGORITHM}, claims, _signing_key())
 
 
@@ -278,12 +285,25 @@ def purge_expired_refresh_tokens(db: Session) -> int:
     return deleted
 
 
+# A hash of a random password, made like the real ones, for the logins that
+# have no stored hash to check (see ``authenticate_user``). Made at import:
+# making it on first use would slow that first login down.
+_DECOY_HASH = hash_password(secrets.token_urlsafe(32))
+
+
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    """Return the user if the email/password pair is valid and active."""
+    """Return the user if the email/password pair is valid and active.
+
+    Every attempt costs one bcrypt check: against a decoy hash when the email
+    is unknown or the account has no password (SSO only), and before the
+    active flag is read. The response time then tells nothing about which
+    emails are registered.
+    """
     user = get_user_by_email(db, email)
-    if not user or not user.is_active:
+    if user is None or not user.hashed_password:
+        verify_password(password, _DECOY_HASH)
         return None
-    if not verify_password(password, user.hashed_password or ""):
+    if not verify_password(password, user.hashed_password) or not user.is_active:
         return None
     return user
 
@@ -316,6 +336,31 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not user or not user.is_active or _issued_before_cutoff(claims, user):
         raise credentials_error
     return user
+
+
+def require_recent_login(
+    request: Request, current_user: User = Depends(get_current_user)
+) -> User:
+    """FastAPI dependency: the current user, signed in within the last
+    ``auth_reauth_max_age_seconds`` (else 403).
+
+    For what a stolen session must not be enough for, like deleting the
+    account. Only a sign-in (password or SSO) dates the access token; a
+    refreshed one isn't dated, so an older session signs in again first.
+    """
+    token = _extract_token(request)
+    claims = (decode_access_token(token) if token else None) or {}
+    auth_time = claims.get("auth_time")
+    max_age = config.auth_reauth_max_age_seconds
+    if not isinstance(auth_time, int) or time.time() - auth_time > max_age:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Sign in again to confirm it's you: this needs a sign-in from "
+                f"the last {max_age // 60} minutes."
+            ),
+        )
+    return current_user
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:

@@ -1,7 +1,6 @@
-import logging
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter, Depends, HTTPException
-
+from server.api.errors import internal_error
 from server.schemas.quality_rules import QualityRulesResponse, QualityRulesUpdate
 from server.models.user import User
 from server.services.auth import get_current_user
@@ -36,6 +35,5 @@ def put_quality_rules(
                 auto_reject_enabled=body.auto_reject_enabled,
             )
         )
-    except Exception as e:
-        logging.exception("Error updating quality rules")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise internal_error("Saving the quality rules") from None

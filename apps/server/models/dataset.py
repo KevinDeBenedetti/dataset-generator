@@ -60,10 +60,7 @@ class Dataset(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    # The Qdrant collection holding this dataset's embeddings, once chosen. Null =
-    # the default ``<prefix>ds_<id>`` (see services/qdrant.py); datasets that
-    # predate owners keep their original ``<prefix><slug>`` collection here, so
-    # nothing has to be re-embedded.
+    # Unused since Qdrant was dropped; goes with the table (TODO: phase 3, 4/4).
     qdrant_collection: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     target_language: Mapped[Optional[str]] = mapped_column(String, nullable=True)

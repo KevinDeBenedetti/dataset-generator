@@ -24,7 +24,7 @@ from server.schemas.me import (
     SettingsUpdate,
 )
 from server.services import identities, user_secrets
-from server.services.auth import get_current_user
+from server.services.auth import get_current_user, require_recent_login
 from server.core.config import config
 from server.services.credentials import (
     ANTHROPIC_API_KEY,
@@ -103,7 +103,7 @@ async def put_secret(
             user_secrets.set_secret, user.id, kind, body.value
         )
     except user_secrets.SecretError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SecretPutResponse(
         secret=SecretStatus(**saved),
         check=SecretCheck(
@@ -161,7 +161,7 @@ async def put_settings(
             )
         saved = await run_in_threadpool(user_secrets.update_settings, user.id, changes)
     except (user_secrets.SecretError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SettingsResponse(settings=saved)
 
 
@@ -189,9 +189,9 @@ def delete_identity(
     try:
         identities.unlink_identity(db, user, identity_id, ip=ip)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Unknown identity")
+        raise HTTPException(status_code=404, detail="Unknown identity") from None
     except LookupError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/export", response_class=Response)
@@ -216,10 +216,14 @@ async def export_account(
 def delete_me(
     request: Request,
     response: Response,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_recent_login),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Delete your account and everything you own. Your Hugging Face repos stay."""
+    """Delete your account and everything you own. Your Hugging Face repos stay.
+
+    Needs a sign-in from the last few minutes (403 otherwise): a stolen
+    session alone can't erase the account.
+    """
     from server.api.auth import logout
     from server.services.admin import AdminError, delete_account
 
@@ -228,5 +232,5 @@ def delete_me(
         delete_account(db, user, ip=ip)
     except AdminError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return logout(request, response, db)

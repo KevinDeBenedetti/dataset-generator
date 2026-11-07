@@ -1,0 +1,5 @@
+# The same week-long cooldown as .github/dependabot.yml: `bun install`/`bun update`
+# only take a release once it is a week old (seconds), so a hijacked package
+# is caught upstream before it lands here.
+[install]
+minimumReleaseAge = 604800

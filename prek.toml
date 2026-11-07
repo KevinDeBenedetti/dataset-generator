@@ -101,13 +101,41 @@ hooks = [
 # ===============================
 [[repos]]
 repo = "https://github.com/hadolint/hadolint"
-rev = "v2.14.0"
+rev = "v2.15.1"
 hooks = [
   # DL3008: pinning apt versions in a dev image buys little and rots fast.
   { id = "hadolint-docker", name = "🐳 Lint Dockerfiles", files = '''^apps/.*/Dockerfile.*''', args = [
     "--ignore",
     "DL3008",
   ] },
+]
+
+# ===============================
+# Security — secrets, workflow hardening and workflow syntax
+# ===============================
+# gitleaks: the same version CI pins (security.yml of the reusable workflows),
+# reading .gitleaks.toml, on the staged changes only.
+[[repos]]
+repo = "https://github.com/gitleaks/gitleaks"
+rev = "v8.30.1"
+hooks = [
+  { id = "gitleaks", name = "🔐 Gitleaks (staged changes)" },
+]
+
+# zizmor: GitHub Actions security audit, on the workflows and dependabot.yml.
+[[repos]]
+repo = "https://github.com/zizmorcore/zizmor-pre-commit"
+rev = "v1.31.1"
+hooks = [
+  { id = "zizmor", name = "🛡️ Zizmor (workflow audit)" },
+]
+
+# actionlint: GitHub Actions workflow syntax and expression checks.
+[[repos]]
+repo = "https://github.com/rhysd/actionlint"
+rev = "v1.7.12"
+hooks = [
+  { id = "actionlint", name = "⚙️ Actionlint (workflows)" },
 ]
 
 # ===============================

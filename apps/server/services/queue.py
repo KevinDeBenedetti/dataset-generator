@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from server.core.config import config
 from server.core.database import get_scoped_db
@@ -69,10 +69,16 @@ def claim_next(worker: str) -> Optional[str]:
 
 
 def reap_stale(stale_after: Optional[float] = None) -> int:
-    """Mark running runs whose worker stopped heart-beating as interrupted."""
+    """Hand back the runs whose process stopped heart-beating.
+
+    A running run becomes interrupted (its worker died; never re-run on its
+    own). A publishing run goes back to succeeded (the API publishing its draft
+    died — ``services.jobs.publish_run`` beats while it works): publishable
+    again, instead of answering 409 for good. Returns how many were touched.
+    """
     cutoff = _now() - timedelta(seconds=stale_after or config.worker_stale_seconds)
     with get_scoped_db() as db:
-        count = db.execute(
+        interrupted = db.execute(
             update(JobRun)
             .where(JobRun.status == "running", JobRun.heartbeat_at < cutoff)
             .values(
@@ -81,10 +87,20 @@ def reap_stale(stale_after: Optional[float] = None) -> int:
                 error="The worker running this job stopped. Start it again.",
             )
         ).rowcount
+        handed_back = db.execute(
+            update(JobRun)
+            .where(
+                JobRun.status == "publishing",
+                or_(JobRun.heartbeat_at.is_(None), JobRun.heartbeat_at < cutoff),
+            )
+            .values(status="succeeded")
+        ).rowcount
         db.commit()
-    if count:
-        logger.warning("marked %d stale run(s) interrupted", count)
-    return count or 0
+    if interrupted:
+        logger.warning("marked %d stale run(s) interrupted", interrupted)
+    if handed_back:
+        logger.warning("handed %d run(s) back: their publication died", handed_back)
+    return (interrupted or 0) + (handed_back or 0)
 
 
 def _beat(run_id: str, worker: str, progress: Optional[Dict[str, Any]]) -> bool:
@@ -129,7 +145,8 @@ def _load(run_id: str) -> Tuple[str, str, Dict[str, Any], Optional[str]]:
     """``(owner_id, job_id, options, model_ref)`` of a claimed run."""
     with get_scoped_db() as db:
         row = db.get(JobRun, run_id)
-        assert row is not None
+        if row is None:
+            raise RuntimeError(f"Run {run_id} is gone")
         return row.owner_id, row.job_id, dict(row.options or {}), row.model_ref
 
 
@@ -172,7 +189,7 @@ async def execute(run_id: str, worker: str) -> str:
             task.cancel()
             try:
                 await task
-            except BaseException:  # noqa: BLE001 — cancellation is the point
+            except BaseException:  # noqa: BLE001, S110 — cancellation is the point
                 pass
             await asyncio.to_thread(
                 _finish, run_id, worker, status="cancelled", progress=None

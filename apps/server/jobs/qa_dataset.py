@@ -26,19 +26,24 @@ import logging
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from server.core.config import _env, config
+from server.core.cpu import cpu_bound
 from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
+import httpx
+
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
+    GitHubAPIError,
     GitHubProfile,
     GitHubSnapshot,
     RepoData,
     RepoDoc,
+    fetch_docs_by_path,
     fetch_repo_docs,
     fetch_snapshot,
     gather_limited,
@@ -650,7 +655,7 @@ def _is_low_quality(pair: QAPair) -> bool:
 def pair_id(pair: QAPair) -> str:
     """Content-derived, so an unchanged pair keeps its id across runs."""
     key = f"{pair.category}:{pair.repo or ''}:{pair.question}"
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
 def sanitize_pairs(pairs: List[QAPair]) -> Tuple[List[QAPair], int]:
@@ -683,12 +688,16 @@ class QADataset:
     # Ids of the pairs generated this run (a subset of ``pairs``) — what a
     # draft review shows, as opposed to the pairs carried over.
     new_ids: List[str] = field(default_factory=list)
+    # Pairs of the published version this draft no longer has (a source gone
+    # or deselected, a fact that changed): what publishing it would delete.
+    removed: List[QAPair] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """JSON-safe form, for storing an unpublished draft."""
         return {
             "pairs": [p.to_record() for p in self.pairs],
             "review": [p.to_record() for p in self.review],
+            "removed": [p.to_record() for p in self.removed],
             "dropped": self.dropped,
             "errors": self.errors,
             "kept": self.kept,
@@ -713,18 +722,57 @@ class QADataset:
             review=pairs("review"),
             manifest=dict(data.get("manifest", {})),
             new_ids=list(data.get("new_ids", [])),
+            removed=pairs("removed"),
         )
 
     def with_selection(
-        self, exclude: Sequence[str] = (), promote: Sequence[str] = ()
+        self,
+        exclude: Sequence[str] = (),
+        promote: Sequence[str] = (),
+        edits: Optional[Dict[str, Dict[str, str]]] = None,
     ) -> "QADataset":
         """This draft after a review: ``exclude`` drops new pairs from the
-        export, ``promote`` moves pairs from the review list into it."""
+        export, ``promote`` moves pairs from the review list into it, and
+        ``edits`` (id → question and answer) rewrites new or promoted pairs.
+
+        An edited pair gets the id of its new content and loses its grounding
+        score, computed for the model's answer, not the reviewer's. Pairs
+        carried over from the published version are never edited here.
+        """
         excluded = set(exclude) & set(self.new_ids)
         promoted = [p for p in self.review if p.id in set(promote)]
         kept_new = [i for i in self.new_ids if i not in excluded]
+        editable = set(kept_new) | {p.id for p in promoted}
+        changes = {k: v for k, v in (edits or {}).items() if k in editable}
+        renamed: Dict[str, str] = {}
+
+        def apply(pair: QAPair) -> QAPair:
+            change = changes.get(pair.id or "")
+            if not change:
+                return pair
+            edited = replace(
+                pair,
+                question=change["question"].strip(),
+                answer=change["answer"].strip(),
+                grounding=None,
+            )
+            edited.id = pair_id(edited)
+            renamed[pair.id or ""] = edited.id
+            return edited
+
+        pairs: List[QAPair] = []
+        seen: Set[str] = set()
+        for pair in [p for p in self.pairs if p.id not in excluded] + promoted:
+            pair = apply(pair)
+            # An edit can turn a pair into another one's twin: keep the first.
+            if pair.id and pair.id in seen:
+                continue
+            seen.add(pair.id or "")
+            pairs.append(pair)
+        new_ids = [renamed.get(i, i) for i in kept_new]
+        new_ids += [renamed.get(p.id, p.id) for p in promoted if p.id]
         return QADataset(
-            pairs=[p for p in self.pairs if p.id not in excluded] + promoted,
+            pairs=pairs,
             dropped=self.dropped,
             errors=self.errors,
             kept=self.kept,
@@ -732,8 +780,16 @@ class QADataset:
             semantic_duplicates=self.semantic_duplicates,
             review=[p for p in self.review if p not in promoted],
             manifest=self.manifest,
-            new_ids=kept_new + [p.id for p in promoted if p.id],
+            new_ids=[i for i in dict.fromkeys(new_ids) if i in seen],
+            removed=self.removed,
         )
+
+
+def removed_pairs(previous: "PreviousState", dataset: QADataset) -> List[QAPair]:
+    """Pairs of the published version that the draft no longer holds, in
+    its pairs or in its review list."""
+    current = {p.id for p in dataset.pairs} | {p.id for p in dataset.review}
+    return [p for p in previous.pairs if p.id and p.id not in current]
 
 
 ProgressFn = Callable[[int, int, str], None]
@@ -819,6 +875,23 @@ def load_previous_state(api: Any, repo_id: str) -> PreviousState:
 
 
 @dataclass
+class Selection:
+    """What a dataset recipe feeds the generation, instead of everything.
+
+    ``overview_repos`` are the repos whose README and metadata are a source
+    (their overview call, their deterministic repo pairs); ``docs_by_repo``
+    holds the ``docs/`` files to generate from, already read.
+    """
+
+    include_profile: bool = True
+    overview_repos: Set[str] = field(default_factory=set)
+    docs_by_repo: Dict[str, List[RepoDoc]] = field(default_factory=dict)
+    # Selected repos that couldn't be read this time: their published pairs
+    # are carried over as they are, not dropped for a transient failure.
+    carry_over: Set[str] = field(default_factory=set)
+
+
+@dataclass
 class _Source:
     key: str
     text: str
@@ -852,7 +925,7 @@ def _grounding_for(
     by_text: Dict[Tuple[str, ...], Any] = {}
     scores: List[float] = []
     answers = embedder.embed([p.answer for p in pairs]) if pairs else []
-    for pair, answer_vector in zip(pairs, answers):
+    for pair, answer_vector in zip(pairs, answers, strict=True):
         keys = tuple(k for k in pair.sources if k in sources)
         if keys not in by_text:
             chunks = _chunks([sources[k].text for k in keys])
@@ -876,7 +949,8 @@ def _plan_tasks(
     tasks: List[_Task] = []
     for repo in repos:
         key = source_key(repo.name, "overview")
-        if sources[key].changed:
+        # A recipe may leave a repo's README out: then it has no overview.
+        if key in sources and sources[key].changed:
             tasks.append(_Task(repo, "overview", keys=[key]))
         changed_docs = [
             d
@@ -936,8 +1010,14 @@ async def build_qa_dataset(
     previous: Optional[PreviousState] = None,
     embedder: Optional[Embedder] = None,
     on_progress: Optional[ProgressFn] = None,
+    selection: Optional[Selection] = None,
 ) -> QADataset:
     """Build the next version of the dataset from ``previous`` (empty = full run).
+
+    Without a ``selection`` every repo with a description or a README is
+    processed, with its default ``docs/`` pick and the profile facts; with one
+    (a dataset recipe), exactly what it selects. Either way, previous pairs of
+    a source outside this run are dropped.
 
     1. Hash every source; an unchanged one keeps its pairs, with no LLM call.
        Pairs of repos gone from GitHub, or of docs removed from a repo, are
@@ -956,13 +1036,20 @@ async def build_qa_dataset(
     previous = previous or PreviousState()
     # Every public repo with something to say (a description or a README),
     # most-starred first — ``max_repos`` only trims that for a cheap test run.
+    # A recipe's repos are all taken: one may feed the dataset by its docs only.
     repos = sorted(
-        (r for r in snapshot.repos if r.description or r.readme),
+        (
+            r
+            for r in snapshot.repos
+            if selection is not None or r.description or r.readme
+        ),
         key=lambda r: r.stars,
         reverse=True,
     )[:max_repos]
     processed = {r.name for r in repos}
-    live = {r.name for r in snapshot.repos}
+    live = {r.name for r in snapshot.repos} | (
+        selection.carry_over if selection is not None else set()
+    )
     errors: List[str] = []
 
     async def docs_for(repo: RepoData) -> List[RepoDoc]:
@@ -974,13 +1061,22 @@ async def build_qa_dataset(
             max_chars=MAX_DOC_CHARS,
         )
 
-    fetched = await gather_limited(REPO_CONCURRENCY, [docs_for(r) for r in repos])
-    docs_by_repo = {repo.name: docs for repo, docs in zip(repos, fetched)}
+    if selection is None:
+        fetched = await gather_limited(REPO_CONCURRENCY, [docs_for(r) for r in repos])
+        docs_by_repo = {
+            repo.name: docs for repo, docs in zip(repos, fetched, strict=True)
+        }
+    else:
+        docs_by_repo = {r.name: selection.docs_by_repo.get(r.name, []) for r in repos}
+
+    def has_overview(repo: RepoData) -> bool:
+        return selection is None or repo.name in selection.overview_repos
 
     sources: Dict[str, _Source] = {}
     for repo in repos:
-        key = source_key(repo.name, "overview")
-        sources[key] = _Source(key, overview_context(repo))
+        if has_overview(repo):
+            key = source_key(repo.name, "overview")
+            sources[key] = _Source(key, overview_context(repo))
         for doc in docs_by_repo[repo.name]:
             key = source_key(repo.name, doc.path)
             sources[key] = _Source(key, doc.content)
@@ -1006,13 +1102,20 @@ async def build_qa_dataset(
 
     # Deterministic pairs go first in the sanitize pass and into the semantic
     # index, so an LLM rephrasing of "What is X?" is dropped as a duplicate.
-    profile = profile_pairs(snapshot.profile, len(snapshot.repos), snapshot.repos)
-    profile += [p for repo in snapshot.repos for p in repo_pairs(repo)]
+    profile = (
+        profile_pairs(snapshot.profile, len(snapshot.repos), snapshot.repos)
+        if selection is None or selection.include_profile
+        else []
+    )
+    profile += [
+        p for repo in snapshot.repos if has_overview(repo) for p in repo_pairs(repo)
+    ]
     review: List[QAPair] = []
 
     def prepare() -> Tuple[SemanticIndex, List[_Task]]:
         if embedder is not None and recheck:
-            for pair, score in zip(recheck, _grounding_for(embedder, recheck, sources)):
+            scores = _grounding_for(embedder, recheck, sources)
+            for pair, score in zip(recheck, scores, strict=True):
                 pair.grounding = score
                 if score >= config.answer_grounding_threshold:
                     kept.append(pair)
@@ -1028,7 +1131,7 @@ async def build_qa_dataset(
         return index, _plan_tasks(repos, docs_by_repo, sources, index, embedder)
 
     carried = len(kept)
-    index, tasks = await asyncio.to_thread(prepare)
+    index, tasks = await cpu_bound(prepare)  # embeddings: the CPU pool
     logger.info(
         "%d source(s) changed of %d; %d pair(s) carried over, %d re-checked "
         "(%d to review), %d LLM call(s) to make",
@@ -1090,7 +1193,7 @@ async def build_qa_dataset(
         accepted: List[QAPair] = []
         vectors = embedder.embed([p.question for p in fresh])
         grounding = _grounding_for(embedder, fresh, sources)
-        for pair, vector, score in zip(fresh, vectors, grounding):
+        for pair, vector, score in zip(fresh, vectors, grounding, strict=True):
             match = find_semantic_duplicate(
                 vector, index, config.semantic_dedup_threshold
             )
@@ -1114,7 +1217,7 @@ async def build_qa_dataset(
             accepted.append(pair)
         return accepted
 
-    accepted = await asyncio.to_thread(screen)
+    accepted = await cpu_bound(screen)  # embeddings: the CPU pool
 
     # A failed call's sources keep their previous hash (or none), so the next
     # run retries them instead of believing them up to date.
@@ -1388,9 +1491,27 @@ class Draft:
             "new": self.dataset.new,
             "semantic_duplicates": self.dataset.semantic_duplicates,
             "review": len(self.dataset.review),
+            "removed": len(self.dataset.removed),
             "full_refresh": self.full_refresh,
             "model": self.model_ref,
         }
+
+
+def _model_for(
+    creds: Credentials, model_ref: Optional[str], complete: Optional[CompletionFn]
+) -> Tuple[str, str]:
+    """``(model_ref, model)``, checked usable before anything is spent."""
+    model_ref = model_ref or config.qa_job_model
+    provider_name, model = parse_ref(model_ref)
+    try:
+        provider = get_provider(provider_name)
+    except ProviderError as exc:
+        raise JobError(str(exc)) from exc
+    if complete is None and not provider.configured(creds):
+        raise JobError(
+            f"{' or '.join(provider.missing(creds))} is required to run {model_ref}"
+        )
+    return model_ref, model
 
 
 async def generate(
@@ -1422,16 +1543,7 @@ async def generate(
     username = creds.github_username
     if not username:
         raise JobError("Your GitHub username is required (set it in Settings)")
-    model_ref = model_ref or config.qa_job_model
-    provider_name, model = parse_ref(model_ref)
-    try:
-        provider = get_provider(provider_name)
-    except ProviderError as exc:
-        raise JobError(str(exc)) from exc
-    if complete is None and not provider.configured(creds):
-        raise JobError(
-            f"{' or '.join(provider.missing(creds))} is required to run {model_ref}"
-        )
+    model_ref, model = _model_for(creds, model_ref, complete)
 
     repo_id = creds.hf_qa_repo
     if require_hub:
@@ -1492,6 +1604,134 @@ async def generate(
         await client.close()
     for err in dataset.errors:
         logger.warning("non-fatal: %s", err)
+    dataset.removed = removed_pairs(previous, dataset)
+    return Draft(dataset, username, repo_id, full_refresh, model_ref)
+
+
+async def generate_from_recipe(
+    creds: Credentials,
+    recipe: Dict[str, Any],
+    *,
+    full_refresh: bool = False,
+    model_ref: Optional[str] = None,
+    complete: Optional[CompletionFn] = None,
+    on_progress: Optional[ProgressFn] = None,
+) -> Draft:
+    """The next version of a recipe's dataset, without publishing it.
+
+    Like :func:`generate`, on what the recipe selects (services/recipes.py):
+    its repos — each with its README and metadata or not, and its chosen
+    ``docs/`` files (``None``: the default pick) — and the profile facts or
+    not, incrementally against the recipe's target repo. The Hugging Face
+    token is checked before any model usage is spent.
+    """
+    username = creds.github_username
+    if not username:
+        raise JobError("Your GitHub username is required (set it in Settings)")
+    chosen = [s for s in recipe.get("sources") or [] if isinstance(s, dict)]
+    include_profile = bool(recipe.get("include_profile", True))
+    if not chosen and not include_profile:
+        raise JobError("This recipe selects nothing: add a repo or the profile facts")
+    model_ref, model = _model_for(creds, model_ref, complete)
+
+    if not creds.has(HF_TOKEN):
+        raise JobError("Your Hugging Face token is required (add it in Settings)")
+    from server.services.huggingface import (
+        HuggingFaceNotConfiguredError,
+        _api,
+        qualify_repo_id,
+    )
+
+    try:
+        await asyncio.to_thread(_api(creds).whoami)
+    except Exception as exc:
+        raise JobError(f"Hugging Face rejected your token: {exc}") from exc
+    try:
+        repo_id = await asyncio.to_thread(
+            qualify_repo_id, creds, str(recipe["target_repo"])
+        )
+    except HuggingFaceNotConfiguredError as exc:
+        raise JobError(str(exc)) from exc
+
+    if full_refresh:
+        logger.info("full refresh: ignoring the previously published version")
+        previous = PreviousState()
+    else:
+        previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
+    embedder = await asyncio.to_thread(get_local_embedder)
+    complete = complete or provider_completion(model_ref, creds)
+
+    client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
+
+    async def read(
+        source: Dict[str, Any],
+    ) -> Tuple[Optional[RepoData], List[RepoDoc], List[str]]:
+        name = str(source.get("repo") or "")
+        try:
+            repo = await client.fetch_repo(username, name)
+        except (GitHubAPIError, httpx.HTTPError) as exc:
+            return None, [], [f"{name}: {exc}"]
+        docs = source.get("docs")
+        if docs is None:
+            found = await fetch_repo_docs(
+                client,
+                username,
+                repo.name,
+                limit=MAX_DOCS_PER_REPO,
+                max_chars=MAX_DOC_CHARS,
+            )
+            return repo, found, []
+        found, errors = await fetch_docs_by_path(
+            client, username, repo.name, list(docs), MAX_DOC_CHARS
+        )
+        return repo, found, errors
+
+    try:
+        profile = await client.fetch_profile(username) if include_profile else None
+        results = await gather_limited(REPO_CONCURRENCY, [read(s) for s in chosen])
+        published = {p.repo.lower(): p.repo for p in previous.pairs if p.repo}
+        selection = Selection(include_profile=include_profile)
+        repos: List[RepoData] = []
+        errors: List[str] = []
+        for source, (repo, docs, problems) in zip(chosen, results, strict=True):
+            errors += problems
+            if repo is None:
+                name = str(source.get("repo") or "")
+                selection.carry_over.add(published.get(name.lower(), name))
+                continue
+            repos.append(repo)
+            selection.docs_by_repo[repo.name] = docs
+            if source.get("readme", True):
+                selection.overview_repos.add(repo.name)
+        snapshot = GitHubSnapshot(
+            username=username,
+            profile=profile,
+            repos=repos,
+            fetched_at=datetime.now(timezone.utc).isoformat(),
+        )
+        logger.info(
+            "recipe %r: %d repo(s), profile %s, generating with %s…",
+            recipe.get("name"),
+            len(repos),
+            "on" if include_profile else "off",
+            model,
+        )
+        dataset = await build_qa_dataset(
+            client,
+            snapshot,
+            complete,
+            model,
+            previous=previous,
+            embedder=embedder,
+            on_progress=on_progress,
+            selection=selection,
+        )
+    finally:
+        await client.close()
+    dataset.errors = errors + dataset.errors
+    for err in dataset.errors:
+        logger.warning("non-fatal: %s", err)
+    dataset.removed = removed_pairs(previous, dataset)
     return Draft(dataset, username, repo_id, full_refresh, model_ref)
 
 

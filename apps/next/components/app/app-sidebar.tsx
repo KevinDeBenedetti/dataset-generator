@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useDatasets, useHubDatasets } from '@/hooks'
+import { useCollections, useDatasets, useDrafts, useHubDatasets } from '@/hooks'
 import { useCurrentUser, useLogout } from '@/hooks/use-auth'
 import { cn, initialsFor } from '@/lib/utils'
 import pkg from '@/package.json'
@@ -28,7 +28,9 @@ const NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
       { icon: 'database', label: 'Datasets', href: '/datasets' },
+      { icon: 'boxes', label: 'Collections', href: '/collections' },
       { icon: 'fileText', label: 'Drafts', href: '/drafts' },
+      { icon: 'github', label: 'GitHub', href: '/github' },
       { icon: 'sparkles', label: 'Generate', href: '/generate' },
       { icon: 'activity', label: 'Jobs', href: '/jobs' },
     ],
@@ -53,12 +55,17 @@ export function AppSidebar() {
 
   // Published datasets live on Hugging Face, drafts in the app: each badge
   // uses the same query (and cache) as its page, so the counts always agree.
-  const { data: drafts } = useDatasets()
+  const { data: localDrafts } = useDatasets()
+  const { data: toReview } = useDrafts()
   const { data: hfData, isPending: hfPending, error: hfError } = useHubDatasets()
+  const { data: vectorData } = useCollections()
+  const draftCount = (localDrafts?.length ?? 0) + (toReview?.drafts.length ?? 0)
+  const collectionCount = vectorData?.collections.length ?? 0
 
   const counts: Record<string, string | undefined> = {
     '/datasets': hfData ? String(hfData.total) : undefined,
-    '/drafts': drafts?.length ? String(drafts.length) : undefined,
+    '/collections': collectionCount ? String(collectionCount) : undefined,
+    '/drafts': draftCount ? String(draftCount) : undefined,
   }
 
   // Hugging Face connection status: no token reads as "Off" rather than being
