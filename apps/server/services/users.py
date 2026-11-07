@@ -7,7 +7,11 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from server.core.config import config
-from server.core.security import hash_password
+from server.core.security import (
+    MAX_PASSWORD_BYTES,
+    hash_password,
+    password_too_long,
+)
 from server.models.user import User, UserRole, AuthProvider
 
 
@@ -108,6 +112,12 @@ def seed_dev_users(
                 "(development only; set %s to override)",
                 spec["email"],
                 spec["password_env"],
+            )
+        if password_too_long(password):
+            raise RuntimeError(
+                f"{spec['password_env']} is longer than {MAX_PASSWORD_BYTES} bytes "
+                f"(UTF-8): bcrypt would ignore the rest. Choose a shorter password "
+                f"to seed {spec['email']}."
             )
         create_user(
             db,

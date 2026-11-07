@@ -12,8 +12,10 @@ import pytest
 from sqlalchemy.orm import Session
 
 from server.main import create_app
+from server.models.dataset_recipe import DatasetRecipe
 from server.models.job_run import JobRun
 from server.models.user import User, UserRole
+from server.models.vector_collection import VectorCollection
 from server.services.datasets import (
     get_dataset_view,
     list_datasets_view,
@@ -23,6 +25,8 @@ from server.services.users import create_user
 
 SECRET = "bobs-secret"
 RUN_ID = "run-of-bob"
+RECIPE_ID = "recipe-of-bob"
+COLLECTION_ID = "collection-of-bob"
 
 
 def _item(id_, question):
@@ -51,6 +55,7 @@ def bob(test_db: Session) -> User:
 def _one_database(monkeypatch, datasets_db):
     """Job runs and collections open their own sessions: same test database."""
     monkeypatch.setattr("server.services.jobs.get_scoped_db", datasets_db)
+    monkeypatch.setattr("server.services.collections.get_scoped_db", datasets_db)
 
 
 @pytest.fixture
@@ -70,6 +75,33 @@ def bobs_data(bob, test_db, datasets_db):
             options={},
         )
     )
+    test_db.add(
+        DatasetRecipe(
+            id=RECIPE_ID,
+            owner_id=bob.id,
+            name=SECRET,
+            target_repo="bob/qa",
+            sources=[{"repo": "bobs-repo", "readme": True, "docs": None}],
+        )
+    )
+    test_db.add(
+        VectorCollection(
+            id=COLLECTION_ID,
+            owner_id=bob.id,
+            name=SECRET,
+            repo_id="bob/qa",
+            revision="a" * 40,
+            config_name="default",
+            split="train",
+            text_columns=["answer"],
+            query_column="question",
+            model="sentence-transformers/all-MiniLM-L6-v2",
+            status="ready",
+            rows_total=1,
+            points_count=1,
+            fields=["answer", "question"],
+        )
+    )
     test_db.commit()
 
 
@@ -86,14 +118,24 @@ _RESOURCE_ROUTES = {
         "params": {"repo_id": "someone/repo"}
     },
     ("DELETE", "/dataset/{dataset_name}"): {},
-    ("POST", "/collections/{dataset_name}/qdrant"): {},
-    ("POST", "/collections/{dataset_name}/search"): {"json": {"query": "bob"}},
     ("GET", "/q_a/{dataset_name}"): {},
     ("GET", "/q_a/{dataset_name}/stats"): {},
     ("POST", "/q_a/{dataset_name}/score"): {},
     ("GET", "/jobs/runs/{run_id}"): {},
+    ("GET", "/jobs/runs/{run_id}/checks"): {},
     ("POST", "/jobs/runs/{run_id}/publish"): {"json": {}},
     ("POST", "/jobs/runs/{run_id}/cancel"): {},
+    ("GET", "/recipes/{recipe_id}"): {},
+    ("PUT", "/recipes/{recipe_id}"): {
+        "json": {"name": "mine", "target_repo": "alice/qa"}
+    },
+    ("DELETE", "/recipes/{recipe_id}"): {},
+    ("POST", "/recipes/{recipe_id}/run"): {"json": {}},
+    ("GET", "/collections/{collection_id}"): {},
+    ("POST", "/collections/{collection_id}/build"): {"json": {}},
+    ("DELETE", "/collections/{collection_id}"): {},
+    ("POST", "/collections/{collection_id}/search"): {"json": {"query": "anything"}},
+    ("POST", "/collections/{collection_id}/evaluate"): {"json": {}},
 }
 
 # Routes without a per-user resource in the path: they are either public,
@@ -121,9 +163,21 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/hub/datasets/{owner}/{name}/statistics"),
     ("GET", "/hub/datasets/{owner}/{name}/commits"),
     ("GET", "/hub/datasets/{owner}/{name}/compare"),
+    # GitHub browse: public data of the GitHub account saved in the caller's own
+    # Settings, read from GitHub on every call — nothing stored per user.
+    ("GET", "/github/profile"),
+    ("GET", "/github/repos"),
+    ("GET", "/github/repos/{owner}/{repo}"),
+    ("GET", "/github/repos/{owner}/{repo}/doc"),
+    # Your own recipes: the list and a new one are the caller's by construction.
+    ("GET", "/recipes"),
+    ("POST", "/recipes"),
+    # Your own collections: the list and a new one (built from a Hub dataset
+    # read with your own token) are the caller's by construction.
+    ("GET", "/collections"),
+    ("POST", "/collections"),
     ("POST", "/dataset/generate/file"),
     ("POST", "/dataset/generate/url"),
-    ("GET", "/collections"),
     ("GET", "/quality-rules"),
     ("PUT", "/quality-rules"),
     ("GET", "/prompts"),
@@ -132,6 +186,7 @@ _NOT_RESOURCE_ROUTES = {
     ("POST", "/models/test"),
     ("POST", "/agent/qa-test"),
     ("GET", "/jobs"),
+    ("GET", "/jobs/drafts"),
     # Your own keys and settings: always the caller's, addressed by kind not id.
     ("GET", "/me/secrets"),
     ("PUT", "/me/secrets/{kind}"),
@@ -165,6 +220,15 @@ _NOT_RESOURCE_ROUTES = {
 _SKIPPED_METHODS = {"HEAD", "OPTIONS"}
 
 
+def _path(template):
+    return template.format(
+        dataset_name=SECRET,
+        run_id=RUN_ID,
+        recipe_id=RECIPE_ID,
+        collection_id=COLLECTION_ID,
+    )
+
+
 def _routes(app):
     """Every (METHOD, path) the app serves, read from its OpenAPI schema.
 
@@ -191,7 +255,12 @@ def test_every_route_is_classified():
     )
     # A route that takes a resource id must be walked, not exempted.
     for method, path in _NOT_RESOURCE_ROUTES:
-        assert not re.search(r"\{(dataset_name|run_id)\}", path), (method, path)
+        assert not re.search(
+            r"\{(dataset_name|run_id|recipe_id|collection_id)\}", path
+        ), (
+            method,
+            path,
+        )
     # ...and the tables must not name routes that no longer exist.
     stale = (set(_RESOURCE_ROUTES) | _NOT_RESOURCE_ROUTES) - _routes(create_app())
     assert not stale, f"Stale entries: {sorted(stale)}"
@@ -204,7 +273,7 @@ def test_another_users_resource_looks_like_it_does_not_exist(
     route, alice, bobs_data, client_for
 ):
     method, template = route
-    path = template.format(dataset_name=SECRET, run_id=RUN_ID)
+    path = _path(template)
 
     response = client_for(alice).request(method, path, **_RESOURCE_ROUTES[route])
 
@@ -214,24 +283,29 @@ def test_another_users_resource_looks_like_it_does_not_exist(
 
 
 def test_nothing_of_bob_changed_after_alice_tried_everything(
-    alice, bob, bobs_data, client_for
+    alice, bob, bobs_data, client_for, test_db
 ):
     alice_client = client_for(alice)
     for (method, template), kwargs in _RESOURCE_ROUTES.items():
-        path = template.format(dataset_name=SECRET, run_id=RUN_ID)
+        path = _path(template)
         alice_client.request(method, path, **kwargs)
 
     detail = get_dataset_view(bob.id, SECRET)
     assert detail is not None
     assert [d["name"] for d in list_datasets_view(bob.id)] == [SECRET]
     assert list_datasets_view(alice.id) == []
+    recipe = test_db.get(DatasetRecipe, RECIPE_ID)
+    assert recipe is not None and recipe.name == SECRET
+    assert recipe.target_repo == "bob/qa"
+    collection = test_db.get(VectorCollection, COLLECTION_ID)
+    assert collection is not None and collection.name == SECRET
+    assert collection.status == "ready" and collection.revision == "a" * 40
 
 
 def test_listings_only_show_your_own_data(alice, bob, bobs_data, client_for):
     assert client_for(alice).get("/dataset").json() == []
     names = [d["name"] for d in client_for(bob).get("/dataset").json()]
     assert names == [SECRET]
-    assert client_for(alice).get("/collections").json()["collections"] == []
 
 
 def test_two_users_can_use_the_same_dataset_name_through_the_api(

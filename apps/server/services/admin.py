@@ -208,11 +208,12 @@ def update_user(
 
 def delete_account(
     db: Session, user: User, actor: Optional[User] = None, ip=None
-) -> int:
-    """Delete ``user`` and everything they own (cascade), then their Qdrant
-    collections. Returns how many collections were dropped. Hugging Face repos
-    they published are theirs and stay."""
-    from server.services.qdrant import default_collection_name, delete_collection
+) -> None:
+    """Delete ``user`` and everything they own (cascade), then the Qdrant
+    collections of their vector collections. Hugging Face repos they published
+    are theirs and stay."""
+    from server.services.collections import qdrant_names
+    from server.services.qdrant import drop
 
     if is_locked_admin(user):
         raise AdminError(
@@ -224,29 +225,24 @@ def delete_account(
         and _other_active_admins(db, user) == 0
     ):
         raise AdminError("This is the last active admin.")
-    collections = [
-        default_collection_name(d.id, d.qdrant_collection)
-        for d in db.scalars(select(Dataset).where(Dataset.owner_id == user.id))
-    ]
+    datasets = db.scalar(
+        select(func.count()).select_from(Dataset).where(Dataset.owner_id == user.id)
+    )
+    vectors = qdrant_names(db, user.id)
     audit.record(
         db,
         "user.deleted",
         actor=actor or user,
         target=user,
         ip=ip,
-        detail={"datasets": len(collections), "self": actor is None},
+        detail={"datasets": datasets or 0, "self": actor is None},
         commit=False,
     )
     db.flush()
     db.delete(user)
     db.commit()
-    dropped = 0
-    for name in collections:
-        try:
-            dropped += 1 if delete_collection(name) else 0
-        except Exception as exc:  # noqa: BLE001 — the account is gone either way
-            logger.warning("Could not drop Qdrant collection %s: %s", name, exc)
-    return dropped
+    for name in vectors:  # best effort: the account is gone either way
+        drop(name)
 
 
 def delete_user(db: Session, actor: User, user_id: str, ip=None) -> None:

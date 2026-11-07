@@ -133,6 +133,66 @@ def test_get_local_embedder_is_shared(monkeypatch, fresh_loader):
     assert semantic.get_local_embedder() is semantic.get_local_embedder()
 
 
+# --- the models of the vector collections ------------------------------------
+
+
+@pytest.fixture
+def collection_loader(monkeypatch, fresh_loader):
+    """Fake models, recorded by name; the loaded ones start empty."""
+    loaded = []
+
+    def load(name, cache_dir=None):
+        loaded.append(name)
+        model = FakeEmbedder()
+        model.model_name = name
+        return model
+
+    monkeypatch.setattr(semantic, "LocalEmbedder", load)
+    monkeypatch.setattr(semantic, "_loaded", semantic.OrderedDict())
+    return loaded
+
+
+def test_a_collection_model_loads_once_and_two_stay_loaded(collection_loader):
+    first = semantic.get_collection_embedder("a/one")
+    assert semantic.get_collection_embedder("a/one") is first
+    semantic.get_collection_embedder("a/two")
+    semantic.get_collection_embedder("a/three")  # a third: "a/one", least recent, goes
+
+    assert semantic.get_collection_embedder("a/three").model_name == "a/three"
+    semantic.get_collection_embedder("a/one")
+    assert collection_loader == ["a/one", "a/two", "a/three", "a/one"]
+
+
+def test_the_duplicate_checks_model_is_shared_with_the_collections(
+    monkeypatch, collection_loader
+):
+    shared = FakeEmbedder()
+    monkeypatch.setattr(semantic, "_embedder", shared)
+
+    assert semantic.get_collection_embedder(semantic.config.semantic_model) is shared
+    assert collection_loader == []
+
+
+def test_a_collection_model_that_can_not_load_says_why(monkeypatch, fresh_loader):
+    def broken(*args, **kwargs):
+        raise OSError("no network")
+
+    monkeypatch.setattr(semantic, "LocalEmbedder", broken)
+    with pytest.raises(semantic.EmbeddingModelError, match="FASTEMBED_CACHE_PATH"):
+        semantic.get_collection_embedder("BAAI/bge-small-en-v1.5")
+
+
+def test_the_collection_models_put_the_deployments_own_first(monkeypatch):
+    names = [m.name for m in semantic.collection_models()]
+    assert names[0] == semantic.config.semantic_model
+    assert len(names) == len(set(names)) == len(semantic.COLLECTION_MODELS)
+
+    monkeypatch.setattr(semantic.config, "semantic_model", "intfloat/custom")
+    custom = semantic.collection_models()
+    assert custom[0].name == "intfloat/custom" and custom[0].dimensions is None
+    assert len(custom) == len(semantic.COLLECTION_MODELS) + 1
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(
     not os.environ.get("SEMANTIC_TEST_MODEL"),

@@ -42,7 +42,7 @@ jobs:
     needs: security
     uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
     with:
-      python-version: "3.13"
+      python-version: "3.14"
       working-directory: "."
       run-lint: true
       run-format: true
@@ -56,7 +56,7 @@ jobs:
     needs: security
     uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
     with:
-      node-version: "22.20.0"
+      node-version: "24.22.2"
       working-directory: apps/next
       package-manager: bun
       run-lint: true
@@ -80,9 +80,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           enable-cache: true
       - run: uv sync --locked
       # Dumps the schema straight from the app (no server to boot) and diffs.
@@ -103,6 +103,11 @@ jobs:
       issues: write
     uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
     with:
+      # The config's extra-files keep pyproject.toml, apps/next/package.json,
+      # apps/server/main.py and the committed OpenAPI schema (its info.version) on
+      # the released version — and uv.lock's own entry for the project, so
+      # `uv sync --locked` and the schema-drift check still pass once the release
+      # PR lands.
       config-file: .github/release/release-please-config-release.json
       manifest-file: .github/release/.release-please-manifest.json
     # No token secret: release-please runs on GITHUB_TOKEN (needs "Allow GitHub
@@ -120,6 +125,8 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: ./.github/workflows/images.yml
+    # `$/…`, GitHub's self-repository form, is what zizmor asks for, but actionlint
+    # 1.7.12 rejects it still: the workspace form stays until actionlint knows it.
+    uses: ./.github/workflows/images.yml # zizmor: ignore[self-repository]
     with:
       tag: ${{ needs.release.outputs.tag }}

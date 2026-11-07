@@ -1,50 +1,28 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { DatasetGenerate, Result, GenerationTimeline, RecentRuns } from '@/components/dataset'
 import { useGenerateStore } from '@/stores/generate'
-import { useDatasets } from '@/hooks'
 
 function GenerateContent() {
-  const { refetch } = useDatasets()
-
-  // `?dataset=<name>` means "add a source to this dataset" (the CTA on the
-  // dataset detail page): generating with an existing name appends to it —
-  // new pairs are deduplicated against the existing ones and recorded as the
-  // next version.
+  // `?target=<owner/name>` pre-fills the Hugging Face dataset the draft adds
+  // to (the "Add data" button of a dataset page).
   const searchParams = useSearchParams()
-  const presetDataset = searchParams.get('dataset') ?? ''
-
+  const presetTarget = searchParams.get('target') ?? ''
   const dataset = useGenerateStore((state) => state.dataset)
   const generationStatus = useGenerateStore((state) => state.generationStatus)
   const liveSteps = useGenerateStore((state) => state.liveSteps)
-
-  useEffect(() => {
-    refetch()
-  }, [refetch])
+  const draftId = dataset && 'draft_run_id' in dataset ? dataset.draft_run_id : null
 
   return (
     <section className="max-w-3xl mx-auto flex flex-col gap-4 p-4">
       <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">
-        {presetDataset ? `Add a source to ${presetDataset}` : 'Generate a dataset'}
+        {presetTarget ? `Add data to ${presetTarget}` : 'Generate a dataset'}
       </h1>
 
-      {presetDataset && (
-        <p className="text-center text-sm text-muted-foreground -mt-2">
-          The new pairs are appended to{' '}
-          <Link
-            href={`/drafts/${encodeURIComponent(presetDataset)}`}
-            className="underline font-medium"
-          >
-            {presetDataset}
-          </Link>{' '}
-          as a new version.
-        </p>
-      )}
-
-      <DatasetGenerate initialDatasetName={presetDataset} />
+      <DatasetGenerate initialTarget={presetTarget} />
 
       {generationStatus === 'pending' && liveSteps.length > 0 && (
         <GenerationTimeline steps={liveSteps} />
@@ -52,6 +30,20 @@ function GenerateContent() {
 
       {generationStatus === 'success' && dataset && 'steps' in dataset && (
         <GenerationTimeline steps={dataset.steps ?? []} scrapedContent={dataset.scraped_content} />
+      )}
+
+      {generationStatus === 'success' && draftId && (
+        <div className="rounded-lg border p-4 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm">
+            Draft ready: review the pairs before they go to Hugging Face.
+          </span>
+          <Link
+            href={`/drafts/runs/${draftId}`}
+            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Review the draft
+          </Link>
+        </div>
       )}
 
       {generationStatus === 'success' && dataset && (

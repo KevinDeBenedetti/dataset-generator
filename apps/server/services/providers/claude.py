@@ -41,6 +41,13 @@ from server.services.providers.base import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+# Models the catalogue moved on from, and what a reference to one means now: a
+# role default saved on them keeps working (``registry.normalize_ref``) instead
+# of answering "Unknown model" until its owner picks a new one.
+RETIRED_MODELS = {
+    "claude-sonnet-5": "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001": "claude-haiku-5-5",
+}
 
 
 # Backstop for a CLI that would ignore ``tools=[]``: a completion needs none.
@@ -200,8 +207,9 @@ class ClaudeProvider:
         try:
             config_dir = Path(scratch, "config")
             workdir = Path(scratch, "cwd")
-            config_dir.mkdir(mode=0o700)
-            workdir.mkdir(mode=0o700)
+            # Two empty directories in a fresh temp tree: not worth a thread.
+            config_dir.mkdir(mode=0o700)  # noqa: ASYNC240
+            workdir.mkdir(mode=0o700)  # noqa: ASYNC240
             options = ClaudeAgentOptions(
                 model=model,
                 system_prompt=req.system or None,

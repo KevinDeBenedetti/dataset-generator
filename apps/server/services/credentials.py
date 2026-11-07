@@ -23,10 +23,10 @@ from server.core.config import _env, config
 
 # Secret kinds (the ``kind`` of a ``user_secrets`` row) and what each one is.
 OPENAI_API_KEY = "openai_api_key"
-CLAUDE_TOKEN = "claude_token"
+CLAUDE_TOKEN = "claude_token"  # noqa: S105 — a kind's name, not a value
 ANTHROPIC_API_KEY = "anthropic_api_key"
-HF_TOKEN = "hf_token"
-GITHUB_TOKEN = "github_token"
+HF_TOKEN = "hf_token"  # noqa: S105 — a kind's name, not a value
+GITHUB_TOKEN = "github_token"  # noqa: S105 — a kind's name, not a value
 
 SECRET_KINDS = (OPENAI_API_KEY, CLAUDE_TOKEN, ANTHROPIC_API_KEY, HF_TOKEN, GITHUB_TOKEN)
 # Kinds whose last four characters are safe to show ("…sk-…a1b2"). An OAuth

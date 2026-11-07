@@ -32,10 +32,13 @@ Thumbs.db
 **/*.sqlite
 **/*.sqlite3
 
-# Env — never bake secrets into an image layer (only the template is kept).
-.env
-.env.*
-!.env.example
+# Env — never bake secrets into an image layer (only the template is kept),
+# at any depth: COPY ./apps/server would otherwise take an apps/server/.env.
+**/.env*
+!**/.env.example
+
+# Agent state (worktrees, settings) — never part of an image.
+.claude/
 
 # Apps non nécessaires pour le server
 apps/next

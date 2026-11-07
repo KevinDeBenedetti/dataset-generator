@@ -162,7 +162,8 @@ def _stream_of(response: StreamingResponse) -> AsyncGenerator[str | bytes, None]
 
 
 async def _next_chunk(
-    iterator: AsyncGenerator[str | bytes, None], timeout: float = 5.0
+    iterator: AsyncGenerator[str | bytes, None],
+    timeout: float = 5.0,  # noqa: ASYNC109 — a test helper's deadline
 ) -> str:
     """Pull one SSE chunk, failing the test rather than hanging forever."""
     chunk = await asyncio.wait_for(anext(iterator), timeout)

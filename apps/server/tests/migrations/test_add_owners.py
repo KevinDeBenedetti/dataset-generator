@@ -116,7 +116,8 @@ def _seed_legacy(engine):
 
 def _owners(engine, table, column="owner_id"):
     with engine.connect() as conn:
-        return set(conn.execute(text(f"SELECT {column} FROM {table}")).scalars())
+        query = f"SELECT {column} FROM {table}"  # noqa: S608 — fixed identifiers
+        return set(conn.execute(text(query)).scalars())
 
 
 def test_without_an_admin_legacy_rows_go_to_an_inactive_system_user(

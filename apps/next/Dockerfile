@@ -4,7 +4,8 @@
 # Stage: base
 # Common base configuration
 # =============================================================================
-FROM oven/bun:1-slim AS base
+# Pinned by tag and digest (dependabot bumps both).
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS base
 
 WORKDIR /app
 
@@ -30,7 +31,7 @@ FROM base AS dev
 ARG APP_PORT=3000
 ENV NODE_ENV=development
 
-# Install only openssl (nodejs is already in bun:1-slim)
+# Install only openssl (nodejs is already in the bun slim image)
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl curl \
     && rm -rf /var/lib/apt/lists/*
@@ -74,7 +75,7 @@ RUN bun run build
 # Stage: prod
 # Plain Node (no bun, no sources, no devDependencies), non-root.
 # =============================================================================
-FROM node:22-slim AS prod
+FROM node:24-slim AS prod
 
 ARG APP_PORT=3000
 ENV NODE_ENV=production \
@@ -84,7 +85,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Debian security updates not yet folded into the node:22-slim tag (e.g.
+# Debian security updates not yet folded into the node:24-slim tag (e.g.
 # perl-base CVE-2026-13221/-42496/-8376, CRITICAL in Trivy): apply them here
 # rather than wait for an upstream rebuild.
 RUN apt-get update \
@@ -93,6 +94,8 @@ RUN apt-get update \
 
 COPY --from=builder --chown=1000:1000 /app/.next/standalone ./
 COPY --from=builder --chown=1000:1000 /app/.next/static ./.next/static
+# public/ is empty today (its .gitkeep keeps the directory): still copied, so an
+# asset added later ships without touching this file.
 COPY --from=builder --chown=1000:1000 /app/public ./public
 
 # Numeric: Kubernetes' runAsNonRoot can only verify a numeric uid (node = 1000).

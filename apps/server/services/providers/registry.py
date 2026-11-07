@@ -22,7 +22,7 @@ from server.services.providers.base import (
     make_ref,
     parse_ref,
 )
-from server.services.providers.claude import ClaudeProvider
+from server.services.providers.claude import RETIRED_MODELS, ClaudeProvider
 from server.services.providers.openai import OpenAIProvider
 
 logger = logging.getLogger(__name__)
@@ -41,9 +41,17 @@ def get_provider(name: str) -> Provider:
 
 
 def normalize_ref(ref: str) -> str:
-    """Always the prefixed form: a bare ``gpt-4o`` becomes ``openai:gpt-4o``."""
+    """Always the prefixed form: a bare ``gpt-4o`` becomes ``openai:gpt-4o`` —
+    and a model the catalogue moved on from, its successor."""
     provider, model = parse_ref(ref)
-    return make_ref(provider, model)
+    return make_ref(provider, _successor(provider, model))
+
+
+def _successor(provider: str, model: str) -> str:
+    """``model``, or what replaced it (``claude.RETIRED_MODELS``)."""
+    if provider == "claude":
+        return RETIRED_MODELS.get(model, model)
+    return model
 
 
 def validate_ref(ref: str, creds: Credentials) -> str:
@@ -51,6 +59,7 @@ def validate_ref(ref: str, creds: Credentials) -> str:
     provider_name, model = parse_ref(ref)
     if not model:
         raise ValueError(f"Model reference '{ref}' has no model id")
+    model = _successor(provider_name, model)
     provider = get_provider(provider_name)
     if provider_name == "claude" and not config.claude_provider_available:
         raise ValueError(

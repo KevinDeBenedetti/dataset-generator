@@ -5,13 +5,13 @@ response and the parsed QA pairs, so the agent can be validated without running
 the full scrape/clean pipeline.
 """
 
-import logging
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from server.api.errors import internal_error
 from server.models.user import User
 from server.api.deps import get_credentials
 from server.services.agent import QAAgentService
@@ -24,7 +24,12 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 class QAAgentTestRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="Source text to feed the agent")
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=20_000,
+        description="Source text to feed the agent",
+    )
     target_language: Optional[str] = Field(
         None, description="Target language (defaults to server config)"
     )
@@ -64,7 +69,9 @@ async def qa_agent_test(
             )
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
     service = QAAgentService(creds)
     try:
@@ -73,11 +80,7 @@ async def qa_agent_test(
             target_language=request.target_language,
             model=model,
         )
-    except Exception as exc:  # pragma: no cover - defensive
-        logging.exception("QA agent test failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent run failed: {exc}",
-        )
+    except Exception:  # pragma: no cover - defensive
+        raise internal_error("The agent run") from None
 
     return QAAgentTestResponse(ok=result["count"] > 0, **result)

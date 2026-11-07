@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-import logging
 from typing import Optional
 
+from server.api.errors import internal_error
 from server.models.user import User
 from server.api.deps import get_credentials
 from server.services.auth import get_current_user
@@ -36,10 +36,9 @@ def get_qa_stats(
             **get_qa_stats_view(user.id, dataset_name, score_threshold=score_threshold)
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error computing Q&A stats for '{dataset_name}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Computing the Q&A stats of {dataset_name}") from None
 
 
 @router.post(
@@ -68,7 +67,7 @@ async def score_qa(
         try:
             model = validate_ref(model, creds)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
     try:
         return QAScoreResponse(
             **await score_dataset(
@@ -80,12 +79,11 @@ async def score_qa(
             )
         )
     except ScoringNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error scoring Q&A for '{dataset_name}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Scoring the Q&A of {dataset_name}") from None
 
 
 @router.get("/{dataset_name}", response_model=QAListResponse)
@@ -103,7 +101,6 @@ def get_qa_by_dataset(
             **get_qa_view(user.id, dataset_name, limit=limit, offset=offset or 0)
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error fetching Q&A for dataset '{dataset_name}': {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Reading the Q&A of {dataset_name}") from None

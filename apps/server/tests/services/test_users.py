@@ -1,5 +1,8 @@
 """Tests for password hashing, the user service, and dev seeding."""
 
+import bcrypt
+import pytest
+
 from server.core.security import hash_password, verify_password
 from server.models.user import User, UserRole, AuthProvider
 from server.services.users import (
@@ -24,11 +27,20 @@ class TestPasswordHashing:
         assert verify_password("anything", "") is False
         assert verify_password("anything", "not-a-bcrypt-hash") is False
 
-    def test_long_password_over_72_bytes(self):
-        # Bcrypt caps at 72 bytes; hashing/verifying must still work.
+    def test_a_password_over_72_bytes_is_refused(self):
+        # Bcrypt reads 72 bytes: a longer password is refused, not cut.
+        assert verify_password("a" * 72, hash_password("a" * 72)) is True
+        with pytest.raises(ValueError, match="72 bytes"):
+            hash_password("a" * 73)
+        with pytest.raises(ValueError, match="72 bytes"):
+            hash_password("é" * 37)  # 37 characters, 74 bytes
+
+    def test_an_account_hashed_before_the_limit_still_logs_in(self):
+        # Hashed from its first 72 bytes, as the older code did.
         pw = "a" * 200
-        hashed = hash_password(pw)
-        assert verify_password(pw, hashed) is True
+        legacy = bcrypt.hashpw(pw.encode()[:72], bcrypt.gensalt()).decode()
+        assert verify_password(pw, legacy) is True
+        assert verify_password("b" * 200, legacy) is False
 
 
 class TestUserService:
@@ -56,8 +68,6 @@ class TestUserService:
         assert user.oidc_sub == "sub-123"
 
     def test_create_user_rejects_unknown_role(self, test_db):
-        import pytest
-
         with pytest.raises(ValueError):
             create_user(test_db, email="x@example.com", password="pw", role="root")
 
@@ -96,11 +106,16 @@ class TestSeedDevUsers:
 
     def test_refuses_weak_defaults_outside_dev(self, test_db, monkeypatch):
         # No explicit passwords + not a dev environment → fail closed, seed nothing.
-        import pytest
-
         monkeypatch.delenv("DEV_ADMIN_PASSWORD", raising=False)
         monkeypatch.delenv("DEV_USER_PASSWORD", raising=False)
         with pytest.raises(RuntimeError, match="Refusing to seed"):
+            seed_dev_users(test_db, allow_insecure_defaults=False)
+        assert test_db.query(User).count() == 0
+
+    def test_refuses_a_password_over_72_bytes(self, test_db, monkeypatch):
+        monkeypatch.setenv("DEV_ADMIN_PASSWORD", "x" * 80)
+        monkeypatch.setenv("DEV_USER_PASSWORD", "Str0ng-User-Pw!")
+        with pytest.raises(RuntimeError, match="DEV_ADMIN_PASSWORD is longer than 72"):
             seed_dev_users(test_db, allow_insecure_defaults=False)
         assert test_db.query(User).count() == 0
 

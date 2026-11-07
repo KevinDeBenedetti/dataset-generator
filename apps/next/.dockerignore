@@ -37,9 +37,10 @@ Thumbs.db
 .git
 .gitignore
 
-# Env
-.env.local
-.env.*.local
+# Env — never bake secrets into an image layer, at any depth (only the
+# template is kept).
+**/.env*
+!**/.env.example
 
 # Build
 dist

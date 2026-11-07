@@ -58,7 +58,11 @@ class HubCard(BaseModel):
 class HubDatasetDetail(HuggingFaceDataset):
     """A dataset repo at one commit: metadata, card, files and tables."""
 
-    sha: str = Field(..., description="The commit everything on the page was read at")
+    # Narrower than the listing's optional sha: a detail is always read at one
+    # commit, and nothing writes the field back.
+    sha: str = Field(  # ty: ignore[invalid-mutable-override]
+        ..., description="The commit everything on the page was read at"
+    )
     revision: Optional[str] = Field(None, description="The revision asked for")
     card: HubCard
     files: List[HubFile]

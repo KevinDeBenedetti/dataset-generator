@@ -17,7 +17,7 @@ DIM = 256
 
 
 def _bucket(word: str) -> int:
-    return int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM
+    return int(hashlib.md5(word.encode(), usedforsecurity=False).hexdigest(), 16) % DIM
 
 
 class FakeEmbedder:
@@ -33,3 +33,7 @@ class FakeEmbedder:
             for word in re.findall(r"\w+", text.lower()):
                 matrix[row, _bucket(word)] += 1.0
         return normalize(matrix)
+
+    # The retrieval side (vector collections): no query/passage distinction.
+    embed_passages = embed
+    embed_queries = embed

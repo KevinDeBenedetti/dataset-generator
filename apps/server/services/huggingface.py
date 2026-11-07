@@ -145,47 +145,69 @@ _NON_DATA_FILENAMES = {
 }
 
 
-def _list_repo_files(creds: Credentials, repo_id: str) -> List[str]:
-    """Every file path in the dataset repo. ValueError if the repo is unknown."""
+def _repo_tree(creds: Credentials, repo_id: str) -> Dict[str, int]:
+    """Every file of the dataset repo with its size in bytes, in one call.
+
+    ValueError if the repo is unknown.
+    """
     from huggingface_hub.errors import RepositoryNotFoundError
+    from huggingface_hub.hf_api import RepoFile
 
     try:
-        return list(_api(creds).list_repo_files(repo_id, repo_type="dataset"))
+        entries = _api(creds).list_repo_tree(
+            repo_id, repo_type="dataset", recursive=True
+        )
+        return {e.path: e.size for e in entries if isinstance(e, RepoFile)}
     except RepositoryNotFoundError:
-        raise ValueError(f"Hugging Face dataset repo '{repo_id}' not found")
+        raise ValueError(f"Hugging Face dataset repo '{repo_id}' not found") from None
+
+
+def _too_large(repo_id: str) -> HuggingFaceImportTooLargeError:
+    return HuggingFaceImportTooLargeError(
+        f"'{repo_id}' is too large to import: its data files exceed "
+        f"{config.max_hub_import_bytes // (1024 * 1024)} MB"
+    )
+
+
+def _check_sizes(
+    repo_id: str, tree: Dict[str, int], paths: List[str], budget: int
+) -> None:
+    """Refuse, before any download, files whose announced sizes exceed ``budget``.
+
+    The sizes come from the repo tree: one call, every file. What arrives is
+    checked again by :func:`_download_file`.
+    """
+    if sum(tree.get(p) or 0 for p in paths) > budget:
+        raise _too_large(repo_id)
 
 
 def _download_file(
     creds: Credentials, repo_id: str, filename: str, max_bytes: int
 ) -> bytes:
-    """A data file's bytes, refused when it is larger than ``max_bytes``.
+    """A data file's bytes, refused when more than ``max_bytes`` arrive.
 
-    The size is checked on the Hub's metadata before anything is fetched, then
-    on what arrived; the file lands in a throwaway cache, so imports never pile
-    up on the server's disk.
+    The file lands in a throwaway cache, so imports never pile up on the
+    server's disk. ValueError when it is no longer in the repo (it was listed
+    a moment ago).
     """
     from huggingface_hub import hf_hub_download
+    from huggingface_hub.errors import EntryNotFoundError
 
-    too_large = HuggingFaceImportTooLargeError(
-        f"'{repo_id}' is too large to import: its data files exceed "
-        f"{config.max_hub_import_bytes // (1024 * 1024)} MB"
-    )
-    [info] = _api(creds).get_paths_info(repo_id, [filename], repo_type="dataset")
-    size = getattr(info, "size", None)
-    if size is not None and size > max_bytes:
-        raise too_large
     with tempfile.TemporaryDirectory(prefix="hf-import-") as cache_dir:
-        path = hf_hub_download(
-            repo_id=repo_id,
-            filename=filename,
-            repo_type="dataset",
-            token=_require_token(creds),
-            cache_dir=cache_dir,
-        )
+        try:
+            path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                repo_type="dataset",
+                token=_require_token(creds),
+                cache_dir=cache_dir,
+            )
+        except EntryNotFoundError:
+            raise ValueError(f"'{filename}' is no longer in '{repo_id}'") from None
         with open(path, "rb") as f:
             data = f.read(max_bytes + 1)
     if len(data) > max_bytes:
-        raise too_large
+        raise _too_large(repo_id)
     return data
 
 
@@ -364,23 +386,29 @@ def import_dataset_from_hub(
     _require_token(creds)
     local_name = dataset_name or repo_id.split("/")[-1]
 
-    files = _list_repo_files(creds, repo_id)
+    tree = _repo_tree(creds, repo_id)
+    files = list(tree)
     data_files = _pick_data_files(files)
     if not data_files:
         raise ValueError(
             f"'{repo_id}' has no readable data file. "
             f"Files in the repo: {', '.join(files) or '(none)'}"
         )
+    # The whole import is refused on the tree's sizes before a byte is fetched.
+    _check_sizes(repo_id, tree, data_files, config.max_hub_import_bytes)
 
     source_fallback = f"huggingface://{repo_id}"
     items: List[Dict[str, Any]] = []
     columns: set[str] = set()
     skipped = 0
+    # The budget bounds the raw bytes; the parsed rows weigh a few times more,
+    # so a file's bytes are dropped as soon as its rows are parsed.
     budget = config.max_hub_import_bytes  # shared by every data file
     for filename in data_files:
         raw = _download_file(creds, repo_id, filename, budget)
         budget -= len(raw)
         rows = _parse_rows(filename, raw)
+        del raw
         logger.info("HF import %s: %s → %d row(s)", repo_id, filename, len(rows))
         for row in rows:
             columns.update(row.keys())
@@ -442,6 +470,88 @@ def import_dataset_from_hub(
         "repo_id": repo_id,
         "pairs_imported": result["created_count"],
         "version": result["version"],
+    }
+
+
+def existing_pairs(creds: Credentials, repo_id: str) -> List[Dict[str, Any]]:
+    """The rows of a dataset repo in the app's layout (``data/train.jsonl``).
+
+    An unknown repo, or one without that file, has none. Capped like an
+    import (``config.max_hub_import_bytes``).
+    """
+    try:
+        tree = _repo_tree(creds, repo_id)
+    except ValueError:
+        return []
+    if DATA_PATH_IN_REPO not in tree:
+        return []
+    _check_sizes(repo_id, tree, [DATA_PATH_IN_REPO], config.max_hub_import_bytes)
+    raw = _download_file(creds, repo_id, DATA_PATH_IN_REPO, config.max_hub_import_bytes)
+    return [row for row in _parse_rows(DATA_PATH_IN_REPO, raw) if isinstance(row, dict)]
+
+
+def publish_generation_draft(
+    creds: Credentials,
+    draft: Dict[str, Any],
+    exclude: List[str],
+    edits: Dict[str, Dict[str, str]],
+) -> Dict[str, Any]:
+    """Merge a reviewed file or URL draft into its dataset repo, in one commit.
+
+    The repo's current pairs are read again (it may have moved since the draft
+    was made); the draft's pairs replace those with the same id and join the
+    others. The repo is created private, or must already be.
+    """
+    from huggingface_hub import CommitOperationAdd
+
+    repo_id = str(draft["repo_id"])
+    api = _api(creds)
+    ensure_private_dataset_repo(api, repo_id)
+    left_out = set(exclude)
+    new: List[Dict[str, Any]] = []
+    for pair in draft.get("pairs") or []:
+        if not isinstance(pair, dict) or pair.get("id") in left_out:
+            continue
+        change = edits.get(str(pair.get("id")))
+        if change:
+            pair = {
+                **pair,
+                "question": change["question"].strip(),
+                "answer": change["answer"].strip(),
+            }
+        new.append(pair)
+    if not new:
+        raise ValueError("Nothing to publish: every pair of the draft was left out")
+
+    merged: Dict[str, Dict[str, Any]] = {}
+    unkeyed: List[Dict[str, Any]] = []
+    for row in existing_pairs(creds, repo_id):
+        if row.get("id"):
+            merged[str(row["id"])] = row
+        else:
+            unkeyed.append(row)
+    for pair in new:
+        merged[str(pair["id"])] = pair
+    pairs = unkeyed + list(merged.values())
+    sources = sorted({str(p["source_url"]) for p in pairs if p.get("source_url")})
+    title = str(draft.get("title") or repo_id.split("/")[-1])
+    api.create_commit(
+        repo_id=repo_id,
+        repo_type="dataset",
+        operations=[
+            CommitOperationAdd(DATA_PATH_IN_REPO, _to_jsonl(pairs)),
+            CommitOperationAdd(
+                "README.md",
+                _dataset_card(title, len(pairs), draft.get("language"), sources),
+            ),
+        ],
+        commit_message=f"Add {len(new)} Q/A pair(s) from {draft.get('source') or title}",
+    )
+    return {
+        "repo_id": repo_id,
+        "url": f"https://huggingface.co/datasets/{repo_id}",
+        "pairs": len(pairs),
+        "new": len(new),
     }
 
 

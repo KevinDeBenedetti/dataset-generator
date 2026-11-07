@@ -7,7 +7,8 @@ from server.core.config import config
 from server.services.agent import QAAgentService
 from server.services.credentials import Credentials
 from server.services.datasets import save_generation
-from server.services.files import render_page_images
+from server.core.cpu import cpu_bound
+from server.services.files import on_render_thread, open_pages
 from server.services.llm import LLMService
 from server.services.qa import QAService
 from server.services.quality_rules import get_quality_rules
@@ -107,28 +108,37 @@ class DatasetPipeline:
         source_url = f"file://{filename}"
         qa_service = await self._qa_service(dataset_name)
 
-        # 1. Rasterise the file to one image per page — CPU-bound (PyMuPDF),
-        # so off the event loop, or every other request waits for it; on the
-        # single thread PyMuPDF tolerates.
+        # 1. Open the file and count its pages — PyMuPDF work, so off the event
+        # loop, on the single thread it tolerates (every other request would
+        # wait otherwise).
         t = time.perf_counter()
-        page_images = await render_page_images(content, content_type, filename)
-        run.record(
-            "rasterize",
-            "Read file",
-            "success",
-            t,
-            f"Prepared {len(page_images)} page(s) from {filename}",
-        )
-
-        # 2. Transcribe each page with the vision model.
-        t = time.perf_counter()
-        texts: List[Tuple[str, str]] = []
-        for label, image_bytes, mime_type in page_images:
-            text = await self.llm_service.extract_text_from_image(
-                image_bytes, mime_type=mime_type, model=model_vlm
+        source = await on_render_thread(open_pages, content, content_type, filename)
+        try:
+            run.record(
+                "rasterize",
+                "Read file",
+                "success",
+                t,
+                f"Found {source.page_count} page(s) in {filename}",
             )
-            if text:
-                texts.append((label, text))
+
+            # 2. Render and transcribe one page at a time: a page's bitmap is
+            # dropped once transcribed, so a long PDF never holds every page in
+            # memory.
+            t = time.perf_counter()
+            texts: List[Tuple[str, str]] = []
+            for index in range(source.page_count):
+                label, image_bytes, mime_type = await on_render_thread(
+                    source.render, index
+                )
+                text = await self.llm_service.extract_text_from_image(
+                    image_bytes, mime_type=mime_type, model=model_vlm
+                )
+                del image_bytes
+                if text:
+                    texts.append((label, text))
+        finally:
+            await on_render_thread(source.close)
         chars = sum(len(text) for _, text in texts)
         run.record(
             "extract",
@@ -150,7 +160,7 @@ class DatasetPipeline:
             model_qa=model_qa,
             similarity_threshold=similarity_threshold,
             persist=persist,
-            pages=len(page_images),
+            pages=source.page_count,
         )
 
     async def process_url(
@@ -178,7 +188,7 @@ class DatasetPipeline:
         t = time.perf_counter()
         page = await fetch_page(url)
         raw_text = (
-            await asyncio.to_thread(html_to_text, page.body)  # up to 2 MB of HTML
+            await cpu_bound(html_to_text, page.body)  # up to 2 MB of HTML
             if page.is_html
             else page.body
         )
@@ -222,10 +232,10 @@ class DatasetPipeline:
 
     async def _qa_service(self, dataset_name: str) -> QAService:
         # DB reads + embedding model load + one pass over the dataset's
-        # questions: all off the event loop.
+        # questions: all off the event loop, the CPU-heavy part on its own pool.
         rules = await asyncio.to_thread(get_quality_rules, self.owner_id)
         qa_service = QAService(self.owner_id, dataset_name, quality_rules=rules)
-        await asyncio.to_thread(qa_service.prepare)
+        await cpu_bound(qa_service.prepare)
         return qa_service
 
     async def _mine_and_save(
@@ -256,8 +266,9 @@ class DatasetPipeline:
             qa_s += time.perf_counter() - t
 
             t = time.perf_counter()
-            # Embeddings (ONNX) and dedup queries: off the event loop.
-            text_stats = await asyncio.to_thread(
+            # Embeddings (ONNX) and dedup queries: off the event loop, on the
+            # CPU pool (core/cpu.py) so the heartbeats never queue behind them.
+            text_stats = await cpu_bound(
                 qa_service.process_qa_pairs,
                 qa_list=text_qa,
                 cleaned_text=text,
@@ -327,6 +338,8 @@ class DatasetPipeline:
 
         return {
             "qa_pairs": run.qa_list,
+            # Full records (id, context, source, confidence): what a draft keeps.
+            "items": run.items,
             **stats,
             "similarity_threshold": threshold,
             "dataset_id": dataset_name,

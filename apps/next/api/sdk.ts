@@ -79,6 +79,24 @@ client.interceptors.response.use(async (response, request, options) => {
   })
 })
 import type {
+  CollectionBuildRequest,
+  CollectionCreate,
+  CollectionEvaluateRequest,
+  CollectionEvaluation,
+  CollectionOut,
+  CollectionSearchOut,
+  CollectionSearchRequest,
+  CollectionsOut,
+  DraftChecks,
+  DraftsOut,
+  GitHubDocContent,
+  GitHubProfileOut,
+  GitHubRepoDetail,
+  GitHubReposOut,
+  RecipeIn,
+  RecipeOut,
+  RecipeRunRequest,
+  RecipesOut,
   HubCommits,
   HubCompare,
   HubDatasetDetail,
@@ -159,7 +177,7 @@ export interface GenerateFromFileParams {
   modelQa?: string | null
   modelVlm?: string | null
   similarityThreshold?: number
-  persist?: boolean
+  targetRepo?: string | null
 }
 
 export async function generateDatasetFromFile(
@@ -175,9 +193,7 @@ export async function generateDatasetFromFile(
   if (params.similarityThreshold != null) {
     form.append('similarity_threshold', String(params.similarityThreshold))
   }
-  if (params.persist != null) {
-    form.append('persist', String(params.persist))
-  }
+  if (params.targetRepo) form.append('target_repo', params.targetRepo)
 
   // No Content-Type header: the browser sets the multipart boundary itself.
   const response = await fetch(`${baseUrl}/dataset/generate/file`, {
@@ -703,6 +719,143 @@ export function getHubCompare(repo: HubRepoRef, query: HubCompareQuery): Promise
   return hubGet(hubPath(repo, `/compare${params}`), 'Failed to compare the versions')
 }
 
+// ── GitHub browse (/github/*) and dataset recipes (/recipes) ─────────────────
+// What a GitHub-fed dataset is made of: your public GitHub data, and the
+// recipes that pick from it and name the Hugging Face repo they publish to.
+
+async function apiSend<T>(
+  method: 'POST' | 'PUT' | 'DELETE',
+  url: string,
+  body: unknown,
+  fallback: string,
+): Promise<T> {
+  const options = {
+    url,
+    ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
+  }
+  const response =
+    method === 'POST'
+      ? await client.post<T>(options)
+      : method === 'PUT'
+        ? await client.put<T>(options)
+        : await client.delete<T>(options)
+  if (response.error) {
+    throw new ApiError(getErrorMessage(response.error, fallback), response.response?.status)
+  }
+  return response.data as unknown as T
+}
+
+function githubPath(owner: string, repo: string, suffix = ''): string {
+  return `/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${suffix}`
+}
+
+export function getGitHubProfile(): Promise<GitHubProfileOut> {
+  return hubGet('/github/profile', 'Failed to read your GitHub account')
+}
+
+export function getGitHubRepos(): Promise<GitHubReposOut> {
+  return hubGet('/github/repos', 'Failed to list your GitHub repos')
+}
+
+export function getGitHubRepo(owner: string, repo: string): Promise<GitHubRepoDetail> {
+  return hubGet(githubPath(owner, repo), 'Failed to read the repo')
+}
+
+export function getGitHubDoc(owner: string, repo: string, path: string): Promise<GitHubDocContent> {
+  return hubGet(githubPath(owner, repo, `/doc${toQuery({ path })}`), 'Failed to read the file')
+}
+
+export function getRecipes(): Promise<RecipesOut> {
+  return hubGet('/recipes', 'Failed to list your recipes')
+}
+
+export function createRecipe(recipe: RecipeIn): Promise<RecipeOut> {
+  return apiSend('POST', '/recipes', recipe, 'Failed to create the recipe')
+}
+
+export function updateRecipe(id: string, recipe: RecipeIn): Promise<RecipeOut> {
+  return apiSend('PUT', `/recipes/${encodeURIComponent(id)}`, recipe, 'Failed to save the recipe')
+}
+
+export function deleteRecipe(id: string): Promise<void> {
+  return apiSend(
+    'DELETE',
+    `/recipes/${encodeURIComponent(id)}`,
+    undefined,
+    'Failed to delete the recipe',
+  )
+}
+
+export function runRecipe(id: string, request: RecipeRunRequest = {}): Promise<JobRunOut> {
+  return apiSend(
+    'POST',
+    `/recipes/${encodeURIComponent(id)}/run`,
+    request,
+    'Failed to start the generation',
+  )
+}
+
+// ── Vector collections (/collections) ────────────────────────────────────────
+// A split of one of your Hugging Face datasets, embedded into Qdrant by a
+// worker, then searched and tested from the Collections page.
+
+function collectionPath(id: string, suffix = ''): string {
+  return `/collections/${encodeURIComponent(id)}${suffix}`
+}
+
+export function getCollections(): Promise<CollectionsOut> {
+  return hubGet('/collections', 'Failed to list your collections')
+}
+
+export function getCollection(id: string): Promise<CollectionOut> {
+  return hubGet(collectionPath(id), 'Failed to load the collection')
+}
+
+/** Defines the collection and queues its first build. */
+export function createCollection(body: CollectionCreate): Promise<CollectionOut> {
+  return apiSend('POST', '/collections', body, 'Failed to create the collection')
+}
+
+/** Embeds the split again, at the dataset's latest commit unless `revision`. */
+export function rebuildCollection(
+  id: string,
+  body: CollectionBuildRequest = {},
+): Promise<CollectionOut> {
+  return apiSend('POST', collectionPath(id, '/build'), body, 'Failed to start the build')
+}
+
+export function deleteCollection(id: string): Promise<void> {
+  return apiSend('DELETE', collectionPath(id), undefined, 'Failed to delete the collection')
+}
+
+export function searchCollection(
+  id: string,
+  body: CollectionSearchRequest,
+): Promise<CollectionSearchOut> {
+  return apiSend('POST', collectionPath(id, '/search'), body, 'The search failed')
+}
+
+/** The retrieval test: sampled rows ask with their question column. */
+export function evaluateCollection(
+  id: string,
+  body: CollectionEvaluateRequest,
+): Promise<CollectionEvaluation> {
+  return apiSend('POST', collectionPath(id, '/evaluate'), body, 'The test failed')
+}
+
+/** Your drafts waiting for a review: file, web page and recipe runs. */
+export function getDrafts(): Promise<DraftsOut> {
+  return hubGet('/jobs/drafts', 'Failed to list your drafts')
+}
+
+/** Near-duplicates and quality-rule failures of a draft, for its review. */
+export function getDraftChecks(runId: string, threshold = 0.85): Promise<DraftChecks> {
+  return hubGet(
+    `/jobs/runs/${encodeURIComponent(runId)}/checks${toQuery({ threshold })}`,
+    'Failed to check the draft',
+  )
+}
+
 export interface HuggingFaceImportResponse {
   dataset_name: string
   repo_id: string
@@ -749,93 +902,6 @@ export async function duplicateDataset(
     throw new Error(getErrorMessage(response.error, 'Failed to copy the dataset'))
   }
   return response.data as unknown as DuplicateDatasetResponse
-}
-
-// Collections (datasets projected into a Qdrant vector store)
-
-export interface Collection {
-  id: string
-  name: string
-  description?: string | null
-  target_language?: string | null
-  qa_sources_count?: number | null
-  created_at?: string | null
-  collection_name: string
-  // null when Qdrant is unconfigured/unreachable (status unknown).
-  in_qdrant?: boolean | null
-  points_count?: number | null
-}
-
-export interface CollectionsResponse {
-  qdrant_configured: boolean
-  total: number
-  collections: Collection[]
-}
-
-export async function getCollections(): Promise<CollectionsResponse> {
-  const response = await client.get<CollectionsResponse>({ url: '/collections' })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch collections'))
-  }
-  return response.data as unknown as CollectionsResponse
-}
-
-export interface QdrantSyncResponse {
-  dataset_name: string
-  collection_name: string
-  points_upserted: number
-  vector_size: number
-}
-
-// Datasets are keyed by their name (the identifier the API takes).
-export async function syncCollectionToQdrant(datasetName: string): Promise<QdrantSyncResponse> {
-  const response = await client.post<QdrantSyncResponse>({
-    url: `/collections/${encodeURIComponent(datasetName)}/qdrant`,
-  })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to add collection to Qdrant'))
-  }
-  return response.data as unknown as QdrantSyncResponse
-}
-
-export interface CollectionSearchResult {
-  qa_id?: string | null
-  question: string
-  answer: string
-  context: string
-  source_url?: string | null
-  confidence?: number | null
-  score?: number | null
-}
-
-export interface CollectionSearchResponse {
-  dataset_name: string
-  collection_name: string
-  query: string
-  count: number
-  results: CollectionSearchResult[]
-}
-
-// Semantic search over a dataset's Qdrant collection. Datasets are keyed by
-// their name (the identifier the API takes).
-export async function searchCollection(
-  datasetName: string,
-  query: string,
-  options?: { limit?: number; scoreThreshold?: number },
-): Promise<CollectionSearchResponse> {
-  const response = await client.post<CollectionSearchResponse>({
-    url: `/collections/${encodeURIComponent(datasetName)}/search`,
-    body: {
-      query,
-      ...(options?.limit !== undefined ? { limit: options.limit } : {}),
-      ...(options?.scoreThreshold !== undefined ? { score_threshold: options.scoreThreshold } : {}),
-    },
-    headers: { 'Content-Type': 'application/json' },
-  })
-  if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to search collection'))
-  }
-  return response.data as unknown as CollectionSearchResponse
 }
 
 // Auth endpoints
@@ -933,10 +999,15 @@ export async function cancelJobRun(runId: string): Promise<JobRunOut> {
 
 // Publishes a run's reviewed draft: `exclude` drops new pairs, `promote` moves
 // pairs from the review list into the export.
-export async function publishJobRun(
-  runId: string,
-  selection: { exclude: string[]; promote: string[] },
-): Promise<JobRunOut> {
+/** What the reviewer decided: new pairs left out, held-out pairs taken in,
+ * and pairs rewritten (id → question and answer). */
+export interface DraftSelection {
+  exclude: string[]
+  promote: string[]
+  edits?: Record<string, { question: string; answer: string }>
+}
+
+export async function publishJobRun(runId: string, selection: DraftSelection): Promise<JobRunOut> {
   const response = await client.post<JobRunOut>({
     url: `/jobs/runs/${encodeURIComponent(runId)}/publish`,
     body: selection,
@@ -1199,9 +1270,14 @@ export function exportUrl(): string {
   return `${API_BASE_URL}/me/export`
 }
 
+// A 403 means the session is older than the API allows for this: the user has
+// to sign in again first (apps/server/services/auth.py, require_recent_login).
 export async function deleteMyAccount(): Promise<void> {
   const response = await client.delete({ url: '/me' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to delete your account'))
+    throw new ApiError(
+      getErrorMessage(response.error, 'Failed to delete your account'),
+      response.response?.status,
+    )
   }
 }

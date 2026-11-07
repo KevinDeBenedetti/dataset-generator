@@ -409,12 +409,10 @@ def test_resolve_pair_unknown_record_raises():
 
 
 def test_delete_dataset_removes_pairs_and_runs(monkeypatch):
-    monkeypatch.setattr("server.services.qdrant.delete_collection", lambda name: True)
     _seed(items=[_item("a", "q1?"), _item("b", "q2?")])
 
     result = delete_dataset(OWNER, "ds")
     assert result["records_deleted"] == 2
-    assert "Qdrant" in result["message"]
     assert get_dataset_view(OWNER, "ds") is None
     # The cascade took the pairs and the run with it.
     assert get_dataset_pairs(OWNER, "ds") == []
@@ -538,7 +536,6 @@ def test_lookups_by_a_stranger_return_nothing():
 
 
 def test_a_stranger_cannot_delete_write_or_duplicate_it(monkeypatch):
-    monkeypatch.setattr("server.services.qdrant.delete_collection", lambda name: True)
     _seed_as(OWNER, "private", [_item("a", "q1?")])
 
     with pytest.raises(ValueError):
@@ -576,7 +573,6 @@ def test_creating_a_name_someone_else_uses_is_fine_but_your_own_twice_is_not():
 def test_deleting_your_dataset_leaves_the_same_named_one_of_another_user(
     monkeypatch,
 ):
-    monkeypatch.setattr("server.services.qdrant.delete_collection", lambda name: True)
     _seed_as(OWNER, "same", [_item("a", "q1?")])
     _seed_as(OTHER, "same", [_item("b", "q2?")])
 
@@ -607,17 +603,3 @@ def test_deleting_a_user_deletes_their_datasets_and_only_theirs(test_db):
     # SQLite only enforces ON DELETE CASCADE with foreign keys switched on, which
     # Postgres always does; the real assertion runs against Postgres in CI.
     assert "kept" in remaining
-
-
-def test_a_datasets_qdrant_collection_is_named_after_its_id_not_its_name():
-    from server.services.qdrant import default_collection_name
-
-    a = _seed_as(OWNER, "docs")
-    b = _seed_as(OTHER, "docs")
-
-    name_a = default_collection_name(a["dataset_id"])
-    name_b = default_collection_name(b["dataset_id"])
-    assert name_a != name_b
-    assert a["dataset_id"] in name_a
-    # A legacy dataset keeps the collection it already has.
-    assert default_collection_name("id", "dev_old_name") == "dev_old_name"

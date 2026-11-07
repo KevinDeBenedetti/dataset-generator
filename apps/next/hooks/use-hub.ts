@@ -47,10 +47,11 @@ export function useHubDatasets(author?: string | null) {
 }
 
 /** Metadata, card, files and tables of one dataset at a revision. */
-export function useHubDataset(repo: HubRepoRef, revision?: string | null) {
+export function useHubDataset(repo: HubRepoRef, revision?: string | null, enabled = true) {
   return useQuery({
     queryKey: [HUB_QUERY_KEY, 'dataset', repo.owner, repo.name, revision ?? null],
     queryFn: () => getHubDataset(repo, revision),
+    enabled,
     retry: retryTransient,
     staleTime: staleTimeFor(revision),
   })

@@ -19,7 +19,8 @@ class JobRun(Base):
 
     ``status``: queued → running → succeeded | failed | cancelled |
     interrupted (its worker stopped heart-beating); a succeeded draft →
-    published. A queued run can also go straight to cancelled.
+    publishing → published, and back to succeeded when the publication fails
+    or stops heart-beating. A queued run can also go straight to cancelled.
     """
 
     __tablename__ = "job_runs"

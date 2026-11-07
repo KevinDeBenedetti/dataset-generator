@@ -42,7 +42,7 @@ def get_user(user_id: str, db: Session = Depends(get_db)) -> AdminUser:
     try:
         return AdminUser(**admin.get_user(db, user_id))
     except admin.NotFound:
-        raise HTTPException(status_code=404, detail="Unknown user")
+        raise HTTPException(status_code=404, detail="Unknown user") from None
 
 
 @router.patch("/users/{user_id}", response_model=AdminUser)
@@ -66,10 +66,10 @@ def update_user(
             )
         )
     except admin.NotFound:
-        raise HTTPException(status_code=404, detail="Unknown user")
+        raise HTTPException(status_code=404, detail="Unknown user") from None
     except admin.AdminError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -83,10 +83,10 @@ def delete_user(
     try:
         admin.delete_user(db, actor, user_id, ip=_ip(request))
     except admin.NotFound:
-        raise HTTPException(status_code=404, detail="Unknown user")
+        raise HTTPException(status_code=404, detail="Unknown user") from None
     except admin.AdminError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/audit", response_model=AuditResponse)
@@ -123,4 +123,4 @@ def put_platform(
         )
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

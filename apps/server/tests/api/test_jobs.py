@@ -122,7 +122,29 @@ def test_publish_run(client: TestClient, owner):
         )
     assert response.status_code == 200
     assert response.json()["published_url"] == "https://huggingface.co/datasets/ns/qa"
-    publish.assert_awaited_once_with(owner.id, FULL, "run-1", ["n2"], ["h1"])
+    publish.assert_awaited_once_with(owner.id, FULL, "run-1", ["n2"], ["h1"], edits={})
+
+
+def test_publish_passes_the_edits(client: TestClient, owner):
+    with patch(
+        "server.api.jobs.publish_run", new=AsyncMock(return_value=RUN)
+    ) as publish:
+        response = client.post(
+            "/jobs/runs/run-1/publish",
+            json={"edits": {"n1": {"question": "Better?", "answer": "Yes."}}},
+        )
+    assert response.status_code == 200
+    assert publish.call_args.kwargs["edits"] == {
+        "n1": {"question": "Better?", "answer": "Yes."}
+    }
+
+
+def test_an_empty_edit_is_refused(client: TestClient):
+    response = client.post(
+        "/jobs/runs/run-1/publish",
+        json={"edits": {"n1": {"question": "", "answer": "Yes."}}},
+    )
+    assert response.status_code == 422
 
 
 def test_publish_errors(client: TestClient):

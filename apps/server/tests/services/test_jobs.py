@@ -170,7 +170,7 @@ async def test_github_personal_publishes_the_reviewed_selection():
         f"{PREFIX}.qa_dataset_job.publish",
         new=AsyncMock(return_value={"url": "https://huggingface.co/datasets/ns/qa"}),
     ) as publish:
-        result = await publisher(FULL, data, ["n2"], ["h1"])
+        result = await publisher(FULL, data, ["n2"], ["h1"], {})
 
     assert publish.call_args.args[0] is FULL
     published = publish.call_args.args[1]
@@ -297,7 +297,7 @@ async def _wait(run_id, owner=OWNER):
     return get_run(owner, run_id)
 
 
-async def _until(predicate, timeout=2.0):
+async def _until(predicate, timeout=2.0):  # noqa: ASYNC109 — a test helper's deadline
     loop = asyncio.get_running_loop()
     end = loop.time() + timeout
     while not predicate():
@@ -506,6 +506,46 @@ def test_a_run_whose_worker_died_is_interrupted_not_rerun(db):
     assert interrupted["status"] == "interrupted" and "stopped" in interrupted["error"]
     assert get_run(OWNER, alive)["status"] == "running"
     assert queue.claim_next("w2") is None  # interrupted is never claimed again
+
+
+def test_a_publication_that_died_is_handed_back(db):
+    from datetime import datetime, timedelta, timezone
+
+    old = datetime.now(timezone.utc) - timedelta(minutes=10)
+    died = _row(status="publishing", heartbeat_at=old, draft={})
+    legacy = _row(status="publishing", heartbeat_at=None, draft={})
+    alive = _row(status="publishing", heartbeat_at=datetime.now(timezone.utc), draft={})
+
+    assert queue.reap_stale(stale_after=120) == 2
+    assert get_run(OWNER, died)["status"] == "succeeded"
+    assert get_run(OWNER, legacy)["status"] == "succeeded"
+    assert get_run(OWNER, alive)["status"] == "publishing"
+
+
+async def test_publishing_keeps_a_heartbeat(db, monkeypatch):
+    from server.models.job_run import JobRun
+
+    monkeypatch.setattr(config, "worker_heartbeat_seconds", 0.01)
+    run = await _finished_draft_run(monkeypatch, OWNER)
+    gate = asyncio.Event()
+
+    async def slow_publish(creds, draft):
+        await gate.wait()
+        return {"url": "https://huggingface.co/datasets/ns/qa"}
+
+    def heartbeat():
+        with jobs_service.get_scoped_db() as db:
+            row = db.get(JobRun, run["id"])
+            assert row is not None
+            return row.heartbeat_at
+
+    with patch(f"{PREFIX}.qa_dataset_job.publish", new=slow_publish):
+        task = asyncio.create_task(publish_run(OWNER, FULL, run["id"]))
+        await _until(lambda: get_run(OWNER, run["id"])["status"] == "publishing")
+        first = heartbeat()
+        await _until(lambda: heartbeat() != first)  # refreshed while publishing
+        gate.set()
+        assert (await task)["status"] == "published"
 
 
 async def test_an_interrupted_run_frees_the_slot(db, monkeypatch):

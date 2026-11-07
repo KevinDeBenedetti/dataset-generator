@@ -635,7 +635,10 @@ def write_jsonl(chunks: List[Chunk]) -> str:
 def _git_commit() -> str:
     try:
         return subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 — the host's git, from PATH
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return ""

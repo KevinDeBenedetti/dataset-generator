@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation'
 import './dataset.css'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
-import { QAList, PaginationWrapper, DatasetSearch } from '@/components/dataset'
+import { QAList, PaginationWrapper } from '@/components/dataset'
 import { useDatasets, useDatasetSources, useExportToHuggingFace } from '@/hooks'
 import { useQAByDataset } from '@/hooks/use-qa'
 import { relativeTime } from '@/lib/utils'
@@ -17,7 +17,7 @@ import type { DatasetAnalysis, DatasetSource } from '@/api/types'
 
 const PAGE_SIZE = 10
 
-type TabKey = 'pairs' | 'sources' | 'history' | 'search'
+type TabKey = 'pairs' | 'sources' | 'history'
 
 // Sources are recorded as a URL whose scheme says where they came from (see
 // _source_label_kind server-side); the icon follows that kind. `kind` is a
@@ -107,8 +107,6 @@ export default function DraftDetailPage() {
   // Read once per mount: relativeTime() is day-granular.
   const [now] = useState(() => Date.now())
 
-  const addSourceHref = `/generate?dataset=${encodeURIComponent(datasetName)}`
-
   const hfExport = useExportToHuggingFace()
   const handleExportToHub = async () => {
     try {
@@ -186,10 +184,6 @@ export default function DraftDetailPage() {
             <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
             {hfExport.isPending ? 'Publishing…' : 'Publish to Hugging Face'}
           </button>
-          <Link className="btn btn-primary" href={addSourceHref}>
-            <Icon name="plus" />
-            Add a source
-          </Link>
         </div>
       </div>
 
@@ -225,13 +219,6 @@ export default function DraftDetailPage() {
           onClick={() => setTab('history')}
         >
           History <span className="mono muted">{history.length}</span>
-        </button>
-        <button
-          type="button"
-          className={`tab${tab === 'search' ? ' active' : ''}`}
-          onClick={() => setTab('search')}
-        >
-          Search
         </button>
       </div>
 
@@ -274,10 +261,6 @@ export default function DraftDetailPage() {
                   uploaded file or GitHub account.
                 </div>
               </div>
-              <Link className="btn btn-outline btn-sm" href={addSourceHref}>
-                <Icon name="plus" />
-                Add a source
-              </Link>
             </div>
 
             {sourcesQuery.isPending && (
@@ -296,10 +279,7 @@ export default function DraftDetailPage() {
             )}
             {!sourcesQuery.isPending && !sourcesQuery.error && sources.length === 0 && (
               <div className="card-body">
-                <p className="muted">
-                  No source recorded yet. <Link href={addSourceHref}>Add one</Link> to generate
-                  pairs into this dataset.
-                </p>
+                <p className="muted">No source recorded.</p>
               </div>
             )}
             {sources.length > 0 && (
@@ -391,12 +371,6 @@ export default function DraftDetailPage() {
               ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {tab === 'search' && (
-        <div className="tabpane active">
-          <DatasetSearch datasetName={datasetName} />
         </div>
       )}
     </div>

@@ -111,7 +111,7 @@ def _register_github(oauth: OAuth) -> None:
         name="github",
         client_id=config.github_client_id,
         client_secret=config.github_client_secret,
-        access_token_url="https://github.com/login/oauth/access_token",
+        access_token_url="https://github.com/login/oauth/access_token",  # noqa: S106 — a URL
         authorize_url="https://github.com/login/oauth/authorize",
         api_base_url="https://api.github.com/",
         client_kwargs={

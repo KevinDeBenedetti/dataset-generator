@@ -146,7 +146,8 @@ def resolve_login(
         user = link_to
     elif known is not None:
         user = db.get(User, known.user_id)
-        assert user is not None  # FK + cascade
+        if user is None:  # FK + cascade: an identity never outlives its user
+            raise RuntimeError(f"Identity {known.id} has no user")
     else:
         email = ext.email if ext.email_verified else ""
         if not email:

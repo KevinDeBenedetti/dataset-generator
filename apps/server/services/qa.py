@@ -252,7 +252,7 @@ class QAService:
 
         flagged_for_review = 0
         scores = self._grounding([it["answer"] for it in new_items], cleaned_text)
-        for item, score in zip(new_items, scores):
+        for item, score in zip(new_items, scores, strict=True):
             if score is None:
                 continue
             needs_review = score < config.answer_grounding_threshold

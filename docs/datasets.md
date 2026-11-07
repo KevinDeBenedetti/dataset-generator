@@ -35,6 +35,9 @@ closes it. Filters accept `is`, `is not`, `contains`, `<`, `≤`, `>`, `≥`,
 The view lives in the URL (tab, version, split, search, filters, page, open
 row): copy the address to share exactly what you see.
 
+**Build a collection** embeds a split of the dataset into Qdrant, to search it
+and test its retrieval: see [Vector collections](./collections.md).
+
 ### Q/A datasets
 
 A split is shown as Q/A cards when it has a question column (`question`,

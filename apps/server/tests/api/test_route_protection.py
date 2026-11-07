@@ -15,11 +15,13 @@ from server.api import (
     collections,
     dataset,
     generate,
+    github,
     hub,
     jobs,
     models,
     q_a,
     quality_rules,
+    recipes,
 )
 from server.core.database import get_db
 from server.models.user import User, UserRole
@@ -33,8 +35,10 @@ def _build_protected_app(test_db):
     auth_required = [Depends(get_current_user)]
     app.include_router(dataset.router, dependencies=auth_required)
     app.include_router(hub.router, dependencies=auth_required)
-    app.include_router(generate.router, dependencies=auth_required)
+    app.include_router(github.router, dependencies=auth_required)
+    app.include_router(recipes.router, dependencies=auth_required)
     app.include_router(collections.router, dependencies=auth_required)
+    app.include_router(generate.router, dependencies=auth_required)
     app.include_router(quality_rules.router, dependencies=auth_required)
     app.include_router(jobs.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
@@ -54,7 +58,6 @@ def test_protected_routes_reject_anonymous(test_db):
 
     # No auth cookie / header → 401 on every feature route.
     assert client.get("/dataset").status_code == 401
-    assert client.get("/collections").status_code == 401
     assert (
         client.post(
             "/dataset/generate/url",
@@ -66,6 +69,10 @@ def test_protected_routes_reject_anonymous(test_db):
     assert client.get("/models").status_code == 401
     assert client.get("/hub/datasets").status_code == 401
     assert client.get("/hub/datasets/kevin/qa/rows").status_code == 401
+    assert client.get("/github/repos").status_code == 401
+    assert client.get("/recipes").status_code == 401
+    assert client.get("/collections").status_code == 401
+    assert client.post("/collections/c1/search", json={"query": "q"}).status_code == 401
 
 
 def test_protected_routes_allow_authenticated(test_db):
@@ -89,7 +96,6 @@ def test_protected_routes_allow_authenticated(test_db):
 # keys: they now run on the caller's own credentials, so any signed-in user may
 # call them (their data is scoped by owner — see test_tenant_isolation).
 _FORMERLY_ADMIN_ROUTES = [
-    ("post", "/collections/my_dataset/qdrant"),
     ("post", "/jobs/github-personal/run", {}),
     ("post", "/jobs/runs/run-1/publish", {}),
     ("post", "/models/test", {"ref": "openai:m"}),

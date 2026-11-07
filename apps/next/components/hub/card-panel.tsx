@@ -1,34 +1,9 @@
 'use client'
 
-import ReactMarkdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { HubDatasetDetail } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { compactJson } from './format'
-
-// The card is Markdown written by whoever owns the repo. react-markdown never
-// renders raw HTML (no rehype-raw), links open in a new tab, and images become
-// links: the production CSP only allows same-origin images, and a remote image
-// would also tell its host who opened the page.
-const COMPONENTS: Components = {
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
-  img: ({ src, alt }) =>
-    typeof src === 'string' && src ? (
-      <a href={src} target="_blank" rel="noopener noreferrer" className="hub-md-img">
-        <Icon name="eye" className="ic-sm" />
-        {alt || 'image'}
-      </a>
-    ) : null,
-  table: ({ children }) => (
-    <div className="hub-md-table">
-      <table>{children}</table>
-    </div>
-  ),
-}
+import { Markdown } from './markdown'
 
 function MetadataValue({ value }: { value: unknown }) {
   if (Array.isArray(value) && value.every((v) => typeof v !== 'object' || v === null)) {
@@ -55,9 +30,7 @@ export function CardPanel({ detail }: { detail: HubDatasetDetail }) {
     <div className="hub-card-tab">
       <article className="card hub-markdown">
         {markdown ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
-            {markdown}
-          </ReactMarkdown>
+          <Markdown>{markdown}</Markdown>
         ) : (
           <p className="muted">
             This dataset has no card (README.md). A card describes the data, its sources and its

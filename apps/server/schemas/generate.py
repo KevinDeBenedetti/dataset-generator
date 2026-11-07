@@ -1,4 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
+
+from server.schemas.recipes import HF_REPO_PATTERN
 from typing import List, Optional
 
 
@@ -24,9 +26,14 @@ class PipelineStep(BaseModel):
 class UrlGenerationRequest(BaseModel):
     """Generate a dataset from one web page (no crawling)."""
 
-    url: str = Field(..., description="http(s) URL of the page to mine")
+    url: str = Field(
+        ..., max_length=2048, description="http(s) URL of the page to mine"
+    )
     dataset_name: str = Field(
-        ..., description="Name of the dataset to create or extend"
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Name of the dataset to create or extend",
     )
     target_language: Optional[str] = Field(
         None, description="Target language for QA generation"
@@ -52,6 +59,13 @@ class UrlGenerationRequest(BaseModel):
     persist: bool = Field(
         default=True,
         description="Store the generated pairs and record a version at generation time",
+    )
+    target_repo: Optional[str] = Field(
+        None,
+        max_length=193,
+        pattern=HF_REPO_PATTERN,
+        description="Hugging Face dataset to publish to ('namespace/name' or 'name'): "
+        "the pairs become a draft to review, not a local dataset",
     )
 
 
@@ -84,6 +98,9 @@ class DatasetGenerationResponse(BaseModel):
         None,
         description="Summary of the stored version (dataset name, version, run) "
         "when the pairs were saved at generation time",
+    )
+    draft_run_id: Optional[str] = Field(
+        None, description="The draft to review, when a target_repo was given"
     )
 
     model_config = ConfigDict(

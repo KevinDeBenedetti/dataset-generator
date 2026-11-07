@@ -94,6 +94,19 @@ def test_resolve_model_prefers_the_request(db):
     assert resolve_model("qa", user_id=USER) == "openai:gpt-qa"
 
 
+def test_a_default_saved_on_a_retired_model_resolves_to_its_successor(db):
+    from server.models.model_defaults import ModelDefault
+
+    with model_defaults.get_scoped_db() as session:
+        session.add(
+            ModelDefault(user_id=USER, role="qa", model_ref="claude:claude-sonnet-5")
+        )
+        session.commit()
+
+    assert get_model_defaults(USER)["qa"] == "claude:claude-sonnet-5-5"
+    assert resolve_model("qa", user_id=USER) == "claude:claude-sonnet-5-5"
+
+
 def test_each_user_has_their_own_defaults(db):
     update_model_defaults(USER, {"qa": "claude:claude-sonnet-5-5"}, FULL)
 

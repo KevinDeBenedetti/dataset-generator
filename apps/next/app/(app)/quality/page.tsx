@@ -444,11 +444,12 @@ export default function QualityPage() {
                 className="input"
                 style={{ width: 90 }}
                 type="number"
-                min={0}
+                min={0.5}
                 max={1}
                 step={0.01}
                 value={threshold}
-                onChange={(e) => setThreshold(Math.min(1, Math.max(0, Number(e.target.value))))}
+                // The API refuses less: nearly every pair would count as a duplicate.
+                onChange={(e) => setThreshold(Math.min(1, Math.max(0.5, Number(e.target.value))))}
               />
             </div>
             <hr className="sep" />

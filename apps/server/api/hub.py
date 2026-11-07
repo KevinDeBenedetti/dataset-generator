@@ -58,24 +58,24 @@ def _call(fn: Callable[[], T], what: str) -> T:
     try:
         return fn()
     except HuggingFaceNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except hub.HubNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except hub.HubTooLargeError as e:
-        raise HTTPException(status_code=413, detail=str(e))
+        raise HTTPException(status_code=413, detail=str(e)) from e
     except hub.HubBadQueryError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except hub.HubUnreadableError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except hub.HubUnavailableError:
         logger.exception("Hub viewer: %s failed", what)
         raise HTTPException(
             status_code=502,
             detail="The Hugging Face Hub didn't answer. Try again shortly.",
-        )
+        ) from None
     except Exception:
         logger.exception("Hub viewer: %s failed", what)
-        raise HTTPException(status_code=502, detail=f"Reading {what} failed")
+        raise HTTPException(status_code=502, detail=f"Reading {what} failed") from None
 
 
 def _parse_filters(raw: Optional[str]) -> List[hub.RowFilter]:
@@ -87,7 +87,7 @@ def _parse_filters(raw: Optional[str]) -> List[hub.RowFilter]:
         raise HTTPException(
             status_code=400,
             detail="filters must be a JSON list of {column, op, value} objects",
-        )
+        ) from None
     return [hub.RowFilter(f.column, f.op, f.value) for f in parsed]
 
 
@@ -95,7 +95,7 @@ def _repo(owner: str, name: str) -> str:
     try:
         return hub.repo_id_of(owner, name)
     except hub.HubNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get(

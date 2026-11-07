@@ -11,7 +11,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 import httpx
@@ -99,6 +99,7 @@ class GitHubProfile:
     followers: int = 0
     following: int = 0
     html_url: str = ""
+    avatar_url: str = ""
 
 
 @dataclass
@@ -197,7 +198,21 @@ class CorpusGitHubClient(GitHubService):
             followers=_int(d, "followers"),
             following=_int(d, "following"),
             html_url=_str(d, "html_url"),
+            avatar_url=_str(d, "avatar_url"),
         )
+
+    async def rate_limit(self) -> Dict[str, Any]:
+        """The core API quota: ``limit``, ``remaining`` and ``reset`` (epoch
+        seconds). Reading it is free — it doesn't count against the quota."""
+        resp = await self.client.get("/rate_limit")
+        if resp.status_code != 200:
+            self._raise_for(resp, "github rate limit")
+        core = (resp.json().get("resources") or {}).get("core") or {}
+        return {
+            "limit": _int(core, "limit"),
+            "remaining": _int(core, "remaining"),
+            "reset": _int(core, "reset"),
+        }
 
     async def fetch_readme(self, owner: str, repo: str) -> str:
         """Best effort: a repo without a README is normal, so failures give ''."""
@@ -344,6 +359,34 @@ async def fetch_repo_docs(
             content = f"{content[:max_chars]}\n[...truncated]"
         docs.append(RepoDoc(path=entry["path"], content=content))
     return docs
+
+
+async def fetch_docs_by_path(
+    client: CorpusGitHubClient,
+    owner: str,
+    repo: str,
+    paths: List[str],
+    max_chars: int = 0,
+) -> Tuple[List[RepoDoc], List[str]]:
+    """Exactly the ``docs/`` files a recipe picked, cut like :func:`fetch_repo_docs`.
+
+    A file that can't be read is reported, not raised: the rest of the repo
+    still feeds the dataset.
+    """
+    docs: List[RepoDoc] = []
+    errors: List[str] = []
+    for path in paths:
+        try:
+            content = await client.file_content(owner, repo, path)
+        except (GitHubAPIError, httpx.HTTPError) as exc:
+            errors.append(f"{repo}/{path}: {exc}")
+            continue
+        if not content.strip():
+            continue
+        if max_chars > 0 and len(content) > max_chars:
+            content = f"{content[:max_chars]}\n[...truncated]"
+        docs.append(RepoDoc(path=path, content=content))
+    return docs, errors
 
 
 async def gather_limited(limit: int, coros) -> list:

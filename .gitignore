@@ -41,6 +41,8 @@ Temporary Items
 # Logs
 logs
 *.log
+# The dev log console route lives in a directory named "logs".
+!apps/next/app/api/debug/logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -112,12 +114,9 @@ web_modules/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+# dotenv environment variable files — every one of them, but the example
+.env*
+!.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

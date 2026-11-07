@@ -62,7 +62,9 @@ def get_model_defaults(user_id: Optional[str] = None) -> Dict[str, str]:
             rows = db.query(ModelDefault).filter(ModelDefault.user_id == user_id)
             for row in rows:
                 if row.role in defaults:
-                    defaults[row.role] = row.model_ref
+                    # A default saved on a model the catalogue moved on from
+                    # means its successor (providers.normalize_ref).
+                    defaults[row.role] = normalize_ref(row.model_ref)
     except Exception as exc:  # noqa: BLE001 — degrade to env defaults
         logger.warning("Could not read model defaults, using env: %s", exc)
     return _without_unavailable(defaults)

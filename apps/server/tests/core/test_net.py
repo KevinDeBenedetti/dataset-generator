@@ -38,7 +38,7 @@ def dns(monkeypatch):
         "192.168.1.1",
         "169.254.169.254",  # cloud metadata
         "100.64.0.1",  # CGNAT
-        "0.0.0.0",
+        "0.0.0.0",  # noqa: S104 — an address the check must refuse
         "::1",
         "fe80::1",
         "fc00::1",

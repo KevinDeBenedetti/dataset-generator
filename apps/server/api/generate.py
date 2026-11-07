@@ -19,9 +19,13 @@ from server.schemas.generate import (
 )
 from server.models.user import User
 from server.services.auth import get_current_user
-from server.services.model_defaults import resolve_model
+from server.services.model_defaults import get_model_defaults
 from server.services.providers import validate_ref
 from server.services.web import WebFetchError
+
+from server.schemas.recipes import HF_REPO_PATTERN
+from server.services.drafts import create_generation_draft
+from server.services.huggingface import HuggingFaceNotConfiguredError
 
 router = APIRouter(
     prefix="/dataset",
@@ -35,24 +39,31 @@ _RESPONSES: Dict[int | str, Dict[str, Any]] = {
 }
 
 
-def _model(
-    role: str, requested: Optional[str], user_id: str, creds: Credentials
-) -> str:
-    """The request's model reference, else your role default — validated. 400 otherwise.
+def _models(
+    user_id: str, creds: Credentials, **requested: Optional[str]
+) -> Dict[str, str]:
+    """For each role given, the request's model reference, else your role
+    default — validated; 400 otherwise.
 
-    Reads the role default from the database: call it through
-    ``run_in_threadpool`` from the async routes.
+    One read of your defaults (a database session) serves every role: call it
+    once per request, through ``run_in_threadpool`` from the async routes.
     """
-    ref = resolve_model(role, requested, user_id=user_id)
-    if not ref:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No {role} model configured — pick one on the Models page",
-        )
-    try:
-        return validate_ref(ref, creds)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    defaults = get_model_defaults(user_id)
+    refs: Dict[str, str] = {}
+    for role, ref in requested.items():
+        ref = ref or defaults.get(role, "")
+        if not ref:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No {role} model configured — pick one on the Models page",
+            )
+        try:
+            refs[role] = validate_ref(ref, creds)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+    return refs
 
 
 def _language(target_language: Optional[str]) -> TargetLanguage:
@@ -115,6 +126,42 @@ def _build_response(
     )
 
 
+async def _keep_draft(
+    user: User,
+    creds: Credentials,
+    target_repo: str,
+    result: Dict[str, Any],
+    *,
+    title: str,
+    source: str,
+    kind: str,
+    language: TargetLanguage,
+    model_ref: str,
+) -> Optional[str]:
+    """Keep the generation as a draft to review (services/drafts.py); None
+    when it produced no pair."""
+    items = result.get("items") or []
+    if not items:
+        return None
+    try:
+        return await run_in_threadpool(
+            create_generation_draft,
+            user.id,
+            creds,
+            target_repo,
+            items,
+            title=title,
+            source=source,
+            kind=kind,
+            language=language.value,
+            model_ref=model_ref,
+        )
+    except HuggingFaceNotConfiguredError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
+        ) from e
+
+
 @router.post(
     "/generate/file",
     response_model=DatasetGenerationResponse,
@@ -127,7 +174,7 @@ def _build_response(
 )
 async def create_dataset_for_file(
     file: UploadFile = File(..., description="PDF or image file to mine for Q&A"),
-    dataset_name: str = Form(...),
+    dataset_name: str = Form(..., min_length=1, max_length=100),
     target_language: Optional[str] = Form(None),
     model_qa: Optional[str] = Form(None, description="Model reference for QA"),
     model_vlm: Optional[str] = Form(
@@ -135,14 +182,22 @@ async def create_dataset_for_file(
     ),
     similarity_threshold: float = Form(0.85, ge=0.0, le=1.0),
     persist: bool = Form(True),
+    target_repo: Optional[str] = Form(
+        None,
+        max_length=193,
+        pattern=HF_REPO_PATTERN,
+        description="Hugging Face dataset to publish to: the pairs become a draft",
+    ),
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
 ) -> DatasetGenerationResponse:
     """Create a dataset from an uploaded PDF/image via a vision model."""
     start_time = time.time()
     language = _language(target_language)
-    model_qa_r = await run_in_threadpool(_model, "qa", model_qa, user.id, creds)
-    model_vlm_r = await run_in_threadpool(_model, "vision", model_vlm, user.id, creds)
+    models = await run_in_threadpool(
+        _models, user.id, creds, qa=model_qa, vision=model_vlm
+    )
+    model_qa_r, model_vlm_r = models["qa"], models["vision"]
 
     # Refuse an oversized upload before holding it in memory: the size the
     # multipart parser saw first, then a bounded read in case it reported none.
@@ -170,9 +225,10 @@ async def create_dataset_for_file(
             model_qa=model_qa_r,
             model_vlm=model_vlm_r,
             similarity_threshold=similarity_threshold,
-            persist=persist,
+            # A draft replaces the local dataset.
+            persist=persist and not target_repo,
         )
-        return _build_response(
+        response = _build_response(
             result,
             dataset_name,
             similarity_threshold,
@@ -181,17 +237,32 @@ async def create_dataset_for_file(
             model_qa_r,
             time.time() - start_time,
         )
+        if target_repo:
+            response.draft_run_id = await _keep_draft(
+                user,
+                creds,
+                target_repo,
+                result,
+                title=dataset_name,
+                source=f"file://{file.filename or 'upload'}",
+                kind="file",
+                language=language,
+                model_ref=model_qa_r,
+            )
+        return response
     except HTTPException:
         raise
     except ValueError as e:
         # Unsupported/corrupt file surfaced by the ingestion layer → 400.
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
     except Exception as e:
         logging.error(f"Unexpected error in create_dataset_for_file: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
-        )
+        ) from e
 
 
 @router.post(
@@ -212,10 +283,10 @@ async def create_dataset_for_url(
     """Create a dataset from a single web page."""
     start_time = time.time()
     language = _language(request.target_language)
-    model_cleaning = await run_in_threadpool(
-        _model, "cleaning", request.model_cleaning, user.id, creds
+    models = await run_in_threadpool(
+        _models, user.id, creds, cleaning=request.model_cleaning, qa=request.model_qa
     )
-    model_qa = await run_in_threadpool(_model, "qa", request.model_qa, user.id, creds)
+    model_cleaning, model_qa = models["cleaning"], models["qa"]
 
     try:
         result = await DatasetPipeline(user.id, creds).process_url(
@@ -225,9 +296,10 @@ async def create_dataset_for_url(
             model_cleaning=model_cleaning,
             model_qa=model_qa,
             similarity_threshold=request.similarity_threshold,
-            persist=request.persist,
+            # A draft replaces the local dataset.
+            persist=request.persist and not request.target_repo,
         )
-        return _build_response(
+        response = _build_response(
             result,
             request.dataset_name,
             request.similarity_threshold,
@@ -236,8 +308,23 @@ async def create_dataset_for_url(
             model_qa,
             time.time() - start_time,
         )
+        if request.target_repo:
+            response.draft_run_id = await _keep_draft(
+                user,
+                creds,
+                request.target_repo,
+                result,
+                title=request.dataset_name,
+                source=request.url,
+                kind="web",
+                language=language,
+                model_ref=model_qa,
+            )
+        return response
     except WebFetchError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -245,4 +332,4 @@ async def create_dataset_for_url(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
-        )
+        ) from e

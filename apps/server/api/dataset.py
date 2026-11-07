@@ -1,9 +1,9 @@
-import logging
 from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
+from server.api.errors import internal_error
 from server.models.user import User
 from server.api.deps import get_credentials
 from server.services.auth import get_current_user
@@ -61,10 +61,9 @@ def create_dataset(
     try:
         return create_dataset_view(user.id, name, description)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error creating new dataset: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        raise internal_error("Creating the dataset") from None
 
 
 @router.get("/dataset", response_model=Union[DatasetResponse, List[DatasetResponse]])
@@ -87,9 +86,8 @@ def get_all_datasets(
         return list_datasets_view(user.id)
     except HTTPException:
         raise
-    except Exception as e:
-        logging.error(f"Error fetching datasets: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise internal_error("Listing your datasets") from None
 
 
 @router.get("/dataset/{dataset_name}/sources", response_model=DatasetSourcesResponse)
@@ -98,10 +96,9 @@ def get_dataset_sources(dataset_name: str, user: User = Depends(get_current_user
     try:
         return get_dataset_sources_view(user.id, dataset_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error fetching sources for {dataset_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Reading the sources of {dataset_name}") from None
 
 
 @router.get("/dataset/{dataset_name}/versions", response_model=DatasetVersionsResponse)
@@ -110,10 +107,9 @@ def get_dataset_versions(dataset_name: str, user: User = Depends(get_current_use
     try:
         return list_dataset_versions(user.id, dataset_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error fetching versions for {dataset_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Reading the versions of {dataset_name}") from None
 
 
 @router.post(
@@ -141,14 +137,13 @@ async def import_huggingface_dataset(
             import_dataset_from_hub, user.id, creds, repo_id, dataset_name
         )
     except HuggingFaceNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except HuggingFaceImportTooLargeError as e:
-        raise HTTPException(status_code=413, detail=str(e))
+        raise HTTPException(status_code=413, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error importing Hugging Face dataset {repo_id}: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"Hugging Face import failed: {e}")
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Importing {repo_id} from Hugging Face", 502) from None
 
 
 @router.post(
@@ -169,15 +164,16 @@ def export_to_huggingface(
     try:
         return export_dataset_to_hub(user.id, creds, dataset_name, repo_id)
     except HuggingFaceNotConfiguredError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except HuggingFaceRepoPublicError as e:
         # The dataset would become public — refuse, and say how to proceed.
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error exporting {dataset_name} to Hugging Face: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"Hugging Face export failed: {e}")
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(
+            f"Publishing {dataset_name} to Hugging Face", 502
+        ) from None
 
 
 @router.post(
@@ -194,10 +190,9 @@ def duplicate_dataset(
     try:
         return duplicate_dataset_view(user.id, dataset_name, target_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error duplicating dataset {dataset_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Copying {dataset_name}") from None
 
 
 @router.get(
@@ -206,17 +201,21 @@ def duplicate_dataset(
 )
 def analyze_similarities(
     dataset_name: str,
-    threshold: float = Query(0.8, description="Similarity threshold"),
+    threshold: float = Query(
+        0.8,
+        ge=0.5,
+        le=1.0,
+        description="Similarity threshold (0.5-1.0)",
+    ),
     user: User = Depends(get_current_user),
 ):
     """Analyze near-duplicate questions in a dataset (read-only)."""
     try:
         return analyze_similarities_view(user.id, dataset_name, threshold)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error in analyze_similarities endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error("The duplicate analysis") from None
 
 
 @router.post(
@@ -226,7 +225,11 @@ def analyze_similarities(
 def clean_similarities(
     dataset_name: str,
     threshold: float = Query(
-        0.8, description="Similarity threshold to detect duplicates (0.0-1.0)"
+        0.8,
+        ge=0.5,
+        le=1.0,
+        # Lower, nearly every pair counts as a duplicate and gets deleted.
+        description="Similarity threshold to detect duplicates (0.5-1.0)",
     ),
     user: User = Depends(get_current_user),
 ):
@@ -234,10 +237,9 @@ def clean_similarities(
     try:
         return clean_similarities_view(user.id, dataset_name, threshold)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error in clean_similarities endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error("Cleaning the duplicates") from None
 
 
 @router.post(
@@ -257,12 +259,11 @@ def resolve_pair(
     try:
         return resolve_similarity_pair(user.id, dataset_name, body.remove_id)
     except AmbiguousRecordError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error in resolve_pair endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error("Resolving the pair") from None
 
 
 @router.delete(
@@ -270,11 +271,10 @@ def resolve_pair(
     response_model=DeleteDatasetResponse,
 )
 def delete_dataset(dataset_name: str, user: User = Depends(get_current_user)):
-    """Delete one of your datasets, its Q/A pairs and its Qdrant collection."""
+    """Delete one of your datasets and its Q/A pairs."""
     try:
         return delete_dataset_view(user.id, dataset_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error deleting dataset {dataset_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        raise internal_error(f"Deleting {dataset_name}") from None

@@ -11,6 +11,7 @@ const LABELS: Record<string, string> = {
   '/dashboard': 'Overview',
   '/datasets': 'Datasets',
   '/drafts': 'Drafts',
+  '/github': 'GitHub',
   '/generate': 'Generate',
   '/jobs': 'Jobs',
   '/quality': 'Quality control',

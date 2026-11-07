@@ -127,7 +127,7 @@ def _salvage_objects(text: str) -> list:
             start = stack.pop()
             try:
                 objects.append(json.loads(text[start : i + 1]))
-            except Exception:
+            except Exception:  # noqa: S112 — not JSON: not a candidate
                 continue
     return objects
 
@@ -149,7 +149,7 @@ def _parse_qa_list(text: str) -> List[QA]:
     # Fast path: the whole payload is a QAList object with all-valid items.
     try:
         return QAList.model_validate_json(cleaned).items
-    except Exception:
+    except Exception:  # noqa: S110 — the slower paths below take over
         pass
 
     # Build candidate item-lists from every JSON form we can find: the outermost
@@ -165,7 +165,7 @@ def _parse_qa_list(text: str) -> List[QA]:
             continue
         try:
             data = json.loads(cleaned[start : end + 1])
-        except Exception:
+        except Exception:  # noqa: S112 — not JSON: not a candidate
             continue
         if isinstance(data, list):
             candidates.append(data)

@@ -89,6 +89,14 @@ class TestRefresh:
         """No reuse grace: any second use of a refresh token is treated as theft."""
         monkeypatch.setattr(config, "auth_refresh_reuse_grace_seconds", 0)
 
+    @staticmethod
+    def _present(client, token):
+        """Send ``token`` as the refresh cookie — alone: the jar also holds the one
+        the last response set, and of two same-named cookies the server reads
+        the last."""
+        client.cookies.delete(config.auth_refresh_cookie_name)
+        client.cookies.set(config.auth_refresh_cookie_name, token)
+
     def _login(self, client, test_db, email="carol@example.com", password="secret"):
         _seed_user(test_db, email=email, password=password)
         resp = client.post("/auth/login", json={"email": email, "password": password})
@@ -112,13 +120,28 @@ class TestRefresh:
         # The new access token authenticates.
         assert client.get("/auth/me").status_code == 200
 
+    def test_only_a_sign_in_dates_the_session(self, client, test_db):
+        """Deleting the account needs a recent sign-in: a refresh isn't one."""
+        self._login(client, test_db)
+        assert client.post("/auth/refresh").status_code == 200
+        resp = client.delete("/me")
+        assert resp.status_code == 403
+        assert "Sign in again" in resp.json()["detail"]
+
+        resp = client.post(
+            "/auth/login", json={"email": "carol@example.com", "password": "secret"}
+        )
+        assert resp.status_code == 200
+        assert client.delete("/me").status_code == 204
+        assert client.get("/auth/me").status_code == 401
+
     def test_consumed_refresh_token_is_rejected(self, client, test_db, strict_rotation):
         self._login(client, test_db)
         old = client.cookies.get(config.auth_refresh_cookie_name)
         assert client.post("/auth/refresh").status_code == 200
 
         # Replay the pre-rotation token.
-        client.cookies.set(config.auth_refresh_cookie_name, old)
+        self._present(client, old)
         assert client.post("/auth/refresh").status_code == 401
 
     def test_replay_revokes_the_successor_too(self, client, test_db, strict_rotation):
@@ -127,11 +150,11 @@ class TestRefresh:
         assert client.post("/auth/refresh").status_code == 200
         successor = client.cookies.get(config.auth_refresh_cookie_name)
 
-        client.cookies.set(config.auth_refresh_cookie_name, old)
+        self._present(client, old)
         assert client.post("/auth/refresh").status_code == 401
 
         # The whole family is dead: the legitimate successor no longer works.
-        client.cookies.set(config.auth_refresh_cookie_name, successor)
+        self._present(client, successor)
         assert client.post("/auth/refresh").status_code == 401
 
     def test_a_tab_racing_the_rotation_is_not_logged_out(self, client, test_db):
@@ -143,7 +166,7 @@ class TestRefresh:
         assert first_response.status_code == 200
         first = first_response.cookies.get(config.auth_refresh_cookie_name)
 
-        client.cookies.set(config.auth_refresh_cookie_name, old)
+        self._present(client, old)
         second_response = client.post("/auth/refresh")
         assert second_response.status_code == 200
         second = second_response.cookies.get(config.auth_refresh_cookie_name)
@@ -152,7 +175,7 @@ class TestRefresh:
         # Both successors are live: neither tab is kicked out.
         for token in (first, second):
             client.cookies.clear()
-            client.cookies.set(config.auth_refresh_cookie_name, token)
+            self._present(client, token)
             assert client.post("/auth/refresh").status_code == 200
 
     def test_refresh_is_throttled_per_client(self, client, test_db, monkeypatch):
@@ -171,7 +194,7 @@ class TestRefresh:
         assert client.post("/auth/refresh").status_code == 401
 
     def test_refresh_with_garbage_cookie_is_401(self, client):
-        client.cookies.set(config.auth_refresh_cookie_name, "not-a-real-token")
+        self._present(client, "not-a-real-token")
         assert client.post("/auth/refresh").status_code == 401
 
     def test_logout_revokes_the_refresh_token(self, client, test_db):
@@ -180,7 +203,7 @@ class TestRefresh:
         assert client.post("/auth/logout").status_code == 204
 
         # Even if the cookie value was captured, it can't renew the session.
-        client.cookies.set(config.auth_refresh_cookie_name, token)
+        self._present(client, token)
         assert client.post("/auth/refresh").status_code == 401
 
 

@@ -45,11 +45,29 @@ def mock_qa_service():
         yield instance
 
 
+class _FakePages:
+    """What ``open_pages`` returns: pages rendered on demand, recorded in order."""
+
+    def __init__(self, pages):
+        self._pages = pages
+        self.page_count = len(pages)
+        self.events = []
+        self.closed = False
+
+    def render(self, index):
+        self.events.append(f"render {index}")
+        return self._pages[index]
+
+    def close(self):
+        self.events.append("close")
+        self.closed = True
+
+
 class TestDatasetPipeline:
     """Tests for DatasetPipeline class"""
 
     @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.render_page_images", new_callable=AsyncMock)
+    @patch("server.pipelines.dataset.open_pages")
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
     async def test_process_file_success(
@@ -60,12 +78,21 @@ class TestDatasetPipeline:
         mock_qa_service,
     ):
         """process_file transcribes each page, generates QA and aggregates stats."""
-        mock_render_pages.return_value = [
-            ("doc.pdf p.1", b"img1", "image/png"),
-            ("doc.pdf p.2", b"img2", "image/png"),
-        ]
+        pages = _FakePages(
+            [
+                ("doc.pdf p.1", b"img1", "image/png"),
+                ("doc.pdf p.2", b"img2", "image/png"),
+            ]
+        )
+        mock_render_pages.return_value = pages
+        texts = iter(["text from page one", "text from page two"])
+
+        async def transcribe(image_bytes, *, mime_type, model):
+            pages.events.append(f"transcribe {image_bytes.decode()}")
+            return next(texts)
+
         mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
-            side_effect=["text from page one", "text from page two"]
+            side_effect=transcribe
         )
         mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
             side_effect=[["qa1"], ["qa2", "qa3"]]
@@ -102,9 +129,17 @@ class TestDatasetPipeline:
         # Saved items use a file:// source.
         save_kwargs = mock_qa_service.process_qa_pairs.call_args.kwargs
         assert save_kwargs["url"] == "file://doc.pdf"
+        # One page at a time — rendered, transcribed, then the next — and closed.
+        assert pages.events == [
+            "render 0",
+            "transcribe img1",
+            "render 1",
+            "transcribe img2",
+            "close",
+        ]
 
     @pytest.mark.asyncio
-    @patch("server.pipelines.dataset.render_page_images", new_callable=AsyncMock)
+    @patch("server.pipelines.dataset.open_pages")
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")
     async def test_process_file_skips_pages_without_text(
@@ -115,10 +150,12 @@ class TestDatasetPipeline:
         mock_qa_service,
     ):
         """A page the VLM can't transcribe is skipped (no QA generation/saving)."""
-        mock_render_pages.return_value = [
-            ("doc.pdf p.1", b"img1", "image/png"),
-            ("doc.pdf p.2", b"img2", "image/png"),
-        ]
+        mock_render_pages.return_value = _FakePages(
+            [
+                ("doc.pdf p.1", b"img1", "image/png"),
+                ("doc.pdf p.2", b"img2", "image/png"),
+            ]
+        )
         mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
             side_effect=["", "real text"]  # page 1 has no readable text
         )

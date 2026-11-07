@@ -160,16 +160,19 @@ class OpenAIProvider:
             messages.append({"role": "system", "content": req.system})
         messages.append({"role": "user", "content": content})
 
-        kwargs: Dict[str, Any] = dict(
-            model=model,
-            messages=messages,
-            max_tokens=req.max_tokens,
-            temperature=config.temperature,
-        )
-        # "low" keeps gpt-oss-style reasoning models from spending their whole
-        # budget thinking; OPENAI_REASONING_EFFORT=off for models rejecting it.
+        kwargs: Dict[str, Any] = dict(model=model, messages=messages)
+        # Reasoning models (o-series, gpt-5): the budget goes as
+        # max_completion_tokens (they refuse max_tokens), the temperature stays
+        # theirs (they refuse any other), and "low" keeps gpt-oss-style ones
+        # from spending the whole budget thinking. OPENAI_REASONING_EFFORT=off
+        # for models rejecting the parameter: the classic shape goes out then,
+        # which every OpenAI-compatible endpoint takes.
         if req.reasoning and config.openai_reasoning_effort:
+            kwargs["max_completion_tokens"] = req.max_tokens
             kwargs["reasoning_effort"] = config.openai_reasoning_effort
+        else:
+            kwargs["max_tokens"] = req.max_tokens
+            kwargs["temperature"] = config.temperature
         async with self.build_client(creds) as client:
             response = await client.chat.completions.create(**kwargs)
         text = (response.choices[0].message.content or "").strip()

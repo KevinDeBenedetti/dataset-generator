@@ -1,5 +1,8 @@
 """Local sentence embeddings for QA generation — no API call, no GPU.
 
+The vector collections (``services/collections.py``) are embedded here too,
+with one of :data:`COLLECTION_MODELS`.
+
 Backs four checks shared by the in-app pipeline (``services/qa.py``) and the
 scheduled Q&A job (``jobs/qa_dataset.py``):
 
@@ -23,6 +26,8 @@ import logging
 import re
 import threading
 import time
+from collections import OrderedDict
+from dataclasses import dataclass
 from typing import List, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
@@ -76,6 +81,19 @@ class LocalEmbedder:
             return np.zeros((0, 0), dtype=np.float32)
         return normalize(np.array(list(self._model.embed(list(texts)))))
 
+    # A retrieval model may embed what is searched and what searches it
+    # differently (a prefix, a task); FastEmbed applies the model's own rule.
+
+    def embed_passages(self, texts: Sequence[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, 0), dtype=np.float32)
+        return normalize(np.array(list(self._model.passage_embed(list(texts)))))
+
+    def embed_queries(self, texts: Sequence[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, 0), dtype=np.float32)
+        return normalize(np.array(list(self._model.query_embed(list(texts)))))
+
 
 _lock = threading.Lock()
 _embedder: Optional[LocalEmbedder] = None
@@ -114,6 +132,125 @@ def get_local_embedder() -> Optional[Embedder]:
                 exc,
             )
             return None
+
+
+# --- Collection models (services/collections.py) --------------------------------
+
+
+class RetrievalEmbedder(Protocol):
+    """What a vector collection is built and searched with."""
+
+    model_name: str
+
+    def embed_passages(self, texts: Sequence[str]) -> np.ndarray: ...
+
+    def embed_queries(self, texts: Sequence[str]) -> np.ndarray: ...
+
+
+class EmbeddingModelError(RuntimeError):
+    """A collection's model could not be loaded (no network, full disk)."""
+
+
+@dataclass(frozen=True)
+class EmbeddingModel:
+    """A model a vector collection can be embedded with: local, CPU only."""
+
+    name: str
+    dimensions: Optional[int]
+    size_mb: Optional[int]
+    languages: str
+    description: str
+
+
+# Small models only: a build embeds every row of a split on the worker's CPU,
+# and a search embeds its query in the API process. Anything else is refused,
+# so a request can't make the server download gigabytes.
+COLLECTION_MODELS: Tuple[EmbeddingModel, ...] = (
+    EmbeddingModel(
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        384,
+        220,
+        "50+ languages",
+        "The model of the app's own duplicate checks, already in the image.",
+    ),
+    EmbeddingModel(
+        "BAAI/bge-small-en-v1.5",
+        384,
+        67,
+        "English",
+        "Small and tuned for retrieval.",
+    ),
+    EmbeddingModel(
+        "BAAI/bge-base-en-v1.5",
+        768,
+        210,
+        "English",
+        "Tuned for retrieval: more accurate than the small one, and slower.",
+    ),
+    EmbeddingModel(
+        "sentence-transformers/all-MiniLM-L6-v2",
+        384,
+        90,
+        "English",
+        "The fastest.",
+    ),
+)
+
+
+def collection_models() -> List[EmbeddingModel]:
+    """The models a collection can use, the deployment's SEMANTIC_MODEL first."""
+    models = list(COLLECTION_MODELS)
+    names = [m.name for m in models]
+    if config.semantic_model in names:
+        models.insert(0, models.pop(names.index(config.semantic_model)))
+    elif config.semantic_model:
+        models.insert(
+            0,
+            EmbeddingModel(
+                config.semantic_model,
+                None,
+                None,
+                "",
+                "The model of the app's own duplicate checks (SEMANTIC_MODEL).",
+            ),
+        )
+    return models
+
+
+# Each loaded model holds 100-500 MB: a process keeps the two last used.
+_MAX_LOADED = 2
+_loaded_lock = threading.Lock()
+_loaded: "OrderedDict[str, LocalEmbedder]" = OrderedDict()
+
+
+def get_collection_embedder(model_name: str) -> RetrievalEmbedder:
+    """The model a collection is embedded with, loaded (and downloaded) on
+    first use. Unlike :func:`get_local_embedder` it raises
+    :class:`EmbeddingModelError` when the model can't load: a collection has no
+    lexical fallback."""
+    if model_name == config.semantic_model:
+        shared = _embedder  # already loaded for the duplicate checks
+        if shared is not None:
+            return shared
+    with _loaded_lock:
+        model = _loaded.get(model_name)
+        if model is not None:
+            _loaded.move_to_end(model_name)
+            return model
+        try:
+            model = LocalEmbedder(model_name, config.fastembed_cache_path or None)
+        except Exception as exc:  # noqa: BLE001 — reported to the caller below
+            logger.warning("Embedding model %s unavailable: %s", model_name, exc)
+            raise EmbeddingModelError(
+                f"The embedding model {model_name} could not be loaded. The server "
+                "downloads it from Hugging Face on first use: check its network "
+                "access and the space left in FASTEMBED_CACHE_PATH."
+            ) from None
+        logger.info("Loaded embedding model %s for collections", model_name)
+        _loaded[model_name] = model
+        while len(_loaded) > _MAX_LOADED:
+            _loaded.popitem(last=False)
+        return model
 
 
 class SemanticIndex:
@@ -199,7 +336,7 @@ def split_sections(
     ``max_chars`` on its own is hard-cut rather than lost.
     """
     bounds = sorted({0, len(text), *(m.start() for m in _HEADING.finditer(text))})
-    sections = [text[a:b] for a, b in zip(bounds, bounds[1:])]
+    sections = [text[a:b] for a, b in zip(bounds, bounds[1:], strict=False)]
 
     pieces: List[str] = []
     for section in sections:
@@ -234,7 +371,7 @@ def uncovered_sections(
     if not len(questions):
         return list(sections)
     out: List[str] = []
-    for section, vector in zip(sections, section_vectors):
+    for section, vector in zip(sections, section_vectors, strict=True):
         match = questions.best(vector)
         if match is None or match[1] < threshold:
             out.append(section)

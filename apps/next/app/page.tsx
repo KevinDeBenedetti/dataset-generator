@@ -90,7 +90,7 @@ const steps = [
 ]
 
 const formats = [
-  { icon: Zap, name: 'Qdrant', description: 'Vector search over your datasets' },
+  { icon: Zap, name: 'Hugging Face', description: 'Private dataset repos, versioned' },
   { icon: FileJson, name: 'JSON / JSONL', description: 'Standard data interchange' },
   { icon: Table, name: 'CSV', description: 'Tabular analysis and review' },
   { icon: Command, name: 'REST API', description: 'Extensible custom formats' },

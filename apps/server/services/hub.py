@@ -906,7 +906,7 @@ def _coerce(value: Any, kind: str) -> Any:
         if kind == "string":
             return str(value)
     except (TypeError, ValueError):
-        raise HubBadQueryError(f"'{value}' is not a valid {kind} value")
+        raise HubBadQueryError(f"'{value}' is not a valid {kind} value") from None
     raise HubBadQueryError(f"Columns of type {kind} can't be filtered on a value")
 
 

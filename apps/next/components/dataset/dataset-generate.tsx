@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,8 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { ModelSelect } from '@/components/app/model-select'
 import { useGenerateStore } from '@/stores/generate'
-import { useDatasets, useGenerateDataset } from '@/hooks'
+import { HF_REPO_PATTERN, defaultTargetRepo } from '@/components/github/recipe-state'
+import { useGenerateDataset, useHubDatasets } from '@/hooks'
 
 const availableLanguages = [
   { value: 'fr', label: 'French' },
@@ -35,38 +36,34 @@ const SELECT_CLASS =
   'h-9 w-full rounded-md border bg-white px-3 text-sm outline-none focus-visible:border-ring'
 
 interface DatasetGenerateProps {
-  // Pre-selects the dataset the generated pairs land in (the "add a source to
-  // an existing dataset" flow). Still editable — it only seeds the field.
-  initialDatasetName?: string
+  // Pre-fills the Hugging Face dataset the draft publishes to (the "add data"
+  // flow of a dataset page). Still editable — it only seeds the field.
+  initialTarget?: string
 }
 
-export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProps) {
+export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
   const [source, setSource] = useState<SourceKind>('file')
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState('')
-  const [manualDatasetName, setManualDatasetName] = useState(initialDatasetName)
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [target, setTarget] = useState<string | null>(initialTarget || null)
   const [targetLanguage, setTargetLanguage] = useState<string>('fr')
   const [similarityThreshold, setSimilarityThreshold] = useState([0.85])
-  const [persist, setPersist] = useState(true)
   // '' = the role default set on the Models page.
   const [modelQa, setModelQa] = useState('')
   const [modelSource, setModelSource] = useState('')
 
-  const { data: datasets = [] } = useDatasets()
+  const hub = useHubDatasets()
   const generateMutation = useGenerateDataset()
 
   const generationStatus = useGenerateStore((state) => state.generationStatus)
   const error = useGenerateStore((state) => state.error)
 
-  // Derive datasetName from selected dataset or use manual input
-  const datasetName = useMemo(() => {
-    if (selectedDatasetId) {
-      const found = datasets.find((d) => d.id === selectedDatasetId)
-      return found?.name || manualDatasetName
-    }
-    return manualDatasetName
-  }, [selectedDatasetId, datasets, manualDatasetName])
+  // The draft publishes to an existing Hub dataset or a new one; until the
+  // field is edited it follows the title (`<namespace>/<slug>`).
+  const targetRepo = target ?? defaultTargetRepo(title || 'my-dataset', hub.data?.namespace)
+  const targetValid = HF_REPO_PATTERN.test(targetRepo)
+  const datasetName = title.trim() || targetRepo.split('/').pop() || ''
 
   const isProcessing = generationStatus === 'pending'
 
@@ -74,16 +71,16 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
   const hasSource = source === 'file' ? !!file : /^https?:\/\/\S+$/i.test(url.trim())
 
   const handleGenerate = async () => {
-    if (!hasSource || !datasetName) {
+    if (!hasSource || !datasetName || !targetValid) {
       return
     }
 
     const common = {
       name: datasetName,
+      targetRepo,
       targetLanguage,
       similarityThreshold: similarityThreshold[0] ?? 0.85,
       modelQa: modelQa || null,
-      persist,
     }
 
     try {
@@ -92,48 +89,48 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
           ? { ...common, source: 'file', file: file as File, modelVlm: modelSource || null }
           : { ...common, source: 'url', url: url.trim(), modelCleaning: modelSource || null },
       )
-      toast.success('Dataset generated')
+      toast.success('Draft ready: review it before it goes to Hugging Face')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
   }
 
-  const handleDatasetSelect = (value: string) => {
-    if (value === 'none') {
-      setSelectedDatasetId(null)
-      return
-    }
-    setSelectedDatasetId(value)
-  }
-
   return (
     <div className="w-full flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        {/* Select for existing dataset */}
-        <Select
-          value={selectedDatasetId || 'none'}
-          onValueChange={handleDatasetSelect}
-          disabled={isProcessing}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select an existing dataset" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Select an existing dataset</SelectItem>
-            {datasets.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
+        <label className="text-sm font-medium" htmlFor="gen-title">
+          Title
+        </label>
         <Input
-          value={datasetName}
-          onChange={(e) => setManualDatasetName(e.target.value)}
-          placeholder="Dataset name"
+          id="gen-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Product documentation"
           disabled={isProcessing}
         />
+        <label className="text-sm font-medium" htmlFor="gen-target">
+          Publishes to (Hugging Face dataset)
+        </label>
+        <Input
+          id="gen-target"
+          className="font-mono"
+          list="gen-target-options"
+          value={targetRepo}
+          onChange={(e) => setTarget(e.target.value)}
+          aria-invalid={!targetValid}
+          disabled={isProcessing}
+        />
+        <datalist id="gen-target-options">
+          {(hub.data?.datasets ?? []).map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.pretty_name ?? d.id}
+            </option>
+          ))}
+        </datalist>
+        <p className="text-xs text-muted-foreground">
+          The pairs become a draft you review before they are added to this dataset (created private
+          if it doesn't exist).
+        </p>
 
         {/* Source picker: File / Web page */}
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
@@ -258,33 +255,18 @@ export function DatasetGenerate({ initialDatasetName = '' }: DatasetGenerateProp
                 thumbLabel="Similarity threshold"
               />
             </div>
-
-            {/* Persistence */}
-            <div className="flex flex-col gap-1 border-t pt-3">
-              <label className="flex items-center gap-2 text-xs text-gray-700">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-primary"
-                  checked={persist}
-                  onChange={(e) => setPersist(e.target.checked)}
-                  disabled={isProcessing}
-                />
-                <span className="font-medium">Save the dataset</span>
-                <span className="text-gray-400">(store the pairs & record a version)</span>
-              </label>
-            </div>
           </div>
         </div>
 
         <Button
-          disabled={!hasSource || !datasetName || isProcessing}
+          disabled={!hasSource || !datasetName || !targetValid || isProcessing}
           className="mt-2"
           onClick={handleGenerate}
         >
           {isProcessing ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
-            <span>Generate Dataset</span>
+            <span>Generate draft</span>
           )}
         </Button>
 

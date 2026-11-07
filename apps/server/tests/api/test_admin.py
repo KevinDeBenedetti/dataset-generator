@@ -2,8 +2,8 @@
 
 import io
 import json
+import time
 import zipfile
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -44,10 +44,13 @@ def app(test_db):
     return application
 
 
-def _as(app, user):
+def _as(app, user, signed_in_at=None):
+    """A client with ``user``'s session; ``signed_in_at`` dates its sign-in
+    (left out: a refreshed session)."""
     client = TestClient(app, base_url="http://testserver", headers={"Origin": FRONT})
     if user is not None:
-        client.cookies.set(config.auth_cookie_name, create_access_token(user))
+        token = create_access_token(user, auth_time=signed_in_at)
+        client.cookies.set(config.auth_cookie_name, token)
     return client
 
 
@@ -184,12 +187,10 @@ def test_deactivating_signs_the_user_out_at_once(app, root, bob, test_db):
     )
 
 
-def test_deleting_a_user_removes_their_data_and_collections(app, root, bob, test_db):
-    with patch("server.services.qdrant.delete_collection", return_value=True) as drop:
-        response = _as(app, root).delete(f"/admin/users/{bob.id}")
+def test_deleting_a_user_removes_their_data(app, root, bob, test_db):
+    response = _as(app, root).delete(f"/admin/users/{bob.id}")
 
     assert response.status_code == 204
-    drop.assert_called_once()
     test_db.expire_all()
     assert test_db.get(User, bob.id) is None
     entry = test_db.scalar(select(AuditLog).where(AuditLog.action == "user.deleted"))
@@ -300,13 +301,24 @@ def test_export_contains_your_data_but_not_your_keys(app, bob):
 
 
 def test_deleting_your_own_account(app, bob, test_db):
-    client = _as(app, bob)
-    with patch("server.services.qdrant.delete_collection", return_value=True):
-        assert client.delete("/me").status_code == 204
+    client = _as(app, bob, signed_in_at=int(time.time()))
+    assert client.delete("/me").status_code == 204
     test_db.expire_all()
     assert test_db.get(User, bob.id) is None
     assert test_db.scalar(select(Identity)) is None
 
 
+def test_deleting_your_account_needs_a_recent_sign_in(app, bob, test_db):
+    # A refreshed session (undated), then a sign-in older than the window.
+    old = int(time.time()) - config.auth_reauth_max_age_seconds - 5
+    for client in (_as(app, bob), _as(app, bob, signed_in_at=old)):
+        resp = client.delete("/me")
+        assert resp.status_code == 403
+        assert "Sign in again" in resp.json()["detail"]
+    test_db.expire_all()
+    assert test_db.get(User, bob.id) is not None
+
+
 def test_the_last_admin_cannot_delete_their_own_account(app, root):
-    assert _as(app, root).delete("/me").status_code == 409
+    client = _as(app, root, signed_in_at=int(time.time()))
+    assert client.delete("/me").status_code == 409
