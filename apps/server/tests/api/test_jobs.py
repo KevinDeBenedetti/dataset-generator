@@ -31,8 +31,6 @@ def test_get_jobs(client: TestClient):
             "id": "github-personal",
             "title": "GitHub personal Q&A",
             "description": "…",
-            "workflow": "qa-dataset-sync.yml",
-            "schedule": "Mondays 06:00 UTC",
             "uses_model": True,
             "default_model": "claude:claude-sonnet-5-5",
             "has_draft": True,

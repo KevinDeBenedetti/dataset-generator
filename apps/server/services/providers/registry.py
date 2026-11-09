@@ -3,7 +3,7 @@
 Callers pass a model reference (``"claude:claude-sonnet-5-5"``, see
 :func:`server.services.providers.base.parse_ref`) and never touch a provider
 SDK directly, so every text/vision call — cleaning, QA generation, file
-transcription, the scheduled jobs — can run on either provider.
+transcription, the dataset jobs — can run on either provider.
 """
 
 import logging

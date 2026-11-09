@@ -105,7 +105,7 @@ async def test_score_dataset_requires_an_llm(monkeypatch):
     monkeypatch.setattr(
         scoring, "resolve_model", lambda role, override=None, user_id=None: "openai:m"
     )
-    with pytest.raises(ScoringNotConfiguredError, match="OpenAI API key"):
+    with pytest.raises(ScoringNotConfiguredError, match=r"API key \(and endpoint\)"):
         await score_dataset(OWNER, "ds", NONE)
 
 

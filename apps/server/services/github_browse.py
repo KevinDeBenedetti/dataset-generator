@@ -9,7 +9,10 @@ would use.
 
 Every answer is cached a few minutes per username: a repo's detail costs up
 to a few dozen GitHub requests (README, tree, dependency manifests), and the
-quota is 60 requests an hour without a token.
+quota is 60 requests an hour without a token. Per username, not per caller —
+so a private repo is refused before anything of it is read, even when the
+caller's token could read it: cached, it would reach anyone who saves the
+same username.
 """
 
 import logging
@@ -135,6 +138,15 @@ def _own_repo(creds: Credentials, owner: str) -> str:
     return username
 
 
+async def _refuse_private(client: CorpusGitHubClient, owner: str, name: str) -> None:
+    """Public repos only, checked before any other read of the repo (see the
+    module docstring)."""
+    if not await client.is_public(owner, name):
+        raise GitHubNotFoundError(
+            f"'{owner}/{name}' is not public: this page shows public repos only"
+        )
+
+
 def _iso(epoch: int) -> Optional[str]:
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat() if epoch else None
 
@@ -242,6 +254,7 @@ async def repo_detail(creds: Credentials, owner: str, name: str) -> Dict[str, An
         return cached
 
     async def read(client: CorpusGitHubClient) -> Dict[str, Any]:
+        await _refuse_private(client, username, name)
         repo: RepoData = await client.fetch_repo(username, name)
         branch = await client.default_branch(username, name)
         try:
@@ -308,6 +321,7 @@ async def doc_content(
         return cached
 
     async def read(client: CorpusGitHubClient) -> Dict[str, Any]:
+        await _refuse_private(client, username, name)
         content = await client.file_content(username, name, path)
         truncated = len(content) > MAX_DOC_CHARS
         if truncated:

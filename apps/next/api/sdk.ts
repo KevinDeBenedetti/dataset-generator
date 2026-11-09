@@ -803,8 +803,13 @@ function collectionPath(id: string, suffix = ''): string {
   return `/collections/${encodeURIComponent(id)}${suffix}`
 }
 
-export function getCollections(): Promise<CollectionsOut> {
-  return hubGet('/collections', 'Failed to list your collections')
+/** `discover` also asks your OpenAI-compatible endpoint which embedding models
+ * it serves (a network call on the server, cached there a few minutes). */
+export function getCollections(discover = false): Promise<CollectionsOut> {
+  return hubGet(
+    `/collections${discover ? '?discover=true' : ''}`,
+    'Failed to list your collections',
+  )
 }
 
 export function getCollection(id: string): Promise<CollectionOut> {
@@ -948,9 +953,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return response.data as unknown as AuthUser
 }
 
-// Dataset job catalogue (server/jobs/registry.py) — the same code their
-// GitHub Actions workflows run on a schedule, triggered here on demand. Each
-// job serves the JSON schema of its options, which the Jobs page renders.
+// Dataset job catalogue (server/jobs/registry.py): the whole-account jobs of
+// the GitHub page, run on demand. Each job serves the JSON schema of its
+// options, which its card renders.
 export async function getJobs(): Promise<JobInfo[]> {
   const response = await client.get<{ jobs: JobInfo[] }>({ url: '/jobs' })
   if (response.error) {
@@ -1021,8 +1026,14 @@ export async function publishJobRun(runId: string, selection: DraftSelection): P
 
 // Absolute URL the browser navigates to in order to sign in with a provider
 // ("infomaniak", "github"), or — while signed in — to link it to the account.
-export function ssoUrl(provider: string, action: 'login' | 'link' = 'login'): string {
-  return `${API_BASE_URL}/auth/${encodeURIComponent(provider)}/${action}`
+// `from` is the app path a sign-in lands on (the server checks it again).
+export function ssoUrl(
+  provider: string,
+  action: 'login' | 'link' = 'login',
+  from?: string,
+): string {
+  const url = `${API_BASE_URL}/auth/${encodeURIComponent(provider)}/${action}`
+  return from ? `${url}?from=${encodeURIComponent(from)}` : url
 }
 
 // Hand-written: mirrors ProvidersResponse (apps/server/api/auth.py).

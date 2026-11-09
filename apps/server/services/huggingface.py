@@ -26,6 +26,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from server.core.config import config
+from server.core.lru import WeightedLRU
 from server.services.credentials import HF_TOKEN, Credentials
 from server.services.datasets import (
     get_dataset_pairs,
@@ -71,6 +72,11 @@ def _api(creds: Credentials):
     from huggingface_hub import HfApi
 
     return HfApi(token=_require_token(creds))
+
+
+def token_fingerprint(creds: Credentials) -> str:
+    """A stable, non-reversible key for the caller's token (cache keys only)."""
+    return hashlib.sha256(creds.secret(HF_TOKEN).encode("utf-8")).hexdigest()[:32]
 
 
 def slugify(name: str) -> str:
@@ -145,21 +151,39 @@ _NON_DATA_FILENAMES = {
 }
 
 
-def _repo_tree(creds: Credentials, repo_id: str) -> Dict[str, int]:
-    """Every file of the dataset repo with its size in bytes, in one call.
+# The tree is read whole before the data files are picked. A dataset repo holds
+# a handful of files to a few hundred shards; past this many entries the
+# listing stops, rather than walking a huge repo page by page for minutes.
+MAX_TREE_ENTRIES = 5_000
 
-    ValueError if the repo is unknown.
+
+def _repo_tree(creds: Credentials, repo_id: str) -> Dict[str, int]:
+    """Every file of the dataset repo with its size in bytes, in one listing.
+
+    ValueError if the repo is unknown, HuggingFaceImportTooLargeError when it
+    holds more than :data:`MAX_TREE_ENTRIES` files and folders (the listing
+    stops there).
     """
     from huggingface_hub.errors import RepositoryNotFoundError
     from huggingface_hub.hf_api import RepoFile
 
+    tree: Dict[str, int] = {}
     try:
+        # A lazy iterator: each page is fetched as the loop reaches it.
         entries = _api(creds).list_repo_tree(
             repo_id, repo_type="dataset", recursive=True
         )
-        return {e.path: e.size for e in entries if isinstance(e, RepoFile)}
+        for seen, entry in enumerate(entries, start=1):
+            if seen > MAX_TREE_ENTRIES:
+                raise HuggingFaceImportTooLargeError(
+                    f"'{repo_id}' holds more than {MAX_TREE_ENTRIES:,} files and "
+                    "folders: too many for the app to read."
+                )
+            if isinstance(entry, RepoFile):
+                tree[entry.path] = entry.size
     except RepositoryNotFoundError:
         raise ValueError(f"Hugging Face dataset repo '{repo_id}' not found") from None
+    return tree
 
 
 def _too_large(repo_id: str) -> HuggingFaceImportTooLargeError:
@@ -182,13 +206,17 @@ def _check_sizes(
 
 
 def _download_file(
-    creds: Credentials, repo_id: str, filename: str, max_bytes: int
+    creds: Credentials,
+    repo_id: str,
+    filename: str,
+    max_bytes: int,
+    revision: Optional[str] = None,
 ) -> bytes:
     """A data file's bytes, refused when more than ``max_bytes`` arrive.
 
     The file lands in a throwaway cache, so imports never pile up on the
-    server's disk. ValueError when it is no longer in the repo (it was listed
-    a moment ago).
+    server's disk. ``revision`` pins a commit (default: the head). ValueError
+    when it is no longer in the repo (it was listed a moment ago).
     """
     from huggingface_hub import hf_hub_download
     from huggingface_hub.errors import EntryNotFoundError
@@ -199,6 +227,7 @@ def _download_file(
                 repo_id=repo_id,
                 filename=filename,
                 repo_type="dataset",
+                revision=revision,
                 token=_require_token(creds),
                 cache_dir=cache_dir,
             )
@@ -473,20 +502,51 @@ def import_dataset_from_hub(
     }
 
 
+# (token fingerprint, repo, commit) -> the bytes of that commit's
+# data/train.jsonl: what a file or URL draft counts when it is made and merges
+# into when it is published. A commit's content never changes, so an entry is
+# never stale, and the token in the key keeps one account's download (a gated
+# repo's, say) from ever serving another. Room for one file of the largest
+# size a read accepts.
+_data_files = WeightedLRU(lambda: config.max_hub_import_bytes, len)
+
+
+def forget_data_files() -> None:
+    """Drop every cached data file (tests)."""
+    _data_files.clear()
+
+
 def existing_pairs(creds: Credentials, repo_id: str) -> List[Dict[str, Any]]:
     """The rows of a dataset repo in the app's layout (``data/train.jsonl``).
 
     An unknown repo, or one without that file, has none. Capped like an
-    import (``config.max_hub_import_bytes``).
+    import (``config.max_hub_import_bytes``). The head commit is resolved on
+    every call, with the caller's token — a publication merges into what is
+    there now — but the file itself is downloaded once per commit.
     """
+    from huggingface_hub.errors import RepositoryNotFoundError
+    from huggingface_hub.hf_api import RepoFile
+
+    api = _api(creds)
     try:
-        tree = _repo_tree(creds, repo_id)
-    except ValueError:
+        sha = api.dataset_info(repo_id, expand=["sha"]).sha
+    except RepositoryNotFoundError:
         return []
-    if DATA_PATH_IN_REPO not in tree:
-        return []
-    _check_sizes(repo_id, tree, [DATA_PATH_IN_REPO], config.max_hub_import_bytes)
-    raw = _download_file(creds, repo_id, DATA_PATH_IN_REPO, config.max_hub_import_bytes)
+    key = (token_fingerprint(creds), repo_id, sha) if sha else None
+    raw = _data_files.get(key) if key else None
+    if raw is None:
+        found = api.get_paths_info(
+            repo_id, [DATA_PATH_IN_REPO], repo_type="dataset", revision=sha
+        )
+        sizes = {f.path: f.size for f in found if isinstance(f, RepoFile)}
+        if DATA_PATH_IN_REPO not in sizes:
+            return []
+        _check_sizes(repo_id, sizes, [DATA_PATH_IN_REPO], config.max_hub_import_bytes)
+        raw = _download_file(
+            creds, repo_id, DATA_PATH_IN_REPO, config.max_hub_import_bytes, revision=sha
+        )
+        if key:
+            _data_files.put(key, raw)
     return [row for row in _parse_rows(DATA_PATH_IN_REPO, raw) if isinstance(row, dict)]
 
 

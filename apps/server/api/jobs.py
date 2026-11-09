@@ -55,8 +55,8 @@ async def post_job_run(
 ) -> JobRunOut:
     """Queue a run (a worker executes it) — poll GET /jobs/runs/{id} for its state.
 
-    The same code the job's workflow runs on a schedule. A draft job
-    (github-personal) stops at a draft: review it, then POST .../publish.
+    A draft job (github-personal) stops at a draft: review it, then
+    POST .../publish.
     """
     spec = JOBS.get(job_id)
     if spec is not None and not spec.listed:

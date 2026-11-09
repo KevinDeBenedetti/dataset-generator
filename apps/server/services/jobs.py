@@ -1,10 +1,9 @@
 """Start, read, cancel and publish the runs of ``server.jobs.registry``.
 
-The jobs are the same code their GitHub Actions workflows run on a schedule.
-From the Jobs page a run is *queued* here; a worker executes it
-(services/queue.py) and the page polls its row in ``job_runs``. A draft job's
-run stops at a draft, published later by :func:`publish_run` — exactly what
-was reviewed, never a regeneration.
+A run is *queued* here, from the GitHub page or a job's own route; a worker
+executes it (services/queue.py) and the page polls its row in ``job_runs``. A
+draft job's run stops at a draft, published later by :func:`publish_run` —
+exactly what was reviewed, never a regeneration.
 """
 
 import asyncio
@@ -133,8 +132,6 @@ def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
                 "id": spec.id,
                 "title": spec.title,
                 "description": spec.description,
-                "workflow": spec.workflow,
-                "schedule": spec.schedule,
                 "uses_model": spec.uses_model,
                 "default_model": default_model if spec.uses_model else None,
                 "has_draft": spec.publisher is not None,

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { useAuthProviders, useLogin } from '@/hooks/use-auth'
+import { postLoginRedirect, useAuthProviders, useLogin } from '@/hooks/use-auth'
 import { API_BASE_URL, ssoUrl } from '@/api/sdk'
 
 // What the API's `?error=` codes mean (see apps/server/services/identities.py).
@@ -96,7 +96,7 @@ export default function LoginPage() {
               variant="outline"
               className="w-full"
               onClick={() => {
-                window.location.href = ssoUrl(provider.name)
+                window.location.href = ssoUrl(provider.name, 'login', postLoginRedirect())
               }}
             >
               Continue with {provider.label}

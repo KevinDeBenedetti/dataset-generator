@@ -81,6 +81,8 @@ class DatasetPipeline:
         # Everything this pipeline reads or writes belongs to this user: the
         # dedup pool, the quality rules, and the dataset the pairs land in.
         self.owner_id = owner_id
+        # The embeddings of the duplicate checks may run on the endpoint too.
+        self.creds = creds
         self.llm_service = LLMService(creds)
         self.qa_agent_service = QAAgentService(creds)
 
@@ -234,7 +236,9 @@ class DatasetPipeline:
         # DB reads + embedding model load + one pass over the dataset's
         # questions: all off the event loop, the CPU-heavy part on its own pool.
         rules = await asyncio.to_thread(get_quality_rules, self.owner_id)
-        qa_service = QAService(self.owner_id, dataset_name, quality_rules=rules)
+        qa_service = QAService(
+            self.owner_id, dataset_name, quality_rules=rules, creds=self.creds
+        )
         await cpu_bound(qa_service.prepare)
         return qa_service
 

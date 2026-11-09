@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
-import { useCancelJobRun, useJobRun, useJobs, usePublishJobRun, useStartJobRun } from '@/hooks'
+import { useCancelJobRun, useJobRun, usePublishJobRun, useStartJobRun } from '@/hooks'
 import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
 
 // The subset of JSON schema the job option models produce (pydantic).
@@ -473,7 +473,9 @@ function RunPanel({ runId }: { runId: string }) {
   )
 }
 
-function JobCard({ job }: { job: JobInfo }) {
+/** One job of the catalogue (GET /jobs): its options, the button that queues a
+ * run, and that run's state — with the review of its draft for a draft job. */
+export function JobCard({ job }: { job: JobInfo }) {
   const properties = (job.options_schema.properties ?? {}) as Record<string, OptionSchema>
   const [values, setValues] = useState(() => initialValues(properties))
   const [modelRef, setModelRef] = useState('')
@@ -504,12 +506,7 @@ function JobCard({ job }: { job: JobInfo }) {
   return (
     <div className="card">
       <div className="card-head">
-        <div>
-          <div className="card-title">{job.title}</div>
-          <div className="card-desc">
-            {job.schedule} via <code className="mono">{job.workflow}</code>
-          </div>
-        </div>
+        <div className="card-title">{job.title}</div>
         <span className={`badge badge-${job.configured ? 'success' : 'destructive'}`}>
           <span className="dot" />
           {job.configured ? 'Configured' : 'Not configured'}
@@ -579,48 +576,6 @@ function JobCard({ job }: { job: JobInfo }) {
           )}
         </div>
         {runId && <RunPanel runId={runId} />}
-      </div>
-    </div>
-  )
-}
-
-export default function JobsPage() {
-  const jobsQuery = useJobs()
-
-  return (
-    <div className="jobs-page">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Jobs</h1>
-          <p className="page-sub">
-            Dataset jobs built from recurring sources. Each one runs on its GitHub Actions schedule
-            and can be run here on demand — the same code either way.
-          </p>
-        </div>
-        <div className="page-actions">
-          <button
-            className="btn btn-outline"
-            onClick={() => jobsQuery.refetch()}
-            disabled={jobsQuery.isRefetching}
-            type="button"
-          >
-            <Icon name="refresh" className={jobsQuery.isRefetching ? 'animate-spin' : undefined} />
-            Refresh status
-          </button>
-        </div>
-      </div>
-
-      {jobsQuery.error && (
-        <p className="hint job-error" style={{ marginBottom: 18 }}>
-          {jobsQuery.error instanceof Error ? jobsQuery.error.message : 'Failed to load the jobs'}
-        </p>
-      )}
-      {jobsQuery.isPending && <p className="muted">Loading jobs…</p>}
-
-      <div className="grid-2" style={{ alignItems: 'start', gap: 24 }}>
-        {(jobsQuery.data ?? []).map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
       </div>
     </div>
   )

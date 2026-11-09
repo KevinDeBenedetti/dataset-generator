@@ -13,10 +13,6 @@ class JobInfo(BaseModel):
     id: str
     title: str
     description: str
-    workflow: str = Field(
-        ..., description="GitHub Actions workflow running it on a schedule"
-    )
-    schedule: str
     uses_model: bool
     default_model: Optional[str] = Field(
         None, description="Model reference used when a run names none (jobs role)"

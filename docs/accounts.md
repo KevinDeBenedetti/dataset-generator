@@ -8,7 +8,9 @@ title: Accounts, roles and keys
 
 Users sign in with **Infomaniak** (OpenID Connect) or **GitHub** (an OAuth App,
 scopes `read:user user:email`); a provider is offered once its client id and
-secret are set. Both flows use state + PKCE (S256). A sign-in is matched on the
+secret are set. Both flows use state + PKCE (S256) and, like the password form,
+land on the page that sent you to the login (its `?from=`: a path of the app
+only, checked again by the API), else on the dashboard. A sign-in is matched on the
 provider's stable id (GitHub's numeric user id, never the login); it joins an
 existing account only through a **verified** email, or when the signed-in user
 links it from **Settings → Sign-in methods**. The last sign-in method can't be
@@ -47,8 +49,13 @@ Every dataset, run, model default and quality-rule set belongs to a user;
 another user's resource answers **404**. `tests/api/test_tenant_isolation.py` walks
 every route and fails on any new one it can't classify.
 
-Each user enters their own OpenAI key, Hugging Face token and GitHub details in
-**Settings** (and, in development, a Claude token). Secrets are encrypted at rest
+Each user enters their own OpenAI-compatible key (and its base URL), Hugging
+Face token and GitHub details in **Settings** (and, in development, a Claude
+token). One exception, off unless the deployment sets
+`SERVER_LLM_FOR_ADMINS=true`: an admin who saved no OpenAI-compatible key calls
+the server's endpoint with the server's key — a gateway the operator runs, such
+as LiteLLM (see [Configuration](./configuration.md)). The role is read at each
+request and run, so a demoted admin loses it at once. Secrets are encrypted at rest
 (AES-256-GCM, bound to the user and the kind), checked against their provider
 when saved, and **write-only**: no route returns one. Calls to a user-chosen
 endpoint go through `core/net.py` (https, public addresses only, pinned

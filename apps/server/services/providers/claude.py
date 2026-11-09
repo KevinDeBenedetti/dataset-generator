@@ -151,6 +151,15 @@ class ClaudeProvider:
             for i in self._ids()
         ]
 
+    def embedding_models(self, creds: Credentials) -> List[ModelInfo]:
+        return []  # Claude has no embedding model
+
+    def endpoint(self, creds: Credentials) -> str:
+        return ""
+
+    def lent(self, creds: Credentials) -> bool:
+        return False
+
     async def list_models(self, creds: Credentials) -> List[ModelInfo]:
         return self.models(creds)
 

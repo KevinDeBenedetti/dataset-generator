@@ -22,12 +22,12 @@ export const COLLECTIONS_QUERY_KEY = ['collections']
 // A build is a worker run: while one is going, its progress is polled.
 const POLL_MS = 2000
 
-/** Your collections, with the models a new one can use. Polled while one of
- * them is being built. */
+/** Your collections, with the models a new one can use — your endpoint's
+ * embedding models among them. Polled while one of them is being built. */
 export function useCollections() {
   return useQuery({
     queryKey: COLLECTIONS_QUERY_KEY,
-    queryFn: getCollections,
+    queryFn: () => getCollections(true),
     refetchInterval: (query) =>
       query.state.data?.collections.some((c) => c.status === 'building') ? POLL_MS : false,
   })

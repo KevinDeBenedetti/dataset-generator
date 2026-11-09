@@ -1,6 +1,6 @@
 """Thin GitHub REST client, public read access only.
 
-The base the scheduled jobs build on (``server.jobs.github_snapshot``
+The base the dataset jobs build on (``server.jobs.github_snapshot``
 extends it with tree/content/profile reads). The token is optional and only
 raises the API rate limit — only public information is ever read.
 """

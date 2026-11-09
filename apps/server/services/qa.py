@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from server.core.config import config
+from server.services.credentials import Credentials
 from server.services.datasets import get_dataset_pairs
 from server.services.dedup import (
     DuplicateVerdict,
@@ -17,12 +18,12 @@ from server.services.semantic import (
     Embedder,
     SemanticIndex,
     find_semantic_duplicate,
-    get_local_embedder,
+    get_embedder,
     grounding_scores,
     split_sections,
 )
 
-# Sentinel: "resolve the process-wide embedder" (None means "explicitly none").
+# Sentinel: "resolve the caller's embedder" (None means "explicitly none").
 _DEFAULT = object()
 
 
@@ -35,13 +36,15 @@ class QAService:
     each :meth:`process_qa_pairs` call so a later call (e.g. the next crawled
     page) sees this call's additions.
 
-    With an embedding model (see ``server.services.semantic``), a candidate is
-    a *similar* duplicate when its question's cosine to any question of the
-    dataset — whatever the source — reaches ``similarity_threshold``, and each
-    kept pair gets a ``grounding_score`` (answer ↔ source) in its metadata,
-    with ``needs_review`` set below ``config.answer_grounding_threshold``.
-    Without one, it falls back to the lexical same-source comparison of
-    ``server.services.dedup``.
+    With an embedding model (``server.services.semantic.get_embedder``: the
+    endpoint's OPENAI_EMBEDDING_MODEL on ``creds``, else the local one), a
+    candidate is a *similar* duplicate when its question's cosine to any
+    question of the dataset — whatever the source — reaches
+    ``similarity_threshold``, and each kept pair gets a ``grounding_score``
+    (answer ↔ source) in its metadata, with ``needs_review`` set below
+    ``config.answer_grounding_threshold``. Without one — or from the first
+    embedding call that fails, for the rest of the run — it falls back to the
+    lexical same-source comparison of ``server.services.dedup``.
 
     When ``quality_rules`` is provided (see
     ``server.services.quality_rules.get_quality_rules``) and its
@@ -59,19 +62,44 @@ class QAService:
         dataset_name: str,
         quality_rules: Optional[Dict[str, Any]] = None,
         embedder: Any = _DEFAULT,
+        creds: Optional[Credentials] = None,
     ):
         self.owner_id = owner_id
         self.dataset_name = dataset_name
         self.quality_rules = quality_rules or {}
+        self.creds = creds
         self._embedder_arg = embedder
+        self._embedder_failed = False
         self._existing_entries: Optional[List[QAEntry]] = None
         self._question_index: Optional[SemanticIndex] = None
 
     @functools.cached_property
-    def embedder(self) -> Optional[Embedder]:
+    def _resolved_embedder(self) -> Optional[Embedder]:
         if self._embedder_arg is _DEFAULT:
-            return get_local_embedder()
+            return get_embedder(self.creds)
         return self._embedder_arg
+
+    @property
+    def embedder(self) -> Optional[Embedder]:
+        return None if self._embedder_failed else self._resolved_embedder
+
+    def _embed(self, texts: List[str]) -> Optional[Any]:
+        """The vectors of ``texts``, or ``None`` without a model — and, when the
+        model fails (an endpoint can), for the rest of this run: vectors of two
+        models never meet in one index."""
+        embedder = self.embedder
+        if embedder is None:
+            return None
+        try:
+            return embedder.embed(texts)
+        except Exception as exc:  # noqa: BLE001 — degrade to lexical, never fail
+            logging.warning(
+                "Embedding with %s failed, deduplicating lexically from here: %s",
+                embedder.model_name,
+                exc,
+            )
+            self._embedder_failed = True
+            return None
 
     def prepare(self) -> None:
         """Load the pool, the model and the question index up front.
@@ -107,28 +135,33 @@ class QAService:
         return self._existing_entries
 
     def _load_question_index(self) -> Optional[SemanticIndex]:
-        embedder = self.embedder
-        if embedder is None:
+        if self.embedder is None:
             return None
         if self._question_index is None:
             index = SemanticIndex()
             questions = [e.question for e in self._load_existing_entries()]
             if questions:
-                index.add(questions, embedder.embed(questions))
+                vectors = self._embed(questions)
+                if vectors is None:
+                    return None
+                index.add(questions, vectors)
             self._question_index = index
         return self._question_index
 
     def _grounding(self, answers: List[str], source_text: str) -> List[Optional[float]]:
         """Answer ↔ closest source chunk cosine per answer (None without a model)."""
-        embedder = self.embedder
-        if embedder is None or not answers:
+        if self.embedder is None or not answers:
             return [None] * len(answers)
         chunks = split_sections(source_text) or (
             [source_text] if source_text.strip() else []
         )
         if not chunks:
             return [None] * len(answers)
-        scores = grounding_scores(embedder.embed(answers), embedder.embed(chunks))
+        answer_vectors = self._embed(answers)
+        chunk_vectors = self._embed(chunks) if answer_vectors is not None else None
+        if answer_vectors is None or chunk_vectors is None:
+            return [None] * len(answers)
+        scores = grounding_scores(answer_vectors, chunk_vectors)
         return [round(float(s), 3) for s in scores]
 
     def process_qa_pairs(
@@ -151,7 +184,6 @@ class QAService:
         """
         existing = self._load_existing_entries()
         index = self._load_question_index()
-        embedder = self.embedder
 
         # Quality rules first (cheaper than dedup classification); no-op
         # unless auto_reject_enabled is set in the provided rules.
@@ -168,8 +200,8 @@ class QAService:
 
         # One embedding batch for the whole call rather than one per pair.
         question_vectors = (
-            embedder.embed([qa.question for qa in candidates])
-            if index is not None and embedder is not None and candidates
+            self._embed([qa.question for qa in candidates])
+            if index is not None and candidates
             else None
         )
 

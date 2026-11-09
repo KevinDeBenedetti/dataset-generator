@@ -538,8 +538,9 @@ def test_import_propagates_a_missing_repo(token):
 
 
 def _fake_download(content: bytes, seen: dict):
-    def download(*, repo_id, filename, repo_type, token, cache_dir):
+    def download(*, repo_id, filename, repo_type, revision, token, cache_dir):
         seen["cache_dir"] = cache_dir
+        seen["revision"] = revision
         path = Path(cache_dir) / filename
         path.write_bytes(content)
         return str(path)
@@ -616,3 +617,60 @@ def test_the_import_budget_is_shared_by_every_data_file(token, monkeypatch):
         import_dataset_from_hub(OWNER, CREDS, "kevin/my-ds")
 
     assert budgets == [budget, budget - len(row)]
+
+
+class _Listing:
+    """``list_repo_tree`` as the Hub client serves it: a lazy iterator,
+    counting how many entries were pulled from it."""
+
+    def __init__(self, entries):
+        self.entries = entries
+        self.pulled = 0
+
+    def list_repo_tree(self, repo_id, repo_type=None, recursive=False):
+        for entry in self.entries:
+            self.pulled += 1
+            yield entry
+
+
+def _file(path, size):
+    from huggingface_hub.hf_api import RepoFile
+
+    return RepoFile(path=path, size=size, oid="0" * 40)
+
+
+def _folder(path):
+    from huggingface_hub.hf_api import RepoFolder
+
+    return RepoFolder(path=path, oid="0" * 40)
+
+
+def test_the_repo_tree_lists_the_files_with_their_sizes(monkeypatch):
+    listing = _Listing(
+        [_folder("data"), _file("data/train.jsonl", 42), _file("README.md", 7)]
+    )
+    monkeypatch.setattr(hf, "_api", lambda creds: listing)
+
+    assert hf._repo_tree(CREDS, "kevin/ds") == {"data/train.jsonl": 42, "README.md": 7}
+
+
+def test_a_repo_tree_past_the_cap_is_refused_without_reading_the_rest(monkeypatch):
+    listing = _Listing(_file(f"shard-{i}.parquet", 1) for i in range(10_000))
+    monkeypatch.setattr(hf, "_api", lambda creds: listing)
+    monkeypatch.setattr(hf, "MAX_TREE_ENTRIES", 3)
+
+    with pytest.raises(HuggingFaceImportTooLargeError, match="more than 3 files"):
+        hf._repo_tree(CREDS, "kevin/huge")
+    # Folders count too, and the listing stops at the first entry past the cap.
+    assert listing.pulled == 4
+
+
+def test_an_import_of_a_repo_past_the_cap_downloads_nothing(token, monkeypatch):
+    listing = _Listing(_file(f"shard-{i}.jsonl", 1) for i in range(10))
+    monkeypatch.setattr(hf, "_api", lambda creds: listing)
+    monkeypatch.setattr(hf, "MAX_TREE_ENTRIES", 3)
+
+    with patch.object(hf, "_download_file") as download:
+        with pytest.raises(HuggingFaceImportTooLargeError):
+            import_dataset_from_hub(OWNER, CREDS, "kevin/huge")
+    download.assert_not_called()

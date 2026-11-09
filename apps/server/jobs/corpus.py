@@ -1,13 +1,10 @@
 """Portfolio knowledge corpus → private Hugging Face dataset.
 
-Two steps, kept separate so each needs only its own credentials:
-
-    python -m server.jobs.corpus export --out DIR [--sources profile,github,...]
-    python -m server.jobs.corpus push --dir DIR
-
-``export`` reads the GitHub API only (GITHUB_USERNAME, GITHUB_TOKEN); ``push``
-commits the directory to HF_DATASET_REPO in one commit (HF_TOKEN), so every
-commit is a complete, self-consistent snapshot the portfolio can reindex from.
+Two steps, which the ``knowledge-corpus`` job (jobs/registry.py, started from
+the GitHub page) runs back to back: :func:`export_corpus` reads the GitHub API
+only and writes every split to a directory; :func:`push_corpus` commits that
+directory to the corpus repo in one commit, so every commit is a complete,
+self-consistent snapshot the portfolio can reindex from.
 
 Ported from portfolio-next (``scripts/export-dataset.ts``,
 ``scripts/push-hf-dataset.ts``, ``src/lib/rag/{chunks,github-code,github-docs,
@@ -15,15 +12,11 @@ dataset}.ts``). Chunk ids and text layout are part of the contract with the
 portfolio's Qdrant ingest — changing either re-embeds or duplicates the corpus.
 """
 
-import argparse
-import asyncio
 import hashlib
 import json
 import logging
-import os
 import re
 import subprocess
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +24,6 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import httpx
 
-from server.core.config import _env
 from server.services.credentials import Credentials
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
@@ -719,18 +711,6 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
 # --- export ------------------------------------------------------------------
 
 
-def parse_sources(raw: str) -> List[str]:
-    requested = [s.strip() for s in raw.split(",") if s.strip()]
-    if not requested:
-        raise JobError("--sources must name at least one source")
-    unknown = [s for s in requested if s not in KNOWN_SOURCES]
-    if unknown:
-        raise JobError(
-            f'unknown source "{unknown[0]}"; known sources: {", ".join(KNOWN_SOURCES)}'
-        )
-    return requested
-
-
 async def export_corpus(
     out: Path,
     sources: List[str],
@@ -828,9 +808,7 @@ async def export_corpus(
 # --- push --------------------------------------------------------------------
 
 
-def push_corpus(
-    creds: Credentials, directory: Path, repo_id: str, commit_sha: str = ""
-) -> str:
+def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
     """Commit the exported directory to a private HF dataset in one commit."""
     from server.services.huggingface import (
         HuggingFaceNotConfiguredError,
@@ -863,8 +841,8 @@ def push_corpus(
 
     files = manifest.get("files") or []
     total = sum(f.get("records", 0) for f in files)
-    sha = commit_sha or manifest.get("source_commit") or ""
-    title = "Weekly corpus refresh" + (f" ({sha[:7]})" if sha else "")
+    sha = manifest.get("source_commit") or ""
+    title = "Corpus refresh" + (f" ({sha[:7]})" if sha else "")
     description = "\n".join(
         [
             f"{total} records across {len(files)} splits.",
@@ -882,61 +860,3 @@ def push_corpus(
         commit_description=description,
     )
     return f"https://huggingface.co/datasets/{repo_id}"
-
-
-# --- CLI ---------------------------------------------------------------------
-
-
-def _required(name: str) -> str:
-    value = _env(name)
-    if not value:
-        raise JobError(f"{name} is required")
-    return value
-
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m server.jobs.corpus")
-    sub = parser.add_subparsers(dest="command", required=True)
-    export_p = sub.add_parser("export", help="build the corpus from the GitHub API")
-    export_p.add_argument("--out", default="./dist/dataset")
-    export_p.add_argument("--sources", default=",".join(KNOWN_SOURCES))
-    push_p = sub.add_parser("push", help="commit an exported corpus to the Hub")
-    push_p.add_argument("--dir", default="./dist/dataset")
-    args = parser.parse_args(argv)
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    try:
-        if args.command == "export":
-            sources = parse_sources(args.sources)
-            username = _required("GITHUB_USERNAME")
-            token = _env("GITHUB_TOKEN") or None
-            if not token:
-                logger.warning(
-                    "GITHUB_TOKEN is not set — 60 unauthenticated requests/hour "
-                    "is not enough for a code export"
-                )
-            manifest = asyncio.run(
-                export_corpus(
-                    Path(args.out), sources, username, token, _env("HF_DATASET_REPO")
-                )
-            )
-            logger.info(
-                "export: complete (%s, %d splits)", args.out, len(manifest["files"])
-            )
-        else:
-            _required("HF_TOKEN")
-            url = push_corpus(
-                Credentials.from_env(),
-                Path(args.dir),
-                _required("HF_DATASET_REPO"),
-                os.getenv("GITHUB_SHA", ""),
-            )
-            logger.info("done — %s", url)
-    except JobError as exc:
-        print(f"corpus: {exc}", file=sys.stderr)
-        return 1
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

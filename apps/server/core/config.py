@@ -182,26 +182,50 @@ class Config:
     docs_enabled: bool = field(default_factory=_is_dev_env)
 
     # --- Model providers ----------------------------------------------------
-    # Models the OpenAI provider offers (per role), on each user's own key.
+    # The models of the OpenAI-compatible endpoint (OpenAI, or a gateway such as
+    # LiteLLM) a user calls with their own key — or the server's, see below.
+    # The default LLM: cleaning, Q&A generation and the dataset jobs.
     openai_llm_model: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
+    # The default vision model (uploaded PDF and image pages).
     openai_vlm_model: str = field(default_factory=lambda: _env("OPENAI_VLM_MODEL", ""))
+    # The default embedding (services/semantic.py): the duplicate, grounding and
+    # coverage checks, and the first choice of a new vector collection. Blank —
+    # or for a user without an endpoint, or whose endpoint doesn't serve it —
+    # the local SEMANTIC_MODEL embeds instead.
+    openai_embedding_model: str = field(
+        default_factory=lambda: _env("OPENAI_EMBEDDING_MODEL", "")
+    )
     # "low" keeps reasoning models from spending their budget thinking;
     # OPENAI_REASONING_EFFORT=off for models that reject the parameter (gpt-4o*):
     # set, the request takes the reasoning models' shape (max_completion_tokens,
     # no temperature — services/providers/openai.py).
     openai_reasoning_effort: str = field(default_factory=lambda: _reasoning_effort())
     # Fill what a user hasn't entered from the server's own keys (OPENAI_API_KEY,
-    # HF_TOKEN…): development only — production never lends its keys.
+    # HF_TOKEN…): development only — production never lends its keys, but for
+    # the one below.
     allow_env_credentials: bool = field(default_factory=_is_dev_env)
+    # Outside development: an admin (ADMIN_EMAILS, or promoted in the
+    # backoffice) who saved no OpenAI-compatible key calls the server's endpoint
+    # with the server's key — OPENAI_BASE_URL + OPENAI_API_KEY, e.g. an
+    # in-cluster LiteLLM and a virtual key of its own. Other users always bring
+    # their own key (services/credentials.py).
+    server_llm_for_admins: bool = field(
+        default_factory=lambda: _flag("SERVER_LLM_FOR_ADMINS", False)
+    )
     # The Claude subscription provider runs in local development and CI only.
     enable_claude_provider: bool = field(
         default_factory=lambda: _is_dev_env() or _is_ci()
     )
     # Model ids the Claude provider offers (comma-separated; default: built-in list).
     claude_models_raw: str = field(default_factory=lambda: _env("CLAUDE_MODELS", ""))
-    # Model of the scheduled jobs when no default is saved (the CI runs DB-free).
+    # Model of the dataset jobs when neither the run nor the Models page names
+    # one: QA_JOB_MODEL, else the default LLM, else Claude (development).
     qa_job_model: str = field(
-        default_factory=lambda: _env("QA_JOB_MODEL", "claude:claude-sonnet-5-5")
+        default_factory=lambda: (
+            _env("QA_JOB_MODEL", "")
+            or _env("OPENAI_LLM_MODEL", "")
+            or "claude:claude-sonnet-5-5"
+        )
     )
 
     # --- Jobs ---------------------------------------------------------------
@@ -243,8 +267,10 @@ class Config:
 
     # --- Local embeddings (services/semantic.py) ----------------------------
     # FastEmbed/ONNX, no API call: semantic dedup, the "don't ask these again"
-    # list, uncovered sections and the answer grounding check. Disabled (or
-    # when the model can't load), callers fall back to the lexical path.
+    # list, uncovered sections and the answer grounding check — unless
+    # OPENAI_EMBEDDING_MODEL embeds them on the endpoint. Disabled (or when no
+    # model can embed), callers fall back to the lexical path. The thresholds
+    # below were measured on the default local model.
     semantic_enabled: bool = field(
         default_factory=lambda: _flag("SEMANTIC_ENABLED", True)
     )

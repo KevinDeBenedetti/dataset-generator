@@ -2,13 +2,13 @@
 
 Each job is defined in code (a :class:`JobSpec`): what it needs from the
 environment, the options it accepts (a pydantic model, served as JSON schema
-so the Jobs page renders its form), whether it calls a model, and how to run
-it. The same code runs on its GitHub Actions schedule (``workflow``) and on
-demand from the Jobs page. Adding a job = adding an entry to :data:`JOBS`.
+so the GitHub page renders its form), whether it calls a model, and how to run
+it. A run is queued by the API and executed by a worker, on demand only.
+Adding a job = adding an entry to :data:`JOBS`.
 
 A job either publishes directly (``publisher`` is None), or produces a
-*draft*: the run generates and stops, the user reviews the result on the Jobs
-page, and ``publisher`` pushes that exact draft — nothing is regenerated.
+*draft*: the run generates and stops, the user reviews the result, and
+``publisher`` pushes that exact draft — nothing is regenerated.
 """
 
 import tempfile
@@ -262,7 +262,7 @@ async def _publish_generation(
 
 # --- vector-collection --------------------------------------------------------
 # Embeds a split of a Hub dataset into Qdrant (services/collections.py): queued
-# by POST /collections and /collections/{id}/build, never from the Jobs page.
+# by POST /collections and /collections/{id}/build, never by POST /jobs/{id}/run.
 
 
 class VectorCollectionOptions(BaseModel):
@@ -363,8 +363,6 @@ class JobSpec:
     id: str
     title: str
     description: str
-    workflow: str
-    schedule: str
     # What the job needs from the user's settings: (label, predicate) — shown as
     # "add X in Settings" when the predicate is false for the user's credentials.
     requires: Tuple[Tuple[str, Callable[[Credentials], bool]], ...]
@@ -389,7 +387,8 @@ class JobSpec:
     ] = None
     # Set for draft jobs: what the review shows (new pairs, pairs to review).
     preview: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
-    # Off the Jobs page (and its POST /jobs/{id}/run) when started elsewhere.
+    # A listed job is one of the GitHub page's whole-account cards (GET /jobs,
+    # POST /jobs/{id}/run); the others are started from their own routes.
     listed: bool = True
 
     def missing(self, creds: Credentials) -> List[str]:
@@ -407,8 +406,6 @@ JOBS: Dict[str, JobSpec] = {
             "folders. Generate a draft, review it, then publish it to your private "
             "Hugging Face dataset. Incremental: only sources that changed since the "
             "published version are sent to the model.",
-            workflow="qa-dataset-sync.yml",
-            schedule="Mondays 06:00 UTC",
             requires=(_GITHUB_USERNAME, _HF_TOKEN, _HF_QA_REPO),
             uses_model=True,
             options=GitHubPersonalOptions,
@@ -422,8 +419,6 @@ JOBS: Dict[str, JobSpec] = {
             description="Retrieval corpus (profile, repos, code chunks, docs) built from "
             "the GitHub API — no model involved — published to a private Hugging Face "
             "dataset.",
-            workflow="dataset-sync.yml",
-            schedule="Mondays 04:00 UTC",
             requires=(_GITHUB_USERNAME, _HF_TOKEN, _HF_CORPUS_REPO),
             uses_model=False,
             options=KnowledgeCorpusOptions,
@@ -436,8 +431,6 @@ JOBS: Dict[str, JobSpec] = {
             "its repos, READMEs, docs/ files and profile facts. Started from the "
             "GitHub page; stops at a draft to review, then publishes it to the "
             "recipe's private Hugging Face dataset.",
-            workflow="",
-            schedule="On demand",
             requires=(_GITHUB_USERNAME, _HF_TOKEN),
             uses_model=True,
             options=RecipeRunOptions,
@@ -451,8 +444,6 @@ JOBS: Dict[str, JobSpec] = {
             title="File or web page draft",
             description="Q&A pairs generated from an uploaded file or a web page, "
             "kept for review, then merged into a private Hugging Face dataset.",
-            workflow="",
-            schedule="On demand",
             requires=(_HF_TOKEN,),
             uses_model=False,
             options=GenerationDraftOptions,
@@ -467,8 +458,6 @@ JOBS: Dict[str, JobSpec] = {
             description="Embeds a split of one of your Hugging Face datasets into "
             "Qdrant with a local model, so the Collections page can search and "
             "test it. Started from the Collections page.",
-            workflow="",
-            schedule="On demand",
             requires=(_HF_TOKEN,),
             uses_model=False,
             options=VectorCollectionOptions,

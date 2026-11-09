@@ -34,7 +34,6 @@ import re
 import tempfile
 import threading
 import time
-from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from datetime import time as time_of_day
@@ -56,6 +55,7 @@ import pyarrow as pa
 import pyarrow.compute as _compute
 
 from server.core.config import config
+from server.core.lru import WeightedLRU
 from server.services.credentials import HF_TOKEN, Credentials
 from server.services.huggingface import (
     _ANSWER_KEYS,
@@ -67,6 +67,7 @@ from server.services.huggingface import (
     _card_metadata,
     _json_safe,
     _require_token,
+    token_fingerprint,
 )
 
 logger = logging.getLogger(__name__)
@@ -171,57 +172,12 @@ def _hub_call(fn: Callable[[], T], not_found: str = "Dataset not found") -> T:
 
 # --- small LRU caches ----------------------------------------------------------
 
-
-class _LRU:
-    """Least-recently-used cache bounded by the total weight of its entries.
-
-    ``budget`` is read on every insert, so a config change (or a test patching
-    it) takes effect without rebuilding the cache. An entry heavier than the
-    whole budget is simply not kept.
-    """
-
-    def __init__(self, budget: Callable[[], int], weigh: Callable[[Any], int]):
-        self._budget = budget
-        self._weigh = weigh
-        self._entries: "OrderedDict[Hashable, Tuple[int, Any]]" = OrderedDict()
-        self._total = 0
-        self._lock = threading.Lock()
-
-    def get(self, key: Hashable) -> Optional[Any]:
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is None:
-                return None
-            self._entries.move_to_end(key)
-            return entry[1]
-
-    def put(self, key: Hashable, value: Any) -> None:
-        weight = max(1, self._weigh(value))
-        with self._lock:
-            old = self._entries.pop(key, None)
-            if old is not None:
-                self._total -= old[0]
-            budget = self._budget()
-            if weight > budget:
-                return
-            self._entries[key] = (weight, value)
-            self._total += weight
-            while self._total > budget and self._entries:
-                _, (evicted, _) = self._entries.popitem(last=False)
-                self._total -= evicted
-
-    def clear(self) -> None:
-        with self._lock:
-            self._entries.clear()
-            self._total = 0
-
-
-_tables = _LRU(lambda: config.hub_cache_bytes, lambda table: table.nbytes)
+_tables = WeightedLRU(lambda: config.hub_cache_bytes, lambda table: table.nbytes)
 # Small results: weighted by count rather than bytes.
-_stats_cache = _LRU(lambda: 256, lambda _: 1)
-_cards = _LRU(lambda: 256, lambda _: 1)
+_stats_cache = WeightedLRU(lambda: 256, lambda _: 1)
+_cards = WeightedLRU(lambda: 256, lambda _: 1)
 # (token fingerprint, repo, revision) -> (expires_at, Snapshot)
-_resolved = _LRU(lambda: 1024, lambda _: 1)
+_resolved = WeightedLRU(lambda: 1024, lambda _: 1)
 
 # Two requests for the same uncached split download it once: the second waits
 # on the first. Striped locks, so the map of locks never grows.
@@ -346,11 +302,6 @@ class Snapshot:
         return None
 
 
-def _fingerprint(creds: Credentials) -> str:
-    """A stable, non-reversible key for the caller's token (cache keys only)."""
-    return hashlib.sha256(creds.secret(HF_TOKEN).encode("utf-8")).hexdigest()[:32]
-
-
 def _sibling_size(sibling: Any) -> Optional[int]:
     size = getattr(sibling, "size", None)
     if size is None and getattr(sibling, "lfs", None) is not None:
@@ -365,7 +316,7 @@ def resolve(
     caller's token. Reused for a few seconds per token, see
     ``config.hub_resolve_ttl_seconds``."""
     _require_token(creds)
-    key = (_fingerprint(creds), repo_id, revision or "")
+    key = (token_fingerprint(creds), repo_id, revision or "")
     now = time.monotonic()
     hit = _resolved.get(key)
     if hit is not None and hit[0] > now:

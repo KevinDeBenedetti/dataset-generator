@@ -16,7 +16,6 @@ from server.jobs.corpus import (
     export_corpus,
     is_code_indexable,
     language_for_path,
-    parse_sources,
     push_corpus,
     split_markdown_sections,
     write_jsonl,
@@ -203,14 +202,6 @@ def test_doc_sections_merge_short_and_cap_long():
     assert [len(s.body) for s in sections[1:]] == [1802, 900]
 
 
-def test_parse_sources():
-    assert parse_sources("profile, github") == ["profile", "github"]
-    with pytest.raises(JobError, match="unknown source"):
-        parse_sources("profile,nope")
-    with pytest.raises(JobError, match="at least one"):
-        parse_sources(" , ")
-
-
 def _fake_account(github):
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json(
@@ -291,21 +282,24 @@ def test_push_requires_a_complete_export(tmp_path):
 def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
     (tmp_path / "manifest.json").write_text(
         json.dumps(
-            {"files": [{"source": "profile", "records": 3, "path": "data/p.jsonl"}]}
+            {
+                "source_commit": "abcdef1234",
+                "files": [{"source": "profile", "records": 3, "path": "data/p.jsonl"}],
+            }
         )
     )
     api = MagicMock()
     api.whoami.return_value = {"name": "kevin"}
     api.repo_info.return_value = MagicMock(private=True)
     with patch("server.services.huggingface._api", return_value=api):
-        url = push_corpus(CREDS, tmp_path, "ns/kb", "abcdef1234")
+        url = push_corpus(CREDS, tmp_path, "ns/kb")
 
     assert url == "https://huggingface.co/datasets/ns/kb"
     api.create_repo.assert_called_once_with(
         "ns/kb", repo_type="dataset", private=True, exist_ok=True
     )
     kwargs = api.upload_folder.call_args.kwargs
-    assert kwargs["commit_message"] == "Weekly corpus refresh (abcdef1)"
+    assert kwargs["commit_message"] == "Corpus refresh (abcdef1)"
     assert "- profile: 3 records (data/p.jsonl)" in kwargs["commit_description"]
 
 
@@ -317,12 +311,6 @@ def test_push_rejects_bad_token(tmp_path):
         with pytest.raises(JobError, match="rejected your token"):
             push_corpus(CREDS, tmp_path, "ns/kb")
     api.upload_folder.assert_not_called()
-
-
-def test_main_reports_missing_env(monkeypatch, capsys):
-    monkeypatch.delenv("GITHUB_USERNAME", raising=False)
-    assert corpus.main(["export"]) == 1
-    assert "GITHUB_USERNAME is required" in capsys.readouterr().err
 
 
 def test_push_completes_a_bare_repo_name(tmp_path):

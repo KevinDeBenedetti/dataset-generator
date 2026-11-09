@@ -5,10 +5,10 @@ Roles:
 * ``cleaning`` — tidies scraped/extracted text before QA generation;
 * ``qa`` — generates the question/answer pairs;
 * ``vision`` — transcribes uploaded PDF/image pages;
-* ``jobs`` — the scheduled dataset jobs (server/jobs), when run from the UI.
+* ``jobs`` — the dataset jobs (server/jobs) started from the GitHub page.
 
-A role without a row falls back to the environment, so a fresh install and
-the DB-free CI behave exactly as before providers existed.
+A role without a row falls back to the environment, so a fresh install
+behaves exactly as before providers existed.
 """
 
 import logging

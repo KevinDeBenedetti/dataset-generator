@@ -1,11 +1,14 @@
-"""Unit tests for the local-embedding helpers (fake embedder, no model download)."""
+"""Unit tests for the embedding helpers (fake embedders: no model download, no
+endpoint call)."""
 
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from server.services import semantic
+from server.services.providers import ProviderError, get_provider
 from server.services.semantic import (
     SemanticIndex,
     find_semantic_duplicate,
@@ -15,6 +18,7 @@ from server.services.semantic import (
     split_sections,
     uncovered_sections,
 )
+from server.tests.creds import FULL, NONE
 from server.tests.fake_embedder import FakeEmbedder
 
 
@@ -183,6 +187,7 @@ def test_a_collection_model_that_can_not_load_says_why(monkeypatch, fresh_loader
 
 
 def test_the_collection_models_put_the_deployments_own_first(monkeypatch):
+    monkeypatch.setattr(semantic.config, "openai_embedding_model", "")
     names = [m.name for m in semantic.collection_models()]
     assert names[0] == semantic.config.semantic_model
     assert len(names) == len(set(names)) == len(semantic.COLLECTION_MODELS)
@@ -191,6 +196,104 @@ def test_the_collection_models_put_the_deployments_own_first(monkeypatch):
     custom = semantic.collection_models()
     assert custom[0].name == "intfloat/custom" and custom[0].dimensions is None
     assert len(custom) == len(semantic.COLLECTION_MODELS) + 1
+
+
+# --- endpoint embeddings (OPENAI_EMBEDDING_MODEL) ------------------------------
+
+
+@pytest.fixture
+def endpoint(monkeypatch):
+    """OPENAI_EMBEDDING_MODEL set, the endpoint's embeddings faked (fake
+    vectors, or ``state.error``), the probe memory and the local model fresh."""
+    state = SimpleNamespace(calls=[], error=None)
+    fake = FakeEmbedder()
+
+    def embed(model, texts, creds):
+        state.calls.append((model, list(texts), creds))
+        if state.error is not None:
+            raise state.error
+        return fake.embed(texts).tolist()
+
+    provider = get_provider("openai")
+    monkeypatch.setattr(provider, "embed", embed)
+    monkeypatch.setattr(provider, "_discovered", {})  # nothing discovered yet
+    monkeypatch.setattr(semantic.config, "openai_embedding_model", "embed-default")
+    monkeypatch.setattr(semantic.config, "semantic_enabled", True)
+    monkeypatch.setattr(semantic, "_probed", {})
+    local = FakeEmbedder()
+    local.model_name = "local/model"
+    monkeypatch.setattr(semantic, "get_local_embedder", lambda: local)
+    state.local = local
+    return state
+
+
+def test_the_checks_embed_on_the_callers_endpoint(endpoint):
+    chosen = semantic.get_embedder(FULL)
+
+    assert isinstance(chosen, semantic.EndpointEmbedder)
+    assert chosen.model_name == "openai:embed-default"
+    vectors = chosen.embed(["port 8000", "port 8000"])
+    assert np.allclose(np.linalg.norm(vectors, axis=1), 1.0)
+    # Probed once, then the call itself — on the caller's own credentials.
+    assert [(m, t) for m, t, _ in endpoint.calls] == [
+        ("embed-default", ["ping"]),
+        ("embed-default", ["port 8000", "port 8000"]),
+    ]
+    assert all(creds is FULL for *_, creds in endpoint.calls)
+    semantic.get_embedder(FULL)
+    assert len(endpoint.calls) == 2  # the probe is remembered
+
+
+def test_without_an_endpoint_the_local_model_embeds(endpoint):
+    assert semantic.get_embedder(NONE) is endpoint.local
+    assert semantic.get_embedder(None) is endpoint.local
+    assert endpoint.calls == []
+
+
+def test_an_endpoint_that_can_not_embed_falls_back_to_the_local_model(endpoint):
+    endpoint.error = ProviderError("Error code: 404 - model not found")
+    assert semantic.get_embedder(FULL) is endpoint.local
+    assert semantic.get_embedder(FULL) is endpoint.local
+    assert len(endpoint.calls) == 1  # the failure is remembered too
+
+
+def test_turning_the_checks_off_turns_the_endpoint_off_too(endpoint, monkeypatch):
+    monkeypatch.setattr(semantic.config, "semantic_enabled", False)
+    assert semantic.get_embedder(FULL) is None
+    assert endpoint.calls == []
+
+
+def test_an_endpoint_failure_reads_as_a_model_error(endpoint):
+    endpoint.error = ProviderError("openai:embed-default embedding failed: 429")
+    with pytest.raises(semantic.EmbeddingModelError, match="429"):
+        semantic.EndpointEmbedder("embed-default", FULL).embed(["a"])
+
+
+def test_the_default_embedding_names_the_endpoints_model(endpoint, monkeypatch):
+    assert semantic.default_embedding_model(FULL) == "openai:embed-default"
+    assert semantic.default_embedding_model(NONE) == semantic.config.semantic_model
+    monkeypatch.setattr(semantic.config, "openai_embedding_model", "")
+    assert semantic.default_embedding_model(FULL) == semantic.config.semantic_model
+
+
+def test_a_collection_defaults_to_the_endpoints_model(endpoint):
+    models = semantic.collection_models(FULL)
+    assert (models[0].name, models[0].provider) == ("openai:embed-default", "openai")
+    assert "api.openai.com" in models[0].description
+    # The local models stay selectable, the deployment's own first of them.
+    assert models[1].name == semantic.config.semantic_model
+    assert {m.provider for m in models[1:]} == {"local"}
+    # No endpoint, no endpoint model.
+    assert semantic.collection_models(NONE)[0].name == semantic.config.semantic_model
+
+
+def test_an_endpoint_collection_runs_on_the_callers_credentials(endpoint):
+    model = semantic.get_collection_embedder("openai:embed-large", FULL)
+    assert isinstance(model, semantic.EndpointEmbedder)
+    model.embed_queries(["capital of France"])
+    assert endpoint.calls[-1][:2] == ("embed-large", ["capital of France"])
+    with pytest.raises(semantic.EmbeddingModelError, match="Settings"):
+        semantic.get_collection_embedder("openai:embed-large", NONE)
 
 
 @pytest.mark.slow

@@ -32,7 +32,6 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { icon: 'fileText', label: 'Drafts', href: '/drafts' },
       { icon: 'github', label: 'GitHub', href: '/github' },
       { icon: 'sparkles', label: 'Generate', href: '/generate' },
-      { icon: 'activity', label: 'Jobs', href: '/jobs' },
     ],
   },
   {

@@ -15,7 +15,7 @@ import { JOBS_QUERY_KEY } from './use-jobs'
 export const SECRETS_QUERY_KEY = ['me', 'secrets']
 export const SETTINGS_QUERY_KEY = ['me', 'settings']
 
-// What is configured changes what the Models and Jobs pages can offer.
+// What is configured changes what the Models and GitHub pages can offer.
 function useRefreshDependents() {
   const queryClient = useQueryClient()
   return () => {

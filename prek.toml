@@ -10,7 +10,10 @@
 #     `bun run` (apps/next/package.json), so a hook can't lint with a different
 #     version than CI does;
 #   * anything prek ships natively uses `repo = "builtin"` — offline, no env to
-#     build, no `rev` to bump (`prek util list-builtins` lists them).
+#     build, no `rev` to bump (`prek util list-builtins` lists them);
+#   * a remote hook is pinned to a commit, its tag in the `# frozen:` comment:
+#     a tag can be moved to other code, a commit can't. `prek update` keeps
+#     them frozen, after the same week-long cooldown as every dependency.
 minimum_prek_version = "0.4.13"
 
 default_stages = ["pre-commit", "pre-push"]
@@ -36,6 +39,10 @@ exclude = '''(?x)^(
     pnpm-lock\.yaml|
     uv\.lock
 )$'''
+
+[update]
+freeze = true
+cooldown_days = 7
 
 # ===============================
 # Built-in fast hooks (offline, zero setup)
@@ -101,10 +108,13 @@ hooks = [
 # ===============================
 [[repos]]
 repo = "https://github.com/hadolint/hadolint"
-rev = "v2.15.1"
+rev = "2eece55955ced00200be9729e9728cb7dacca505"  # frozen: v2.15.1
 hooks = [
   # DL3008: pinning apt versions in a dev image buys little and rots fast.
-  { id = "hadolint-docker", name = "🐳 Lint Dockerfiles", files = '''^apps/.*/Dockerfile.*''', args = [
+  # `entry` names the image by digest: the hook's own entry runs whatever
+  # `ghcr.io/hadolint/hadolint` (latest) is that day, whatever `rev` says.
+  # `prek update` moves `rev` only: bump the image with it.
+  { id = "hadolint-docker", name = "🐳 Lint Dockerfiles", entry = "ghcr.io/hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint", files = '''^apps/.*/Dockerfile.*''', args = [
     "--ignore",
     "DL3008",
   ] },
@@ -117,7 +127,7 @@ hooks = [
 # reading .gitleaks.toml, on the staged changes only.
 [[repos]]
 repo = "https://github.com/gitleaks/gitleaks"
-rev = "v8.30.1"
+rev = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"  # frozen: v8.30.1
 hooks = [
   { id = "gitleaks", name = "🔐 Gitleaks (staged changes)" },
 ]
@@ -125,7 +135,7 @@ hooks = [
 # zizmor: GitHub Actions security audit, on the workflows and dependabot.yml.
 [[repos]]
 repo = "https://github.com/zizmorcore/zizmor-pre-commit"
-rev = "v1.31.1"
+rev = "c92afdf2c6ca336aaa8f39e2bd8d48f62dbd8e1f"  # frozen: v1.31.1
 hooks = [
   { id = "zizmor", name = "🛡️ Zizmor (workflow audit)" },
 ]
@@ -133,7 +143,7 @@ hooks = [
 # actionlint: GitHub Actions workflow syntax and expression checks.
 [[repos]]
 repo = "https://github.com/rhysd/actionlint"
-rev = "v1.7.12"
+rev = "914e7df21a07ef503a81201c76d2b11c789d3fca"  # frozen: v1.7.12
 hooks = [
   { id = "actionlint", name = "⚙️ Actionlint (workflows)" },
 ]
@@ -143,7 +153,7 @@ hooks = [
 # ===============================
 [[repos]]
 repo = "https://github.com/pre-commit/pygrep-hooks"
-rev = "v1.10.0"
+rev = "3a6eb0fadf60b3cccfd80bad9dbb6fae7e47b316"  # frozen: v1.10.0
 hooks = [
   { id = "python-check-blanket-noqa", name = "🔍 Check blanket noqa", files = '''^apps/server/''' },
   { id = "python-check-blanket-type-ignore", name = "🔍 Check blanket type:ignore", files = '''^apps/server/''' },

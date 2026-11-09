@@ -23,8 +23,8 @@
 - **Your own model keys**: cleaning, Q&A and vision run on each user's
   OpenAI-compatible key (or a Claude subscription in local development), with
   per-step defaults on the **Models** page
-- **Dataset jobs**: recurring sources run by a worker, on demand from the
-  **Jobs** page or on a GitHub Actions schedule
+- **GitHub datasets**: Q&A pairs and a retrieval corpus from your whole GitHub
+  account, generated on demand from the **GitHub** page and run by a worker
 - **Per-user isolation**: datasets, runs and settings belong to their owner;
   keys are encrypted at rest and never returned by any route
 
@@ -65,7 +65,7 @@ It is generated from the `docs/` directory and published by the docs hub, which 
 - [Production](https://kevindebenedetti.github.io/dataset-generator/production) — one public host, encryption keys, images and deployment
 - [Accounts, roles and keys](https://kevindebenedetti.github.io/dataset-generator/accounts) — SSO sign-in, admins, per-user keys
 - [Jobs](https://kevindebenedetti.github.io/dataset-generator/jobs) and [Storage](https://kevindebenedetti.github.io/dataset-generator/storage)
-- [Datasets on Hugging Face](https://kevindebenedetti.github.io/dataset-generator/datasets) and [GitHub recipes](https://kevindebenedetti.github.io/dataset-generator/github)
+- [Datasets on Hugging Face](https://kevindebenedetti.github.io/dataset-generator/datasets) and [GitHub datasets](https://kevindebenedetti.github.io/dataset-generator/github)
 - [Vector collections](https://kevindebenedetti.github.io/dataset-generator/collections) — Qdrant collections built from a dataset's split, searched and tested
 
 ## Security

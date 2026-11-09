@@ -26,7 +26,14 @@ import {
 } from '@/hooks'
 import { cn } from '@/lib/utils'
 import { BuildProgress, StatusBadge } from './collections-page'
-import { DUPLICATE_SCORE, modelLabel, percent, pythonSnippet, rowHref } from './format'
+import {
+  DUPLICATE_SCORE,
+  isEndpointModel,
+  modelLabel,
+  percent,
+  pythonSnippet,
+  rowHref,
+} from './format'
 
 type Tab = 'search' | 'test' | 'use'
 
@@ -159,8 +166,10 @@ function Building({ collection }: { collection: CollectionOut }) {
         <div className="card-title">Embedding the split</div>
         <p className="card-desc">
           A worker reads the split from Hugging Face, embeds every row with{' '}
-          {modelLabel(collection.model)} and stores the vectors in Qdrant. The first build with a
-          model downloads it too.
+          {modelLabel(collection.model)} and stores the vectors in Qdrant.{' '}
+          {isEndpointModel(collection.model)
+            ? 'The rows are sent to your endpoint to be embedded.'
+            : 'The first build with a model downloads it too.'}
         </p>
         <BuildProgress collection={collection} />
       </div>
