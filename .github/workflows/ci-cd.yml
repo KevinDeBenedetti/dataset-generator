@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@0c3f6cd063dd809a39041c734f6b0b539b9d0252 # v0.40.0
     with:
       # A known high/critical vulnerability in the web UI's bun.lock, or any
       # known one in uv.lock (pip-audit), fails the pipeline before the build.
@@ -40,7 +40,7 @@ jobs:
   ci-python:
     name: CI Python (server)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@0c3f6cd063dd809a39041c734f6b0b539b9d0252 # v0.40.0
     with:
       python-version: "3.13"
       working-directory: "."
@@ -54,7 +54,7 @@ jobs:
   ci-node:
     name: CI Node (next)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@0c3f6cd063dd809a39041c734f6b0b539b9d0252 # v0.40.0
     with:
       node-version: "22.20.0"
       working-directory: apps/next
@@ -101,7 +101,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@25fe357b3609dfa591519ee8bdf19c1334a74cdd # v0.39.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@0c3f6cd063dd809a39041c734f6b0b539b9d0252 # v0.40.0
     with:
       config-file: .github/release/release-please-config-release.json
       manifest-file: .github/release/.release-please-manifest.json
