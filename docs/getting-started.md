@@ -92,15 +92,15 @@ curl -X POST http://localhost:8020/dataset/generate/url \
 The response's `draft_run_id` is the draft to review.
 
 To build a dataset from chosen GitHub repos, README and `docs/` files, use a
-recipe on the **GitHub** page: see [GitHub recipes](./github.md).
+recipe on the **GitHub** page: see [GitHub datasets](./github.md).
 
-Recurring sources — your GitHub profile and repos, the knowledge corpus — are
-**jobs** (`apps/server/jobs/registry.py`): they run on their GitHub Actions
-schedule and on demand from the **Jobs** page. There, **GitHub personal Q&A**
-works in three steps: *Generate draft* runs in the background (progress shown,
-you can leave the page), you review the new pairs and those held out for
-review, then *Publish to Hugging Face* pushes exactly that draft to
-`HF_QA_DATASET_REPO` — nothing is regenerated. API: `POST /jobs/{id}/run`,
+Datasets built from your whole GitHub account — your profile and repos, the
+knowledge corpus — are **jobs** (`apps/server/jobs/registry.py`), started on
+demand from the same page. There, **GitHub personal Q&A** works in three
+steps: *Generate draft* runs in the background (progress shown, you can leave
+the page), you review the new pairs and those held out for review, then
+*Publish to Hugging Face* pushes exactly that draft to the Q&A dataset repo
+saved in **Settings** — nothing is regenerated. API: `POST /jobs/{id}/run`,
 `GET /jobs/runs/{run_id}`, `POST /jobs/runs/{run_id}/publish`.
 
 Each page/document goes through the same pipeline: read/transcribe → clean →
@@ -124,7 +124,7 @@ exists and the Hub does not confirm it is private, publishing is refused rather
 than making your data public. Once published, the dataset appears under
 **Datasets**, read from the Hub: see [Datasets on Hugging Face](./datasets.md).
 **Import from Hugging Face** (on the **Quality control** page) reads at most
-50 MB of data files per repo.
+50 MB of data files per repo, from a repo of at most 5,000 files and folders.
 
 ## Useful commands
 
@@ -157,7 +157,8 @@ Images built before this start-up install don't have it: run
 
 - [Datasets on Hugging Face](./datasets.md) — browsing, statistics and versions
   of the published datasets
-- [GitHub recipes](./github.md) — choosing the GitHub sources of a dataset
+- [GitHub datasets](./github.md) — your whole account, or a recipe choosing the
+  GitHub sources of a dataset
 - [Vector collections](./collections.md) — embedding a split into Qdrant,
   searching it and testing its retrieval
 - [Configuration](./configuration.md) — `.env`, what `ENVIRONMENT` decides, the

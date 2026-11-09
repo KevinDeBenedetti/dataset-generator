@@ -3,6 +3,7 @@ import {
   defaultCollectionName,
   defaultColumns,
   isTrivialTest,
+  modelGroups,
   modelLabel,
   percent,
   pythonSnippet,
@@ -13,6 +14,20 @@ describe('collection labels', () => {
   it('names a model by its last segment', () => {
     expect(modelLabel('BAAI/bge-small-en-v1.5')).toBe('bge-small-en-v1.5')
     expect(modelLabel('plain')).toBe('plain')
+    expect(modelLabel('openai:embed-default')).toBe('embed-default')
+  })
+
+  it("offers the endpoint's models first, in their own group", () => {
+    const models = [
+      { name: 'openai:embed-default' },
+      { name: 'openai:embed-large' },
+      { name: 'BAAI/bge-small-en-v1.5' },
+    ]
+    expect(modelGroups(models).map((g) => [g.label, g.models.map((m) => m.name)])).toEqual([
+      ['Your endpoint', ['openai:embed-default', 'openai:embed-large']],
+      ['Local, on the server', ['BAAI/bge-small-en-v1.5']],
+    ])
+    expect(modelGroups([{ name: 'm/mini' }]).map((g) => g.label)).toEqual(['Local, on the server'])
   })
 
   it('rounds shares to whole percents, flagging the tiny ones', () => {
@@ -80,5 +95,13 @@ describe('links and snippet', () => {
     expect(snippet).toContain('TextEmbedding("BAAI/bge-small-en-v1.5")')
     expect(snippet).toContain('"dataset_c_42", query=vector')
     expect(snippet).toContain('query_embed')
+  })
+
+  it("queries an endpoint model's collection through the endpoint", () => {
+    const snippet = pythonSnippet({ ...collection, model: 'openai:embed-default' })
+    expect(snippet).toContain('llm.embeddings.create(')
+    expect(snippet).toContain('model="embed-default"')
+    expect(snippet).not.toContain('fastembed')
+    expect(snippet).toContain('"dataset_c_42", query=vector')
   })
 })

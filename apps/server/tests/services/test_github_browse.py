@@ -246,6 +246,61 @@ async def test_only_docs_files_can_be_read(github, path):
     )
 
 
+@pytest.fixture
+def secret(github):
+    """A private repo the owner's token can read."""
+    github.json(
+        "/repos/kevin/secret",
+        {
+            "name": "secret",
+            "private": True,
+            "visibility": "private",
+            "default_branch": "main",
+        },
+    )
+    github.text("/repos/kevin/secret/readme", "# Secret plans")
+    github.json(
+        "/repos/kevin/secret/contents/docs/plan.md",
+        {"encoding": "base64", "content": b64("# Plan")},
+    )
+    return github
+
+
+async def test_a_private_repo_is_never_read(secret):
+    with pytest.raises(browse.GitHubNotFoundError, match="not public"):
+        await browse.repo_detail(CREDS, "kevin", "secret")
+    # Nothing past its visibility was asked for, so nothing could be cached.
+    assert secret.calls == ["/repos/kevin/secret"]
+
+
+async def test_a_private_repos_docs_are_never_read(secret):
+    with pytest.raises(browse.GitHubNotFoundError, match="not public"):
+        await browse.doc_content(CREDS, "kevin", "secret", "docs/plan.md")
+    assert secret.calls == ["/repos/kevin/secret"]
+
+
+async def test_the_same_username_without_a_token_gets_nothing_private(secret):
+    # Refused for the owner's token first, so the per-username cache holds
+    # nothing a caller without it could be served.
+    with pytest.raises(browse.GitHubNotFoundError):
+        await browse.repo_detail(CREDS, "kevin", "secret")
+    with pytest.raises(browse.GitHubNotFoundError):
+        await browse.repo_detail(ANONYMOUS, "kevin", "secret")
+    with pytest.raises(browse.GitHubNotFoundError):
+        await browse.doc_content(ANONYMOUS, "kevin", "secret", "docs/plan.md")
+    assert not any("/readme" in c or "/contents/" in c for c in secret.calls)
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [{"private": True}, {"private": False, "visibility": "internal"}],
+)
+async def test_only_a_public_visibility_is_shown(github, meta):
+    github.json("/repos/kevin/corp", {"name": "corp", **meta})
+    with pytest.raises(browse.GitHubNotFoundError, match="not public"):
+        await browse.repo_detail(CREDS, "kevin", "corp")
+
+
 async def test_rate_limit_is_its_own_error(github):
     github.json(
         "/users/kevin/repos",

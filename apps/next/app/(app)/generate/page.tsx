@@ -54,9 +54,9 @@ function GenerateContent() {
       )}
 
       <p className="text-center text-xs text-muted-foreground">
-        Recurring sources (your GitHub account, the knowledge corpus) run as{' '}
-        <Link href="/jobs" className="underline">
-          jobs
+        Datasets from your GitHub account (Q&amp;A pairs, the knowledge corpus) are generated on the{' '}
+        <Link href="/github" className="underline">
+          GitHub page
         </Link>
         ; duplicates across a dataset are analysed and cleaned on{' '}
         <Link href="/quality" className="underline">

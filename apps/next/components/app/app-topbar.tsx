@@ -13,7 +13,6 @@ const LABELS: Record<string, string> = {
   '/drafts': 'Drafts',
   '/github': 'GitHub',
   '/generate': 'Generate',
-  '/jobs': 'Jobs',
   '/quality': 'Quality control',
   '/agent-test': 'Verify QA',
   '/prompts': 'LLM Prompts',

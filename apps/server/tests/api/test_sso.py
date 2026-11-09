@@ -5,12 +5,13 @@ cookie handling are Authlib's real ones.
 """
 
 from unittest.mock import AsyncMock, MagicMock
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from server.api.auth import _return_path
 from server.core.config import config
 from server.core.database import get_db
 from server.main import create_app
@@ -179,6 +180,90 @@ def test_closed_signup_is_reported_to_the_login_page(web, monkeypatch):
         f"/auth/github/callback?code=c&state={state}", follow_redirects=False
     )
     assert response.headers["location"] == f"{FRONT}/login?error=signup_closed"
+
+
+def _callback(web, start_path):
+    state = _start(web, start_path)["state"][0]
+    return web.get(
+        f"/auth/github/callback?code=c&state={state}", follow_redirects=False
+    )
+
+
+def test_a_sign_in_lands_on_the_page_it_started_from(web, monkeypatch):
+    _github_api(monkeypatch)
+    start = "/auth/github/login?" + urlencode({"from": "/datasets/ns/qa?tab=files"})
+
+    response = _callback(web, start)
+
+    assert response.headers["location"] == f"{FRONT}/datasets/ns/qa?tab=files"
+    assert config.auth_cookie_name in response.cookies
+
+
+@pytest.mark.parametrize(
+    "back_to",
+    [
+        "https://evil.example/x",
+        "//evil.example/x",
+        "/\\evil.example/x",
+        "/\t/evil.example/x",
+        "settings",
+        "/" + "a" * 2048,
+    ],
+)
+def test_a_return_path_off_the_app_lands_on_the_dashboard(web, monkeypatch, back_to):
+    _github_api(monkeypatch)
+    response = _callback(web, "/auth/github/login?" + urlencode({"from": back_to}))
+    assert response.headers["location"] == f"{FRONT}/dashboard"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("/settings", "/settings"),
+        ("/datasets/ns/qa?tab=files#rows", "/datasets/ns/qa?tab=files#rows"),
+        ("/a/./b/../c", "/a/c"),
+        (None, None),
+        ("", None),
+    ],
+)
+def test_return_path_keeps_paths_of_the_app(value, expected):
+    assert _return_path(value) == expected
+
+
+def test_return_path_never_rebuilds_a_host_from_dot_segments():
+    for value in ("/..//evil.example/x", "/.//evil.example", "/a/..//evil.example"):
+        resolved = _return_path(value)
+        assert resolved is None or not resolved.startswith("//"), value
+
+
+def test_a_refused_sign_in_keeps_where_it_was_going(web, monkeypatch):
+    monkeypatch.setattr(config, "allow_signup", False)
+    _github_api(monkeypatch)
+    response = _callback(web, "/auth/github/login?from=/settings")
+    assert response.headers["location"] == (
+        f"{FRONT}/login?error=signup_closed&from=%2Fsettings"
+    )
+
+
+def test_an_abandoned_sign_in_does_not_pass_its_destination_on(web, monkeypatch):
+    _github_api(monkeypatch)
+    _start(web, "/auth/github/login?from=/settings")
+    response = _callback(web, "/auth/github/login")
+    assert response.headers["location"] == f"{FRONT}/dashboard"
+
+
+def test_linking_lands_on_settings_whatever_a_sign_in_started(
+    web, test_db, monkeypatch
+):
+    me = create_user(test_db, email="me@example.com", password="pw12345")
+    web.cookies.set(config.auth_cookie_name, create_access_token(me))
+    _github_api(
+        monkeypatch,
+        emails=[{"email": "x@example.com", "primary": True, "verified": True}],
+    )
+    _start(web, "/auth/github/login?from=/datasets")
+    response = _callback(web, "/auth/github/link")
+    assert response.headers["location"] == f"{FRONT}/settings?linked=github"
 
 
 def test_linking_from_settings_adds_github_to_the_signed_in_account(

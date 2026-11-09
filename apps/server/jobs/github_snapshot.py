@@ -257,6 +257,18 @@ class CorpusGitHubClient(GitHubService):
             tree, lambda path: self.file_content(owner, repo, path)
         )
 
+    async def is_public(self, owner: str, repo: str) -> bool:
+        """Whether ``owner/repo`` is public — not private, not an enterprise's
+        internal repo. An unknown repo raises, like :meth:`fetch_repo`; its
+        default branch is remembered on the way."""
+        self._guard()
+        resp = await self.client.get(f"/repos/{owner}/{repo}")
+        if resp.status_code != 200:
+            self._raise_for(resp, f"github repo {owner}/{repo}")
+        d = resp.json()
+        self._branches[f"{owner}/{repo}"] = d.get("default_branch") or "main"
+        return not d.get("private") and d.get("visibility", "public") == "public"
+
     async def default_branch(self, owner: str, repo: str) -> str:
         key = f"{owner}/{repo}"
         if key not in self._branches:

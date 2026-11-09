@@ -9,8 +9,10 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
+from server.core import net
 from server.core.config import config
 from server.tests.creds import FULL, NONE, make_creds
 from server.services.providers import (
@@ -24,8 +26,13 @@ from server.services.providers import (
 from server.services.providers import registry
 from server.core.net import PinnedTransport
 from server.services.providers import claude as claude_module
+from server.services.providers import openai as openai_module
 from server.services.providers.claude import ClaudeProvider
-from server.services.providers.openai import OpenAIProvider, check_base_url
+from server.services.providers.openai import (
+    OpenAIProvider,
+    check_base_url,
+    classify_model_id,
+)
 
 
 @pytest.mark.parametrize(
@@ -60,7 +67,7 @@ class TestValidateRef:
     def test_unconfigured_provider_says_what_to_add(self):
         with pytest.raises(ValueError, match="Claude token.*Settings"):
             validate_ref("claude:claude-sonnet-5-5", NONE)
-        with pytest.raises(ValueError, match="OpenAI API key"):
+        with pytest.raises(ValueError, match=r"API key \(and endpoint\).*Settings"):
             validate_ref("openai:gpt-4o-mini", NONE)
 
     def test_claude_is_refused_outside_development_and_ci(self, monkeypatch):
@@ -263,6 +270,191 @@ async def test_openai_discovery_is_best_effort_and_per_key(monkeypatch):
     provider._discovered.clear()
     client.models.list = AsyncMock(side_effect=RuntimeError("down"))
     assert [m.id for m in await provider.list_models(FULL)] == ["configured"]
+
+
+def _listing(*ids):
+    return AsyncMock(
+        return_value=SimpleNamespace(data=[SimpleNamespace(id=i) for i in ids])
+    )
+
+
+async def test_discovery_sorts_chat_from_embedding_models(monkeypatch):
+    """A gateway lists every alias: only chat models are offered for the model
+    roles, the embedding ones go to the collections, the rest nowhere."""
+    provider, client, _ = _openai_provider(monkeypatch)
+    monkeypatch.setattr(config, "available_models", [])
+    client.models.list = _listing(
+        "chat-default", "embed-default", "text-embedding-3-small", "moderation", "gpt-x"
+    )
+    client.get = AsyncMock(side_effect=RuntimeError("404"))  # not a LiteLLM
+
+    await provider.discover(FULL)
+
+    assert [m.id for m in provider.models(FULL)] == ["chat-default", "gpt-x"]
+    assert [m.ref for m in provider.embedding_models(FULL)] == [
+        "openai:embed-default",
+        "openai:text-embedding-3-small",
+    ]
+    assert not provider.knows("embed-default", FULL)  # not a chat default
+
+
+async def test_discovery_follows_litellm_model_modes(monkeypatch):
+    provider, client, _ = _openai_provider(monkeypatch)
+    monkeypatch.setattr(config, "available_models", [])
+    client.models.list = _listing("chat-free", "vectors", "guard")
+    client.get = AsyncMock(
+        return_value={
+            "data": [
+                # One entry per deployment: the first mode given wins.
+                {"model_name": "chat-free", "model_info": {"mode": "chat"}},
+                {"model_name": "chat-free", "model_info": {"mode": None}},
+                {"model_name": "vectors", "model_info": {"mode": "embedding"}},
+                {"model_name": "guard", "model_info": {"mode": "moderation"}},
+            ]
+        }
+    )
+
+    await provider.discover(FULL)
+
+    assert client.get.call_args.args == ("/model/info",)
+    assert [m.id for m in provider.models(FULL)] == ["chat-free"]
+    assert [m.id for m in provider.embedding_models(FULL)] == ["vectors"]
+
+
+async def test_the_configured_embedding_model_is_never_a_chat_model(monkeypatch):
+    provider, client, _ = _openai_provider(monkeypatch)
+    monkeypatch.setattr(config, "available_models", ["chat-default"])
+    monkeypatch.setattr(config, "openai_embedding_model", "my-vectors")
+    client.models.list = _listing("chat-default", "my-vectors")  # an id with no hint
+    client.get = AsyncMock(return_value={})
+
+    await provider.discover(FULL)
+
+    assert [m.id for m in provider.models(FULL)] == ["chat-default"]
+    assert [m.id for m in provider.embedding_models(FULL)] == ["my-vectors"]
+    # Without a key there is no endpoint to embed on.
+    assert provider.embedding_models(NONE) == []
+
+
+async def test_a_failed_discovery_is_not_retried_on_every_page_load(monkeypatch):
+    provider, client, _ = _openai_provider(monkeypatch)
+    client.models.list = AsyncMock(side_effect=RuntimeError("down"))
+    await provider.discover(FULL)
+    await provider.discover(FULL)
+    assert client.models.list.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "model_id, kind",
+    [
+        ("embed-default", "embedding"),
+        ("text-embedding-3-large", "embedding"),
+        ("nomic-embed-text", "embedding"),
+        ("BAAI/bge-m3", "embedding"),
+        ("omni-moderation-latest", "other"),
+        ("whisper-1", "other"),
+        ("chat-smart", "chat"),
+        ("llama3:8b", "chat"),
+    ],
+)
+def test_classify_model_id(model_id, kind):
+    assert classify_model_id(model_id) == kind
+
+
+def _embedding_client(monkeypatch, provider, dims=3):
+    """A sync client whose embeddings.create answers in shuffled order."""
+    client = MagicMock()
+    sent = []
+
+    def create(model, input, encoding_format):
+        sent.append(list(input))
+        data = [
+            SimpleNamespace(index=i, embedding=[float(len(t))] * dims)
+            for i, t in enumerate(input)
+        ]
+        return SimpleNamespace(data=list(reversed(data)))
+
+    client.embeddings.create = MagicMock(side_effect=create)
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=None)
+    monkeypatch.setattr(provider, "build_sync_client", lambda creds: client)
+    return client, sent
+
+
+def test_embed_batches_keep_the_order_and_never_send_an_empty_text(monkeypatch):
+    provider = OpenAIProvider()
+    client, sent = _embedding_client(monkeypatch, provider)
+    monkeypatch.setattr(openai_module, "EMBED_BATCH", 2)
+
+    vectors = provider.embed("embed-default", ["abc", "", "abcdef"], FULL)
+
+    assert sent == [["abc", " "], ["abcdef"]]
+    assert vectors == [[3.0] * 3, [1.0] * 3, [6.0] * 3]
+    assert client.embeddings.create.call_args.kwargs["encoding_format"] == "float"
+
+
+def test_embed_cuts_long_texts_and_bounds_a_request_by_size(monkeypatch):
+    provider = OpenAIProvider()
+    _, sent = _embedding_client(monkeypatch, provider)
+    monkeypatch.setattr(openai_module, "EMBED_BATCH_CHARS", 10)
+
+    provider.embed("m", ["x" * 9000, "abcdef", "abcdef"], FULL)
+
+    assert [len(t) for t in sent[0]] == [openai_module.EMBED_MAX_CHARS]
+    assert sent[1:] == [["abcdef"], ["abcdef"]]
+
+
+def test_embed_failures_are_provider_errors(monkeypatch):
+    provider = OpenAIProvider()
+    client, _ = _embedding_client(monkeypatch, provider)
+    client.embeddings.create.side_effect = RuntimeError("Error code: 404 - no model")
+    with pytest.raises(ProviderError, match="openai:m embedding failed.*404"):
+        provider.embed("m", ["a"], FULL)
+    with pytest.raises(ProviderError, match="not configured"):
+        provider.embed("m", ["a"], NONE)
+
+
+def test_the_embedding_client_is_pinned_for_a_users_endpoint(monkeypatch):
+    """Embeddings run in threads, on a sync client: a user's endpoint gets the
+    same guard as the async one, the operator's none."""
+    pinned = []
+
+    def fake_pinned(**kwargs):
+        pinned.append(kwargs)
+        # No TLS context to build, no proxy from the env: nothing is sent.
+        return httpx.Client(
+            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+            trust_env=False,
+        )
+
+    monkeypatch.setattr(net, "pinned_sync_client", fake_pinned)
+    provider = OpenAIProvider()
+    user = make_creds(openai_api_key="sk-alice-000000000000")
+    provider.build_sync_client(user).close()
+    assert pinned and pinned[0]["allowed_hosts"] == ["api.openai.com"]
+
+    pinned.clear()
+    operator = make_creds(
+        openai_api_key="sk-x-0000000000000000",
+        openai_base_url="http://litellm.litellm.svc.cluster.local:4000/v1",
+        base_url_trusted=True,
+    )
+    provider.build_sync_client(operator).close()
+    assert pinned == []
+
+
+def test_the_endpoint_is_shown_and_a_lent_key_says_so():
+    provider = OpenAIProvider()
+    lent = make_creds(
+        openai_api_key="sk-x-0000000000000000",
+        openai_base_url="http://litellm.litellm.svc.cluster.local:4000/v1",
+        base_url_trusted=True,
+        openai_from_server=True,
+    )
+    assert provider.endpoint(lent) == "litellm.litellm.svc.cluster.local"
+    assert provider.lent(lent) is True
+    assert provider.endpoint(FULL) == "api.openai.com"
+    assert provider.lent(FULL) is False
 
 
 # --- Claude -------------------------------------------------------------------

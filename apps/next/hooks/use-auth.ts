@@ -18,8 +18,9 @@ export const CURRENT_USER_QUERY_KEY = ['auth', 'me']
 // bounced an unauthenticated request, falling back to /dashboard. Read from the
 // live URL (login runs client-side only) so we don't need a useSearchParams
 // Suspense boundary. Only a path on this origin is honoured (see
-// safeRedirectPath), so the login page can't be used as an open redirect.
-function postLoginRedirect(): string {
+// safeRedirectPath), so the login page can't be used as an open redirect. An
+// SSO sign-in carries it through the provider (ssoUrl).
+export function postLoginRedirect(): string {
   if (typeof window === 'undefined') return '/dashboard'
   const from = new URLSearchParams(window.location.search).get('from')
   return safeRedirectPath(from, window.location.origin)

@@ -452,6 +452,46 @@ class TestQAServiceSemantic:
         assert self.embedder.calls[0] == ["What is it?"]
         assert sum(c == ["What is it?"] for c in self.embedder.calls) == 1
 
+    def test_a_failing_model_falls_back_to_lexical_for_the_rest_of_the_run(self):
+        """An endpoint can fail mid-run: the generation goes on, deduplicated
+        lexically from then on — never with vectors of two models in one index."""
+        from server.tests.fake_embedder import FakeEmbedder
+
+        class FailsAfterTheIndex(FakeEmbedder):
+            def embed(self, texts):
+                if len(self.calls) >= 1:
+                    self.calls.append(list(texts))
+                    raise RuntimeError("endpoint down")
+                return super().embed(texts)
+
+        existing = _existing_item(
+            "Which port does the API listen on?", "8000", "ctx", "https://example.com/a"
+        )
+        service = self._service([existing], embedder=FailsAfterTheIndex())
+        result = self._run(
+            service,
+            [
+                _qa("Which port does the API listen on", "Port 8000."),
+                _qa("How do I start the services?", "Run make dev."),
+            ],
+        )
+        # Lexical: another source, so the rephrasing is kept; no grounding.
+        assert result["total"] == 2 and result["similar_duplicates"] == 0
+        assert all("grounding_score" not in i["metadata"] for i in result["items"])
+        calls = len(self.embedder.calls)
+        self._run(service, [_qa("Which port does the web UI use?", "3000.")])
+        assert len(self.embedder.calls) == calls  # not asked again this run
+
+    def test_the_callers_credentials_choose_the_model(self):
+        from server.tests.creds import FULL
+
+        with (
+            patch("server.services.qa.get_dataset_pairs", return_value=[]),
+            patch("server.services.qa.get_embedder", return_value=None) as choose,
+        ):
+            QAService(OWNER, "ds", creds=FULL).prepare()
+        choose.assert_called_once_with(FULL)
+
     def test_without_embedder_falls_back_to_lexical(self):
         existing = _existing_item(
             "Which port does the API listen on?", "8000", "ctx", "https://example.com/a"

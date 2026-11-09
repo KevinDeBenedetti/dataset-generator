@@ -126,7 +126,7 @@ def postgres_url() -> Generator[str, None, None]:
     # fills from the dev .env ("datasets") — a word that also appears in
     # migration messages, breaking the "never logs the password" assertion.
     with PostgresContainer(
-        "postgres:17-alpine",
+        "postgres:18-alpine",
         username="test",
         password="test-only-pw-7f3a",
         dbname="test",
@@ -410,6 +410,18 @@ def _reset_login_rate_limiter():
     yield
     for limiter in limiters:
         limiter.clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_cached_data_files():
+    """Every test reads its fake Hub afresh: the per-commit cache of a dataset's
+    pairs (services/huggingface.py) would otherwise carry one test's file to
+    the next one using the same fake commit id."""
+    from server.services import huggingface
+
+    huggingface.forget_data_files()
+    yield
+    huggingface.forget_data_files()
 
 
 @pytest.fixture

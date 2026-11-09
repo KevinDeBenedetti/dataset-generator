@@ -4,7 +4,7 @@ The vector collections (``services/collections.py``) are embedded here too,
 with one of :data:`COLLECTION_MODELS`.
 
 Backs four checks shared by the in-app pipeline (``services/qa.py``) and the
-scheduled Q&A job (``jobs/qa_dataset.py``):
+GitHub Q&A jobs (``jobs/qa_dataset.py``):
 
 * **semantic dedup** — a new question whose cosine to an existing one reaches
   the threshold is a rephrasing, not a new pair;
@@ -16,8 +16,10 @@ scheduled Q&A job (``jobs/qa_dataset.py``):
   hallucination signal, flagged for review.
 
 The model runs through FastEmbed (ONNX Runtime, no torch), downloaded from the
-Hugging Face Hub on first use and cached under ``FASTEMBED_CACHE_PATH``.
-Everything here except :func:`get_local_embedder` is pure and takes an
+Hugging Face Hub on first use and cached under ``FASTEMBED_CACHE_PATH`` — or,
+with ``OPENAI_EMBEDDING_MODEL``, on the caller's OpenAI-compatible endpoint
+(:class:`EndpointEmbedder`, a model named ``openai:<id>``; :func:`get_embedder`
+picks). Everything here except the loaders is pure and takes an
 :class:`Embedder` or plain vectors, so tests inject a fake and never download a
 model. Vectors are L2-normalised on the way out: cosine is a dot product.
 """
@@ -28,11 +30,14 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List, Optional, Protocol, Sequence, Tuple
+from typing import Dict, List, Optional, Protocol, Sequence, Tuple, cast
 
 import numpy as np
 
 from server.core.config import config
+from server.services.credentials import Credentials
+from server.services.providers import get_provider
+from server.services.providers.openai import OpenAIProvider, connection_key
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +139,111 @@ def get_local_embedder() -> Optional[Embedder]:
             return None
 
 
+# --- Endpoint embeddings (OPENAI_EMBEDDING_MODEL) ---------------------------------
+
+# A model named "openai:<id>" is served by the OpenAI-compatible endpoint; any
+# other name is a local FastEmbed model.
+ENDPOINT_PREFIX = "openai:"
+
+
+def is_endpoint_model(name: str) -> bool:
+    return name.startswith(ENDPOINT_PREFIX)
+
+
+def _openai() -> OpenAIProvider:
+    # The registry's instance: its discovery cache lists the endpoint's models.
+    return cast(OpenAIProvider, get_provider("openai"))
+
+
+def _endpoint_configured(creds: Optional[Credentials]) -> bool:
+    return creds is not None and _openai().configured(creds)
+
+
+class EndpointEmbedder:
+    """An embedding model of the caller's OpenAI-compatible endpoint.
+
+    Blocking like the local one (callers run it in a thread); ``remote`` tells
+    them it waits on the network, not on the CPU. A failed call raises
+    :class:`EmbeddingModelError`, its message safe to show.
+    """
+
+    remote = True
+
+    def __init__(self, model_id: str, creds: Credentials):
+        self.model_id = model_id
+        self.model_name = ENDPOINT_PREFIX + model_id
+        self.creds = creds
+
+    def embed(self, texts: Sequence[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, 0), dtype=np.float32)
+        try:
+            vectors = _openai().embed(self.model_id, texts, self.creds)
+        except Exception as exc:  # noqa: BLE001 — ProviderError, or a bad endpoint URL
+            raise EmbeddingModelError(
+                f"The endpoint could not embed with {self.model_id}: {exc}"
+            ) from None
+        return normalize(np.array(vectors, dtype=np.float32))
+
+    # The OpenAI API has no query/passage distinction.
+    embed_passages = embed
+    embed_queries = embed
+
+
+# Probe outcomes per endpoint, key and model (hashed): a success is trusted
+# for _PROBE_OK_S, a failure retried after _RETRY_AFTER_FAILURE_S.
+_PROBE_OK_S = 300
+_probe_lock = threading.Lock()
+_probed: Dict[str, Tuple[bool, float]] = {}
+
+
+def _answers(embedder: EndpointEmbedder) -> bool:
+    """Whether the endpoint embeds with this model now (one short call)."""
+    key = f"{connection_key(embedder.creds)}|{embedder.model_id}"
+    now = time.monotonic()
+    with _probe_lock:
+        known = _probed.get(key)
+    if known is not None:
+        ok, at = known
+        if now - at < (_PROBE_OK_S if ok else _RETRY_AFTER_FAILURE_S):
+            return ok
+    try:
+        embedder.embed(["ping"])
+        ok = True
+    except EmbeddingModelError as exc:
+        ok = False
+        logger.warning("%s, using the local embedding model instead", exc)
+    with _probe_lock:
+        _probed[key] = (ok, time.monotonic())
+    return ok
+
+
+def default_embedding_model(creds: Optional[Credentials]) -> str:
+    """What embeds for ``creds`` by default: ``openai:<OPENAI_EMBEDDING_MODEL>``
+    when they have an endpoint, else the local SEMANTIC_MODEL. (Unprobed: the
+    checks fall back to the local model when the endpoint can't embed.)"""
+    if config.openai_embedding_model and _endpoint_configured(creds):
+        return ENDPOINT_PREFIX + config.openai_embedding_model
+    return config.semantic_model
+
+
+def get_embedder(creds: Optional[Credentials] = None) -> Optional[Embedder]:
+    """The embedder of the duplicate, grounding and coverage checks for ``creds``.
+
+    OPENAI_EMBEDDING_MODEL on the caller's endpoint when they have one and it
+    answers, else the local model (:func:`get_local_embedder`), else ``None``
+    — the lexical path. Blocking (a probe, a model load): call it in a thread.
+    """
+    if not config.semantic_enabled:
+        return None
+    model_id = config.openai_embedding_model
+    if model_id and creds is not None and _endpoint_configured(creds):
+        embedder = EndpointEmbedder(model_id, creds)
+        if _answers(embedder):
+            return embedder
+    return get_local_embedder()
+
+
 # --- Collection models (services/collections.py) --------------------------------
 
 
@@ -153,13 +263,16 @@ class EmbeddingModelError(RuntimeError):
 
 @dataclass(frozen=True)
 class EmbeddingModel:
-    """A model a vector collection can be embedded with: local, CPU only."""
+    """A model a vector collection can be embedded with: local (CPU only), or
+    served by the caller's OpenAI-compatible endpoint (``provider="openai"``,
+    named ``openai:<id>``)."""
 
     name: str
     dimensions: Optional[int]
     size_mb: Optional[int]
     languages: str
     description: str
+    provider: str = "local"
 
 
 # Small models only: a build embeds every row of a split on the worker's CPU,
@@ -197,8 +310,32 @@ COLLECTION_MODELS: Tuple[EmbeddingModel, ...] = (
 )
 
 
-def collection_models() -> List[EmbeddingModel]:
-    """The models a collection can use, the deployment's SEMANTIC_MODEL first."""
+def collection_models(creds: Optional[Credentials] = None) -> List[EmbeddingModel]:
+    """The models a collection can use, the default first: with an endpoint,
+    its OPENAI_EMBEDDING_MODEL and the other embedding models its discovery
+    found, then the local ones — the deployment's SEMANTIC_MODEL first."""
+    return [*_endpoint_models(creds), *_local_models()]
+
+
+def _endpoint_models(creds: Optional[Credentials]) -> List[EmbeddingModel]:
+    if creds is None or not _endpoint_configured(creds):
+        return []
+    provider = _openai()
+    host = provider.endpoint(creds)
+    return [
+        EmbeddingModel(
+            info.ref,
+            None,
+            None,
+            "",
+            f"Served by {host}: the rows are sent there to be embedded.",
+            provider="openai",
+        )
+        for info in provider.embedding_models(creds)
+    ]
+
+
+def _local_models() -> List[EmbeddingModel]:
     models = list(COLLECTION_MODELS)
     names = [m.name for m in models]
     if config.semantic_model in names:
@@ -223,11 +360,21 @@ _loaded_lock = threading.Lock()
 _loaded: "OrderedDict[str, LocalEmbedder]" = OrderedDict()
 
 
-def get_collection_embedder(model_name: str) -> RetrievalEmbedder:
-    """The model a collection is embedded with, loaded (and downloaded) on
-    first use. Unlike :func:`get_local_embedder` it raises
+def get_collection_embedder(
+    model_name: str, creds: Optional[Credentials] = None
+) -> RetrievalEmbedder:
+    """The model a collection is embedded with: a local one is loaded (and
+    downloaded) on first use, an endpoint one (``openai:<id>``) runs on
+    ``creds``. Unlike :func:`get_local_embedder` it raises
     :class:`EmbeddingModelError` when the model can't load: a collection has no
     lexical fallback."""
+    if is_endpoint_model(model_name):
+        if creds is None or not _endpoint_configured(creds):
+            raise EmbeddingModelError(
+                f"{model_name} is a model of an OpenAI-compatible endpoint: add "
+                "your API key (and endpoint) in Settings to use this collection."
+            )
+        return EndpointEmbedder(model_name[len(ENDPOINT_PREFIX) :], creds)
     if model_name == config.semantic_model:
         shared = _embedder  # already loaded for the duplicate checks
         if shared is not None:

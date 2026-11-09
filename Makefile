@@ -96,7 +96,7 @@ down:
 ## Purge persistent volumes (server venv + node_modules) and rebuild.
 ## Use after a dependency change: `make dev` keeps the volumes, so a stale
 ## venv would otherwise mask the new lockfile (e.g. an old litellm lingering).
-## WARNING: -v also drops postgres_data and redis_data — the
+## WARNING: -v also drops postgres18_data, qdrant_storage and redis_data — the
 ## application database (users, refresh tokens, quality rules) is destroyed and
 ## rebuilt from migrations on the next `make dev`.
 reset: check-docker

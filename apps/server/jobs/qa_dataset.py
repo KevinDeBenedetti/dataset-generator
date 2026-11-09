@@ -1,19 +1,22 @@
 """GitHub Q&A dataset → private Hugging Face dataset.
 
-    python -m server.jobs.qa_dataset
+Run by the ``github-personal`` and ``github-recipe`` jobs (jobs/registry.py),
+both started from the GitHub page: :func:`generate` (or
+:func:`generate_from_recipe`) stops at a draft, :func:`publish` pushes it once
+reviewed.
 
 Profile facts become pairs deterministically; each notable repo gets one
 "overview" LLM call (description + README) plus one call per small batch of
-its ``docs/`` files. The result is deduplicated and pushed to
-HF_QA_DATASET_REPO as ``train.jsonl`` + a dataset card — the file the
-portfolio's "Synchroniser les paires Q/R" action ingests.
+its ``docs/`` files. The result is deduplicated and pushed to the Q&A dataset
+repo as ``train.jsonl`` + a dataset card — the file the portfolio's
+"Synchroniser les paires Q/R" action ingests.
 
 Generation goes through the model provider registry (services/providers):
 by default the Claude subscription via the Claude Agent SDK, authenticated
 with CLAUDE_CODE_OAUTH_TOKEN (``claude setup-token``) — that subscription
 grants no plain-API access, only Claude Code, which is what the SDK drives.
-Any model reference works (QA_JOB_MODEL, or the one picked on the Jobs page),
-including the OpenAI-compatible API.
+Any model reference works (the one picked on the GitHub page, else the jobs
+default of the Models page), including the OpenAI-compatible API.
 
 Ported from portfolio-next (``scripts/generate-and-export-qa-dataset.ts``,
 ``src/lib/rag/github-qa.ts``, ``src/lib/rag/github-hf-export.ts``).
@@ -24,7 +27,6 @@ import hashlib
 import json
 import logging
 import re
-import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -66,7 +68,7 @@ from server.services.semantic import (
     Embedder,
     SemanticIndex,
     find_semantic_duplicate,
-    get_local_embedder,
+    get_embedder,
     grounding_scores,
     nearest_texts,
     split_sections,
@@ -1191,8 +1193,18 @@ async def build_qa_dataset(
         if embedder is None or not fresh:
             return fresh
         accepted: List[QAPair] = []
-        vectors = embedder.embed([p.question for p in fresh])
-        grounding = _grounding_for(embedder, fresh, sources)
+        try:
+            vectors = embedder.embed([p.question for p in fresh])
+            grounding = _grounding_for(embedder, fresh, sources)
+        except Exception as exc:  # noqa: BLE001 — an endpoint can fail mid-run
+            # The generation is done: keep its pairs, unscreened, rather than
+            # lose them to the checks — and say so in the run's errors.
+            logger.warning("Semantic checks skipped: %s", exc)
+            errors.append(
+                f"Duplicate and grounding checks skipped ({embedder.model_name} "
+                f"failed): {exc}"
+            )
+            return fresh
         for pair, vector, score in zip(fresh, vectors, grounding, strict=True):
             match = find_semantic_duplicate(
                 vector, index, config.semantic_dedup_threshold
@@ -1469,7 +1481,7 @@ def publish_qa_dataset(
     }
 
 
-# --- CLI ---------------------------------------------------------------------
+# --- generate, review, publish ------------------------------------------------
 
 
 @dataclass
@@ -1518,68 +1530,57 @@ async def generate(
     creds: Credentials,
     complete: Optional[CompletionFn] = None,
     max_repos: Optional[int] = None,
-    full_refresh: Optional[bool] = None,
+    full_refresh: bool = False,
     model_ref: Optional[str] = None,
-    require_hub: bool = True,
     on_progress: Optional[ProgressFn] = None,
 ) -> Draft:
     """Generate the next version of the Q&A dataset, without publishing it.
 
     Every public (non-fork, non-archived) repo is processed; ``max_repos``
     caps that to the most-starred ones — only useful for a cheap test run.
-    The weekly cost stays bounded by the incremental mode: an unchanged repo
-    costs no LLM call.
+    The cost stays bounded by the incremental mode: an unchanged repo costs
+    no LLM call.
 
     The run is incremental against the published version (see
-    :func:`build_qa_dataset`) whenever HF credentials are set. With
-    ``require_hub`` (the default), HF_TOKEN/HF_QA_DATASET_REPO are required and
-    the token is checked *before* any (limited) subscription usage is spent.
-    ``full_refresh`` (default: env ``QA_FULL_REFRESH``) ignores the published
-    version. ``model_ref`` picks the model (default: ``QA_JOB_MODEL``, else
-    ``claude:$CLAUDE_MODEL``).
+    :func:`build_qa_dataset`): the Hugging Face token and the Q&A dataset repo
+    are required, and the token is checked *before* any (limited) subscription
+    usage is spent. ``full_refresh`` ignores the published version.
+    ``model_ref`` picks the model (default: ``QA_JOB_MODEL``).
     """
-    if full_refresh is None:
-        full_refresh = _env("QA_FULL_REFRESH", "false").lower() in ("1", "true", "yes")
     username = creds.github_username
     if not username:
         raise JobError("Your GitHub username is required (set it in Settings)")
     model_ref, model = _model_for(creds, model_ref, complete)
 
     repo_id = creds.hf_qa_repo
-    if require_hub:
-        if not creds.has(HF_TOKEN):
-            raise JobError("Your Hugging Face token is required (add it in Settings)")
-        if not repo_id:
-            raise JobError(
-                "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
-            )
-
-        from server.services.huggingface import _api
-
-        try:
-            await asyncio.to_thread(_api(creds).whoami)
-        except Exception as exc:
-            raise JobError(f"Hugging Face rejected your token: {exc}") from exc
-
-    if repo_id and creds.has(HF_TOKEN):
-        from server.services.huggingface import (
-            HuggingFaceNotConfiguredError,
-            qualify_repo_id,
+    if not creds.has(HF_TOKEN):
+        raise JobError("Your Hugging Face token is required (add it in Settings)")
+    if not repo_id:
+        raise JobError(
+            "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
         )
 
-        try:
-            repo_id = await asyncio.to_thread(qualify_repo_id, creds, repo_id)
-        except HuggingFaceNotConfiguredError as exc:
-            raise JobError(str(exc)) from exc
+    from server.services.huggingface import (
+        HuggingFaceNotConfiguredError,
+        _api,
+        qualify_repo_id,
+    )
+
+    try:
+        await asyncio.to_thread(_api(creds).whoami)
+    except Exception as exc:
+        raise JobError(f"Hugging Face rejected your token: {exc}") from exc
+    try:
+        repo_id = await asyncio.to_thread(qualify_repo_id, creds, repo_id)
+    except HuggingFaceNotConfiguredError as exc:
+        raise JobError(str(exc)) from exc
 
     previous = PreviousState()
     if full_refresh:
         logger.info("full refresh: ignoring the previously published version")
-    elif repo_id and creds.has(HF_TOKEN):
-        from server.services.huggingface import _api
-
+    else:
         previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
-    embedder = await asyncio.to_thread(get_local_embedder)
+    embedder = await asyncio.to_thread(get_embedder, creds)
 
     complete = complete or provider_completion(model_ref, creds)
     client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
@@ -1658,7 +1659,7 @@ async def generate_from_recipe(
         previous = PreviousState()
     else:
         previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
-    embedder = await asyncio.to_thread(get_local_embedder)
+    embedder = await asyncio.to_thread(get_embedder, creds)
     complete = complete or provider_completion(model_ref, creds)
 
     client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
@@ -1744,53 +1745,3 @@ async def publish(creds: Credentials, draft: Draft) -> dict:
     return await asyncio.to_thread(
         publish_qa_dataset, creds, draft.dataset, draft.username, draft.repo_id
     )
-
-
-async def run(
-    creds: Credentials,
-    complete: Optional[CompletionFn] = None,
-    max_repos: Optional[int] = None,
-    dry_run: bool = False,
-    full_refresh: Optional[bool] = None,
-    model_ref: Optional[str] = None,
-) -> dict:
-    """Generate the Q&A dataset and, unless ``dry_run``, publish it — the CLI
-    and CI path, in one go. A dry run needs no HF_TOKEN/HF_QA_DATASET_REPO;
-    without them it can't read the published version, so it is a full run."""
-    draft = await generate(
-        creds,
-        complete,
-        max_repos=max_repos,
-        full_refresh=full_refresh,
-        model_ref=model_ref,
-        require_hub=not dry_run,
-    )
-    if dry_run:
-        return {"repo": draft.repo_id, "url": None, **draft.stats(), "dry_run": True}
-    result = await publish(creds, draft)
-    return {**result, **draft.stats(), "dry_run": False}
-
-
-def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    try:
-        result = asyncio.run(run(Credentials.from_env()))
-    except JobError as exc:
-        print(f"qa_dataset: {exc}", file=sys.stderr)
-        return 1
-    logger.info(
-        "done — %d pairs (%d kept, %d new; %d dropped, %d rephrasings, "
-        "%d to review) at %s",
-        result["records"],
-        result["kept"],
-        result["new"],
-        result["dropped"],
-        result["semantic_duplicates"],
-        result["review"],
-        result["url"],
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

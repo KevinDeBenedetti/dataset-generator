@@ -41,6 +41,35 @@ def test_list_models(client: TestClient, monkeypatch):
     assert "claude:claude-sonnet-5-5" in [
         m["ref"] for m in providers["claude"]["models"]
     ]
+    assert providers["openai"]["endpoint"] == "api.openai.com"
+    assert providers["openai"]["lent"] is False
+
+
+def test_list_models_shows_the_endpoint_and_the_default_embedding(
+    client: TestClient, monkeypatch
+):
+    """An admin on the server's LiteLLM: where the calls go, that the key is
+    the server's, and what the duplicate checks embed with."""
+    monkeypatch.setattr(config, "available_models", ["chat-default"])
+    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    monkeypatch.setattr(config, "semantic_enabled", True)
+    overrides = client.app.dependency_overrides  # ty: ignore[unresolved-attribute]
+    overrides[get_credentials] = lambda: make_creds(
+        openai_api_key="sk-server-0000000000000",
+        openai_base_url="http://litellm.litellm.svc.cluster.local:4000/v1",
+        base_url_trusted=True,
+        openai_from_server=True,
+    )
+    with patch("server.api.models.get_model_defaults", return_value=DEFAULTS):
+        body = client.get("/models").json()
+
+    openai = next(p for p in body["providers"] if p["name"] == "openai")
+    assert openai["endpoint"] == "litellm.litellm.svc.cluster.local"
+    assert openai["lent"] is True
+    assert [m["ref"] for m in openai["models"]] == ["openai:chat-default"]
+    assert [m["ref"] for m in openai["embedding_models"]] == ["openai:embed-default"]
+    assert body["embedding_model"] == "openai:embed-default"
+    assert body["local_embedding_model"] == config.semantic_model
 
 
 def test_put_defaults(client: TestClient, owner):

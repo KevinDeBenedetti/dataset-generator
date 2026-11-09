@@ -73,9 +73,9 @@ dev = [
     # install side by side under different module names.
     "httpx2>=2.13.1",
 ]
-# Scheduled dataset jobs (server/jobs): the SDK bundles the Claude Code binary,
-# so it stays out of the default install. The server image and the
-# qa-dataset-sync workflow opt in with `uv sync --group jobs`.
+# Dataset jobs (server/jobs) on the Claude provider: the SDK bundles the Claude
+# Code binary, so it stays out of the default install. The server image opts in
+# with `uv sync --group jobs`.
 jobs = [
     "claude-agent-sdk>=0.2.165",
 ]
@@ -115,6 +115,3 @@ extend-immutable-calls = [
 "apps/server/tests/**" = ["S101", "S105", "S106", "S107"]
 # Migrations build their SQL from fixed identifiers, never from input.
 "apps/server/migrations/**" = ["S608"]
-
-[tool.coverage.run]
-relative_files = true

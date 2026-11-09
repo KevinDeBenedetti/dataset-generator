@@ -58,7 +58,13 @@ Containers run as uid 10001 and need no writable root filesystem. The local
 embedding model is baked into the server image; `HF_HUB_OFFLINE` must stay unset
 (uploads and token checks need the Hub). Leave `ENVIRONMENT` unset (= production),
 and do not set `ALLOW_ENV_CREDENTIALS` or `ENABLE_CLAUDE_PROVIDER`: they no longer
-exist — production never lends the server's keys and never offers Claude.
+exist — production never offers Claude, and lends the server's keys for one
+thing only. With `SERVER_LLM_FOR_ADMINS=true`, admins who saved no
+OpenAI-compatible key of their own call `OPENAI_BASE_URL` with
+`OPENAI_API_KEY`: point them at a gateway you run (an in-cluster
+`http://…:4000/v1` LiteLLM Service is fine) with a virtual key of its own, so
+its budget and revocation stay in the gateway. Other users always bring their
+own key.
 
 Required in the deployment's secrets/config: `DATABASE_URL`, `AUTH_SECRET_KEY`,
 `SECRETS_ENCRYPTION_KEYS`, `FRONTEND_URL` (https), and at least one SSO pair

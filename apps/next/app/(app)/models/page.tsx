@@ -12,7 +12,7 @@ const ROLE_INFO: Record<string, { label: string; hint: string }> = {
   cleaning: { label: 'Cleaning', hint: 'Tidies web page text before Q&A generation' },
   qa: { label: 'Q&A generation', hint: 'Writes the question/answer pairs, and judges scores' },
   vision: { label: 'Vision', hint: 'Transcribes uploaded PDF and image pages' },
-  jobs: { label: 'Jobs', hint: 'Dataset jobs run from the Jobs page' },
+  jobs: { label: 'Jobs', hint: 'GitHub datasets: whole-account jobs and recipes' },
 }
 
 function ProviderCard({ provider }: { provider: ProviderOut }) {
@@ -54,6 +54,14 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
             subscription.
           </p>
         )}
+        {provider.configured && provider.endpoint && (
+          <p className="hint">
+            Calls go to <code className="mono">{provider.endpoint}</code>
+            {provider.lent
+              ? " with the server's key: you saved none of your own. Save yours in Settings to use your own endpoint instead."
+              : ' with your own key.'}
+          </p>
+        )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {provider.models.length === 0 && <span className="muted">No models configured.</span>}
           {provider.models.map((m) => (
@@ -63,6 +71,16 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
             </span>
           ))}
         </div>
+        {(provider.embedding_models ?? []).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span className="hint">Embeddings</span>
+            {(provider.embedding_models ?? []).map((m) => (
+              <span key={m.ref} className="tag mono" title="Embedding model">
+                {m.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div
         className="card-foot"
@@ -107,6 +125,27 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
   )
 }
 
+// Set by the deployment (OPENAI_EMBEDDING_MODEL), not per user: the duplicate
+// thresholds belong to a model.
+function EmbeddingDefault({ model, local }: { model: string; local: string }) {
+  const onEndpoint = model.startsWith('openai:')
+  return (
+    <div className="field">
+      <span className="label">Embeddings</span>
+      <div className="input mono" aria-readonly="true" title={model || undefined}>
+        {model ? model.replace(/^openai:/, '') : 'Off'}
+      </div>
+      <div className="hint">
+        {!model
+          ? 'Duplicate and grounding checks are off: they compare the words instead.'
+          : onEndpoint
+            ? `Duplicate and grounding checks, and new collections, embed on your endpoint — with the local ${local.slice(local.lastIndexOf('/') + 1)} when it can't.`
+            : 'Duplicate and grounding checks, and new collections, embed with this local model.'}
+      </div>
+    </div>
+  )
+}
+
 export default function ModelsPage() {
   const modelsQuery = useModels(true)
   const updateMutation = useUpdateModelDefaults()
@@ -130,8 +169,9 @@ export default function ModelsPage() {
         <div>
           <h1 className="page-title">Models</h1>
           <p className="page-sub">
-            Model providers and the default model of each step. Any step can run on the OpenAI API
-            or on your Claude subscription; a generation can still pick another model.
+            Model providers and the default model of each step. Any step can run on an
+            OpenAI-compatible endpoint (OpenAI, or a gateway such as LiteLLM) or, where it is
+            offered, on your Claude subscription; a generation can still pick another model.
           </p>
         </div>
         <div className="page-actions">
@@ -190,6 +230,10 @@ export default function ModelsPage() {
                   <div className="hint">{ROLE_INFO[role]?.hint}</div>
                 </div>
               ))}
+              <EmbeddingDefault
+                model={modelsQuery.data.embedding_model ?? ''}
+                local={modelsQuery.data.local_embedding_model ?? ''}
+              />
             </div>
             <div className="card-foot" style={{ gap: 10 }}>
               <button

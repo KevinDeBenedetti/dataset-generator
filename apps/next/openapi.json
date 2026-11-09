@@ -161,6 +161,24 @@
               "type": "string",
               "title": "Provider Name"
             }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A path of the app to land on once signed in; anything else lands on the dashboard",
+              "title": "From"
+            },
+            "description": "A path of the app to land on once signed in; anything else lands on the dashboard"
           }
         ],
         "responses": {
@@ -1734,8 +1752,22 @@
           "collections"
         ],
         "summary": "Your vector collections",
-        "description": "Your collections, most recently changed first, with the embedding models\na collection can use and whether Qdrant is set up.",
+        "description": "Your collections, most recently changed first, with the embedding models\na collection can use (your endpoint's, then the local ones) and whether\nQdrant is set up.",
         "operationId": "get_collections_collections_get",
+        "parameters": [
+          {
+            "name": "discover",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also ask your OpenAI-compatible endpoint which embedding models it serves (a network call, 5 s max, then cached a few minutes) on top of OPENAI_EMBEDDING_MODEL",
+              "default": false,
+              "title": "Discover"
+            },
+            "description": "Also ask your OpenAI-compatible endpoint which embedding models it serves (a network call, 5 s max, then cached a few minutes) on top of OPENAI_EMBEDDING_MODEL"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1743,6 +1775,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CollectionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1757,14 +1799,14 @@
         "description": "Pin the split at its latest commit (or ``revision``) and queue its build:\na worker embeds every row. Poll ``GET /collections/{id}`` for progress.",
         "operationId": "post_collection_collections_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CollectionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
@@ -3593,7 +3635,7 @@
           "jobs"
         ],
         "summary": "Post Job Run",
-        "description": "Queue a run (a worker executes it) — poll GET /jobs/runs/{id} for its state.\n\nThe same code the job's workflow runs on a schedule. A draft job\n(github-personal) stops at a draft: review it, then POST .../publish.",
+        "description": "Queue a run (a worker executes it) — poll GET /jobs/runs/{id} for its state.\n\nA draft job (github-personal) stops at a draft: review it, then\nPOST .../publish.",
         "operationId": "post_job_run_jobs__job_id__run_post",
         "parameters": [
           {
@@ -5730,7 +5772,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "A local model, or \"openai:<id>\" for an endpoint one"
           },
           "dimensions": {
             "anyOf": [
@@ -5762,6 +5805,12 @@
           "description": {
             "type": "string",
             "title": "Description"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "\"local\" (FastEmbed, on the server) or \"openai\" (your OpenAI-compatible endpoint: the rows are sent to it)",
+            "default": "local"
           }
         },
         "type": "object",
@@ -7747,15 +7796,6 @@
             "type": "string",
             "title": "Description"
           },
-          "workflow": {
-            "type": "string",
-            "title": "Workflow",
-            "description": "GitHub Actions workflow running it on a schedule"
-          },
-          "schedule": {
-            "type": "string",
-            "title": "Schedule"
-          },
           "uses_model": {
             "type": "boolean",
             "title": "Uses Model"
@@ -7811,8 +7851,6 @@
           "id",
           "title",
           "description",
-          "workflow",
-          "schedule",
           "uses_model",
           "has_draft",
           "configured",
@@ -8249,6 +8287,18 @@
             },
             "type": "array",
             "title": "Roles"
+          },
+          "embedding_model": {
+            "type": "string",
+            "title": "Embedding Model",
+            "description": "What the duplicate and grounding checks embed with: \"openai:<id>\" (OPENAI_EMBEDDING_MODEL, on your endpoint) or a local model",
+            "default": ""
+          },
+          "local_embedding_model": {
+            "type": "string",
+            "title": "Local Embedding Model",
+            "description": "The local model they fall back to ('' when the checks are off)",
+            "default": ""
           }
         },
         "type": "object",
@@ -8502,7 +8552,28 @@
               "$ref": "#/components/schemas/ModelInfoOut"
             },
             "type": "array",
-            "title": "Models"
+            "title": "Models",
+            "description": "The chat models"
+          },
+          "embedding_models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInfoOut"
+            },
+            "type": "array",
+            "title": "Embedding Models",
+            "description": "The embedding models (offered to the vector collections)"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint",
+            "description": "The host the calls go to",
+            "default": ""
+          },
+          "lent": {
+            "type": "boolean",
+            "title": "Lent",
+            "description": "The calls use the server's key and endpoint (no key of yours is saved)",
+            "default": false
           }
         },
         "type": "object",

@@ -113,13 +113,15 @@ def vectors(monkeypatch):
 def embedder(monkeypatch):
     fake = FakeEmbedder()
     models = []
+    creds = []
 
-    def load(model):
+    def load(model, with_creds):
         models.append(model)
+        creds.append(with_creds)
         return fake
 
     monkeypatch.setattr(collections, "_embedder", load)
-    return SimpleNamespace(fake=fake, models=models)
+    return SimpleNamespace(fake=fake, models=models, creds=creds)
 
 
 @pytest.fixture
@@ -220,6 +222,24 @@ def test_a_new_collection_pins_the_latest_commit_and_queues_its_build(
     assert created["qdrant_collection"] == (
         f"{config.qdrant_collection_prefix}c_{created['id']}"
     )
+
+
+def test_with_an_endpoint_a_collection_defaults_to_its_embedding_model(
+    db, vectors, fake_hub, queued, embedder, monkeypatch
+):
+    """OPENAI_EMBEDDING_MODEL is the first choice, built and searched on the
+    owner's own credentials; the local models stay selectable."""
+    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    created = _define(db)
+    assert created["model"] == "openai:embed-default"
+    assert _define(db, name="Local", model=config.semantic_model)["model"] == (
+        config.semantic_model
+    )
+
+    asyncio.run(_build_now(created["id"]))
+    collections.search(db, OWNER, created["id"], "capital", creds=FULL)
+    assert embedder.models[0] == "openai:embed-default"
+    assert embedder.creds == [FULL, FULL]  # the build, then the search
 
 
 def test_what_a_collection_can_not_be_built_from_is_refused(

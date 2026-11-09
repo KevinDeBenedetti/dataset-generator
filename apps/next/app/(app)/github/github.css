@@ -7,6 +7,18 @@
   margin-bottom: 16px;
 }
 
+/* ---------- Sections: whole-account jobs, recipes ---------- */
+.gh-section-head {
+  margin: 8px 0 10px;
+}
+.gh-jobs {
+  margin-bottom: 16px;
+}
+.gh-jobs-grid {
+  align-items: start;
+  gap: 16px;
+}
+
 /* ---------- Account ---------- */
 .gh-account {
   display: flex;

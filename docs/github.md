@@ -1,16 +1,35 @@
 ---
-title: GitHub recipes
+title: GitHub datasets
 ---
 
-# GitHub recipes
+# GitHub datasets
 
-The **GitHub** page shows your public GitHub data and the recipes that turn it
-into datasets. A recipe picks what a dataset is generated from and names the
-Hugging Face dataset it publishes to; a generation stops at a draft that you
-review before anything reaches the Hub.
+The **GitHub** page shows your public GitHub data and makes datasets from it,
+in two ways: from your **whole account**, or from a **recipe** that picks what
+a dataset is generated from and names the Hugging Face dataset it publishes
+to. A Q&A generation stops at a draft that you review before anything reaches
+the Hub. Nothing runs on a schedule: a run starts when you start it.
 
-Only public data is read. A GitHub token saved in **Settings** only raises the
-API quota from 60 to 5,000 requests an hour; the page shows what is left.
+Only public data is read: a private repo is refused, even one your token could
+read. A GitHub token saved in **Settings** only raises the API quota from 60 to
+5,000 requests an hour; the page shows what is left.
+
+## Your whole account
+
+Two jobs read all your public repos, forks and archived ones aside, and
+publish to the dataset repos saved in **Settings**:
+
+| Job                 | What it builds                                                         | Publishes to            |
+| ------------------- | ---------------------------------------------------------------------- | ----------------------- |
+| GitHub personal Q&A | Q&A pairs from your profile, the READMEs and the `docs/` folders       | The Q&A dataset repo    |
+| Knowledge corpus    | A retrieval corpus (profile, repos, code chunks, docs), with no model  | The corpus dataset repo |
+
+**GitHub personal Q&A** is incremental like a recipe, and stops at a draft
+reviewed on its card: untick the new pairs you don't want, tick the held-out
+ones you do, then **Publish** pushes exactly that. *Max Repos* limits a test
+run to your most-starred repos; *Full Refresh* ignores the published version.
+The **Knowledge corpus** builds the splits you switch on; it publishes only
+with *Dry Run* off.
 
 ## Recipes
 
@@ -85,12 +104,14 @@ shown and can't be edited here.
 | `GET /recipes`, `POST /recipes`        | Your recipes; a new one                                       |
 | `GET/PUT/DELETE /recipes/{recipe_id}`  | One recipe (another user's answers 404)                       |
 | `POST /recipes/{recipe_id}/run`        | Queues a generation; follow it with `GET /jobs/runs/{run_id}` |
+| `GET /jobs`                            | The whole-account jobs, with their options and latest run     |
+| `POST /jobs/{job_id}/run`              | Queues one of them (`options`, `model_ref`)                   |
 | `POST /jobs/runs/{run_id}/publish`     | Publishes the reviewed draft: `exclude`, `promote`, `edits`   |
 | `GET /jobs/runs/{run_id}/checks`       | Near-duplicates and quality-rule failures of the draft        |
 
 GitHub answers are cached 5 minutes per account. Errors: `400` without a GitHub
-username in **Settings**, `404` outside your account, `429` when the GitHub
-quota is exhausted.
+username in **Settings**, `404` outside your account or for a repo that isn't
+public, `429` when the GitHub quota is exhausted.
 
 See [Datasets on Hugging Face](./datasets.md) for what happens once a draft is
 published.

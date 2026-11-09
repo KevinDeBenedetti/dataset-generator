@@ -49,11 +49,18 @@ Three security hooks run too: gitleaks on the staged changes (the version CI
 pins, reading `.gitleaks.toml`), and zizmor and actionlint on the GitHub
 workflows.
 
+Every remote hook is pinned to a commit, with its tag in a `# frozen:` comment
+— a tag can be moved to other code, a commit can't — and hadolint's image by
+digest. `uv run prek update` keeps them that way: it moves each one to its
+newest tag at least a week old (`[update]` in `prek.toml`). It leaves the
+hadolint image alone: bump its digest with the `rev`.
+
 ```sh
 uv run prek run --all-files      # every hook, every file
 uv run prek run                  # staged files only
 uv run prek run ruff             # a single hook
 uv run prek run --stage pre-push # includes the test suite
+uv run prek update               # move the remote hooks to newer pinned commits
 uv run prek util list-builtins   # what "builtin" provides
 ```
 

@@ -1,7 +1,7 @@
 # Host ports are published on 127.0.0.1 only: the local stack runs Postgres with
-# default credentials, Redis without a password, Qdrant without an API key and
-# an unauthenticated /debug/logs under DEBUG_LOGS=1 — none of it belongs on the
-# LAN.
+# default credentials, Redis and Qdrant open unless REDIS_PASSWORD and
+# QDRANT_API_KEY are set, and an unauthenticated /debug/logs under
+# DEBUG_LOGS=1 — none of it belongs on the LAN.
 services:
   next:
     container_name: next
@@ -77,7 +77,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
       # Shared login rate-limiter store; in-network address. Override REDIS_URL
       # in .env to point at a managed Redis.
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-}@redis:6379/0}
       # Vector collections (services/collections.py), in-network.
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       # Local stack: development mode, URLs derived from the ports above.
@@ -136,7 +136,7 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-datasets}:${POSTGRES_PASSWORD:-datasets}@postgres:5432/${POSTGRES_DB:-datasets}}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-}@redis:6379/0}
       # The worker builds the collections: it embeds and stores the vectors.
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -163,11 +163,13 @@ services:
   # the host on the project's slot-2 Postgres port (5452) so psql / a GUI client
   # can reach it. Alembic migrations run from the server's lifespan on startup,
   # which is why the server waits for the healthcheck rather than just the
-  # container start. Data persists in the postgres_data volume (`make reset`
-  # purges it).
+  # container start. Data persists in the postgres18_data volume (`make reset`
+  # purges it), mounted at /var/lib/postgresql: from 18, the image keeps each
+  # major's cluster in its own <major>/docker directory there, and refuses to
+  # start on a volume left at the old /var/lib/postgresql/data.
   postgres:
     container_name: postgres
-    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-datasets}
@@ -190,7 +192,7 @@ services:
       retries: 10
       start_period: 10s
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql
 
   # Qdrant: the vector store of the collections (services/collections.py). The
   # server and the worker reach it at http://qdrant:6333; its REST API and
@@ -204,6 +206,12 @@ services:
     restart: always
     expose:
       - "6333"
+    environment:
+      # The collections' payloads hold the text of private datasets: with
+      # QDRANT_API_KEY in .env, Qdrant refuses every request without it, and
+      # the server and the worker (env_file) send it. Empty, Qdrant 1.20 leaves
+      # authentication off rather than requiring an empty key.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
     ports:
       - "127.0.0.1:${QDRANT_HOST_PORT:-6353}:6333"
     volumes:
@@ -218,13 +226,21 @@ services:
     container_name: redis
     image: ${REDIS_IMAGE:-redis:8-alpine}
     restart: always
-    command: ["redis-server", "--appendonly", "yes"]
+    # REDIS_PASSWORD from .env: any local process could otherwise read or reset
+    # the login limiter's counters. Empty, `requirepass ""` means no password,
+    # as before; the server's and the worker's REDIS_URL above carry it. Hex
+    # only (`openssl rand -hex 32`): it goes into that URL as is.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     expose:
       - "6379"
     ports:
       - "127.0.0.1:${REDIS_HOST_PORT:-6399}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # Authenticates only when there is a password: redis-cli fails outright
+      # on an empty one.
+      test: ["CMD-SHELL", "[ -z \"$$REDIS_PASSWORD\" ] || export REDISCLI_AUTH=\"$$REDIS_PASSWORD\"; redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -236,6 +252,6 @@ volumes:
   next_node_modules:
   server_venv:
   fastembed_cache:
-  postgres_data:
+  postgres18_data:
   qdrant_storage:
   redis_data:

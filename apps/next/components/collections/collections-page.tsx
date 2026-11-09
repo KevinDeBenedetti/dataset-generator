@@ -125,8 +125,9 @@ export function CollectionsPage() {
         <div>
           <h1 className="page-title">Collections</h1>
           <p className="page-sub">
-            Splits of your Hugging Face datasets, embedded into Qdrant with a local model. Build
-            one, then search it and test how well its questions find their answers.
+            Splits of your Hugging Face datasets, embedded into Qdrant with a local model or your
+            endpoint&apos;s. Build one, then search it and test how well its questions find their
+            answers.
           </p>
         </div>
         {data?.qdrant_configured && !creating && (

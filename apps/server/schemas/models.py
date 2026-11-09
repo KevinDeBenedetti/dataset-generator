@@ -18,7 +18,17 @@ class ProviderOut(BaseModel):
     missing: List[str] = Field(
         default_factory=list, description="What to add in Settings to enable it"
     )
-    models: List[ModelInfoOut]
+    models: List[ModelInfoOut] = Field(..., description="The chat models")
+    embedding_models: List[ModelInfoOut] = Field(
+        default_factory=list,
+        description="The embedding models (offered to the vector collections)",
+    )
+    endpoint: str = Field("", description="The host the calls go to")
+    lent: bool = Field(
+        False,
+        description="The calls use the server's key and endpoint (no key of "
+        "yours is saved)",
+    )
 
 
 class ModelsResponse(BaseModel):
@@ -27,6 +37,15 @@ class ModelsResponse(BaseModel):
         ..., description="Model reference per role (cleaning, qa, vision, jobs)"
     )
     roles: List[str]
+    embedding_model: str = Field(
+        "",
+        description="What the duplicate and grounding checks embed with: "
+        '"openai:<id>" (OPENAI_EMBEDDING_MODEL, on your endpoint) or a local model',
+    )
+    local_embedding_model: str = Field(
+        "",
+        description="The local model they fall back to ('' when the checks are off)",
+    )
 
 
 class ModelDefaultsUpdate(BaseModel):

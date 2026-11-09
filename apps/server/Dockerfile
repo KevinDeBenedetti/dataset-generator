@@ -28,7 +28,7 @@ FROM base AS dependencies
 COPY pyproject.toml uv.lock ./
 
 # Use cache mount to speed up installation. The `jobs` group (Claude Agent SDK)
-# is included so the dashboard's Sync jobs page can run the Q&A job in-process.
+# is included so the GitHub page's Q&A jobs can run on the Claude provider.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --group jobs
 

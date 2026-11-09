@@ -146,6 +146,58 @@ def test_env_fallback_only_where_allowed(monkeypatch):
     assert Credentials.from_env().secret(OPENAI_API_KEY) == "sk-server-key-000000"
 
 
+def _server_endpoint(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-server-key-000000")
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL", "http://litellm.litellm.svc.cluster.local:4000/v1"
+    )
+    monkeypatch.setattr(config, "allow_env_credentials", False)  # production
+
+
+def _promote(store, user_id):
+    with store() as db:
+        db.get(User, user_id).role = "admin"
+        db.commit()
+
+
+def test_an_admin_without_a_key_uses_the_servers_endpoint(store, monkeypatch):
+    _server_endpoint(monkeypatch)
+    monkeypatch.setattr(config, "server_llm_for_admins", True)
+    _promote(store, ALICE)
+
+    lent = resolve_credentials(ALICE)
+    assert lent.secret(OPENAI_API_KEY) == "sk-server-key-000000"
+    assert lent.openai_base_url.startswith("http://litellm.litellm.svc")
+    # The operator's own endpoint: an in-cluster http URL is fine.
+    assert lent.base_url_trusted is True and lent.openai_from_server is True
+    # Only that: the server's other keys stay its own.
+    monkeypatch.setenv("HF_TOKEN", "hf_server")
+    assert resolve_credentials(ALICE).has(HF_TOKEN) is False
+
+    # Other users bring their own, whatever the request says about them.
+    assert resolve_credentials(BOB).has(OPENAI_API_KEY) is False
+    assert resolve_credentials(ALICE, is_admin=False).has(OPENAI_API_KEY) is False
+
+
+def test_an_admins_own_key_wins_with_their_own_endpoint(store, monkeypatch):
+    _server_endpoint(monkeypatch)
+    monkeypatch.setattr(config, "server_llm_for_admins", True)
+    _promote(store, ALICE)
+    set_secret(ALICE, OPENAI_API_KEY, CANARY)
+
+    creds = resolve_credentials(ALICE)
+    assert creds.secret(OPENAI_API_KEY) == CANARY
+    assert creds.openai_base_url == "" and creds.base_url_trusted is False
+    assert creds.openai_from_server is False
+
+
+def test_the_server_lends_nothing_unless_asked_to(store, monkeypatch):
+    _server_endpoint(monkeypatch)
+    monkeypatch.setattr(config, "server_llm_for_admins", False)
+    _promote(store, ALICE)
+    assert resolve_credentials(ALICE).has(OPENAI_API_KEY) is False
+
+
 def test_rotation_rewraps_everything(store):
     set_secret(ALICE, OPENAI_API_KEY, CANARY)
     old = config.secrets_encryption_keys_raw

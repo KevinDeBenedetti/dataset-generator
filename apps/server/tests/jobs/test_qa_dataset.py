@@ -318,7 +318,7 @@ def test_publish_refuses_empty_dataset():
         publish_qa_dataset(CREDS, QADataset([], 0, []), "kevin", "ns/qa")
 
 
-async def test_run_checks_hf_token_before_generating(monkeypatch):
+async def test_generate_checks_hf_token_before_generating(monkeypatch):
     creds = make_creds(
         github_username="kevin", hf_token="hf_000000000000", hf_qa_repo="ns/qa"
     )
@@ -330,38 +330,18 @@ async def test_run_checks_hf_token_before_generating(monkeypatch):
 
     with patch("server.services.huggingface._api", return_value=api):
         with pytest.raises(JobError, match="rejected your token"):
-            await qa_dataset.run(creds, complete)
+            await qa_dataset.generate(creds, complete)
 
 
-async def test_run_requires_claude_credentials(monkeypatch):
+async def test_generate_requires_claude_credentials(monkeypatch):
+    # The jobs default to OPENAI_LLM_MODEL (set for the tests): name Claude.
+    monkeypatch.setattr(qa_dataset.config, "qa_job_model", "claude:claude-sonnet-5-5")
     creds = make_creds(github_username="kevin")
     with pytest.raises(JobError, match="Claude token"):
-        await qa_dataset.run(
-            creds,
-        )
+        await qa_dataset.generate(creds)
 
 
-async def test_run_dry_run_skips_hf_checks_and_publish(monkeypatch, github):
-    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
-    # No Hugging Face token or repo at all — a dry run needs neither.
-    github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
-    github.json("/users/kevin/repos", [])
-
-    async def complete(_req):  # pragma: no cover — no repos to generate for
-        raise AssertionError("unexpected LLM call")
-
-    with patch(
-        "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
-    ):
-        result = await qa_dataset.run(creds, complete, dry_run=True)
-
-    assert result["dry_run"] is True
-    assert result["url"] is None
-    # Deterministic profile pairs only (username, indexed-repo count).
-    assert result["records"] == 2
-
-
-async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
+async def test_generate_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
     creds = make_creds(
         github_username="kevin",
         anthropic_api_key="ak-000000000000",
@@ -388,8 +368,7 @@ async def test_run_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
             new=AsyncMock(return_value=QADataset([], 0, [])),
         ) as build,
     ):
-        with pytest.raises(JobError, match="0 pairs"):
-            await qa_dataset.run(creds, complete, max_repos=2, dry_run=False)
+        await qa_dataset.generate(creds, complete, max_repos=2)
 
     assert build.call_args.args[-1] == 2
 
@@ -586,6 +565,37 @@ async def test_rephrasing_is_rejected_semantically(github, snapshot):
     assert dataset.new == 1
 
 
+async def test_a_failing_embedding_model_keeps_the_generated_pairs(github, snapshot):
+    """An endpoint model can fail after the generation: its pairs are kept,
+    unscreened, and the run says so — the LLM calls are never lost to it."""
+    previous = await _first_version(github, snapshot)
+    docs = {**DOCS, "docs/release.md": DOCS["docs/release.md"] + " It runs on main."}
+    fresh = "Which tool tags versions and writes the changelog?"
+
+    class FailsOnTheNewPairs(FakeEmbedder):
+        def embed(self, texts):
+            if fresh in texts:
+                raise RuntimeError("endpoint down")
+            return super().embed(texts)
+
+    def new_pair(req):
+        return json.dumps(
+            [{"question": fresh, "answer": "release-please writes the changelog."}]
+        )
+
+    _docs_routes(github, docs)
+    dataset = await build_qa_dataset(
+        github.client(),
+        snapshot,
+        _echo([], new_pair),
+        "m",
+        previous=previous,
+        embedder=FailsOnTheNewPairs(),
+    )
+    assert fresh in _questions(dataset)
+    assert any("checks skipped" in e and "endpoint down" in e for e in dataset.errors)
+
+
 async def test_ungrounded_answer_goes_to_review(github, snapshot):
     previous = await _first_version(github, snapshot)
     docs = {**DOCS, "docs/release.md": DOCS["docs/release.md"] + " It runs on main."}
@@ -750,7 +760,7 @@ def test_load_previous_state_first_run_and_errors():
         load_previous_state(api, "ns/qa")
 
 
-async def test_run_full_refresh_skips_previous_version(monkeypatch, github):
+async def test_generate_full_refresh_skips_previous_version(monkeypatch, github):
     creds = make_creds(
         github_username="kevin",
         anthropic_api_key="ak-000000000000",
@@ -759,17 +769,25 @@ async def test_run_full_refresh_skips_previous_version(monkeypatch, github):
     )
     github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
     github.json("/users/kevin/repos", [])
+    api = MagicMock()
+    api.whoami.return_value = {"name": "kevin"}
 
     def must_not_load(*_):  # pragma: no cover
         raise AssertionError("previous version read on a full refresh")
 
     monkeypatch.setattr(qa_dataset, "load_previous_state", must_not_load)
-    with patch(
-        "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
+    with (
+        patch(
+            "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
+        ),
+        patch("server.services.huggingface._api", return_value=api),
     ):
-        result = await qa_dataset.run(creds, _echo([]), dry_run=True, full_refresh=True)
-    assert result["full_refresh"] is True
-    assert (result["kept"], result["new"], result["review"]) == (0, 0, 0)
+        draft = await qa_dataset.generate(creds, _echo([]), full_refresh=True)
+    stats = draft.stats()
+    assert stats["full_refresh"] is True
+    assert (stats["kept"], stats["new"], stats["review"]) == (0, 0, 0)
+    # Deterministic profile pairs only (username, indexed-repo count).
+    assert stats["records"] == 2
 
 
 def test_card_mentions_incremental_stats_and_review():
@@ -878,24 +896,7 @@ async def test_build_reports_progress(github, snapshot):
     assert progress == [(0, 1, ""), (1, 1, "portfolio")]
 
 
-async def test_generate_without_hub_is_a_full_run(monkeypatch, github):
-    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
-    github.json("/users/kevin", {"login": "kevin", "name": "Kevin"})
-    github.json("/users/kevin/repos", [])
-
-    async def complete(_req):  # pragma: no cover — no repos
-        raise AssertionError("unexpected LLM call")
-
-    with patch(
-        "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
-    ):
-        draft = await qa_dataset.generate(creds, complete, require_hub=False)
-    # Username and indexed-repo count: no repos means no stack or projects pair.
-    assert draft.username == "kevin" and len(draft.dataset.pairs) == 2
-    assert draft.stats()["records"] == 2
-
-
-async def test_generate_requires_the_hub_by_default(monkeypatch):
+async def test_generate_requires_the_hub(monkeypatch):
     creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
     with pytest.raises(JobError, match="Hugging Face token"):
         await qa_dataset.generate(creds, AsyncMock())

@@ -8,7 +8,13 @@ import { Icon } from '@/components/app/icon'
 import { formatBytes, splitRepoId } from '@/components/hub/format'
 import { useCreateCollection, useHubDataset, useHubDatasets, useHubRows } from '@/hooks'
 import { cn } from '@/lib/utils'
-import { defaultCollectionName, defaultColumns, isTrivialTest, modelLabel } from './format'
+import {
+  defaultCollectionName,
+  defaultColumns,
+  isTrivialTest,
+  modelGroups,
+  modelLabel,
+} from './format'
 
 // The server refuses more (services/collections.py MAX_TEXT_COLUMNS).
 const MAX_TEXT_COLUMNS = 4
@@ -124,7 +130,8 @@ export function CreateCollectionForm({
           <div className="card-title">New collection</div>
           <p className="card-desc">
             One split of a dataset, read from Hugging Face at its latest commit and embedded row by
-            row on the server, with a local model: no data leaves your stack.
+            row: with a local model on the server, no data leaves your stack; with your endpoint's
+            embedding model, the rows are sent to it.
           </p>
         </div>
       </div>
@@ -250,10 +257,14 @@ export function CreateCollectionForm({
               value={model}
               onChange={(e) => setModel(e.target.value)}
             >
-              {models.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {modelOption(m)}
-                </option>
+              {modelGroups(models).map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.models.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {modelOption(m)}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             {chosenModel && <div className="hint">{chosenModel.description}</div>}

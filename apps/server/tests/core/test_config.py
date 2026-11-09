@@ -82,6 +82,34 @@ class TestReasoningEffort:
         assert Config().openai_reasoning_effort == "high"
 
 
+class TestDefaultModels:
+    """OPENAI_LLM_MODEL is the default LLM of every text role, the jobs too."""
+
+    def test_the_jobs_take_the_default_llm(self, monkeypatch):
+        monkeypatch.delenv("QA_JOB_MODEL", raising=False)
+        monkeypatch.setenv("OPENAI_LLM_MODEL", "chat-default")
+        assert Config().qa_job_model == "chat-default"
+
+    def test_qa_job_model_still_wins(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_LLM_MODEL", "chat-default")
+        monkeypatch.setenv("QA_JOB_MODEL", "claude:claude-sonnet-5-5")
+        assert Config().qa_job_model == "claude:claude-sonnet-5-5"
+
+    def test_without_either_the_jobs_run_on_claude(self, monkeypatch):
+        monkeypatch.delenv("QA_JOB_MODEL", raising=False)
+        monkeypatch.setenv("OPENAI_LLM_MODEL", "")
+        assert Config().qa_job_model == "claude:claude-sonnet-5-5"
+
+    def test_the_default_embedding_and_the_admins_server_llm(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "embed-default")
+        monkeypatch.delenv("SERVER_LLM_FOR_ADMINS", raising=False)
+        cfg = Config()
+        assert cfg.openai_embedding_model == "embed-default"
+        assert cfg.server_llm_for_admins is False  # opt-in
+        monkeypatch.setenv("SERVER_LLM_FOR_ADMINS", "true")
+        assert Config().server_llm_for_admins is True
+
+
 def _config(monkeypatch, **env) -> Config:
     """A Config built from a production environment, with overrides."""
     base = {

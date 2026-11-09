@@ -104,9 +104,10 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def _embedder(model: str) -> RetrievalEmbedder:
-    """The collection's model; tests swap it for a fake."""
-    return get_collection_embedder(model)
+def _embedder(model: str, creds: Credentials) -> RetrievalEmbedder:
+    """The collection's model (an endpoint one runs on ``creds``); tests swap
+    it for a fake."""
+    return get_collection_embedder(model, creds)
 
 
 # --- reading -------------------------------------------------------------------
@@ -170,9 +171,12 @@ def _view(row: VectorCollection, run: Optional[JobRun]) -> Dict[str, Any]:
     }
 
 
-def list_collections(db: Session, owner_id: str) -> Dict[str, Any]:
+def list_collections(
+    db: Session, owner_id: str, creds: Optional[Credentials] = None
+) -> Dict[str, Any]:
     """The owner's collections, most recently changed first, with what the
-    create form offers (the models, whether Qdrant is set up)."""
+    create form offers (the models — the endpoint's ones on ``creds`` — and
+    whether Qdrant is set up)."""
     rows = list(
         db.scalars(
             select(VectorCollection)
@@ -184,7 +188,7 @@ def list_collections(db: Session, owner_id: str) -> Dict[str, Any]:
     return {
         "qdrant_configured": qdrant.is_configured(),
         "quota": config.quota_collections,
-        "models": [asdict(m) for m in collection_models()],
+        "models": [asdict(m) for m in collection_models(creds)],
         "collections": [_view(r, runs.get(r.run_id or "")) for r in rows],
     }
 
@@ -228,8 +232,8 @@ def _resolve_split(
     return snapshot, view
 
 
-def _check_model(model: Optional[str]) -> str:
-    models = [m.name for m in collection_models()]
+def _check_model(model: Optional[str], creds: Credentials) -> str:
+    models = [m.name for m in collection_models(creds)]
     chosen = model or models[0]
     if chosen not in models:
         raise CollectionInputError(f"'{chosen}' is not one of the collection models")
@@ -251,7 +255,7 @@ def _insert(
     if not qdrant.is_configured():
         raise qdrant.QdrantNotConfiguredError(qdrant.NOT_CONFIGURED)
     name = data["name"].strip()
-    model = _check_model(data.get("model"))
+    model = _check_model(data.get("model"), creds)
     columns = _check_columns(data.get("text_columns") or [])
     count = db.scalar(
         select(func.count())
@@ -525,12 +529,15 @@ async def _build(
         )
 
     progress(0, len(ids), "Loading the embedding model…")
-    embedder = await asyncio.to_thread(_embedder, spec.model)
+    embedder = await asyncio.to_thread(_embedder, spec.model, creds)
+    # A local model computes (the CPU pool); an endpoint one waits on the
+    # network, which must not hold a CPU slot.
+    run = asyncio.to_thread if getattr(embedder, "remote", False) else cpu_bound
     name = qdrant.collection_name(spec.id)
     vector_size = 0
     for start in range(0, len(ids), BUILD_BATCH):
         batch = ids[start : start + BUILD_BATCH]
-        vectors = await cpu_bound(embedder.embed_passages, [texts[i] for i in batch])
+        vectors = await run(embedder.embed_passages, [texts[i] for i in batch])
         if not vector_size:
             vector_size = int(vectors.shape[1])
             # Replaces the vectors of an earlier build.
@@ -603,8 +610,10 @@ def search(
     query: str,
     limit: int = 10,
     score_threshold: Optional[float] = None,
+    creds: Optional[Credentials] = None,
 ) -> Dict[str, Any]:
-    """The points closest to ``query``, embedded with the collection's model."""
+    """The points closest to ``query``, embedded with the collection's model
+    (an endpoint one on ``creds``)."""
     row = _owned(db, owner_id, collection_id)
     _require_ready(db, row)
     query = query.strip()
@@ -612,7 +621,7 @@ def search(
         raise CollectionInputError("Type something to search for")
     started = time.perf_counter()
     name = _vectors_name(row)
-    vector = _embedder(row.model).embed_queries([query])[0]
+    vector = _embedder(row.model, creds or Credentials()).embed_queries([query])[0]
     hits = qdrant.search(name, vector, limit, score_threshold)
     return {
         "query": query,
@@ -644,10 +653,11 @@ def evaluate(
     sample: int = 100,
     k: int = 10,
     query_column: Optional[str] = None,
+    creds: Optional[Credentials] = None,
 ) -> Dict[str, Any]:
     """The retrieval test: sampled rows ask with their ``query_column`` value;
     a hit is the row's own point coming back. Saved as the collection's latest
-    test, and returned."""
+    test, and returned. An endpoint model embeds the questions on ``creds``."""
     row = _owned(db, owner_id, collection_id)
     _require_ready(db, row)
     column = query_column or row.query_column
@@ -670,7 +680,9 @@ def evaluate(
     if not cases:
         raise CollectionInputError(f"No sampled row has a value in '{column}'")
 
-    vectors = _embedder(row.model).embed_queries([q for _, q in cases])
+    vectors = _embedder(row.model, creds or Credentials()).embed_queries(
+        [q for _, q in cases]
+    )
     results = qdrant.search_batch(name, vectors, k)
     ranks: List[Optional[int]] = []
     misses: List[Tuple[int, str, Optional[int], List[Tuple[int, float]]]] = []

@@ -4,10 +4,10 @@ single sign-on (Infomaniak, GitHub) — login, account linking and callback."""
 import logging
 import time
 from datetime import datetime, timezone
-from typing import List, Optional
-from urllib.parse import urlencode
+from typing import Annotated, List, Optional
+from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
@@ -265,6 +265,30 @@ def logout_all(
 
 
 _LINK_SESSION_KEY = "sso_link_user"
+# Where a sign-in goes back to: the login page's `?from=`, kept through the
+# provider's round trip.
+_RETURN_SESSION_KEY = "sso_return_to"
+_RETURN_PATH_MAX_CHARS = 2048
+
+
+def _return_path(value: Optional[str]) -> Optional[str]:
+    """``value`` when it is a path on the front-end's own origin, else None.
+
+    The SSO twin of the login page's ``safeRedirectPath``
+    (apps/next/lib/safe-redirect.ts): a prefix check is not enough, so the path
+    is resolved first and must still start with a single slash (dot segments
+    can rebuild a ``//host`` prefix, which a browser reads as a host), and
+    backslashes and control characters, which browsers rewrite, are refused
+    outright. What comes back is the resolved path.
+    """
+    if not value or len(value) > _RETURN_PATH_MAX_CHARS or not value.startswith("/"):
+        return None
+    if "\\" in value or any(ord(c) < 0x20 or ord(c) == 0x7F for c in value):
+        return None
+    parts = urlsplit(urljoin("https://app.invalid/", value))
+    if parts.netloc != "app.invalid" or parts.path.startswith("//"):
+        return None
+    return urlunsplit(("", "", parts.path, parts.query, parts.fragment))
 
 
 def _provider_or_404(name: str) -> SsoProvider:
@@ -286,6 +310,15 @@ def _front(path: str, **params: str) -> RedirectResponse:
     return RedirectResponse(
         url=f"{config.frontend_url.rstrip('/')}{path}{query}", status_code=302
     )
+
+
+def _failed(error_page: str, code: str, back_to: Optional[str]) -> RedirectResponse:
+    """Back to the page that started the flow, saying why — and still headed
+    where the sign-in was going, so the next attempt lands there too."""
+    params = {"error": code}
+    if back_to:
+        params["from"] = back_to
+    return _front(error_page, **params)
 
 
 async def _start(request: Request, provider: SsoProvider) -> Response:
@@ -310,10 +343,27 @@ async def oidc_callback(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/{provider_name}/login")
-async def sso_login(provider_name: str, request: Request):
+async def sso_login(
+    provider_name: str,
+    request: Request,
+    from_: Annotated[
+        Optional[str],
+        Query(
+            alias="from",
+            description="A path of the app to land on once signed in; anything "
+            "else lands on the dashboard",
+        ),
+    ] = None,
+):
     """Send the browser to the provider (state + PKCE kept in the session cookie)."""
     provider = _provider_or_404(provider_name)
     request.session.pop(_LINK_SESSION_KEY, None)
+    back_to = _return_path(from_)
+    if back_to:
+        request.session[_RETURN_SESSION_KEY] = back_to
+    else:
+        # An earlier, abandoned sign-in's destination never carries over.
+        request.session.pop(_RETURN_SESSION_KEY, None)
     return await _start(request, provider)
 
 
@@ -324,6 +374,7 @@ async def sso_link(
     """Like login, but the identity is added to the signed-in account."""
     provider = _provider_or_404(provider_name)
     request.session[_LINK_SESSION_KEY] = current_user.id
+    request.session.pop(_RETURN_SESSION_KEY, None)
     return await _start(request, provider)
 
 
@@ -332,6 +383,7 @@ def _sign_in(
     ext: ExternalIdentity,
     link_user_id: Optional[str],
     error_page: str,
+    back_to: Optional[str],
     ip: str,
     provider_name: str,
 ) -> Response:
@@ -343,10 +395,12 @@ def _sign_in(
     try:
         user = resolve_login(db, ext, link_to=link_to, ip=ip)
     except LoginRefused as exc:
-        return _front(error_page, error=exc.code)
+        return _failed(error_page, exc.code, back_to)
 
     redirect = (
-        _front("/settings", linked=provider_name) if link_to else _front("/dashboard")
+        _front("/settings", linked=provider_name)
+        if link_to
+        else _front(back_to or "/dashboard")
     )
     _set_session_cookies(redirect, db, user)
     return redirect
@@ -354,19 +408,27 @@ def _sign_in(
 
 async def _callback(request: Request, provider: SsoProvider, db: Session) -> Response:
     link_user_id = request.session.pop(_LINK_SESSION_KEY, None)
+    back_to = _return_path(request.session.pop(_RETURN_SESSION_KEY, None))
     error_page = "/settings" if link_user_id else "/login"
     client = get_client(provider)
     try:
         token = await client.authorize_access_token(request)
         ext = await provider.identity(client, token)
     except SsoError as exc:
-        return _front(error_page, error=exc.code)
+        return _failed(error_page, exc.code, back_to)
     except Exception as exc:  # noqa: BLE001 — a bad/replayed/forged flow
         logging.warning("%s sign-in failed: %s", provider.name, type(exc).__name__)
-        return _front(error_page, error="sso_failed")
+        return _failed(error_page, "sso_failed", back_to)
 
     return await run_in_threadpool(
-        _sign_in, db, ext, link_user_id, error_page, _client_ip(request), provider.name
+        _sign_in,
+        db,
+        ext,
+        link_user_id,
+        error_page,
+        back_to,
+        _client_ip(request),
+        provider.name,
     )
 
 

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from server.core.config import config
 from server.core.crypto import CryptoError, SecretBox, aad_for, build_box
 from server.core.database import get_scoped_db
+from server.models.user import User
 from server.models.user_secret import UserSecret, UserSettings
 from server.services.credentials import (
     HINT_KINDS,
@@ -152,6 +153,13 @@ def load_credentials(user_id: str) -> Credentials:
                 continue
             secrets[row.kind] = _secret(plain)
     return Credentials(**secrets, **get_settings(user_id))
+
+
+def user_is_admin(user_id: str) -> bool:
+    """Whether ``user_id`` is an active admin right now (see resolve_credentials)."""
+    with get_scoped_db() as db:
+        user = db.get(User, user_id)
+        return bool(user is not None and user.is_active and user.is_admin)
 
 
 def rewrap_all(db: Session, box: Optional[SecretBox] = None) -> Dict[str, int]:

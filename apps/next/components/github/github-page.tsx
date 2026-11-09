@@ -12,6 +12,7 @@ import {
   useUpdateRecipe,
 } from '@/hooks'
 import { AccountCard, GitHubProblem } from './account-card'
+import { AccountJobs } from './account-jobs'
 import { NewRecipeForm, RecipeBar } from './recipe-bar'
 import { toRecipeIn, toggleRepo } from './recipe-state'
 import { RepoList } from './repo-list'
@@ -78,8 +79,9 @@ export function GitHubPage() {
         <div>
           <h1 className="page-title">GitHub</h1>
           <p className="page-sub">
-            Your public GitHub data, and the recipes that pick from it. A recipe generates a draft
-            you review before it is published to its Hugging Face dataset.
+            Your public GitHub data and the datasets made from it: from your whole account, or from
+            a recipe that picks repos, READMEs and docs. A Q&amp;A generation stops at a draft you
+            review before it is published to Hugging Face.
           </p>
         </div>
       </div>
@@ -97,6 +99,11 @@ export function GitHubPage() {
 
       {profile.data && (
         <>
+          <AccountJobs />
+
+          <div className="gh-section-head">
+            <h2 className="card-title">From a recipe</h2>
+          </div>
           {recipes.isPending ? null : current && working ? (
             <RecipeBar
               recipes={list}

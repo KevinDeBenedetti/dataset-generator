@@ -10,11 +10,13 @@ import io
 import json
 import zipfile
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pyarrow as pa
 import pytest
 from qdrant_client import QdrantClient
 
+from server.api import collections as api_collections
 from server.core.config import config
 from server.services import collections, hub, qdrant, queue
 from server.services.users import create_user
@@ -53,7 +55,7 @@ def stack(monkeypatch, datasets_db):
     vectors = QdrantClient(":memory:")
     monkeypatch.setattr(config, "qdrant_url", "http://qdrant.test:6333")
     monkeypatch.setattr(qdrant, "get_client", lambda: vectors)
-    monkeypatch.setattr(collections, "_embedder", lambda model: FakeEmbedder())
+    monkeypatch.setattr(collections, "_embedder", lambda model, creds: FakeEmbedder())
     for target in (
         "server.services.jobs.get_scoped_db",
         "server.services.queue.get_scoped_db",
@@ -180,6 +182,20 @@ def test_what_can_not_be_built_is_refused(client, stack, change, status):
     response = client.post("/collections", json={**NEW, **change})
     assert response.status_code == status, response.text
     assert client.get("/collections").json()["collections"] == []
+
+
+def test_the_listing_asks_the_endpoint_for_its_models_only_when_told(
+    client, stack, monkeypatch
+):
+    """Discovery is a network call: the Collections page asks for it, tests
+    and other callers don't pay it."""
+    provider = SimpleNamespace(list_models=AsyncMock(return_value=[]))
+    monkeypatch.setattr(api_collections, "get_provider", lambda name: provider)
+
+    assert client.get("/collections").status_code == 200
+    provider.list_models.assert_not_awaited()
+    assert client.get("/collections?discover=true").status_code == 200
+    provider.list_models.assert_awaited_once()
 
 
 def test_without_qdrant_collections_are_off(client, stack, monkeypatch):

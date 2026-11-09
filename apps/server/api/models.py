@@ -1,4 +1,5 @@
-"""Model providers (OpenAI API, Claude subscription) and per-role defaults."""
+"""Model providers (an OpenAI-compatible endpoint, the Claude subscription),
+per-role defaults, and the default embedding."""
 
 import time
 from dataclasses import asdict
@@ -29,6 +30,7 @@ from server.services.providers import (
     complete,
     validate_ref,
 )
+from server.services.semantic import default_embedding_model
 
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -48,10 +50,22 @@ async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsR
                 "configured": provider.configured(creds),
                 "missing": provider.missing(creds),
                 "models": [asdict(m) for m in models],
+                "embedding_models": [
+                    asdict(m) for m in provider.embedding_models(creds)
+                ],
+                "endpoint": provider.endpoint(creds),
+                "lent": provider.lent(creds),
             }
         )
     defaults = await run_in_threadpool(get_model_defaults, user_id)  # database
-    return ModelsResponse(providers=providers, defaults=defaults, roles=list(ROLES))
+    on = config.semantic_enabled
+    return ModelsResponse(
+        providers=providers,
+        defaults=defaults,
+        roles=list(ROLES),
+        embedding_model=default_embedding_model(creds) if on else "",
+        local_embedding_model=config.semantic_model if on else "",
+    )
 
 
 @router.get("", response_model=ModelsResponse)

@@ -24,6 +24,11 @@ const nextConfig: NextConfig = {
     return [{ source: '/api/:path*', destination: `${API_INTERNAL_URL}/:path*` }]
   },
 
+  // The Jobs page's whole-account jobs moved to the GitHub page.
+  async redirects() {
+    return [{ source: '/jobs', destination: '/github', permanent: false }]
+  },
+
   // The Content-Security-Policy (needs a per-request nonce) is set in proxy.ts.
   async headers() {
     return [

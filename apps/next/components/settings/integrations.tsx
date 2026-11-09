@@ -36,15 +36,15 @@ interface Group {
 
 const GROUPS: Group[] = [
   {
-    title: 'OpenAI',
+    title: 'OpenAI-compatible endpoint',
     description:
-      'Your own API key pays for cleaning, Q&A generation, vision and embeddings run with an OpenAI model.',
+      'Your own key, on OpenAI or a gateway such as LiteLLM, pays for cleaning, Q&A generation, vision and the embeddings run on it. Admins without a key of their own may use the server’s endpoint, when the server offers it.',
     secrets: [
       {
         kind: 'openai_api_key',
         label: 'API key',
         placeholder: 'sk-…',
-        help: 'Create one at platform.openai.com/api-keys.',
+        help: 'From platform.openai.com/api-keys, or a virtual key of your gateway.',
       },
     ],
     settings: [
@@ -52,7 +52,7 @@ const GROUPS: Group[] = [
         key: 'openai_base_url',
         label: 'Base URL (optional)',
         placeholder: 'https://api.openai.com/v1',
-        help: 'Only for an OpenAI-compatible endpoint your administrator allows. Leave empty for OpenAI.',
+        help: 'Your gateway’s URL, if your administrator allows it. Leave empty for OpenAI. Your key is only ever sent here.',
       },
     ],
   },
