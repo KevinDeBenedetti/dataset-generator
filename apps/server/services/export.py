@@ -22,7 +22,7 @@ from server.models.user import User
 from server.services.collections import list_collections
 from server.services.datasets import get_dataset_pairs, list_datasets_view
 from server.services.identities import list_identities
-from server.services.model_defaults import get_model_defaults
+from server.services.model_defaults import get_default_model
 from server.services.quality_rules import get_quality_rules
 from server.services.recipes import list_recipes
 from server.services.user_secrets import get_settings, secret_statuses
@@ -74,7 +74,7 @@ def build_export(db: Session, user: User) -> bytes:
                         for k, s in secret_statuses(user.id).items()
                         if s["configured"]
                     ),
-                    "model_defaults": get_model_defaults(user.id),
+                    "model_defaults": {"llm": get_default_model(user.id)},
                     "quality_rules": get_quality_rules(user.id),
                 }
             ),

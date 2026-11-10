@@ -232,7 +232,7 @@ class QAAgentService:
     ) -> List[QA]:
         """Generate QA pairs; returns an empty list on failure."""
         target_language = target_language or config.target_language or "en"
-        model = resolve_model("qa", model)
+        model = resolve_model(model)
         try:
             raw = await self._run(text, target_language, model)
             if not raw:
@@ -255,7 +255,7 @@ class QAAgentService:
         returns and whether it parses into valid QA pairs.
         """
         target_language = target_language or config.target_language or "en"
-        model = resolve_model("qa", model)
+        model = resolve_model(model)
         raw_response = ""
         error: Optional[str] = None
         pairs: List[QA] = []

@@ -1,8 +1,8 @@
-"""A deterministic stand-in for the local embedding model.
+"""A deterministic stand-in for the endpoint's embedding model.
 
 Bag of words hashed into a small vector: texts sharing words score high,
 unrelated ones near zero — enough to exercise the semantic code paths without
-downloading a model.
+an endpoint call.
 """
 
 import hashlib

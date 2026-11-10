@@ -26,19 +26,12 @@ def test_list_prompts(client: TestClient):
         assert prompt["role"] in {"system", "user", "assistant"}
 
 
-def test_list_prompts_shows_the_role_defaults(client: TestClient):
-    """Each prompt names the model its role currently defaults to."""
+def test_every_prompt_runs_on_your_llm(client: TestClient):
+    """Each prompt names the model it runs on: your LLM, for every step."""
     from unittest.mock import patch
 
-    defaults = {
-        "qa": "claude:q",
-        "cleaning": "openai:c",
-        "vision": "openai:v",
-        "jobs": "x",
-    }
-    with patch("server.api.prompts.get_model_defaults", return_value=defaults):
+    with patch("server.api.prompts.get_default_model", return_value="openai:m"):
         prompts = {p["key"]: p for p in client.get("/prompts").json()["prompts"]}
-    assert prompts["qa_agent"]["model"] == "claude:q"
-    assert prompts["cleaning"]["model"] == "openai:c"
-    assert prompts["extraction"]["model"] == "openai:v"
+    assert set(prompts) >= {"qa_agent", "cleaning", "extraction"}
+    assert {p["model"] for p in prompts.values()} == {"openai:m"}
     assert all(p["active"] for p in prompts.values())

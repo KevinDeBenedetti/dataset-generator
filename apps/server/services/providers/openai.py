@@ -198,7 +198,6 @@ class OpenAIProvider:
             id=model_id,
             provider=self.name,
             label=model_id,
-            vision=model_id == config.openai_vlm_model,
         )
 
     def _ids(self, creds: Credentials) -> List[str]:

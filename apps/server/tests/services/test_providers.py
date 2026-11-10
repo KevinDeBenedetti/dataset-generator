@@ -1,11 +1,8 @@
 """Model providers: reference parsing, validation, and both providers' calls
-(OpenAI client and Claude Agent SDK mocked — no network, no Claude Code)."""
+(OpenAI client mocked — no network)."""
 
 import asyncio
 import base64
-import os
-import subprocess
-import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -25,9 +22,7 @@ from server.services.providers import (
 )
 from server.services.providers import registry
 from server.core.net import PinnedTransport
-from server.services.providers import claude as claude_module
 from server.services.providers import openai as openai_module
-from server.services.providers.claude import ClaudeProvider
 from server.services.providers.openai import (
     OpenAIProvider,
     check_base_url,
@@ -38,7 +33,8 @@ from server.services.providers.openai import (
 @pytest.mark.parametrize(
     "ref, expected",
     [
-        ("claude:claude-sonnet-5-5", ("claude", "claude-sonnet-5-5")),
+        # The Claude provider is gone: its old prefix is no prefix any more.
+        ("claude:claude-sonnet-5-5", ("openai", "claude:claude-sonnet-5-5")),
         ("openai:gpt-4o", ("openai", "gpt-4o")),
         ("gpt-4o", ("openai", "gpt-4o")),
         # A colon inside an OpenAI-compatible id isn't a provider prefix.
@@ -65,38 +61,12 @@ class TestValidateRef:
             validate_ref("openai:nope", FULL)
 
     def test_unconfigured_provider_says_what_to_add(self):
-        with pytest.raises(ValueError, match="Claude token.*Settings"):
-            validate_ref("claude:claude-sonnet-5-5", NONE)
         with pytest.raises(ValueError, match=r"API key \(and endpoint\).*Settings"):
             validate_ref("openai:gpt-4o-mini", NONE)
 
-    def test_claude_is_refused_outside_development_and_ci(self, monkeypatch):
-        monkeypatch.delenv("CI", raising=False)
-        monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-        monkeypatch.setattr(config, "environment", "production")
-        with pytest.raises(ValueError, match="development and CI"):
-            validate_ref("claude:claude-sonnet-5-5", FULL)
-
-    def test_claude_models_override(self, monkeypatch):
-        monkeypatch.setattr(config, "claude_models_raw", "claude-x, claude-y")
-        assert validate_ref("claude:claude-y", FULL) == "claude:claude-y"
-        with pytest.raises(ValueError):
-            validate_ref("claude:claude-sonnet-5-5", FULL)
-
     def test_empty_model(self):
         with pytest.raises(ValueError, match="no model id"):
-            validate_ref("claude:", FULL)
-
-    def test_a_retired_claude_model_means_its_successor(self):
-        # Saved before the catalogue moved on: still valid, as the successor.
-        assert (
-            validate_ref("claude:claude-sonnet-5", FULL) == "claude:claude-sonnet-5-5"
-        )
-        assert (
-            validate_ref("claude:claude-haiku-4-5-20251001", FULL)
-            == "claude:claude-haiku-5-5"
-        )
-        assert normalize_ref("claude:claude-sonnet-5") == "claude:claude-sonnet-5-5"
+            validate_ref("openai:", FULL)
 
 
 # --- OpenAI -------------------------------------------------------------------
@@ -457,206 +427,7 @@ def test_the_endpoint_is_shown_and_a_lent_key_says_so():
     assert provider.lent(FULL) is False
 
 
-# --- Claude -------------------------------------------------------------------
-
-
-class _ResultMessage:
-    def __init__(self, **kw):
-        self.subtype = kw.get("subtype", "success")
-        self.is_error = kw.get("is_error", False)
-        self.result = kw.get("result", "Bonjour")
-        self.usage = kw.get("usage", {"output_tokens": 3})
-        self.total_cost_usd = kw.get("total_cost_usd", 0.001)
-        self.errors = kw.get("errors")
-
-
-@pytest.fixture
-def fake_sdk(monkeypatch):
-    """A stand-in claude_agent_sdk module recording each query() call."""
-    calls = []
-    outcome = SimpleNamespace(messages=[_ResultMessage()], error=None)
-
-    async def query(prompt, options):
-        if not isinstance(prompt, str):
-            prompt = [m async for m in prompt]
-        calls.append({"prompt": prompt, "options": options})
-        if outcome.error is not None:
-            raise outcome.error
-        for m in outcome.messages:
-            yield m
-
-    module = SimpleNamespace(
-        query=query,
-        ResultMessage=_ResultMessage,
-        ClaudeAgentOptions=lambda **kw: SimpleNamespace(**kw),
-    )
-    monkeypatch.setitem(sys.modules, "claude_agent_sdk", module)
-    monkeypatch.setattr(
-        claude_module, "_claude_binary", lambda: "/usr/local/bin/claude"
-    )
-    return SimpleNamespace(calls=calls, outcome=outcome)
-
-
-async def test_claude_text_completion(fake_sdk):
-    result = await ClaudeProvider().complete(
-        "claude-sonnet-5-5", CompletionRequest(user="Hi", system="Sys"), FULL
-    )
-    assert result.text == "Bonjour"
-    assert result.usage == {"output_tokens": 3, "total_cost_usd": 0.001}
-    [call] = fake_sdk.calls
-    assert call["prompt"] == "Hi"
-    opts = call["options"]
-    assert (opts.model, opts.system_prompt, opts.allowed_tools, opts.max_turns) == (
-        "claude-sonnet-5-5",
-        "Sys",
-        [],
-        1,
-    )
-    assert opts.setting_sources == []
-    # No tool, no MCP server, nothing pre-approved, the prompt taken verbatim.
-    assert opts.tools == [] and opts.permission_mode == "dontAsk"
-    assert opts.verbatim_prompts is True and opts.strict_mcp_config is True
-
-
-async def test_claude_images_use_streaming_input(fake_sdk):
-    await ClaudeProvider().complete(
-        "claude-sonnet-5-5",
-        CompletionRequest(user="Transcribe", images=[(b"img", "image/jpeg")]),
-        FULL,
-    )
-    [message] = fake_sdk.calls[0]["prompt"]
-    assert message["type"] == "user"
-    image, text = message["message"]["content"]
-    assert image["source"] == {
-        "type": "base64",
-        "media_type": "image/jpeg",
-        "data": base64.b64encode(b"img").decode(),
-    }
-    assert text == {"type": "text", "text": "Transcribe"}
-
-
-async def test_claude_error_result_raises(fake_sdk):
-    fake_sdk.outcome.messages = [
-        _ResultMessage(subtype="error_max_turns", is_error=True, errors=["boom"])
-    ]
-    with pytest.raises(ProviderError, match="boom"):
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), FULL)
-
-
-async def test_claude_query_exception_raises(fake_sdk):
-    fake_sdk.outcome.error = RuntimeError("cli crashed")
-    with pytest.raises(ProviderError, match="cli crashed"):
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), FULL)
-
-
-async def test_claude_no_result_raises(fake_sdk):
-    fake_sdk.outcome.messages = []
-    with pytest.raises(ProviderError, match="no result"):
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), FULL)
-
-
-async def test_claude_unconfigured():
-    with pytest.raises(ProviderError, match="Claude token"):
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), NONE)
-
-
-async def test_claude_disabled_by_the_platform_flag(monkeypatch):
-    monkeypatch.setattr(config, "enable_claude_provider", False)
-    with pytest.raises(ProviderError):
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), FULL)
-
-
-async def test_claude_call_is_isolated_and_uses_only_the_callers_token(
-    fake_sdk, monkeypatch
-):
-    monkeypatch.setenv(
-        "ANTHROPIC_API_KEY", "sk-ant-api-SERVER-KEY-0000"
-    )  # the operator's
-    mine = make_creds(claude_token="sk-ant-oat01-alice-token")
-    seen = {}
-
-    async def query(prompt, options):
-        seen["cwd_existed"] = os.path.isdir(options.cwd)  # noqa: ASYNC240 — a test
-        seen["config_existed"] = os.path.isdir(  # noqa: ASYNC240 — a test
-            options.env["CLAUDE_CONFIG_DIR"]
-        )
-        seen["options"] = options
-        yield _ResultMessage()
-
-    monkeypatch.setattr(sys.modules["claude_agent_sdk"], "query", query)
-    await ClaudeProvider().complete(
-        "claude-sonnet-5-5", CompletionRequest(user="u"), mine
-    )
-
-    options = seen["options"]
-    env = options.env
-    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-ant-oat01-alice-token"
-    # The server's own key must be blanked, or it would be merged over os.environ.
-    assert env["ANTHROPIC_API_KEY"] == ""
-    assert "DATABASE_URL" not in env and "SECRETS_ENCRYPTION_KEYS" not in env
-    assert options.allowed_tools == [] and "Bash" in options.disallowed_tools
-    assert options.setting_sources == []
-    assert options.cli_path.endswith("claude-isolated")
-    # A throwaway working and config directory, gone afterwards.
-    assert seen["cwd_existed"] and seen["config_existed"]
-    assert not os.path.exists(options.cwd)  # noqa: ASYNC240 — a test
-    assert not os.path.exists(env["CLAUDE_CONFIG_DIR"])  # noqa: ASYNC240 — a test
-
-
-async def test_claude_errors_are_scrubbed_of_tokens(fake_sdk):
-    fake_sdk.outcome.error = RuntimeError(
-        "auth failed for sk-ant-oat01-abcdefghijklmnop"
-    )
-    with pytest.raises(ProviderError) as info:
-        await ClaudeProvider().complete("m", CompletionRequest(user="u"), FULL)
-    assert "abcdefghijklmnop" not in str(info.value)
-
-
-def test_the_wrapper_starts_the_cli_with_a_scrubbed_environment(tmp_path, monkeypatch):
-    """Run the real launcher against a fake CLI that prints what it can see."""
-    fake = tmp_path / "fake-claude"
-    fake.write_text('#!/bin/sh\nenv\necho "ARGS=$*"\n')
-    fake.chmod(0o755)
-    env = {
-        **os.environ,
-        "DATABASE_URL": "postgresql://user:pw@db/app",
-        "SECRETS_ENCRYPTION_KEYS": "k1:abc",
-        "AUTH_SECRET_KEY": "server-secret",
-        **claude_module.isolated_env(
-            make_creds(claude_token="sk-ant-oat01-alice-token"),
-            str(tmp_path),
-            str(fake),
-        ),
-    }
-    out = subprocess.run(  # noqa: S603 — runs the wrapper the test just built
-        [claude_module._wrapper(), "--print", "hi there"],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-    assert "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-alice-token" in out
-    assert f"CLAUDE_CONFIG_DIR={tmp_path}" in out
-    assert "ARGS=--print hi there" in out
-    for leaked in (
-        "DATABASE_URL",
-        "SECRETS_ENCRYPTION_KEYS",
-        "AUTH_SECRET_KEY",
-        "ANTHROPIC_API_KEY",
-    ):
-        assert leaked not in out
-
-
 # --- registry -----------------------------------------------------------------
-
-
-async def test_complete_dispatches_on_prefix(fake_sdk):
-    result = await complete(
-        "claude:claude-sonnet-5-5", CompletionRequest(user="u"), FULL
-    )
-    assert result.text == "Bonjour"
-    assert fake_sdk.calls[0]["options"].model == "claude-sonnet-5-5"
 
 
 async def test_complete_wraps_unexpected_errors(monkeypatch):

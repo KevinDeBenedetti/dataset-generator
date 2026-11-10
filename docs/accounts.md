@@ -50,8 +50,7 @@ another user's resource answers **404**. `tests/api/test_tenant_isolation.py` wa
 every route and fails on any new one it can't classify.
 
 Each user enters their own OpenAI-compatible key (and its base URL), Hugging
-Face token and GitHub details in **Settings** (and, in development, a Claude
-token). One exception, off unless the deployment sets
+Face token and GitHub details in **Settings**. One exception, off unless the deployment sets
 `SERVER_LLM_FOR_ADMINS=true`: an admin who saved no OpenAI-compatible key calls
 the server's endpoint with the server's key — a gateway the operator runs, such
 as LiteLLM (see [Configuration](./configuration.md)). The role is read at each

@@ -57,7 +57,8 @@ class VectorCollection(Base):
     text_columns: Mapped[List[str]] = mapped_column(JSON, nullable=False)
     # The column the retrieval test asks with (the question, for a Q/A split).
     query_column: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    # The FastEmbed model the points and the queries are embedded with.
+    # The model the points and the queries are embedded with: openai:<id>, an
+    # endpoint model (an older collection may name a local one, no longer run).
     model: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="building")
     # The job run of the latest build (job_runs.id): while the row says

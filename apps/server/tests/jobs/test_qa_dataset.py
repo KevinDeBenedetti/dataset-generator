@@ -183,7 +183,7 @@ async def test_build_qa_dataset_runs_overview_and_doc_batches(github, snapshot):
             [{"question": f"Question number {n}?", "answer": f"Answer {n}."}]
         )
 
-    dataset = await build_qa_dataset(github.client(), snapshot, complete, "claude-x")
+    dataset = await build_qa_dataset(github.client(), snapshot, complete, "chat-x")
 
     # overview + 2 docs batches (3 + 1 files); the second batch got retried once.
     assert "Generate 4 distinct" in requests[0].user
@@ -198,7 +198,7 @@ async def test_build_qa_dataset_runs_overview_and_doc_batches(github, snapshot):
     assert categories.count("docs") == 2
     assert dataset.errors == []
     llm = [p for p in dataset.pairs if p.category in ("overview", "docs")]
-    assert {p.model for p in llm} == {"claude-x"}
+    assert {p.model for p in llm} == {"chat-x"}
 
 
 def test_repo_pairs_cover_description_stack_and_links():
@@ -333,18 +333,24 @@ async def test_generate_checks_hf_token_before_generating(monkeypatch):
             await qa_dataset.generate(creds, complete)
 
 
-async def test_generate_requires_claude_credentials(monkeypatch):
-    # The jobs default to OPENAI_LLM_MODEL (set for the tests): name Claude.
-    monkeypatch.setattr(qa_dataset.config, "qa_job_model", "claude:claude-sonnet-5-5")
+async def test_generate_requires_the_llms_credentials():
+    # The jobs default to OPENAI_LLM_MODEL (set for the tests): no key, no run.
     creds = make_creds(github_username="kevin")
-    with pytest.raises(JobError, match="Claude token"):
+    with pytest.raises(JobError, match="API key"):
+        await qa_dataset.generate(creds)
+
+
+async def test_generate_requires_an_llm(monkeypatch):
+    monkeypatch.setattr(qa_dataset.config, "openai_llm_model", "")
+    creds = make_creds(github_username="kevin", openai_api_key="sk-000000000000")
+    with pytest.raises(JobError, match="No LLM configured"):
         await qa_dataset.generate(creds)
 
 
 async def test_generate_passes_max_repos_to_build_qa_dataset(monkeypatch, github):
     creds = make_creds(
         github_username="kevin",
-        anthropic_api_key="ak-000000000000",
+        openai_api_key="sk-000000000000",
         hf_token="hf_000000000000",
         hf_qa_repo="ns/qa",
     )
@@ -763,7 +769,7 @@ def test_load_previous_state_first_run_and_errors():
 async def test_generate_full_refresh_skips_previous_version(monkeypatch, github):
     creds = make_creds(
         github_username="kevin",
-        anthropic_api_key="ak-000000000000",
+        openai_api_key="sk-000000000000",
         hf_token="hf_000000000000",
         hf_qa_repo="ns/qa",
     )
@@ -897,7 +903,7 @@ async def test_build_reports_progress(github, snapshot):
 
 
 async def test_generate_requires_the_hub(monkeypatch):
-    creds = make_creds(github_username="kevin", anthropic_api_key="ak-000000000000")
+    creds = make_creds(github_username="kevin", openai_api_key="sk-000000000000")
     with pytest.raises(JobError, match="Hugging Face token"):
         await qa_dataset.generate(creds, AsyncMock())
 
@@ -930,7 +936,7 @@ async def test_generate_reads_the_previous_version_from_the_full_repo_id(
 ):
     creds = make_creds(
         github_username="kevin",
-        anthropic_api_key="ak-000000000000",
+        openai_api_key="sk-000000000000",
         hf_token="hf_000000000000",
         hf_qa_repo="github-personal",
     )

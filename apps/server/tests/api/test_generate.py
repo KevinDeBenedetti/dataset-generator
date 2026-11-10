@@ -27,13 +27,13 @@ def authenticated():
 
 
 @pytest.fixture(autouse=True)
-def env_model_defaults():
-    """Role defaults from the env only — these tests have no database."""
-    from server.services.model_defaults import env_defaults
+def env_model():
+    """Your LLM from the env only — these tests have no database."""
+    from server.services.model_defaults import env_default
 
     with patch(
-        "server.services.model_defaults.get_model_defaults",
-        side_effect=lambda user_id=None: env_defaults(),
+        "server.api.generate.get_default_model",
+        side_effect=lambda user_id=None: env_default(),
     ):
         yield
 
@@ -80,6 +80,9 @@ class TestGenerateDatasetFromFile:
         kwargs = mock_file_pipeline.process_file.call_args.kwargs
         assert kwargs["filename"] == "doc.pdf"
         assert kwargs["content"] == b"%PDF-1.4 fake"
+        # Your LLM transcribes the pages too.
+        assert kwargs["model"] == "openai:gpt-4o-mini"
+        assert data["model"] == "openai:gpt-4o-mini"
 
     def test_unsupported_file_returns_400(self, mock_file_pipeline):
         mock_file_pipeline.process_file = AsyncMock(
@@ -105,10 +108,10 @@ class TestGenerateDatasetFromFile:
         assert response.status_code == 400
         assert "empty" in response.json()["detail"].lower()
 
-    def test_missing_vlm_model_returns_400(self, mock_file_pipeline, monkeypatch):
+    def test_without_an_llm_returns_400(self, mock_file_pipeline, monkeypatch):
         from server.core.config import config
 
-        monkeypatch.setattr(config, "openai_vlm_model", "")
+        monkeypatch.setattr(config, "openai_llm_model", "")
 
         response = client.post(
             "/dataset/generate/file",
@@ -117,7 +120,26 @@ class TestGenerateDatasetFromFile:
         )
 
         assert response.status_code == 400
-        assert "vision model" in response.json()["detail"].lower()
+        assert "No LLM configured" in response.json()["detail"]
+        mock_file_pipeline.process_file.assert_not_called()
+
+    def test_the_requested_model_transcribes_the_file(
+        self, mock_file_pipeline, monkeypatch
+    ):
+        from server.core.config import config
+
+        monkeypatch.setattr(config, "available_models", ["gpt-4o-mini", "gpt-4o"])
+        mock_file_pipeline.process_file.return_value = self._pipeline_result()
+
+        response = client.post(
+            "/dataset/generate/file",
+            data={"dataset_name": "x", "model": "gpt-4o"},
+            files={"file": ("doc.pdf", b"%PDF fake", "application/pdf")},
+        )
+
+        assert response.status_code == 201
+        kwargs = mock_file_pipeline.process_file.call_args.kwargs
+        assert kwargs["model"] == "openai:gpt-4o"
 
     def test_file_over_the_upload_limit_returns_413(
         self, mock_file_pipeline, monkeypatch
@@ -171,11 +193,14 @@ class TestGenerateDatasetFromUrl:
         assert data["id"] == "web-ds" and data["total_questions"] == 1
         kwargs = mock_url_pipeline.process_url.call_args.kwargs
         assert kwargs["url"] == "https://docs.example.com/guide"
-        # Role defaults, normalized to provider references.
-        assert kwargs["model_cleaning"] == "openai:gpt-4o-mini"
-        assert kwargs["model_qa"] == "openai:gpt-4o-mini"
+        # Your LLM, normalized to a provider reference.
+        assert kwargs["model"] == "openai:gpt-4o-mini"
+        assert data["model"] == "openai:gpt-4o-mini"
 
-    def test_explicit_models_are_forwarded(self, mock_url_pipeline, monkeypatch):
+    def test_an_explicit_model_is_forwarded(self, mock_url_pipeline, monkeypatch):
+        from server.core.config import config
+
+        monkeypatch.setattr(config, "available_models", ["gpt-4o-mini", "gpt-4o"])
         mock_url_pipeline.process_url.return_value = self._pipeline_result()
 
         response = client.post(
@@ -183,28 +208,26 @@ class TestGenerateDatasetFromUrl:
             json={
                 "url": "https://docs.example.com",
                 "dataset_name": "x",
-                "model_qa": "claude:claude-sonnet-5-5",
+                "model": "openai:gpt-4o",
             },
         )
 
         assert response.status_code == 201
         kwargs = mock_url_pipeline.process_url.call_args.kwargs
-        assert kwargs["model_qa"] == "claude:claude-sonnet-5-5"
+        assert kwargs["model"] == "openai:gpt-4o"
 
-    def test_the_role_defaults_are_read_once_per_request(
-        self, mock_url_pipeline, monkeypatch
-    ):
-        # Two roles to resolve, one read of the defaults (one database session).
+    def test_your_llm_is_read_once_per_request(self, mock_url_pipeline, monkeypatch):
+        # One read of your saved model (one database session) for every step.
         from server.api import generate as generate_api
 
         reads = []
-        real = generate_api.get_model_defaults
+        real = generate_api.get_default_model
 
         def counting(user_id=None):
             reads.append(user_id)
             return real(user_id)
 
-        monkeypatch.setattr(generate_api, "get_model_defaults", counting)
+        monkeypatch.setattr(generate_api, "get_default_model", counting)
         mock_url_pipeline.process_url.return_value = self._pipeline_result()
 
         response = client.post(
@@ -213,10 +236,9 @@ class TestGenerateDatasetFromUrl:
         )
 
         assert response.status_code == 201
-        assert len(reads) == 1
+        assert reads == ["test-user"]
         kwargs = mock_url_pipeline.process_url.call_args.kwargs
-        assert kwargs["model_cleaning"] == "openai:gpt-4o-mini"
-        assert kwargs["model_qa"] == "openai:gpt-4o-mini"
+        assert kwargs["model"] == "openai:gpt-4o-mini"
 
     def test_refused_url_returns_400(self, mock_url_pipeline):
         from server.services.web import WebFetchError
@@ -237,7 +259,7 @@ class TestGenerateDatasetFromUrl:
             json={
                 "url": "https://docs.example.com",
                 "dataset_name": "x",
-                "model_qa": "openai:not-configured",
+                "model": "openai:not-configured",
             },
         )
         assert response.status_code == 400
@@ -245,21 +267,17 @@ class TestGenerateDatasetFromUrl:
         mock_url_pipeline.process_url.assert_not_called()
 
     def test_unconfigured_provider_returns_400(self, mock_url_pipeline):
-        # A user who never added a Claude token.
+        # A user who never added an OpenAI key.
         app.dependency_overrides[get_credentials] = lambda: make_creds(
-            openai_api_key="sk-user-0000000000000000", base_url_trusted=True
+            hf_token="hf_user_token", base_url_trusted=True
         )
         response = client.post(
             "/dataset/generate/url",
-            json={
-                "url": "https://docs.example.com",
-                "dataset_name": "x",
-                "model_qa": "claude:claude-sonnet-5-5",
-            },
+            json={"url": "https://docs.example.com", "dataset_name": "x"},
         )
         assert response.status_code == 400
-        assert "Claude token" in response.json()["detail"]
         assert "Settings" in response.json()["detail"]
+        mock_url_pipeline.process_url.assert_not_called()
 
 
 class TestGenerationDrafts:

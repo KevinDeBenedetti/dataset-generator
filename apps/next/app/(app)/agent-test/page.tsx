@@ -83,8 +83,8 @@ export default function AgentTestPage() {
           ))}
         </select>
 
-        {/* Any provider's model; empty = the qa role default. */}
-        <ModelSelect value={model} onChange={setModel} modelRole="qa" disabled={loading} />
+        {/* Any model of the endpoint; empty = your LLM. */}
+        <ModelSelect value={model} onChange={setModel} disabled={loading} />
 
         <Button onClick={run} disabled={!text.trim() || loading} className="flex-1">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Run agent</span>}

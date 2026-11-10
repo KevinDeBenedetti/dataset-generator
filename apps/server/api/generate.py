@@ -19,7 +19,7 @@ from server.schemas.generate import (
 )
 from server.models.user import User
 from server.services.auth import get_current_user
-from server.services.model_defaults import get_model_defaults
+from server.services.model_defaults import get_default_model
 from server.services.providers import validate_ref
 from server.services.web import WebFetchError
 
@@ -39,31 +39,25 @@ _RESPONSES: Dict[int | str, Dict[str, Any]] = {
 }
 
 
-def _models(
-    user_id: str, creds: Credentials, **requested: Optional[str]
-) -> Dict[str, str]:
-    """For each role given, the request's model reference, else your role
-    default — validated; 400 otherwise.
+def _model(user_id: str, creds: Credentials, requested: Optional[str]) -> str:
+    """The request's model reference, else your LLM — validated; 400 otherwise.
 
-    One read of your defaults (a database session) serves every role: call it
-    once per request, through ``run_in_threadpool`` from the async routes.
+    Reads your saved model (a database session): call it once per request,
+    through ``run_in_threadpool`` from the async routes.
     """
-    defaults = get_model_defaults(user_id)
-    refs: Dict[str, str] = {}
-    for role, ref in requested.items():
-        ref = ref or defaults.get(role, "")
-        if not ref:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"No {role} model configured — pick one on the Models page",
-            )
-        try:
-            refs[role] = validate_ref(ref, creds)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-            ) from exc
-    return refs
+    ref = requested or get_default_model(user_id)
+    if not ref:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No LLM configured — set OPENAI_LLM_MODEL, or pick one on the "
+            "Models page",
+        )
+    try:
+        return validate_ref(ref, creds)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 def _language(target_language: Optional[str]) -> TargetLanguage:
@@ -81,9 +75,8 @@ def _build_response(
     result: Dict[str, Any],
     dataset_name: str,
     similarity_threshold: float,
-    model_cleaning: str,
+    model: str,
     target_language_enum: TargetLanguage,
-    model_qa: str,
     processing_time: float,
 ) -> DatasetGenerationResponse:
     """Adapt a pipeline result to the API response. Raises HTTPException(500)."""
@@ -113,9 +106,8 @@ def _build_response(
         id=dataset_id,
         dataset_name=result.get("dataset_name", dataset_name),
         qa_pairs=qa_pairs,
-        model_cleaning=model_cleaning,
+        model=model,
         target_language=target_language_enum.value,
-        model_qa=model_qa,
         similarity_threshold=similarity_threshold,
         total_questions=len(qa_pairs),
         pages_crawled=result.get("pages_crawled", 1),
@@ -168,17 +160,16 @@ async def _keep_draft(
     status_code=status.HTTP_201_CREATED,
     summary="Generate a dataset from an uploaded file (PDF or image)",
     description="Create or extend a dataset from an uploaded PDF or image. Each "
-    "page is transcribed with a vision model (the vision role default unless "
-    "model_vlm is given), then mined for question-answer pairs.",
+    "page is transcribed by your LLM (it must read images), then mined for "
+    "question-answer pairs.",
     responses=_RESPONSES,
 )
 async def create_dataset_for_file(
     file: UploadFile = File(..., description="PDF or image file to mine for Q&A"),
     dataset_name: str = Form(..., min_length=1, max_length=100),
     target_language: Optional[str] = Form(None),
-    model_qa: Optional[str] = Form(None, description="Model reference for QA"),
-    model_vlm: Optional[str] = Form(
-        None, description="Model reference for page transcription"
+    model: Optional[str] = Form(
+        None, max_length=200, description="Model reference (default: your LLM)"
     ),
     similarity_threshold: float = Form(0.85, ge=0.0, le=1.0),
     persist: bool = Form(True),
@@ -191,13 +182,10 @@ async def create_dataset_for_file(
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
 ) -> DatasetGenerationResponse:
-    """Create a dataset from an uploaded PDF/image via a vision model."""
+    """Create a dataset from an uploaded PDF/image, read by your LLM."""
     start_time = time.time()
     language = _language(target_language)
-    models = await run_in_threadpool(
-        _models, user.id, creds, qa=model_qa, vision=model_vlm
-    )
-    model_qa_r, model_vlm_r = models["qa"], models["vision"]
+    model_ref = await run_in_threadpool(_model, user.id, creds, model)
 
     # Refuse an oversized upload before holding it in memory: the size the
     # multipart parser saw first, then a bounded read in case it reported none.
@@ -222,8 +210,7 @@ async def create_dataset_for_file(
             content_type=file.content_type or "",
             dataset_name=dataset_name,
             target_language=language,
-            model_qa=model_qa_r,
-            model_vlm=model_vlm_r,
+            model=model_ref,
             similarity_threshold=similarity_threshold,
             # A draft replaces the local dataset.
             persist=persist and not target_repo,
@@ -232,9 +219,8 @@ async def create_dataset_for_file(
             result,
             dataset_name,
             similarity_threshold,
-            model_vlm_r,
+            model_ref,
             language,
-            model_qa_r,
             time.time() - start_time,
         )
         if target_repo:
@@ -247,7 +233,7 @@ async def create_dataset_for_file(
                 source=f"file://{file.filename or 'upload'}",
                 kind="file",
                 language=language,
-                model_ref=model_qa_r,
+                model_ref=model_ref,
             )
         return response
     except HTTPException:
@@ -283,18 +269,14 @@ async def create_dataset_for_url(
     """Create a dataset from a single web page."""
     start_time = time.time()
     language = _language(request.target_language)
-    models = await run_in_threadpool(
-        _models, user.id, creds, cleaning=request.model_cleaning, qa=request.model_qa
-    )
-    model_cleaning, model_qa = models["cleaning"], models["qa"]
+    model_ref = await run_in_threadpool(_model, user.id, creds, request.model)
 
     try:
         result = await DatasetPipeline(user.id, creds).process_url(
             url=request.url,
             dataset_name=request.dataset_name,
             target_language=language,
-            model_cleaning=model_cleaning,
-            model_qa=model_qa,
+            model=model_ref,
             similarity_threshold=request.similarity_threshold,
             # A draft replaces the local dataset.
             persist=request.persist and not request.target_repo,
@@ -303,9 +285,8 @@ async def create_dataset_for_url(
             result,
             request.dataset_name,
             request.similarity_threshold,
-            model_cleaning,
+            model_ref,
             language,
-            model_qa,
             time.time() - start_time,
         )
         if request.target_repo:
@@ -318,7 +299,7 @@ async def create_dataset_for_url(
                 source=request.url,
                 kind="web",
                 language=language,
-                model_ref=model_qa,
+                model_ref=model_ref,
             )
         return response
     except WebFetchError as e:

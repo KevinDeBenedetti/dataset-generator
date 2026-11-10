@@ -101,18 +101,17 @@ async def test_score_dataset_counts_a_failed_batch(monkeypatch):
     assert (result["scored"], result["failed"]) == (0, 2)
 
 
-async def test_score_dataset_requires_an_llm(monkeypatch):
+async def test_score_dataset_requires_the_llms_key(monkeypatch):
     monkeypatch.setattr(
-        scoring, "resolve_model", lambda role, override=None, user_id=None: "openai:m"
+        scoring, "resolve_model", lambda override=None, user_id=None: "openai:m"
     )
     with pytest.raises(ScoringNotConfiguredError, match=r"API key \(and endpoint\)"):
         await score_dataset(OWNER, "ds", NONE)
 
 
-async def test_score_dataset_requires_a_usable_judge_provider(monkeypatch):
-    # A claude: default with no Claude credentials is as unusable as no key.
+async def test_score_dataset_requires_an_llm(monkeypatch):
     monkeypatch.setattr(
-        scoring, "resolve_model", lambda role, override=None, user_id=None: "claude:x"
+        scoring, "resolve_model", lambda override=None, user_id=None: ""
     )
-    with pytest.raises(ScoringNotConfiguredError, match="Claude token"):
-        await score_dataset(OWNER, "ds", NONE)
+    with pytest.raises(ScoringNotConfiguredError, match="an LLM"):
+        await score_dataset(OWNER, "ds", FULL)

@@ -283,7 +283,6 @@ export function RecipeBar({
           <ModelSelect
             id="recipe-model"
             className="select"
-            modelRole="jobs"
             value={working.model_ref ?? ''}
             onChange={(ref) => onChange({ ...working, model_ref: ref || null })}
           />

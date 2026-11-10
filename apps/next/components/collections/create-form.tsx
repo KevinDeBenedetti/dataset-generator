@@ -8,13 +8,7 @@ import { Icon } from '@/components/app/icon'
 import { formatBytes, splitRepoId } from '@/components/hub/format'
 import { useCreateCollection, useHubDataset, useHubDatasets, useHubRows } from '@/hooks'
 import { cn } from '@/lib/utils'
-import {
-  defaultCollectionName,
-  defaultColumns,
-  isTrivialTest,
-  modelGroups,
-  modelLabel,
-} from './format'
+import { defaultCollectionName, defaultColumns, isTrivialTest, modelLabel } from './format'
 
 // The server refuses more (services/collections.py MAX_TEXT_COLUMNS).
 const MAX_TEXT_COLUMNS = 4
@@ -24,15 +18,6 @@ const viewKey = (view: HubView) => `${view.config}\u0000${view.split}`
 function viewLabel(view: HubView): string {
   const name = view.config === 'default' ? view.split : `${view.config} / ${view.split}`
   return view.num_bytes != null ? `${name} · ${formatBytes(view.num_bytes)}` : name
-}
-
-function modelOption(model: EmbeddingModelOut): string {
-  const facts = [
-    model.languages,
-    model.dimensions ? `${model.dimensions} dimensions` : null,
-    model.size_mb ? `${model.size_mb} MB` : null,
-  ].filter(Boolean)
-  return `${modelLabel(model.name)}${facts.length ? ` — ${facts.join(' · ')}` : ''}`
 }
 
 export function CreateCollectionForm({
@@ -130,8 +115,7 @@ export function CreateCollectionForm({
           <div className="card-title">New collection</div>
           <p className="card-desc">
             One split of a dataset, read from Hugging Face at its latest commit and embedded row by
-            row: with a local model on the server, no data leaves your stack; with your endpoint's
-            embedding model, the rows are sent to it.
+            row with an embedding model of your endpoint: the rows are sent to it.
           </p>
         </div>
       </div>
@@ -257,17 +241,20 @@ export function CreateCollectionForm({
               value={model}
               onChange={(e) => setModel(e.target.value)}
             >
-              {modelGroups(models).map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.models.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {modelOption(m)}
-                    </option>
-                  ))}
-                </optgroup>
+              {models.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {modelLabel(m.name)}
+                </option>
               ))}
             </select>
-            {chosenModel && <div className="hint">{chosenModel.description}</div>}
+            {chosenModel ? (
+              <div className="hint">{chosenModel.description}</div>
+            ) : (
+              <div className="hint">
+                Your endpoint serves no embedding model: add your API key in Settings, on an
+                endpoint that serves OPENAI_EMBEDDING_MODEL.
+              </div>
+            )}
           </div>
         </div>
       )}

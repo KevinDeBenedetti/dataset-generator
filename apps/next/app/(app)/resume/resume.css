@@ -1,0 +1,83 @@
+/* ============================================================
+   The Resume page: the resumes of the server's Reactive Resume
+   key, and the one picked, as text. The list and the panel use
+   the gh-* layout of github/github.css.
+   ============================================================ */
+
+.rs-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.rs-name {
+  font-size: 18px;
+  font-weight: 600;
+}
+.rs-headline {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+}
+.rs-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.rs-contact a,
+.rs-item-title a {
+  text-decoration: underline;
+}
+.rs-facts {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.rs-section-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.rs-items {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rs-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+.rs-item-title {
+  font-weight: 500;
+}
+.rs-item-period {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.rs-item-sub {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.rs-text {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.rs-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}

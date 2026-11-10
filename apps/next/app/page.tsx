@@ -25,7 +25,7 @@ const features = [
   {
     icon: Upload,
     title: 'Multi-source ingestion',
-    description: "File upload (PDF/image via a vision model) or a GitHub account's public docs.",
+    description: "File upload (PDF/image, read by your LLM) or a GitHub account's public docs.",
   },
   {
     icon: Sparkles,

@@ -1,5 +1,5 @@
-"""Model providers (an OpenAI-compatible endpoint, the Claude subscription),
-per-role defaults, and the default embedding."""
+"""The model provider (an OpenAI-compatible endpoint), your LLM and the
+embedding model."""
 
 import time
 from dataclasses import asdict
@@ -7,9 +7,8 @@ from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
-from server.core.config import config
 from server.schemas.models import (
-    ModelDefaultsUpdate,
+    ModelDefaultUpdate,
     ModelsResponse,
     ModelTestRequest,
     ModelTestResponse,
@@ -18,11 +17,7 @@ from server.models.user import User
 from server.api.deps import get_credentials
 from server.services.auth import get_current_user
 from server.services.credentials import Credentials
-from server.services.model_defaults import (
-    ROLES,
-    get_model_defaults,
-    update_model_defaults,
-)
+from server.services.model_defaults import get_default_model, set_default_model
 from server.services.providers import (
     PROVIDERS,
     CompletionRequest,
@@ -38,8 +33,6 @@ router = APIRouter(prefix="/models", tags=["models"])
 async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsResponse:
     providers = []
     for provider in PROVIDERS.values():
-        if provider.name == "claude" and not config.claude_provider_available:
-            continue  # development and CI only
         models = (
             await provider.list_models(creds) if discover else provider.models(creds)
         )
@@ -57,14 +50,11 @@ async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsR
                 "lent": provider.lent(creds),
             }
         )
-    defaults = await run_in_threadpool(get_model_defaults, user_id)  # database
-    on = config.semantic_enabled
+    model = await run_in_threadpool(get_default_model, user_id)  # database
     return ModelsResponse(
         providers=providers,
-        defaults=defaults,
-        roles=list(ROLES),
-        embedding_model=default_embedding_model(creds) if on else "",
-        local_embedding_model=config.semantic_model if on else "",
+        model=model,
+        embedding_model=default_embedding_model(creds),
     )
 
 
@@ -78,19 +68,19 @@ async def list_models(
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
 ) -> ModelsResponse:
-    """Every provider with its status and models, plus your per-role defaults."""
+    """The provider with its status and models, your LLM and the embedding model."""
     return await _snapshot(discover, user.id, creds)
 
 
-@router.put("/defaults", response_model=ModelsResponse)
-async def put_model_defaults(
-    body: ModelDefaultsUpdate,
+@router.put("/default", response_model=ModelsResponse)
+async def put_default_model(
+    body: ModelDefaultUpdate,
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
 ) -> ModelsResponse:
-    """Set your default model for one or more roles."""
+    """Set your LLM: the model of every step."""
     try:
-        await run_in_threadpool(update_model_defaults, user.id, body.defaults, creds)
+        await run_in_threadpool(set_default_model, user.id, body.model, creds)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return await _snapshot(False, user.id, creds)

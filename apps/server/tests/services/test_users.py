@@ -112,6 +112,20 @@ class TestSeedDevUsers:
             seed_dev_users(test_db, allow_insecure_defaults=False)
         assert test_db.query(User).count() == 0
 
+    def test_an_empty_password_is_no_password(self, test_db, monkeypatch):
+        # docker-compose.yml passes DEV_*_PASSWORD through empty when .env has
+        # none: the weak defaults then apply in development only, as unset.
+        monkeypatch.setenv("DEV_ADMIN_PASSWORD", "")
+        monkeypatch.setenv("DEV_USER_PASSWORD", "")
+        with pytest.raises(RuntimeError, match="Refusing to seed"):
+            seed_dev_users(test_db, allow_insecure_defaults=False)
+        assert test_db.query(User).count() == 0
+
+        assert seed_dev_users(test_db, allow_insecure_defaults=True) == 2
+        admin = get_user_by_email(test_db, "admin@example.com")
+        assert admin is not None and admin.hashed_password is not None
+        assert verify_password("admin1234", admin.hashed_password) is True
+
     def test_refuses_a_password_over_72_bytes(self, test_db, monkeypatch):
         monkeypatch.setenv("DEV_ADMIN_PASSWORD", "x" * 80)
         monkeypatch.setenv("DEV_USER_PASSWORD", "Str0ng-User-Pw!")

@@ -68,10 +68,9 @@ export default function SettingsPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Generation defaults</div>
+              <div className="card-title">Models</div>
               <div className="card-desc">
-                The default model of each step (cleaning, Q&amp;A, vision, jobs) and the OpenAI /
-                Claude subscription providers.
+                Your LLM, the model of every step, and the embedding model of your endpoint.
               </div>
             </div>
           </div>

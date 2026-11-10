@@ -43,6 +43,10 @@ make dev     # builds if needed, starts, and streams logs (Ctrl-C stops it)
 when dependencies change, and source edits hot-reload without a rebuild — so the
 same command works on the first run and every day after.
 
+Sign in with a development account, seeded at startup: `admin@example.com` /
+`admin1234` or `user@example.com` / `user1234` (see
+[Configuration](./configuration.md) to change the passwords).
+
 Services started by Docker Compose:
 
 | Service  | Role                         | Host port                      |
@@ -63,18 +67,17 @@ From the UI, open the **Generate** page, name the Hugging Face dataset the
 pairs go to (an existing one or a new one), and pick a source:
 
 - **File** — upload a PDF/image (up to 20 MB and 50 pages), transcribed page
-  by page by the vision model
+  by page by your LLM
 - **Web page** — one public URL (no crawling), reduced to text and cleaned
 
 The pairs become a draft listed under **Drafts**: nothing reaches Hugging Face
 before you review it. A dataset's page offers **Add data**, which opens this
 form with that dataset filled in.
 
-Each step's model (cleaning, Q&A, vision) defaults to what is set on the
-**Models** page and can be overridden per generation. A model is a
-`"<provider>:<model>"` reference: `openai:…` (OpenAI-compatible API, on the key
-saved in **Settings**) or, in local development and CI only, `claude:…` (Claude
-subscription through the Claude Agent SDK, a token from `claude setup-token`).
+Every step — cleaning, Q&A, page transcription — runs on your LLM, set on the
+**Models** page, and a generation can pick another one. A model is an
+`openai:<model>` reference: a model of the OpenAI-compatible endpoint, called
+with the key saved in **Settings**.
 
 Or via the API (replace the port with your `SERVER_PORT` if you changed it):
 
@@ -85,7 +88,7 @@ curl -X POST http://localhost:8020/dataset/generate/url \
     "url": "https://docs.example.com/guide",
     "dataset_name": "Example docs",
     "target_repo": "your-namespace/example-docs",
-    "model_qa": "claude:claude-sonnet-5-5"
+    "model": "openai:gpt-4o-mini"
   }'
 ```
 
@@ -159,6 +162,8 @@ Images built before this start-up install don't have it: run
   of the published datasets
 - [GitHub datasets](./github.md) — your whole account, or a recipe choosing the
   GitHub sources of a dataset
+- [Reactive Resume](./resume.md) — your resumes, listed and read as text
+  (admins)
 - [Vector collections](./collections.md) — embedding a split into Qdrant,
   searching it and testing its retrieval
 - [Configuration](./configuration.md) — `.env`, what `ENVIRONMENT` decides, the

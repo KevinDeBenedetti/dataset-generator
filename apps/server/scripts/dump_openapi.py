@@ -22,7 +22,6 @@ import sys
 os.environ.setdefault("OPENAI_API_KEY", "schema-dump-placeholder")
 os.environ.setdefault("OPENAI_BASE_URL", "https://api.openai.com/v1")
 os.environ.setdefault("OPENAI_LLM_MODEL", "gpt-4o-mini")
-os.environ.setdefault("OPENAI_VLM_MODEL", "gpt-4o-mini")
 # The dev log console mounts an extra router; keep it out of the schema so the
 # generated client doesn't depend on how the dumping machine is configured.
 os.environ["DEBUG_LOGS"] = ""

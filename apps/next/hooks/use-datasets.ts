@@ -17,19 +17,19 @@ import { DATASET_ALL_RUNS_QUERY_KEY } from './use-dataset-versions'
 import { HUB_QUERY_KEY } from './use-hub'
 
 // The /generate form can mine two kinds of source; the mutation branches on it.
-// Model fields are "<provider>:<model>" references; null = the role default.
+// `model` is a "<provider>:<model>" reference; null = your LLM.
 interface GenerateCommon {
   name: string
   targetLanguage: string | null
   similarityThreshold: number
-  modelQa?: string | null
+  model?: string | null
   // The Hugging Face dataset the draft publishes to.
   targetRepo: string
 }
 
 export type GenerateParams =
-  | (GenerateCommon & { source: 'file'; file: File; modelVlm?: string | null })
-  | (GenerateCommon & { source: 'url'; url: string; modelCleaning?: string | null })
+  | (GenerateCommon & { source: 'file'; file: File })
+  | (GenerateCommon & { source: 'url'; url: string })
 
 export const DATASETS_QUERY_KEY = ['datasets']
 
@@ -73,8 +73,7 @@ export function useGenerateDataset() {
           datasetName: params.name,
           targetLanguage: params.targetLanguage,
           similarityThreshold: params.similarityThreshold,
-          modelQa: params.modelQa,
-          modelVlm: params.modelVlm,
+          model: params.model,
           targetRepo: params.targetRepo,
         })
       }
@@ -84,8 +83,7 @@ export function useGenerateDataset() {
         dataset_name: params.name,
         target_language: params.targetLanguage,
         similarity_threshold: params.similarityThreshold,
-        model_cleaning: params.modelCleaning,
-        model_qa: params.modelQa,
+        model: params.model,
         target_repo: params.targetRepo,
       })
     },

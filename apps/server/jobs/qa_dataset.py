@@ -11,12 +11,9 @@ its ``docs/`` files. The result is deduplicated and pushed to the Q&A dataset
 repo as ``train.jsonl`` + a dataset card — the file the portfolio's
 "Synchroniser les paires Q/R" action ingests.
 
-Generation goes through the model provider registry (services/providers):
-by default the Claude subscription via the Claude Agent SDK, authenticated
-with CLAUDE_CODE_OAUTH_TOKEN (``claude setup-token``) — that subscription
-grants no plain-API access, only Claude Code, which is what the SDK drives.
-Any model reference works (the one picked on the GitHub page, else the jobs
-default of the Models page), including the OpenAI-compatible API.
+Generation goes through the model provider registry (services/providers), on
+the OpenAI-compatible endpoint: the model picked on the GitHub page, else your
+LLM (Models page), else OPENAI_LLM_MODEL.
 
 Ported from portfolio-next (``scripts/generate-and-export-qa-dataset.ts``,
 ``src/lib/rag/github-qa.ts``, ``src/lib/rag/github-hf-export.ts``).
@@ -1133,7 +1130,7 @@ async def build_qa_dataset(
         return index, _plan_tasks(repos, docs_by_repo, sources, index, embedder)
 
     carried = len(kept)
-    index, tasks = await cpu_bound(prepare)  # embeddings: the CPU pool
+    index, tasks = await cpu_bound(prepare)  # embedding batches: core/cpu.py
     logger.info(
         "%d source(s) changed of %d; %d pair(s) carried over, %d re-checked "
         "(%d to review), %d LLM call(s) to make",
@@ -1229,7 +1226,7 @@ async def build_qa_dataset(
             accepted.append(pair)
         return accepted
 
-    accepted = await cpu_bound(screen)  # embeddings: the CPU pool
+    accepted = await cpu_bound(screen)  # embedding batches: core/cpu.py
 
     # A failed call's sources keep their previous hash (or none), so the next
     # run retries them instead of believing them up to date.
@@ -1512,8 +1509,13 @@ class Draft:
 def _model_for(
     creds: Credentials, model_ref: Optional[str], complete: Optional[CompletionFn]
 ) -> Tuple[str, str]:
-    """``(model_ref, model)``, checked usable before anything is spent."""
-    model_ref = model_ref or config.qa_job_model
+    """``(model_ref, model)``, checked usable before anything is spent: the
+    run's model, else OPENAI_LLM_MODEL."""
+    model_ref = model_ref or config.openai_llm_model
+    if not model_ref:
+        raise JobError(
+            "No LLM configured: set OPENAI_LLM_MODEL, or pick one on the Models page"
+        )
     provider_name, model = parse_ref(model_ref)
     try:
         provider = get_provider(provider_name)
@@ -1545,7 +1547,7 @@ async def generate(
     :func:`build_qa_dataset`): the Hugging Face token and the Q&A dataset repo
     are required, and the token is checked *before* any (limited) subscription
     usage is spent. ``full_refresh`` ignores the published version.
-    ``model_ref`` picks the model (default: ``QA_JOB_MODEL``).
+    ``model_ref`` picks the model (default: ``OPENAI_LLM_MODEL``).
     """
     username = creds.github_username
     if not username:

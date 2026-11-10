@@ -111,7 +111,7 @@ def _owned_row(db, owner_id: str, run_id: str) -> JobRun:
 def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
     """Every job with its option schema, configuration status and the owner's
     latest run."""
-    default_model = resolve_model("jobs", user_id=owner_id)
+    default_model = resolve_model(user_id=owner_id)
     latest: Dict[str, Dict[str, Any]] = {}
     try:
         with get_scoped_db() as db:
@@ -204,7 +204,7 @@ def _queue_run(
     spec = _spec(job_id)
     parsed = spec.options.model_validate(options or {})
     model = (
-        validate_ref(resolve_model("jobs", model_ref, user_id=owner_id), creds)
+        validate_ref(resolve_model(model_ref, user_id=owner_id), creds)
         if spec.uses_model
         else None
     )

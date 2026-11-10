@@ -37,7 +37,7 @@ with *Dry Run* off.
 | ------------- | -------------------------------------------------------------------------------- |
 | Name          | How you tell recipes apart (unique per user, 50 recipes at most)                 |
 | Publishes to  | The Hugging Face dataset, `namespace/name`, created private on the first publish |
-| Model         | The model for the generation; empty uses the **jobs** default of the Models page |
+| Model         | The model for the generation; empty uses your LLM, set on the Models page        |
 | Profile facts | Who you are, your stack and your projects, from your GitHub profile              |
 | Repos         | Up to 200, each with its README and metadata or not, and its `docs/` files       |
 

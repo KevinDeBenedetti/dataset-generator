@@ -26,6 +26,7 @@ from server.api import (
     recipes,
     me,
     quality_rules,
+    resumes,
 )
 from server.services.auth import ensure_secret_is_safe, get_current_user
 from server.migrations.utils.db_utils import upgrade_db
@@ -245,6 +246,7 @@ def create_app() -> FastAPI:
     app.include_router(collections.router, dependencies=auth_required)
     app.include_router(github.router, dependencies=auth_required)
     app.include_router(recipes.router, dependencies=auth_required)
+    app.include_router(resumes.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
     app.include_router(models.router, dependencies=auth_required)
     app.include_router(agent.router, dependencies=auth_required)

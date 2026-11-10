@@ -38,23 +38,18 @@ class UrlGenerationRequest(BaseModel):
     target_language: Optional[str] = Field(
         None, description="Target language for QA generation"
     )
-    model_cleaning: Optional[str] = Field(
+    model: Optional[str] = Field(
         None,
-        description='Model reference for text cleaning, e.g. "openai:gpt-4o-mini" '
-        "(default: the cleaning role default)",
-    )
-    model_qa: Optional[str] = Field(
-        None,
-        description='Model reference for QA generation, e.g. "claude:claude-sonnet-5-5" '
-        "(default: the qa role default)",
+        max_length=200,
+        description='Model reference, e.g. "openai:chat-default" (default: your LLM)',
     )
     similarity_threshold: float = Field(
         default=0.85,
         ge=0.0,
         le=1.0,
         description="Question similarity at or above which a pair is a duplicate "
-        "(0.0-1.0): embedding cosine across the dataset when the local model is "
-        "available, else a lexical ratio within the same source",
+        "(0.0-1.0): embedding cosine across the dataset when the embedding model "
+        "answers, else a lexical ratio within the same source",
     )
     persist: bool = Field(
         default=True,
@@ -77,11 +72,8 @@ class DatasetGenerationResponse(BaseModel):
         ..., description="List of generated question-answer pairs"
     )
     dataset_name: str = Field(..., description="Name of the dataset")
-    model_cleaning: str = Field(
-        ..., description="Model used to clean (URL) or transcribe (file) the source"
-    )
+    model: str = Field(..., description="The model of every step")
     target_language: str = Field(..., description="Target language used")
-    model_qa: str = Field(..., description="Model used for QA generation")
     similarity_threshold: float = Field(..., description="Similarity threshold used")
     total_questions: int = Field(..., description="Total number of generated questions")
     pages_crawled: int = Field(
@@ -114,9 +106,8 @@ class DatasetGenerationResponse(BaseModel):
                     }
                 ],
                 "dataset_name": "my_dataset",
-                "model_cleaning": "gpt-3.5-turbo",
+                "model": "openai:chat-default",
                 "target_language": "en",
-                "model_qa": "gpt-4",
                 "similarity_threshold": 0.85,
                 "total_questions": 50,
                 "processing_time": 45.2,

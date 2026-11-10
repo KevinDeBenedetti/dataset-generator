@@ -28,7 +28,6 @@ def bob(test_db):
 def _flags(monkeypatch):
     # Production-like: no env fallback, so what a user sees is only their own.
     monkeypatch.setattr(config, "allow_env_credentials", False)
-    monkeypatch.setattr(config, "enable_claude_provider", True)
 
 
 @pytest.fixture
@@ -78,7 +77,7 @@ def test_no_route_ever_returns_a_secret(alice, client_for, ok_check):
     listed = client.get("/me/secrets").json()["secrets"]
     by_kind = {s["kind"]: s for s in listed}
     assert by_kind["openai_api_key"]["configured"] is True
-    assert by_kind["claude_token"]["configured"] is False
+    assert by_kind["github_token"]["configured"] is False
 
 
 def test_the_secret_is_encrypted_in_the_database(alice, client_for, ok_check, test_db):
@@ -101,19 +100,6 @@ def test_a_failed_live_check_refuses_the_key_unless_forced(alice, client_for):
         forced = _put(client, "openai_api_key", CANARY, force=True)
         assert forced.status_code == 200
         assert forced.json()["check"]["ok"] is False
-
-
-def test_a_token_that_can_only_be_format_checked_is_saved(alice, client_for):
-    client = client_for(alice, real_credentials=True)
-    response = _put(client, "claude_token", "sk-ant-oat01-" + "a" * 40)
-    assert response.status_code == 200
-    assert response.json()["check"]["checked"] is False
-    assert response.json()["secret"]["hint"] is None  # OAuth tokens get no hint
-
-    # A wrongly-shaped one is refused like any failed check.
-    wrong = _put(client, "claude_token", "not-a-claude-token")
-    assert wrong.status_code == 422
-    assert "setup-token" in wrong.json()["detail"]
 
 
 def test_unknown_kinds_and_bad_values(alice, client_for, ok_check):
@@ -260,21 +246,13 @@ def test_identities_list_and_unlink_rules(alice, bob, client_for, test_db):
     assert test_db.get(Identity, "gh-b") is not None
 
 
-def test_a_deployed_server_offers_no_claude_at_all(
-    alice, client_for, monkeypatch, ok_check
-):
-    monkeypatch.delenv("CI", raising=False)
-    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    monkeypatch.setattr(config, "environment", "production")
+def test_only_the_openai_hub_and_github_secrets_exist(alice, client_for, ok_check):
     client = client_for(alice, real_credentials=True)
 
-    kinds = {s["kind"] for s in client.get("/me/secrets").json()["secrets"]}
-    assert "claude_token" not in kinds and "anthropic_api_key" not in kinds
-    assert _put(client, "claude_token", "sk-ant-oat01-" + "a" * 30).status_code == 404
+    kinds = [s["kind"] for s in client.get("/me/secrets").json()["secrets"]]
+    assert kinds == ["openai_api_key", "hf_token", "github_token"]
+    # The Claude subscription token and the Anthropic key are gone.
+    for kind in ("claude_token", "anthropic_api_key"):
+        assert _put(client, kind, "sk-ant-oat01-" + "a" * 30).status_code == 404
     providers = [p["name"] for p in client.get("/models").json()["providers"]]
     assert providers == ["openai"]
-    # A claude: default saved during development falls back to the qa model.
-    assert not any(
-        v.startswith("claude:")
-        for v in client.get("/models").json()["defaults"].values()
-    )

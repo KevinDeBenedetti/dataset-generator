@@ -1,9 +1,8 @@
 """Shared types for the model providers.
 
 A model is addressed by a *reference* ``"<provider>:<model id>"`` — e.g.
-``openai:gpt-4o-mini`` or ``claude:claude-sonnet-5-5``. A bare id (no prefix)
-means the OpenAI-compatible provider, so the ``OPENAI_*_MODEL`` values that
-predate providers keep working unchanged.
+``openai:chat-default``. One provider is left, the OpenAI-compatible endpoint;
+a bare id (no prefix) means it, so ``OPENAI_LLM_MODEL`` works as written.
 """
 
 from dataclasses import dataclass, field
@@ -12,7 +11,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple
 from server.services.credentials import Credentials
 
 DEFAULT_PROVIDER = "openai"
-PROVIDER_NAMES = ("openai", "claude")
+PROVIDER_NAMES = ("openai",)
 
 
 class ProviderError(RuntimeError):
@@ -25,7 +24,6 @@ class ModelInfo:
     id: str
     provider: str
     label: str
-    vision: bool = False
 
 
 @dataclass
@@ -89,7 +87,7 @@ class Provider(Protocol):
 
 
 def parse_ref(ref: str) -> Tuple[str, str]:
-    """``"claude:claude-sonnet-5-5"`` → ``("claude", "claude-sonnet-5-5")``.
+    """``"openai:chat-default"`` → ``("openai", "chat-default")``.
 
     A bare id belongs to :data:`DEFAULT_PROVIDER`. Only the first ``:`` splits,
     and only when the prefix is a known provider name — some OpenAI-compatible

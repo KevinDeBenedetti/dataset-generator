@@ -109,8 +109,7 @@ class TestDatasetPipeline:
             content_type="application/pdf",
             dataset_name="test_dataset",
             target_language="en",
-            model_qa="gpt-4o-mini",
-            model_vlm="vlm-x",
+            model="openai:llm-x",
             similarity_threshold=0.9,
             persist=False,
         )
@@ -122,8 +121,12 @@ class TestDatasetPipeline:
 
         llm_inst = mock_llm_service_class.return_value
         assert llm_inst.extract_text_from_image.call_count == 2
-        # The chosen VLM model is threaded through to the extraction call.
-        assert llm_inst.extract_text_from_image.call_args.kwargs["model"] == "vlm-x"
+        # The one LLM transcribes the pages and mines them.
+        assert llm_inst.extract_text_from_image.call_args.kwargs["model"] == (
+            "openai:llm-x"
+        )
+        agent = mock_qa_agent_service_class.return_value
+        assert agent.generate_qa.call_args.args[2] == "openai:llm-x"
 
         assert mock_qa_service.process_qa_pairs.call_count == 2
         # Saved items use a file:// source.
@@ -149,7 +152,7 @@ class TestDatasetPipeline:
         mock_render_pages,
         mock_qa_service,
     ):
-        """A page the VLM can't transcribe is skipped (no QA generation/saving)."""
+        """A page the LLM can't transcribe is skipped (no QA generation/saving)."""
         mock_render_pages.return_value = _FakePages(
             [
                 ("doc.pdf p.1", b"img1", "image/png"),
@@ -171,8 +174,7 @@ class TestDatasetPipeline:
             content_type="application/pdf",
             dataset_name="test_dataset",
             target_language="en",
-            model_qa="gpt-4o-mini",
-            model_vlm="vlm-x",
+            model="openai:llm-x",
             persist=False,
         )
 
@@ -211,19 +213,18 @@ class TestProcessUrl:
             url="https://docs.example.com/guide",
             dataset_name="ds",
             target_language="en",
-            model_cleaning="openai:clean",
-            model_qa="claude:claude-sonnet-5-5",
+            model="openai:llm-x",
             persist=False,
         )
 
         raw, model = llm_class.return_value.clean_text.call_args.args
         assert "Install it with make." in raw and "menu" not in raw
-        assert model == "openai:clean"
+        assert model == "openai:llm-x"
         text, lang, qa_model = agent_class.return_value.generate_qa.call_args.args
         assert (text, lang, qa_model) == (
             "Guide. Install it with make.",
             "en",
-            "claude:claude-sonnet-5-5",
+            "openai:llm-x",
         )
         assert mock_qa_service.process_qa_pairs.call_args.kwargs["url"] == (
             "https://docs.example.com/guide"
@@ -246,8 +247,7 @@ class TestProcessUrl:
             url="https://x.dev",
             dataset_name="ds",
             target_language="en",
-            model_cleaning="openai:c",
-            model_qa="openai:q",
+            model="openai:m",
             persist=False,
         )
         llm_class.return_value.clean_text.assert_not_called()

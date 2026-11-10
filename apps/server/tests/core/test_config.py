@@ -83,22 +83,13 @@ class TestReasoningEffort:
 
 
 class TestDefaultModels:
-    """OPENAI_LLM_MODEL is the default LLM of every text role, the jobs too."""
+    """OPENAI_LLM_MODEL is the one LLM: every step, the jobs too."""
 
-    def test_the_jobs_take_the_default_llm(self, monkeypatch):
-        monkeypatch.delenv("QA_JOB_MODEL", raising=False)
+    def test_the_llm_is_the_one_configured_model(self, monkeypatch):
         monkeypatch.setenv("OPENAI_LLM_MODEL", "chat-default")
-        assert Config().qa_job_model == "chat-default"
-
-    def test_qa_job_model_still_wins(self, monkeypatch):
-        monkeypatch.setenv("OPENAI_LLM_MODEL", "chat-default")
-        monkeypatch.setenv("QA_JOB_MODEL", "claude:claude-sonnet-5-5")
-        assert Config().qa_job_model == "claude:claude-sonnet-5-5"
-
-    def test_without_either_the_jobs_run_on_claude(self, monkeypatch):
-        monkeypatch.delenv("QA_JOB_MODEL", raising=False)
+        assert Config().available_models == ["chat-default"]
         monkeypatch.setenv("OPENAI_LLM_MODEL", "")
-        assert Config().qa_job_model == "claude:claude-sonnet-5-5"
+        assert Config().available_models == []
 
     def test_the_default_embedding_and_the_admins_server_llm(self, monkeypatch):
         monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "embed-default")
@@ -122,8 +113,6 @@ def _config(monkeypatch, **env) -> Config:
         "GITHUB_CLIENT_SECRET": "gh-secret",
     }
     for key in (
-        "CI",
-        "GITHUB_ACTIONS",
         "INFOMANIAK_CLIENT_ID",
         "INFOMANIAK_CLIENT_SECRET",
         "API_PUBLIC_URL",
@@ -205,9 +194,8 @@ class TestDerivedFromEnvironment:
         assert cfg.session_cookie_name == "__Host-session"
         assert cfg.enable_local_login is False
         assert cfg.docs_enabled is False
-        # Users bring their own keys; the Claude subscription never runs.
+        # Users bring their own keys.
         assert cfg.allow_env_credentials is False
-        assert cfg.claude_provider_available is False
         assert cfg.allowed_llm_hosts == ["api.openai.com"]
         assert cfg.allow_custom_base_url is False
         # A public deployment creates no account until an admin opens sign-up.
@@ -221,16 +209,7 @@ class TestDerivedFromEnvironment:
         assert cfg.enable_local_login is True
         assert cfg.docs_enabled is True
         assert cfg.allow_env_credentials is True
-        assert cfg.claude_provider_available is True
         assert cfg.allow_signup is True
-
-    def test_claude_runs_in_ci_but_never_on_a_deployed_server(self, monkeypatch):
-        ci = _config(monkeypatch, GITHUB_ACTIONS="true")
-        assert ci.claude_provider_available
-        assert ci.production_problems() == []  # the CI job is not a deployment
-        deployed = _config(monkeypatch)
-        deployed.enable_claude_provider = True  # forced on: still unavailable
-        assert deployed.claude_provider_available is False
 
     def test_local_login_can_be_switched(self, monkeypatch):
         assert _config(monkeypatch, ENABLE_LOCAL_LOGIN="true").enable_local_login

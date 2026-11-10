@@ -7,11 +7,12 @@ from server.core.database import Base
 
 
 class ModelDefault(Base):
-    """The model a role uses for one user when a request names none — set on /models.
+    """The LLM one user's steps run on when a request names none — set on /models.
 
-    One row per (user, role) with roles cleaning, qa, vision, jobs; ``model_ref``
-    is a ``"<provider>:<model>"`` reference (see services/providers). A role with
-    no row falls back to the environment (services/model_defaults.py).
+    One row per user, role ``llm`` (the per-step roles were folded into it by
+    migration 5d6e7f8091a2); ``model_ref`` is a ``"<provider>:<model>"``
+    reference (see services/providers). A user with no row falls back to
+    OPENAI_LLM_MODEL (services/model_defaults.py).
     """
 
     __tablename__ = "model_defaults"

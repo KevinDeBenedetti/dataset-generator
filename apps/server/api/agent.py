@@ -35,8 +35,7 @@ class QAAgentTestRequest(BaseModel):
     )
     model: Optional[str] = Field(
         None,
-        description='Model reference, e.g. "claude:claude-sonnet-5-5" '
-        "(defaults to the qa role default)",
+        description='Model reference, e.g. "openai:chat-default" (default: your LLM)',
     )
 
 
@@ -62,11 +61,9 @@ async def qa_agent_test(
     creds: Credentials = Depends(get_credentials),
 ) -> QAAgentTestResponse:
     try:
-        # The role default comes from the database: resolve it off the loop.
+        # Your LLM comes from the database: resolve it off the loop.
         model = await run_in_threadpool(
-            lambda: validate_ref(
-                resolve_model("qa", request.model, user_id=user.id), creds
-            )
+            lambda: validate_ref(resolve_model(request.model, user_id=user.id), creds)
         )
     except ValueError as exc:
         raise HTTPException(

@@ -241,7 +241,9 @@ def delete_account(
     db.flush()
     db.delete(user)
     db.commit()
-    for name in vectors:  # best effort: the account is gone either way
+    # Best effort: the account is gone either way. A build still running drops
+    # what it writes next (services/collections.py `_write_batch`).
+    for name in vectors:
         drop(name)
 
 

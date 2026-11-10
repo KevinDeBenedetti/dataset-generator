@@ -27,10 +27,9 @@ FROM base AS dependencies
 # Copy only dependency files to maximize cache
 COPY pyproject.toml uv.lock ./
 
-# Use cache mount to speed up installation. The `jobs` group (Claude Agent SDK)
-# is included so the GitHub page's Q&A jobs can run on the Claude provider.
+# Use cache mount to speed up installation.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --group jobs
+    uv sync --frozen --no-dev
 
 # =============================================================================
 # Stage: dev
@@ -66,26 +65,18 @@ EXPOSE ${APP_PORT}
 # the read-only pyproject.toml/uv.lock mounts and is a no-op when already synced.
 # Then --reload-dir limits the watcher to the source so it does not watch
 # /app/.venv (thousands of files, churned by bytecode writes).
-CMD ["sh", "-c", "uv sync --frozen --no-dev --group jobs && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]
+CMD ["sh", "-c", "uv sync --frozen --no-dev && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]
 
 # =============================================================================
 # Stage: prod-dependencies
-# Runtime packages only (no dev tools, no Claude SDK: the Claude subscription
-# provider never runs on a deployed server) plus the local embedding model,
-# downloaded here so a pod never fetches ~220 MB at startup.
+# Runtime packages only, no dev tools. The models run on the OpenAI-compatible
+# endpoint: nothing to download into the image.
 # =============================================================================
 FROM base AS prod-dependencies
-
-ARG SEMANTIC_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-ENV FASTEMBED_CACHE_PATH=/opt/fastembed
 
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
-
-# HF_HUB_OFFLINE is deliberately NOT set anywhere: Hugging Face uploads and
-# token checks need the Hub at runtime.
-RUN /app/.venv/bin/python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${SEMANTIC_MODEL}')"
 
 # =============================================================================
 # Stage: prod
@@ -109,11 +100,9 @@ ENV PATH=/app/.venv/bin:$PATH \
     HOME=/home/app \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    FASTEMBED_CACHE_PATH=/opt/fastembed \
     WEB_CONCURRENCY=1
 
 COPY --from=prod-dependencies /app/.venv /app/.venv
-COPY --from=prod-dependencies /opt/fastembed /opt/fastembed
 # The package lives at /app/server (PYTHONPATH=/app); alembic.ini's
 # script_location is relative to /app.
 COPY ./apps/server ./server

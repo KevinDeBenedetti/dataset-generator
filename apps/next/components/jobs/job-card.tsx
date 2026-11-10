@@ -533,13 +533,9 @@ export function JobCard({ job }: { job: JobInfo }) {
               id={`model-${job.id}`}
               value={modelRef}
               onChange={setModelRef}
-              modelRole="jobs"
               disabled={running}
               className="input"
             />
-            <div className="hint">
-              Claude models bill against the subscription; OpenAI models against the API key.
-            </div>
           </div>
         )}
 

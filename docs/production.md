@@ -54,12 +54,10 @@ What a deployment runs, from the server image:
 | Migration Job | `python -m server.cli migrate`                       | runs once per release, before the pods roll    |
 
 Set `RUN_MIGRATIONS_ON_STARTUP=false` on the API and the worker when a Job migrates.
-Containers run as uid 10001 and need no writable root filesystem. The local
-embedding model is baked into the server image; `HF_HUB_OFFLINE` must stay unset
-(uploads and token checks need the Hub). Leave `ENVIRONMENT` unset (= production),
-and do not set `ALLOW_ENV_CREDENTIALS` or `ENABLE_CLAUDE_PROVIDER`: they no longer
-exist — production never offers Claude, and lends the server's keys for one
-thing only. With `SERVER_LLM_FOR_ADMINS=true`, admins who saved no
+Containers run as uid 10001 and need no writable root filesystem.
+`HF_HUB_OFFLINE` must stay unset (uploads and token checks need the Hub). Leave
+`ENVIRONMENT` unset (= production), and do not set `ALLOW_ENV_CREDENTIALS`: it
+no longer exists — production lends the server's keys for one thing only. With `SERVER_LLM_FOR_ADMINS=true`, admins who saved no
 OpenAI-compatible key of their own call `OPENAI_BASE_URL` with
 `OPENAI_API_KEY`: point them at a gateway you run (an in-cluster
 `http://…:4000/v1` LiteLLM Service is fine) with a virtual key of its own, so
@@ -73,7 +71,5 @@ Required in the deployment's secrets/config: `DATABASE_URL`, `AUTH_SECRET_KEY`,
 needs only `API_INTERNAL_URL` (the API's in-cluster URL).
 
 [Vector collections](./collections.md) are off until the API and the worker get
-`QDRANT_URL` (and `QDRANT_API_KEY`). A collection built with the model baked
-into the image works as is; any other model is downloaded on first use into
-`FASTEMBED_CACHE_PATH`, which must then be a volume writable by uid 10001 on
-both workloads.
+`QDRANT_URL` (and `QDRANT_API_KEY`); they embed on the users' endpoints, so
+nothing more is needed.

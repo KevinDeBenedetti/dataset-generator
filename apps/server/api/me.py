@@ -25,12 +25,7 @@ from server.schemas.me import (
 )
 from server.services import identities, user_secrets
 from server.services.auth import get_current_user, require_recent_login
-from server.core.config import config
-from server.services.credentials import (
-    ANTHROPIC_API_KEY,
-    CLAUDE_TOKEN,
-    SECRET_KINDS,
-)
+from server.services.credentials import SECRET_KINDS
 from server.services.providers.openai import check_base_url
 from server.services.rate_limit import secrets_rate_limiter
 from server.services.secret_validation import check_secret
@@ -44,10 +39,8 @@ def _no_store(response: Response) -> None:
 
 
 def _available_kinds() -> list[str]:
-    """Secret kinds this server can use (no Claude outside development/CI)."""
-    if config.claude_provider_available:
-        return list(SECRET_KINDS)
-    return [k for k in SECRET_KINDS if k not in (CLAUDE_TOKEN, ANTHROPIC_API_KEY)]
+    """The secret kinds a user can save."""
+    return list(SECRET_KINDS)
 
 
 def _kind(kind: str) -> str:

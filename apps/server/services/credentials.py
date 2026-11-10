@@ -29,15 +29,13 @@ from server.core.config import _env, config
 
 # Secret kinds (the ``kind`` of a ``user_secrets`` row) and what each one is.
 OPENAI_API_KEY = "openai_api_key"
-CLAUDE_TOKEN = "claude_token"  # noqa: S105 — a kind's name, not a value
-ANTHROPIC_API_KEY = "anthropic_api_key"
 HF_TOKEN = "hf_token"  # noqa: S105 — a kind's name, not a value
 GITHUB_TOKEN = "github_token"  # noqa: S105 — a kind's name, not a value
 
-SECRET_KINDS = (OPENAI_API_KEY, CLAUDE_TOKEN, ANTHROPIC_API_KEY, HF_TOKEN, GITHUB_TOKEN)
+SECRET_KINDS = (OPENAI_API_KEY, HF_TOKEN, GITHUB_TOKEN)
 # Kinds whose last four characters are safe to show ("…sk-…a1b2"). An OAuth
 # token's tail says as much about the account as its head, so those get none.
-HINT_KINDS = (OPENAI_API_KEY, ANTHROPIC_API_KEY, HF_TOKEN, GITHUB_TOKEN)
+HINT_KINDS = (OPENAI_API_KEY, HF_TOKEN, GITHUB_TOKEN)
 
 # Non-secret settings a user can save, and the env var each falls back to.
 SETTING_ENV = {
@@ -49,8 +47,6 @@ SETTING_ENV = {
 }
 _SECRET_ENV = {
     OPENAI_API_KEY: "OPENAI_API_KEY",
-    CLAUDE_TOKEN: "CLAUDE_CODE_OAUTH_TOKEN",
-    ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY",
     HF_TOKEN: "HF_TOKEN",
     GITHUB_TOKEN: "GITHUB_TOKEN",
 }
@@ -64,8 +60,6 @@ def _secret(value: Optional[str]) -> Optional[SecretStr]:
 @dataclass(frozen=True)
 class Credentials:
     openai_api_key: Optional[SecretStr] = None
-    claude_token: Optional[SecretStr] = None
-    anthropic_api_key: Optional[SecretStr] = None
     hf_token: Optional[SecretStr] = None
     github_token: Optional[SecretStr] = None
     openai_base_url: str = ""
