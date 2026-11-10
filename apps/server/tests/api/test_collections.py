@@ -19,6 +19,7 @@ from qdrant_client import QdrantClient
 from server.api import collections as api_collections
 from server.core.config import config
 from server.services import collections, hub, qdrant, queue
+from server.services.providers import get_provider
 from server.services.users import create_user
 from server.tests.creds import FULL
 from server.tests.fake_embedder import FakeEmbedder
@@ -50,11 +51,13 @@ def client(alice, client_for):
 
 @pytest.fixture
 def stack(monkeypatch, datasets_db):
-    """Qdrant in memory, the fake model, a one-split dataset, and the jobs,
-    the worker and the build on the test database."""
+    """Qdrant in memory, the endpoint's model faked, a one-split dataset, and
+    the jobs, the worker and the build on the test database."""
     vectors = QdrantClient(":memory:")
     monkeypatch.setattr(config, "qdrant_url", "http://qdrant.test:6333")
     monkeypatch.setattr(qdrant, "get_client", lambda: vectors)
+    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    monkeypatch.setattr(get_provider("openai"), "_discovered", {})
     monkeypatch.setattr(collections, "_embedder", lambda model, creds: FakeEmbedder())
     for target in (
         "server.services.jobs.get_scoped_db",

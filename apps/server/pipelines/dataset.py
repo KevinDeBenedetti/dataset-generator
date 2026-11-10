@@ -94,16 +94,15 @@ class DatasetPipeline:
         content_type: str,
         dataset_name: str,
         target_language: Union[str, TargetLanguage],
-        model_qa: str,
-        model_vlm: str,
+        model: str,
         similarity_threshold: Optional[Union[float, str]] = None,
         persist: bool = True,
         on_progress: Optional[ProgressFn] = None,
     ) -> Dict[str, Any]:
         """Generate a QA dataset from an uploaded file (PDF or image).
 
-        The file is rasterised to one image per page and transcribed with the
-        vision model; each page's text is then mined for QA pairs (see
+        The file is rasterised to one image per page and transcribed by
+        ``model``; each page's text is then mined for QA pairs (see
         :meth:`_mine`). Pairs are stored with a ``file://<name>`` source.
         """
         run = _Run(on_progress)
@@ -134,7 +133,7 @@ class DatasetPipeline:
                     source.render, index
                 )
                 text = await self.llm_service.extract_text_from_image(
-                    image_bytes, mime_type=mime_type, model=model_vlm
+                    image_bytes, mime_type=mime_type, model=model
                 )
                 del image_bytes
                 if text:
@@ -147,7 +146,7 @@ class DatasetPipeline:
             "Transcribe pages",
             "success" if chars else "warning",
             t,
-            f"Transcribed {len(texts)} page(s) with {model_vlm} → {chars:,} characters"
+            f"Transcribed {len(texts)} page(s) with {model} → {chars:,} characters"
             if chars
             else "No readable text found in the file",
         )
@@ -159,7 +158,7 @@ class DatasetPipeline:
             dataset_name=dataset_name,
             source_url=source_url,
             target_language=_value(target_language),
-            model_qa=model_qa,
+            model_qa=model,
             similarity_threshold=similarity_threshold,
             persist=persist,
             pages=source.page_count,
@@ -171,8 +170,7 @@ class DatasetPipeline:
         url: str,
         dataset_name: str,
         target_language: Union[str, TargetLanguage],
-        model_cleaning: str,
-        model_qa: str,
+        model: str,
         similarity_threshold: Optional[Union[float, str]] = None,
         persist: bool = True,
         on_progress: Optional[ProgressFn] = None,
@@ -180,7 +178,7 @@ class DatasetPipeline:
         """Generate a QA dataset from one web page (no crawling).
 
         The page is fetched (see services/web.py for the SSRF/size guards),
-        reduced to text, cleaned by the ``model_cleaning`` model, then mined
+        reduced to text, cleaned by ``model``, then mined
         for QA pairs. Pairs are stored with the page URL as their source.
         """
         run = _Run(on_progress)
@@ -205,7 +203,7 @@ class DatasetPipeline:
         # 2. Clean it (drops leftover navigation, boilerplate).
         t = time.perf_counter()
         cleaned = (
-            await self.llm_service.clean_text(raw_text, model_cleaning)
+            await self.llm_service.clean_text(raw_text, model)
             if raw_text.strip()
             else ""
         )
@@ -214,7 +212,7 @@ class DatasetPipeline:
             "Clean text",
             "success" if cleaned else "warning",
             t,
-            f"Cleaned with {model_cleaning} → {len(cleaned):,} characters"
+            f"Cleaned with {model} → {len(cleaned):,} characters"
             if cleaned
             else "No text left to mine on this page",
         )
@@ -226,15 +224,15 @@ class DatasetPipeline:
             dataset_name=dataset_name,
             source_url=page.url,
             target_language=_value(target_language),
-            model_qa=model_qa,
+            model_qa=model,
             similarity_threshold=similarity_threshold,
             persist=persist,
             pages=1,
         )
 
     async def _qa_service(self, dataset_name: str) -> QAService:
-        # DB reads + embedding model load + one pass over the dataset's
-        # questions: all off the event loop, the CPU-heavy part on its own pool.
+        # DB reads + the embedding probe + one pass over the dataset's
+        # questions: all off the event loop, the heavy part on its own pool.
         rules = await asyncio.to_thread(get_quality_rules, self.owner_id)
         qa_service = QAService(
             self.owner_id, dataset_name, quality_rules=rules, creds=self.creds
@@ -270,7 +268,7 @@ class DatasetPipeline:
             qa_s += time.perf_counter() - t
 
             t = time.perf_counter()
-            # Embeddings (ONNX) and dedup queries: off the event loop, on the
+            # Embedding calls and the dedup pass: off the event loop, on the
             # CPU pool (core/cpu.py) so the heartbeats never queue behind them.
             text_stats = await cpu_bound(
                 qa_service.process_qa_pairs,

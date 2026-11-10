@@ -5,15 +5,8 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
-import { useModels, useTestModel, useUpdateModelDefaults } from '@/hooks/use-models'
+import { useModels, useTestModel, useUpdateDefaultModel } from '@/hooks/use-models'
 import type { ModelTestResponse, ProviderOut } from '@/api/types'
-
-const ROLE_INFO: Record<string, { label: string; hint: string }> = {
-  cleaning: { label: 'Cleaning', hint: 'Tidies web page text before Q&A generation' },
-  qa: { label: 'Q&A generation', hint: 'Writes the question/answer pairs, and judges scores' },
-  vision: { label: 'Vision', hint: 'Transcribes uploaded PDF and image pages' },
-  jobs: { label: 'Jobs', hint: 'GitHub datasets: whole-account jobs and recipes' },
-}
 
 function ProviderCard({ provider }: { provider: ProviderOut }) {
   const [selected, setSelected] = useState(provider.models[0]?.ref ?? '')
@@ -47,13 +40,6 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
             enable it.
           </p>
         )}
-        {provider.name === 'claude' && (
-          <p className="hint">
-            Calls go through the Claude Agent SDK with{' '}
-            <code className="mono">claude setup-token</code> and bill against your Claude
-            subscription.
-          </p>
-        )}
         {provider.configured && provider.endpoint && (
           <p className="hint">
             Calls go to <code className="mono">{provider.endpoint}</code>
@@ -65,9 +51,8 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {provider.models.length === 0 && <span className="muted">No models configured.</span>}
           {provider.models.map((m) => (
-            <span key={m.ref} className="tag mono" title={m.vision ? 'Vision-capable' : undefined}>
+            <span key={m.ref} className="tag mono">
               {m.label}
-              {m.vision ? ' · vision' : ''}
             </span>
           ))}
         </div>
@@ -127,20 +112,17 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
 
 // Set by the deployment (OPENAI_EMBEDDING_MODEL), not per user: the duplicate
 // thresholds belong to a model.
-function EmbeddingDefault({ model, local }: { model: string; local: string }) {
-  const onEndpoint = model.startsWith('openai:')
+function EmbeddingModel({ model }: { model: string }) {
   return (
     <div className="field">
-      <span className="label">Embeddings</span>
+      <span className="label">Embedding model</span>
       <div className="input mono" aria-readonly="true" title={model || undefined}>
-        {model ? model.replace(/^openai:/, '') : 'Off'}
+        {model ? model.replace(/^openai:/, '') : 'None'}
       </div>
       <div className="hint">
-        {!model
-          ? 'Duplicate and grounding checks are off: they compare the words instead.'
-          : onEndpoint
-            ? `Duplicate and grounding checks, and new collections, embed on your endpoint — with the local ${local.slice(local.lastIndexOf('/') + 1)} when it can't.`
-            : 'Duplicate and grounding checks, and new collections, embed with this local model.'}
+        {model
+          ? "Duplicate and grounding checks, and new collections, embed with it on your endpoint; when it doesn't answer, the checks compare the words."
+          : 'None on your endpoint (OPENAI_EMBEDDING_MODEL): the duplicate and grounding checks compare the words, and no collection can be built.'}
       </div>
     </div>
   )
@@ -148,18 +130,20 @@ function EmbeddingDefault({ model, local }: { model: string; local: string }) {
 
 export default function ModelsPage() {
   const modelsQuery = useModels(true)
-  const updateMutation = useUpdateModelDefaults()
-  // Only what the user has edited; everything else shows the saved defaults.
-  const [edits, setEdits] = useState<Record<string, string>>({})
+  const updateMutation = useUpdateDefaultModel()
+  // What the user picked, until it is saved; null shows the saved LLM.
+  const [edit, setEdit] = useState<string | null>(null)
 
-  const defaults = modelsQuery.data?.defaults
-  const draft: Record<string, string> = { ...defaults, ...edits }
-
-  const changed = Object.entries(draft).filter(([role, ref]) => ref && defaults?.[role] !== ref)
+  const saved = modelsQuery.data?.model ?? ''
+  const draft = edit ?? saved
+  const changed = draft !== '' && draft !== saved
 
   const save = () =>
-    updateMutation.mutate(Object.fromEntries(changed), {
-      onSuccess: () => toast.success('Model defaults saved'),
+    updateMutation.mutate(draft, {
+      onSuccess: () => {
+        setEdit(null)
+        toast.success('LLM saved')
+      },
       onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
     })
 
@@ -169,9 +153,8 @@ export default function ModelsPage() {
         <div>
           <h1 className="page-title">Models</h1>
           <p className="page-sub">
-            Model providers and the default model of each step. Any step can run on an
-            OpenAI-compatible endpoint (OpenAI, or a gateway such as LiteLLM) or, where it is
-            offered, on your Claude subscription; a generation can still pick another model.
+            Your LLM and the embedding model, on an OpenAI-compatible endpoint (OpenAI, or a gateway
+            such as LiteLLM). A generation can still pick another model.
           </p>
         </div>
         <div className="page-actions">
@@ -202,7 +185,7 @@ export default function ModelsPage() {
           <div className="card" style={{ marginBottom: 24 }}>
             <div className="card-head">
               <div>
-                <div className="card-title">Defaults</div>
+                <div className="card-title">Your models</div>
                 <div className="card-desc">Used whenever a request doesn&apos;t name a model.</div>
               </div>
             </div>
@@ -214,39 +197,37 @@ export default function ModelsPage() {
                 gap: 16,
               }}
             >
-              {modelsQuery.data.roles.map((role) => (
-                <div className="field" key={role}>
-                  <label htmlFor={`role-${role}`} className="label">
-                    {ROLE_INFO[role]?.label ?? role}
-                  </label>
-                  <ModelSelect
-                    id={`role-${role}`}
-                    value={draft[role] ?? ''}
-                    onChange={(ref) => setEdits((e) => ({ ...e, [role]: ref }))}
-                    allowDefault={false}
-                    disabled={updateMutation.isPending}
-                    className="input"
-                  />
-                  <div className="hint">{ROLE_INFO[role]?.hint}</div>
+              <div className="field">
+                <label htmlFor="default-llm" className="label">
+                  LLM
+                </label>
+                <ModelSelect
+                  id="default-llm"
+                  value={draft}
+                  onChange={setEdit}
+                  allowDefault={false}
+                  disabled={updateMutation.isPending}
+                  className="input"
+                />
+                <div className="hint">
+                  Every step: cleaning, Q&amp;A, scoring, the jobs, and the transcription of PDF and
+                  image pages — so it must read images.
                 </div>
-              ))}
-              <EmbeddingDefault
-                model={modelsQuery.data.embedding_model ?? ''}
-                local={modelsQuery.data.local_embedding_model ?? ''}
-              />
+              </div>
+              <EmbeddingModel model={modelsQuery.data.embedding_model ?? ''} />
             </div>
             <div className="card-foot" style={{ gap: 10 }}>
               <button
                 className="btn btn-primary"
                 type="button"
-                disabled={changed.length === 0 || updateMutation.isPending}
+                disabled={!changed || updateMutation.isPending}
                 onClick={save}
               >
                 <Icon
                   name={updateMutation.isPending ? 'loader' : 'check'}
                   className={updateMutation.isPending ? 'animate-spin' : undefined}
                 />
-                Save defaults
+                Save
               </button>
             </div>
           </div>

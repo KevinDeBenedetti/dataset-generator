@@ -124,14 +124,14 @@ async def score_dataset(
 ) -> Dict[str, Any]:
     """Score a dataset's pairs and store the results.
 
-    ``model`` is a model reference (default: the qa role default). Raises
+    ``model`` is a model reference (default: your LLM). Raises
     ValueError for an unknown dataset and :class:`ScoringNotConfiguredError`
     when the judge's provider isn't configured.
     """
-    model = resolve_model("qa", model, user_id=owner_id)
+    model = resolve_model(model, user_id=owner_id)
     provider = get_provider(parse_ref(model)[0]) if model else None
     if provider is None or not provider.configured(creds):
-        missing = ", ".join(provider.missing(creds)) if provider else "a qa model"
+        missing = ", ".join(provider.missing(creds)) if provider else "an LLM"
         raise ScoringNotConfiguredError(
             f"No judge model is usable — add {missing} in Settings to score Q/A pairs."
         )

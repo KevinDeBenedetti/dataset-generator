@@ -106,5 +106,5 @@ releases younger than a week (`exclude-newer` in `pyproject.toml`,
 `minimumReleaseAge` in `apps/next/bunfig.toml` — the same cooldown as
 dependabot); review the diff, then `make lint test`. Each cap or skipped release
 in `pyproject.toml` says why next to it: huggingface-hub stays below 2 until
-fastembed allows it, and PyMuPDF skips 2.0, whose import costs seconds and
-hundreds of megabytes in every process.
+the Hub code is checked against 2.x, and PyMuPDF skips 2.0, whose import costs
+seconds and hundreds of megabytes in every process.

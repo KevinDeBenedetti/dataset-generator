@@ -7,17 +7,12 @@ ColumnName = Annotated[str, StringConstraints(min_length=1, max_length=256)]
 
 
 class EmbeddingModelOut(BaseModel):
-    name: str = Field(
-        ..., description='A local model, or "openai:<id>" for an endpoint one'
-    )
-    dimensions: Optional[int] = None
-    size_mb: Optional[int] = Field(None, description="Download size, roughly")
-    languages: str
+    name: str = Field(..., description='"openai:<id>": a model of your endpoint')
     description: str
     provider: str = Field(
-        "local",
-        description='"local" (FastEmbed, on the server) or "openai" '
-        "(your OpenAI-compatible endpoint: the rows are sent to it)",
+        "openai",
+        description='"openai": your OpenAI-compatible endpoint (the rows are '
+        "sent to it)",
     )
 
 

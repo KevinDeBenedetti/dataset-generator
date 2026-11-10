@@ -40,8 +40,8 @@ class JobRunRequest(BaseModel):
     )
     model_ref: Optional[str] = Field(
         None,
-        description='Model reference, e.g. "claude:claude-sonnet-5-5" (jobs using a '
-        "model only; default: the jobs role default)",
+        description='Model reference, e.g. "openai:chat-default" (jobs using a '
+        "model only; default: your LLM)",
     )
 
 

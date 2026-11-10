@@ -11,18 +11,18 @@
 - **Hugging Face as the source of truth**: the **Datasets** section reads every
   published dataset from the Hub with your own token — data table, rendered
   card, per-column statistics, files and version history with row-level diffs
-- **Three sources**: uploaded files (PDF/image, transcribed by a vision model),
+- **Three sources**: uploaded files (PDF/image, transcribed by your LLM),
   single web pages, and GitHub recipes — your public repos as the model sees
   them, saved as the sources of a dataset
 - **Drafts before publication**: every generation waits as a draft (a numbered
   run, pairs idempotent by content hash) to review, check for duplicates and
   rule failures, then publish as a **private** dataset repo
 - **Vector collections**: embed a split of a published dataset into Qdrant
-  with a local model, then search it and run a retrieval test that shows which
-  questions don't find their own answer
-- **Your own model keys**: cleaning, Q&A and vision run on each user's
-  OpenAI-compatible key (or a Claude subscription in local development), with
-  per-step defaults on the **Models** page
+  with your endpoint's embedding model, then search it and run a retrieval
+  test that shows which questions don't find their own answer
+- **Two models, your own keys**: one LLM for every step and one embedding
+  model, on each user's OpenAI-compatible key and endpoint, the LLM picked on
+  the **Models** page
 - **GitHub datasets**: Q&A pairs and a retrieval corpus from your whole GitHub
   account, generated on demand from the **GitHub** page and run by a worker
 - **Per-user isolation**: datasets, runs and settings belong to their owner;

@@ -1,8 +1,8 @@
 """Live checks of a key or token before it is stored (and on demand afterwards).
 
 Each check calls a fixed provider endpoint (api.openai.com or the user's vetted
-base URL through the SSRF guard, huggingface.co, api.github.com,
-api.anthropic.com) with the candidate secret, so a typo or a revoked key is
+base URL through the SSRF guard, huggingface.co, api.github.com)
+with the candidate secret, so a typo or a revoked key is
 caught at save time instead of in the middle of a run. Messages never include
 the secret or the provider's raw response.
 """
@@ -17,8 +17,6 @@ from pydantic import SecretStr
 
 from server.services.providers.openai import OpenAIProvider
 from server.services.credentials import (
-    ANTHROPIC_API_KEY,
-    CLAUDE_TOKEN,
     GITHUB_TOKEN,
     HF_TOKEN,
     OPENAI_API_KEY,
@@ -105,44 +103,10 @@ async def _github(creds: Credentials) -> Check:
     return Check(False, True, f"GitHub answered HTTP {response.status_code}")
 
 
-async def _anthropic(creds: Credentials) -> Check:
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_S, trust_env=False) as client:
-            response = await client.get(
-                "https://api.anthropic.com/v1/models",
-                headers={
-                    "x-api-key": creds.secret(ANTHROPIC_API_KEY),
-                    "anthropic-version": "2023-06-01",
-                },
-            )
-    except httpx.HTTPError:
-        return Check(False, True, "Could not reach Anthropic to check the key")
-    if response.status_code == 200:
-        return Check(True, True, "The key works")
-    if response.status_code in (401, 403):
-        return Check(False, True, "Anthropic rejected this key")
-    return Check(False, True, f"Anthropic answered HTTP {response.status_code}")
-
-
-async def _claude_token(creds: Credentials) -> Check:
-    # A subscription token can only be exercised by running the Claude CLI, which
-    # spends usage — so it is checked for shape only.
-    token = creds.secret(CLAUDE_TOKEN)
-    if not token.startswith("sk-ant-"):
-        return Check(
-            False,
-            True,
-            "That does not look like a Claude token (run `claude setup-token`)",
-        )
-    return Check(True, False, "Saved — it is verified the first time a model runs")
-
-
 _CHECKS = {
     OPENAI_API_KEY: _openai,
     HF_TOKEN: _huggingface,
     GITHUB_TOKEN: _github,
-    ANTHROPIC_API_KEY: _anthropic,
-    CLAUDE_TOKEN: _claude_token,
 }
 
 

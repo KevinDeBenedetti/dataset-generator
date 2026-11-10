@@ -2,8 +2,9 @@
 
 import { datasetHref } from '../hub/format'
 
-/** A model of the OpenAI-compatible endpoint is named `openai:<id>`; any other
- * name is a local model (services/semantic.py). */
+/** A collection model is one of the OpenAI-compatible endpoint's, named
+ * `openai:<id>` (services/semantic.py); a collection built before the local
+ * models were removed still names one of those. */
 export const ENDPOINT_PREFIX = 'openai:'
 
 export function isEndpointModel(name: string): boolean {
@@ -14,18 +15,6 @@ export function isEndpointModel(name: string): boolean {
 export function modelLabel(name: string): string {
   const id = isEndpointModel(name) ? name.slice(ENDPOINT_PREFIX.length) : name
   return id.slice(id.lastIndexOf('/') + 1)
-}
-
-/** The create form's model choices: the endpoint's first (the default), then
- * the local ones — empty groups left out, the server's order kept. */
-export function modelGroups<T extends { name: string }>(
-  models: T[],
-): { label: string; models: T[] }[] {
-  const groups = [
-    { label: 'Your endpoint', models: models.filter((m) => isEndpointModel(m.name)) },
-    { label: 'Local, on the server', models: models.filter((m) => !isEndpointModel(m.name)) },
-  ]
-  return groups.filter((g) => g.models.length > 0)
 }
 
 /** 0.754 → `75%`; 1 → `100%`; a share under 1% but above 0 → `<1%`. */
@@ -89,32 +78,18 @@ export function rowHref(
 
 /** Python that queries the collection outside the app: same model, same name. */
 export function pythonSnippet(collection: { model: string; qdrant_collection: string }): string {
-  const embedding = isEndpointModel(collection.model)
-    ? [
-        'from openai import OpenAI',
-        'from qdrant_client import QdrantClient',
-        '',
-        '# The OpenAI-compatible endpoint and key the collection was built with.',
-        'llm = OpenAI(base_url="https://your-endpoint/v1", api_key="sk-…")',
-        '# QDRANT_URL of the server; the local stack publishes it on localhost:6353.',
-        'client = QdrantClient(url="http://localhost:6353")',
-        '',
-        'vector = llm.embeddings.create(',
-        `    model=${JSON.stringify(modelId(collection.model))}, input="your question"`,
-        ').data[0].embedding',
-      ]
-    : [
-        'from fastembed import TextEmbedding',
-        'from qdrant_client import QdrantClient',
-        '',
-        `model = TextEmbedding(${JSON.stringify(collection.model)})`,
-        '# QDRANT_URL of the server; the local stack publishes it on localhost:6353.',
-        'client = QdrantClient(url="http://localhost:6353")',
-        '',
-        'vector = next(model.query_embed("your question")).tolist()',
-      ]
   return [
-    ...embedding,
+    'from openai import OpenAI',
+    'from qdrant_client import QdrantClient',
+    '',
+    '# The OpenAI-compatible endpoint and key the collection was built with.',
+    'llm = OpenAI(base_url="https://your-endpoint/v1", api_key="sk-…")',
+    '# QDRANT_URL of the server; the local stack publishes it on localhost:6353.',
+    'client = QdrantClient(url="http://localhost:6353")',
+    '',
+    'vector = llm.embeddings.create(',
+    `    model=${JSON.stringify(modelId(collection.model))}, input="your question"`,
+    ').data[0].embedding',
     'hits = client.query_points(',
     `    ${JSON.stringify(collection.qdrant_collection)}, query=vector, limit=5`,
     ').points',

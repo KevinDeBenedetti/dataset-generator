@@ -49,9 +49,8 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
   const [target, setTarget] = useState<string | null>(initialTarget || null)
   const [targetLanguage, setTargetLanguage] = useState<string>('fr')
   const [similarityThreshold, setSimilarityThreshold] = useState([0.85])
-  // '' = the role default set on the Models page.
-  const [modelQa, setModelQa] = useState('')
-  const [modelSource, setModelSource] = useState('')
+  // '' = your LLM, set on the Models page.
+  const [model, setModel] = useState('')
 
   const hub = useHubDatasets()
   const generateMutation = useGenerateDataset()
@@ -80,14 +79,14 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
       targetRepo,
       targetLanguage,
       similarityThreshold: similarityThreshold[0] ?? 0.85,
-      modelQa: modelQa || null,
+      model: model || null,
     }
 
     try {
       await generateMutation.mutateAsync(
         source === 'file'
-          ? { ...common, source: 'file', file: file as File, modelVlm: modelSource || null }
-          : { ...common, source: 'url', url: url.trim(), modelCleaning: modelSource || null },
+          ? { ...common, source: 'file', file: file as File }
+          : { ...common, source: 'url', url: url.trim() },
       )
       toast.success('Draft ready: review it before it goes to Hugging Face')
     } catch (err) {
@@ -138,10 +137,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
             <button
               key={opt.value}
               type="button"
-              onClick={() => {
-                setSource(opt.value)
-                setModelSource('')
-              }}
+              onClick={() => setSource(opt.value)}
               disabled={isProcessing}
               className={`rounded-md py-1.5 text-sm font-medium transition-colors ${
                 source === opt.value
@@ -164,7 +160,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
               className="text-sm file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground"
             />
             <span className="text-xs text-gray-400">
-              PDF or image — each page is transcribed with the vision model.
+              PDF or image — each page is transcribed by the model, then mined for Q&amp;A.
             </span>
           </div>
         )}
@@ -189,35 +185,17 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
           <h4 className="text-sm font-medium mb-2">Advanced options</h4>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="model-qa" className="text-xs text-gray-500">
-                  Q&amp;A model
-                </label>
-                <ModelSelect
-                  id="model-qa"
-                  value={modelQa}
-                  onChange={setModelQa}
-                  modelRole="qa"
-                  ariaLabel="Q&A model"
-                  disabled={isProcessing}
-                  className={SELECT_CLASS}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor="model-source" className="text-xs text-gray-500">
-                  {source === 'file' ? 'Vision model' : 'Cleaning model'}
-                </label>
-                <ModelSelect
-                  id="model-source"
-                  value={modelSource}
-                  onChange={setModelSource}
-                  modelRole={source === 'file' ? 'vision' : 'cleaning'}
-                  ariaLabel={source === 'file' ? 'Vision model' : 'Cleaning model'}
-                  disabled={isProcessing}
-                  className={SELECT_CLASS}
-                />
-              </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="model" className="text-xs text-gray-500">
+                Model
+              </label>
+              <ModelSelect
+                id="model"
+                value={model}
+                onChange={setModel}
+                disabled={isProcessing}
+                className={SELECT_CLASS}
+              />
             </div>
 
             <div className="flex flex-col gap-1 border-t pt-3">

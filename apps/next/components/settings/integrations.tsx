@@ -38,7 +38,7 @@ const GROUPS: Group[] = [
   {
     title: 'OpenAI-compatible endpoint',
     description:
-      'Your own key, on OpenAI or a gateway such as LiteLLM, pays for cleaning, Q&A generation, vision and the embeddings run on it. Admins without a key of their own may use the server’s endpoint, when the server offers it.',
+      'Your own key, on OpenAI or a gateway such as LiteLLM, pays for your LLM (every generation step) and the embedding model. Admins without a key of their own may use the server’s endpoint, when the server offers it.',
     secrets: [
       {
         kind: 'openai_api_key',
@@ -55,26 +55,6 @@ const GROUPS: Group[] = [
         help: 'Your gateway’s URL, if your administrator allows it. Leave empty for OpenAI. Your key is only ever sent here.',
       },
     ],
-  },
-  {
-    title: 'Claude',
-    description:
-      'Use your Claude subscription (or an Anthropic API key) for any model step. Not available when the administrator has disabled it.',
-    secrets: [
-      {
-        kind: 'claude_token',
-        label: 'Subscription token',
-        placeholder: 'sk-ant-oat01-…',
-        help: 'Run `claude setup-token` in a terminal and paste the result.',
-      },
-      {
-        kind: 'anthropic_api_key',
-        label: 'Anthropic API key (instead)',
-        placeholder: 'sk-ant-api03-…',
-        help: 'Billed per token. Used only when there is no subscription token.',
-      },
-    ],
-    settings: [],
   },
   {
     title: 'Hugging Face',

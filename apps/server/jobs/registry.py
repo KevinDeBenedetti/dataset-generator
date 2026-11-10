@@ -456,7 +456,8 @@ JOBS: Dict[str, JobSpec] = {
             id=COLLECTION_JOB_ID,
             title="Vector collection",
             description="Embeds a split of one of your Hugging Face datasets into "
-            "Qdrant with a local model, so the Collections page can search and "
+            "Qdrant with an embedding model of your endpoint, so the Collections "
+            "page can search and "
             "test it. Started from the Collections page.",
             requires=(_HF_TOKEN,),
             uses_model=False,

@@ -81,5 +81,5 @@ async def test_extract_text_from_image_failure_returns_empty():
 
 
 async def test_extract_text_from_image_requires_a_model():
-    with pytest.raises(ValueError, match="vision model"):
+    with pytest.raises(ValueError, match="No LLM"):
         await LLMService(FULL).extract_text_from_image(b"x", model="")

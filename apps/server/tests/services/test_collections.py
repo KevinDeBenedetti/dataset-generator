@@ -1,12 +1,13 @@
 """Vector collections (services/collections.py): define, build, search, test.
 
-Qdrant runs in qdrant-client's in-memory mode and the model is the
-bag-of-words fake, so the whole flow, the worker's build included, runs
-without a Qdrant server or a model download. The Hub is faked at its two read
+Qdrant runs in qdrant-client's in-memory mode and the model, the endpoint's
+OPENAI_EMBEDDING_MODEL, is the bag-of-words fake, so the whole flow, the
+worker's build included, runs without a Qdrant server or an endpoint call. The Hub is faked at its two read
 calls; the split itself is a real Arrow table.
 """
 
 import asyncio
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -98,6 +99,15 @@ def db(monkeypatch, test_engine):
     session.commit()
     yield session
     session.close()
+
+
+@pytest.fixture(autouse=True)
+def endpoint_model(monkeypatch):
+    """The endpoint (FULL's) serves one embedding model, nothing discovered."""
+    from server.services.providers import get_provider
+
+    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    monkeypatch.setattr(get_provider("openai"), "_discovered", {})
 
 
 @pytest.fixture
@@ -215,7 +225,7 @@ def test_a_new_collection_pins_the_latest_commit_and_queues_its_build(
     assert created["status"] == "building"
     assert created["revision"] == SHA
     assert (created["config"], created["split"]) == ("default", "train")
-    assert created["model"] == collections.collection_models()[0].name
+    assert created["model"] == "openai:embed-default"
     assert created["run_id"] == "run-1"
     assert queued == [created["id"]]
     # Named after the row's id, behind the deployment's prefix.
@@ -224,17 +234,12 @@ def test_a_new_collection_pins_the_latest_commit_and_queues_its_build(
     )
 
 
-def test_with_an_endpoint_a_collection_defaults_to_its_embedding_model(
-    db, vectors, fake_hub, queued, embedder, monkeypatch
+def test_a_collection_is_built_and_searched_on_the_owners_credentials(
+    db, vectors, fake_hub, queued, embedder
 ):
-    """OPENAI_EMBEDDING_MODEL is the first choice, built and searched on the
-    owner's own credentials; the local models stay selectable."""
-    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    """OPENAI_EMBEDDING_MODEL is the default, on the owner's own endpoint."""
     created = _define(db)
     assert created["model"] == "openai:embed-default"
-    assert _define(db, name="Local", model=config.semantic_model)["model"] == (
-        config.semantic_model
-    )
 
     asyncio.run(_build_now(created["id"]))
     collections.search(db, OWNER, created["id"], "capital", creds=FULL)
@@ -246,7 +251,7 @@ def test_what_a_collection_can_not_be_built_from_is_refused(
     db, vectors, fake_hub, queued, monkeypatch
 ):
     with pytest.raises(collections.CollectionInputError, match="not one of"):
-        _define(db, model="some/huge-model")
+        _define(db, model="BAAI/bge-small-en-v1.5")  # a local model: gone
     with pytest.raises(collections.CollectionInputError, match="at least one"):
         _define(db, text_columns=[""])
     with pytest.raises(hub.HubNotFoundError):
@@ -256,6 +261,9 @@ def test_what_a_collection_can_not_be_built_from_is_refused(
     fake_hub.size = config.max_hub_view_bytes + 1
     with pytest.raises(hub.HubTooLargeError, match="collection"):
         _define(db)
+    monkeypatch.setattr(config, "openai_embedding_model", "")
+    with pytest.raises(collections.CollectionInputError, match="embedding model"):
+        _define(db)  # the endpoint serves none
     monkeypatch.setattr(config, "qdrant_url", "")
     with pytest.raises(qdrant.QdrantNotConfiguredError):
         _define(db)
@@ -375,6 +383,95 @@ async def test_the_worker_runs_the_build_from_the_queue(
     assert ("Points", 4) in [tuple(m) for m in run["result"]["metrics"]]
     db.expire_all()
     assert collections.get_collection(db, OWNER, created["id"])["status"] == "ready"
+
+
+# --- a build whose account is deleted ----------------------------------------------
+
+
+def _delete_account(collection_id):
+    """What deleting the owner's account does to a collection: its row goes
+    with the user, then its Qdrant collection is dropped (services/admin.py)."""
+    with collections.get_scoped_db() as session:
+        session.query(VectorCollection).filter(
+            VectorCollection.id == collection_id
+        ).delete()
+        session.commit()
+    qdrant.drop(qdrant.collection_name(collection_id))
+
+
+def _deleting_at(embedder, call, collection_id):
+    """The fake embeds as before, and the account goes during its ``call``-th
+    batch (1: before anything was stored)."""
+    real, calls = embedder.fake.embed_passages, []
+
+    def embed(texts):
+        calls.append(len(texts))
+        if len(calls) == call:
+            _delete_account(collection_id)
+        return real(texts)
+
+    embedder.fake.embed_passages = embed
+    return calls
+
+
+def test_a_build_whose_account_went_leaves_no_vectors(
+    db, vectors, embedder, fake_hub, queued
+):
+    # The account's collections were already dropped when the first batch is
+    # stored: that batch creates this one again, then finds its row gone.
+    created = _define(db)
+    _deleting_at(embedder, 1, created["id"])
+
+    with pytest.raises(collections.CollectionBuildError, match="deleted"):
+        asyncio.run(_build_now(created["id"]))
+    assert not vectors.collection_exists(qdrant.collection_name(created["id"]))
+
+
+def test_a_build_stops_at_the_batch_after_its_account_went(
+    db, vectors, embedder, fake_hub, queued, monkeypatch
+):
+    monkeypatch.setattr(collections, "BUILD_BATCH", 2)  # 4 rows to embed: 2 batches
+    created = _define(db)
+    calls = _deleting_at(embedder, 2, created["id"])
+
+    with pytest.raises(collections.CollectionBuildError, match="deleted"):
+        asyncio.run(_build_now(created["id"]))
+    assert calls == [2, 2]
+    assert not vectors.collection_exists(qdrant.collection_name(created["id"]))
+
+
+async def test_a_cancelled_build_still_drops_what_it_wrote_for_a_gone_account(
+    db, vectors, embedder, fake_hub, queued, monkeypatch
+):
+    """The worker cancels a deleted account's build — its run went with the
+    account — while a batch is being stored: the batch still checks."""
+    created = await collections.create_collection(
+        db, OWNER, FULL, {"name": "Gone", "repo_id": REPO, "text_columns": ["answer"]}
+    )
+    name = qdrant.collection_name(created["id"])
+    _deleting_at(embedder, 1, created["id"])
+    storing, release = threading.Event(), threading.Event()
+    real_upsert = qdrant.upsert
+
+    def slow_upsert(*args, **kwargs):
+        storing.set()
+        release.wait(5)
+        return real_upsert(*args, **kwargs)
+
+    monkeypatch.setattr(qdrant, "upsert", slow_upsert)
+    task = asyncio.create_task(collections.build(FULL, created["id"], lambda *_: None))
+    assert await asyncio.to_thread(storing.wait, 5)
+    task.cancel()
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # The batch's thread outlives the cancellation, and drops the collection.
+    for _ in range(250):
+        if not vectors.collection_exists(name):
+            break
+        await asyncio.sleep(0.02)
+    assert not vectors.collection_exists(name)
 
 
 def _row(**values):
@@ -604,9 +701,10 @@ def test_the_listing_offers_the_models_and_says_whether_qdrant_is_set_up(
     db, monkeypatch
 ):
     monkeypatch.setattr(config, "qdrant_url", "")
-    listed = collections.list_collections(db, OWNER)
+    listed = collections.list_collections(db, OWNER, FULL)
 
     assert listed["qdrant_configured"] is False
-    assert listed["models"][0]["name"] == config.semantic_model
-    assert {m["name"] for m in listed["models"]} >= {"BAAI/bge-small-en-v1.5"}
+    assert [m["name"] for m in listed["models"]] == ["openai:embed-default"]
+    # No endpoint, nothing to build with.
+    assert collections.list_collections(db, OWNER)["models"] == []
     assert listed["quota"] == config.quota_collections

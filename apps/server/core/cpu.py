@@ -1,9 +1,10 @@
-"""The executor for CPU-bound work: embeddings, dedup passes, HTML stripping.
+"""The executor for heavy blocking work: dedup passes, HTML stripping, and the
+embedding batches sent to the endpoint.
 
 Off the default thread pool on purpose. The worker's heartbeats, the API's
 database calls and every other short blocking call share that pool, and a few
 large uploads' worth of embedding batches would queue them behind minutes of
-CPU work — long enough for ``services.queue.reap_stale`` to take a live run for
+work — long enough for ``services.queue.reap_stale`` to take a live run for
 a dead one. ``EMBEDDED_WORKER`` (``make dev-local``), where the API and the
 worker share one process, suffers first. The pool is also bounded to the cores,
 so the work doesn't oversubscribe them.

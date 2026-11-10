@@ -46,12 +46,10 @@ def noop(done, total, label):
 
 @pytest.fixture(autouse=True)
 def jobs_model(monkeypatch):
-    """The jobs role default, without a DB."""
+    """Your LLM, without a DB."""
     monkeypatch.setattr(
         "server.services.jobs.resolve_model",
-        lambda role, override=None, user_id=None: (
-            override or "claude:claude-sonnet-5-5"
-        ),
+        lambda override=None, user_id=None: override or "openai:chat-default",
     )
     monkeypatch.setattr("server.services.jobs.validate_ref", lambda ref, creds: ref)
 
@@ -68,7 +66,7 @@ def _draft():
     dataset = QADataset(
         [kept, new1, new2], 0, [], kept=1, new=2, review=[held], new_ids=["n1", "n2"]
     )
-    return Draft(dataset, "kevin", "ns/qa", False, "claude:claude-sonnet-5-5")
+    return Draft(dataset, "kevin", "ns/qa", False, "openai:chat-default")
 
 
 # --- catalogue ------------------------------------------------------------------
@@ -84,7 +82,7 @@ def test_list_jobs_reports_what_to_add_in_settings():
         "your GitHub username",
         "your Hugging Face token",
         "the Q&A dataset repo",
-        "your Claude token (`claude setup-token`) or Anthropic API key",
+        "your API key (and endpoint)",
     ]
     assert personal["uses_model"] and personal["has_draft"]
     corpus = _job(jobs, "knowledge-corpus")
@@ -162,7 +160,7 @@ async def test_github_personal_publishes_the_reviewed_selection():
         "username": "kevin",
         "repo_id": "ns/qa",
         "full_refresh": False,
-        "model_ref": "claude:claude-sonnet-5-5",
+        "model_ref": "openai:chat-default",
     }
     publisher = JOBS["github-personal"].publisher
     assert publisher is not None

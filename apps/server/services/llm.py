@@ -73,14 +73,15 @@ class LLMService:
         mime_type: str = "image/png",
         model: Optional[str] = None,
     ) -> str:
-        """Transcribe an image (or rendered PDF page) to text with a vision model.
+        """Transcribe an image (or rendered PDF page) to text with ``model``,
+        the LLM (it must read images).
 
         Returns the transcribed text, or an empty string if the call fails or
-        the page has no readable text. Raises ``ValueError`` if no vision model
-        is given.
+        the page has no readable text. Raises ``ValueError`` if no model is
+        given.
         """
         if not model:
-            raise ValueError("No vision model configured (set it on /models)")
+            raise ValueError("No LLM configured (set it on /models)")
         try:
             result = await complete(
                 model,
@@ -93,5 +94,5 @@ class LLMService:
             )
             return result.text
         except Exception as e:
-            logging.error(f"VLM text extraction failed: {e}")
+            logging.error(f"Page transcription failed: {e}")
             return ""

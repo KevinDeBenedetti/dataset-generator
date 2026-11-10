@@ -86,9 +86,13 @@ services:
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:${SERVER_PORT:-8020}}
       # Expose /debug/logs (SSE) for the dev log console when DEBUG_LOGS=1.
       DEBUG_LOGS: ${DEBUG_LOGS:-}
-      # Local embedding model (services/semantic.py), cached in the
-      # fastembed_cache volume so it is downloaded once, not per container.
-      FASTEMBED_CACHE_PATH: /app/.cache/fastembed
+      # The development accounts, admin@example.com / admin1234 and
+      # user@example.com / user1234, seeded at startup (services/users.py).
+      # Those weak passwords are the code's own, used in development only:
+      # outside it seeding refuses them, so DEV_*_PASSWORD pass through empty.
+      SEED_DEV_USERS: ${SEED_DEV_USERS:-true}
+      DEV_ADMIN_PASSWORD: ${DEV_ADMIN_PASSWORD:-}
+      DEV_USER_PASSWORD: ${DEV_USER_PASSWORD:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -114,7 +118,6 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - server_venv:/app/.venv
-      - fastembed_cache:/app/.cache/fastembed
     restart: always
     # Source is bind-mounted above for uvicorn --reload; watch rebuilds the image
     # when Python dependencies change.
@@ -140,7 +143,6 @@ services:
       # The worker builds the collections: it embeds and stores the vectors.
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      FASTEMBED_CACHE_PATH: /app/.cache/fastembed
       RUN_MIGRATIONS_ON_STARTUP: "false"
     build:
       context: .
@@ -154,7 +156,6 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - server_venv:/app/.venv
-      - fastembed_cache:/app/.cache/fastembed
     restart: always
     stop_grace_period: 30s
 
@@ -251,7 +252,6 @@ services:
 volumes:
   next_node_modules:
   server_venv:
-  fastembed_cache:
   postgres18_data:
   qdrant_storage:
   redis_data:

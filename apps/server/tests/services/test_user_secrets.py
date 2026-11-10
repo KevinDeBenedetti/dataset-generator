@@ -12,7 +12,6 @@ from server.models.user import User
 from server.models.user_secret import UserSecret
 from server.services import user_secrets
 from server.services.credentials import (
-    CLAUDE_TOKEN,
     HF_TOKEN,
     OPENAI_API_KEY,
     Credentials,
@@ -67,12 +66,10 @@ def test_the_database_never_holds_the_plaintext(store):
 
 def test_statuses_are_write_only(store):
     set_secret(ALICE, OPENAI_API_KEY, CANARY)
-    set_secret(ALICE, CLAUDE_TOKEN, "sk-ant-oat01-" + "x" * 30)
 
     statuses = secret_statuses(ALICE)
     assert statuses[OPENAI_API_KEY]["configured"] is True
     assert statuses[OPENAI_API_KEY]["hint"] == CANARY[-4:]
-    assert statuses[CLAUDE_TOKEN]["hint"] is None  # OAuth tokens get no hint
     assert statuses[HF_TOKEN]["configured"] is False
     assert CANARY not in repr(statuses)
 

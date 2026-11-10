@@ -119,6 +119,8 @@ import type {
   JobRunOut,
   ModelsResponse,
   ModelTestResponse,
+  ResumeOut,
+  ResumesOut,
   UrlGenerationRequest,
 } from './gen/types.gen'
 
@@ -174,8 +176,8 @@ export interface GenerateFromFileParams {
   file: File
   datasetName: string
   targetLanguage?: string | null
-  modelQa?: string | null
-  modelVlm?: string | null
+  // A "<provider>:<model>" reference; omitted = your LLM.
+  model?: string | null
   similarityThreshold?: number
   targetRepo?: string | null
 }
@@ -188,8 +190,7 @@ export async function generateDatasetFromFile(
   form.append('file', params.file)
   form.append('dataset_name', params.datasetName)
   if (params.targetLanguage) form.append('target_language', params.targetLanguage)
-  if (params.modelQa) form.append('model_qa', params.modelQa)
-  if (params.modelVlm) form.append('model_vlm', params.modelVlm)
+  if (params.model) form.append('model', params.model)
   if (params.similarityThreshold != null) {
     form.append('similarity_threshold', String(params.similarityThreshold))
   }
@@ -214,8 +215,8 @@ export async function generateDatasetFromFile(
   return (await response.json()) as DatasetGenerationResponse
 }
 
-// Generate a dataset from one web page (no crawling). Model fields are
-// "<provider>:<model>" references; omitted ones use the role defaults.
+// Generate a dataset from one web page (no crawling). `model` is a
+// "<provider>:<model>" reference; omitted = your LLM.
 export async function generateDatasetFromUrl(
   body: UrlGenerationRequest,
 ): Promise<DatasetGenerationResponse> {
@@ -323,9 +324,9 @@ export async function resolvePair(
   return response.data as unknown as ResolvePairResponse
 }
 
-// Model providers (OpenAI API, Claude subscription), their models and the
-// default model reference of each role (cleaning, qa, vision, jobs).
-// `discover` also asks the OpenAI-compatible endpoint which models it serves.
+// The model provider (your OpenAI-compatible endpoint) with its models, your
+// LLM and the embedding model. `discover` also asks the endpoint which models
+// it serves.
 export async function getModels(discover = false): Promise<ModelsResponse> {
   const response = await client.get<ModelsResponse>({
     url: `/models${discover ? '?discover=true' : ''}`,
@@ -336,17 +337,15 @@ export async function getModels(discover = false): Promise<ModelsResponse> {
   return response.data as unknown as ModelsResponse
 }
 
-// Set your default model of one or more roles.
-export async function updateModelDefaults(
-  defaults: Record<string, string>,
-): Promise<ModelsResponse> {
+// Set your LLM: the model of every step.
+export async function updateDefaultModel(model: string): Promise<ModelsResponse> {
   const response = await client.put<ModelsResponse>({
-    url: '/models/defaults',
-    body: { defaults },
+    url: '/models/default',
+    body: { model },
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to save the model defaults'))
+    throw new Error(getErrorMessage(response.error, 'Failed to save your LLM'))
   }
   return response.data as unknown as ModelsResponse
 }
@@ -765,6 +764,15 @@ export function getGitHubDoc(owner: string, repo: string, path: string): Promise
   return hubGet(githubPath(owner, repo, `/doc${toQuery({ path })}`), 'Failed to read the file')
 }
 
+// Reactive Resume (admins only): the resumes the server's API key can read.
+export function getResumes(): Promise<ResumesOut> {
+  return hubGet('/resumes', 'Failed to list your resumes')
+}
+
+export function getResume(id: string): Promise<ResumeOut> {
+  return hubGet(`/resumes/${encodeURIComponent(id)}`, 'Failed to read the resume')
+}
+
 export function getRecipes(): Promise<RecipesOut> {
   return hubGet('/recipes', 'Failed to list your recipes')
 }
@@ -1092,12 +1100,7 @@ export async function unlinkIdentity(id: string): Promise<void> {
 
 // --- Your keys and integration settings --------------------------------------
 
-export type SecretKind =
-  | 'openai_api_key'
-  | 'claude_token'
-  | 'anthropic_api_key'
-  | 'hf_token'
-  | 'github_token'
+export type SecretKind = 'openai_api_key' | 'hf_token' | 'github_token'
 
 export type SettingKey =
   | 'openai_base_url'

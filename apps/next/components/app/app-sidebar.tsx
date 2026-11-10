@@ -20,6 +20,8 @@ type NavItem = {
   label: string
   href: string
   count?: string
+  // Pages whose routes answer admins only (the server's own keys).
+  adminOnly?: boolean
 }
 
 const NAV: { label: string; items: NavItem[] }[] = [
@@ -31,6 +33,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { icon: 'boxes', label: 'Collections', href: '/collections' },
       { icon: 'fileText', label: 'Drafts', href: '/drafts' },
       { icon: 'github', label: 'GitHub', href: '/github' },
+      { icon: 'user', label: 'Resume', href: '/resume', adminOnly: true },
       { icon: 'sparkles', label: 'Generate', href: '/generate' },
     ],
   },
@@ -92,20 +95,22 @@ export function AppSidebar() {
         {NAV.map((group) => (
           <div className="sb-group" key={group.label}>
             <div className="sb-label">{group.label}</div>
-            {group.items.map((it) => {
-              const count = it.href in counts ? counts[it.href] : it.count
-              return (
-                <Link
-                  key={it.href}
-                  href={it.href}
-                  className={cn('sb-link', isActive(it.href) && 'active')}
-                >
-                  <Icon name={it.icon} />
-                  <span>{it.label}</span>
-                  {count && <span className="count">{count}</span>}
-                </Link>
-              )
-            })}
+            {group.items
+              .filter((it) => !it.adminOnly || user?.role === 'admin')
+              .map((it) => {
+                const count = it.href in counts ? counts[it.href] : it.count
+                return (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    className={cn('sb-link', isActive(it.href) && 'active')}
+                  >
+                    <Icon name={it.icon} />
+                    <span>{it.label}</span>
+                    {count && <span className="count">{count}</span>}
+                  </Link>
+                )
+              })}
             {/* Real Hugging Face connection status, not a nav destination —
                 links out to the account's Hub profile once connected. */}
             {group.label === 'Configuration' &&

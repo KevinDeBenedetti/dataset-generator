@@ -39,14 +39,6 @@ def _is_dev_env() -> bool:
     )
 
 
-def _is_ci() -> bool:
-    """Running in a CI job (GitHub Actions sets both variables)."""
-    return any(
-        _env(name, "").strip().lower() in ("1", "true", "yes")
-        for name in ("GITHUB_ACTIONS", "CI")
-    )
-
-
 def _flag(name: str, default: bool) -> bool:
     raw = _env(name, "")
     if not raw:
@@ -77,7 +69,7 @@ class Config:
 
     # --- Deployment ---------------------------------------------------------
     # "development" for local runs; anything else (or unset) is production and
-    # fails closed: secure cookies, SSO only, no server keys, no Claude, strict
+    # fails closed: secure cookies, SSO only, no server keys, strict
     # startup checks (see production_problems).
     environment: str = field(
         default_factory=lambda: _env("ENVIRONMENT", "production").strip().lower()
@@ -184,14 +176,14 @@ class Config:
     # --- Model providers ----------------------------------------------------
     # The models of the OpenAI-compatible endpoint (OpenAI, or a gateway such as
     # LiteLLM) a user calls with their own key — or the server's, see below.
-    # The default LLM: cleaning, Q&A generation and the dataset jobs.
+    # The LLM of every step — cleaning, Q&A generation, the pages of an uploaded
+    # PDF or image (so it must read images), the dataset jobs — unless a user
+    # picks another on the Models page.
     openai_llm_model: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
-    # The default vision model (uploaded PDF and image pages).
-    openai_vlm_model: str = field(default_factory=lambda: _env("OPENAI_VLM_MODEL", ""))
-    # The default embedding (services/semantic.py): the duplicate, grounding and
+    # The embedding model (services/semantic.py): the duplicate, grounding and
     # coverage checks, and the first choice of a new vector collection. Blank —
-    # or for a user without an endpoint, or whose endpoint doesn't serve it —
-    # the local SEMANTIC_MODEL embeds instead.
+    # or for a user whose endpoint doesn't serve it — the checks compare the
+    # text itself, and a collection can only use the endpoint's other models.
     openai_embedding_model: str = field(
         default_factory=lambda: _env("OPENAI_EMBEDDING_MODEL", "")
     )
@@ -212,20 +204,16 @@ class Config:
     server_llm_for_admins: bool = field(
         default_factory=lambda: _flag("SERVER_LLM_FOR_ADMINS", False)
     )
-    # The Claude subscription provider runs in local development and CI only.
-    enable_claude_provider: bool = field(
-        default_factory=lambda: _is_dev_env() or _is_ci()
+
+    # --- Reactive Resume (services/reactive_resume.py) ----------------------
+    # The Resume page lists what this API key of the operator's account can
+    # read, on this instance (its root; blank: the hosted https://rxresu.me).
+    # Server secrets, so only admins reach them (api/resumes.py).
+    reactive_resume_url: str = field(
+        default_factory=lambda: _env("REACTIVE_RESUME_URL", "")
     )
-    # Model ids the Claude provider offers (comma-separated; default: built-in list).
-    claude_models_raw: str = field(default_factory=lambda: _env("CLAUDE_MODELS", ""))
-    # Model of the dataset jobs when neither the run nor the Models page names
-    # one: QA_JOB_MODEL, else the default LLM, else Claude (development).
-    qa_job_model: str = field(
-        default_factory=lambda: (
-            _env("QA_JOB_MODEL", "")
-            or _env("OPENAI_LLM_MODEL", "")
-            or "claude:claude-sonnet-5-5"
-        )
+    reactive_resume_api_key: str = field(
+        default_factory=lambda: _env("REACTIVE_RESUME_API_KEY", ""), repr=False
     )
 
     # --- Jobs ---------------------------------------------------------------
@@ -265,38 +253,18 @@ class Config:
         default_factory=lambda: _flag("PERSIST_DATASETS", True)
     )
 
-    # --- Local embeddings (services/semantic.py) ----------------------------
-    # FastEmbed/ONNX, no API call: semantic dedup, the "don't ask these again"
-    # list, uncovered sections and the answer grounding check — unless
-    # OPENAI_EMBEDDING_MODEL embeds them on the endpoint. Disabled (or when no
-    # model can embed), callers fall back to the lexical path. The thresholds
-    # below were measured on the default local model.
-    semantic_enabled: bool = field(
-        default_factory=lambda: _flag("SEMANTIC_ENABLED", True)
-    )
-    semantic_model: str = field(
-        default_factory=lambda: _env(
-            "SEMANTIC_MODEL",
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        )
-    )
+    # --- Embedding checks (services/semantic.py) ----------------------------
+    # Semantic dedup, the "don't ask these again" list, uncovered sections and
+    # the answer grounding check, on OPENAI_EMBEDDING_MODEL; without it the
+    # checks compare the text itself. Measured on MiniLM, before the endpoint
+    # embedding (🤖 in TODO.md: re-measure them on it).
     # Question ↔ question cosine at or above which a new pair is a duplicate.
-    semantic_dedup_threshold: float = field(
-        default_factory=lambda: float(_env("SEMANTIC_DEDUP_THRESHOLD", "0.85"))
-    )
+    semantic_dedup_threshold: float = 0.85
     # Answer ↔ best source chunk cosine below which the answer is flagged for
     # review (faithful paraphrases score ~0.45–0.65, off-topic ~0.3–0.4).
-    answer_grounding_threshold: float = field(
-        default_factory=lambda: float(_env("ANSWER_GROUNDING_THRESHOLD", "0.35"))
-    )
+    answer_grounding_threshold: float = 0.35
     # Source section ↔ best question cosine below which a section is uncovered.
-    uncovered_section_threshold: float = field(
-        default_factory=lambda: float(_env("UNCOVERED_SECTION_THRESHOLD", "0.4"))
-    )
-    # Where the ~220 MB model is cached (FastEmbed's default is a temp dir).
-    fastembed_cache_path: str = field(
-        default_factory=lambda: _env("FASTEMBED_CACHE_PATH", "")
-    )
+    uncovered_section_threshold: float = 0.4
 
     # --- Development --------------------------------------------------------
     # Seed the two local accounts (services/users.py).
@@ -306,7 +274,7 @@ class Config:
     debug_logs: bool = field(default_factory=lambda: _flag("DEBUG_LOGS", False))
 
     # --- Uploads ------------------------------------------------------------
-    # Every page of an upload is rasterised and sent to the vision model, so
+    # Every page of an upload is rasterised and sent to the LLM, so
     # these bound the work one request can cause (one page is rendered at a
     # time, so the memory is one page's).
     max_upload_bytes: int = _MAX_UPLOAD_BYTES
@@ -336,7 +304,7 @@ class Config:
     hub_resolve_ttl_seconds: float = 30.0
 
     # --- Vector collections (services/collections.py) --------------------------
-    # A split of a Hub dataset embedded with a local model into Qdrant, then
+    # A split of a Hub dataset embedded on the endpoint into Qdrant, then
     # searched and tested from the app. Off until QDRANT_URL is set.
     qdrant_url: str = field(default_factory=lambda: _env("QDRANT_URL", ""))
     qdrant_api_key: str = field(default_factory=lambda: _env("QDRANT_API_KEY", ""))
@@ -354,9 +322,7 @@ class Config:
     temperature: float = 0.0
     # Default language when a request names none.
     target_language: str = "en"
-    model_cleaning: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
-    model_qa: str = field(default_factory=lambda: _env("OPENAI_LLM_MODEL", ""))
-    # Every configured OpenAI model id, de-duplicated (filled in __post_init__).
+    # The configured OpenAI model ids: OPENAI_LLM_MODEL (filled in __post_init__).
     available_models: List[str] = field(default_factory=list)
 
     @property
@@ -429,11 +395,6 @@ class Config:
                 "Unsafe production configuration:\n  - " + "\n  - ".join(problems)
             )
 
-    @property
-    def claude_provider_available(self) -> bool:
-        """The Claude provider may run here: development or CI, and not switched off."""
-        return self.enable_claude_provider and (self.is_development or _is_ci())
-
     @staticmethod
     def _csv(raw: str) -> List[str]:
         return [part.strip().lower() for part in raw.split(",") if part.strip()]
@@ -491,13 +452,7 @@ class Config:
         self.github_redirect_uri = (
             self.github_redirect_uri or f"{api}/auth/github/callback"
         )
-        candidates = [
-            self.openai_llm_model,
-            self.openai_vlm_model,
-            self.model_cleaning,
-            self.model_qa,
-        ]
-        self.available_models = list(dict.fromkeys(m for m in candidates if m))
+        self.available_models = [self.openai_llm_model] if self.openai_llm_model else []
 
 
 config = Config()

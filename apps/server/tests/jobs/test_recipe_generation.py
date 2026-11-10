@@ -28,7 +28,7 @@ from server.tests.jobs.conftest import b64
 
 CREDS = make_creds(
     github_username="kevin",
-    anthropic_api_key="ak-000000000000",
+    openai_api_key="sk-000000000000",
     hf_token="hf_000000000000",
 )
 
@@ -180,7 +180,7 @@ async def test_generate_from_recipe(github):
         patch("server.services.huggingface._api", return_value=_hub()),
     ):
         draft = await qa_dataset.generate_from_recipe(
-            CREDS, recipe, model_ref="claude:m", complete=complete
+            CREDS, recipe, model_ref="openai:m", complete=complete
         )
 
     # A bare repo name is completed with the token's account.

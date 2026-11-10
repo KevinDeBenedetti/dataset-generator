@@ -50,15 +50,6 @@ async def test_github_token_ok_and_rejected():
     assert not result.ok and "Could not reach" in result.message
 
 
-async def test_anthropic_key_sends_only_its_own_key():
-    client = _Client(httpx.Response(200, json={}))
-    with _patch_http(client):
-        assert (
-            await check_secret("anthropic_api_key", "sk-ant-key-1", make_creds())
-        ).ok
-    assert client.seen[1]["x-api-key"] == "sk-ant-key-1"
-
-
 @pytest.mark.parametrize(
     "who, namespace, ok",
     [
@@ -133,10 +124,3 @@ async def test_openai_auth_failure_and_bad_endpoint_are_reported():
     creds = make_creds(openai_base_url="https://169.254.169.254/v1")
     result = await check_secret("openai_api_key", KEY, creds)
     assert not result.ok and "not an allowed endpoint" in result.message
-
-
-async def test_claude_token_is_only_shape_checked():
-    good = await check_secret("claude_token", "sk-ant-oat01-" + "a" * 30, make_creds())
-    assert good.ok and good.checked is False
-    bad = await check_secret("claude_token", "nope", make_creds())
-    assert not bad.ok and bad.checked is True

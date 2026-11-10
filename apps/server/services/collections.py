@@ -36,7 +36,6 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from server.core.config import config
-from server.core.cpu import cpu_bound
 from server.core.database import get_scoped_db
 from server.models.job_run import JobRun
 from server.models.vector_collection import VectorCollection
@@ -234,6 +233,11 @@ def _resolve_split(
 
 def _check_model(model: Optional[str], creds: Credentials) -> str:
     models = [m.name for m in collection_models(creds)]
+    if not models:
+        raise CollectionInputError(
+            "No embedding model to build with: add your API key (and endpoint) "
+            "in Settings, on an endpoint that serves OPENAI_EMBEDDING_MODEL"
+        )
     chosen = model or models[0]
     if chosen not in models:
         raise CollectionInputError(f"'{chosen}' is not one of the collection models")
@@ -472,6 +476,41 @@ def _save_build(collection_id: str, built: Dict[str, Any]) -> None:
         db.commit()
 
 
+def _defined(collection_id: str) -> bool:
+    with get_scoped_db() as db:
+        return db.get(VectorCollection, collection_id) is not None
+
+
+def _write_batch(
+    collection_id: str,
+    name: str,
+    ids: Sequence[int],
+    vectors: Any,
+    payloads: List[Dict[str, Any]],
+    new_size: Optional[int] = None,
+) -> None:
+    """Store one batch of points — ``new_size`` (the first batch) replaces the
+    vectors of an earlier build with an empty collection first — then check
+    that the collection still exists.
+
+    Its owner's account may be deleted mid-build: the deletion drops the
+    account's Qdrant collections once their rows are gone, and the first batch
+    would create this one again, the deleted user's text in it and nothing
+    pointing at it. A batch that finds its row gone drops what it wrote and
+    stops the build. The write and the check share this one thread: the worker
+    cancels a deleted account's build (its run goes with the account), and a
+    cancellation never stops a thread between the two.
+    """
+    try:
+        if new_size:
+            qdrant.recreate(name, new_size)
+        qdrant.upsert(name, ids, vectors, payloads)
+    finally:
+        if not _defined(collection_id):
+            qdrant.drop(name)
+            raise CollectionBuildError("The collection was deleted during its build.")
+
+
 def _cell(value: Any) -> str:
     if value is None:
         return ""
@@ -530,20 +569,26 @@ async def _build(
 
     progress(0, len(ids), "Loading the embedding model…")
     embedder = await asyncio.to_thread(_embedder, spec.model, creds)
-    # A local model computes (the CPU pool); an endpoint one waits on the
-    # network, which must not hold a CPU slot.
-    run = asyncio.to_thread if getattr(embedder, "remote", False) else cpu_bound
+    # The endpoint embeds: the batches wait on the network, not on a CPU slot.
+    run = asyncio.to_thread
     name = qdrant.collection_name(spec.id)
     vector_size = 0
     for start in range(0, len(ids), BUILD_BATCH):
         batch = ids[start : start + BUILD_BATCH]
         vectors = await run(embedder.embed_passages, [texts[i] for i in batch])
-        if not vector_size:
+        first = not vector_size
+        if first:
             vector_size = int(vectors.shape[1])
-            # Replaces the vectors of an earlier build.
-            await asyncio.to_thread(qdrant.recreate, name, vector_size)
         payloads = [_payload(i, texts[i], values, fields) for i in batch]
-        await asyncio.to_thread(qdrant.upsert, name, batch, vectors, payloads)
+        await asyncio.to_thread(
+            _write_batch,
+            spec.id,
+            name,
+            batch,
+            vectors,
+            payloads,
+            vector_size if first else None,
+        )
         progress(start + len(batch), len(ids), "Embedding rows")
 
     points = await asyncio.to_thread(qdrant.count, name)

@@ -15,17 +15,16 @@ holds vectors computed from it at one commit, and its definition.
 Open **Collections → New collection**, or **Build a collection** on a dataset's
 page, then pick:
 
-| Field                            | What it decides                                                                                                                                                                                                                                                                                         |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dataset and split                | The rows embedded, read at the dataset's latest commit. A split over 50 MB is refused, as in the viewer.                                                                                                                                                                                                |
-| Text to embed                    | One to four text columns, joined by a blank line. A row empty in all of them is skipped.                                                                                                                                                                                                                |
-| Questions for the retrieval test | The column the test asks with. For a Q/A split, the question column.                                                                                                                                                                                                                                    |
-| Embedding model                  | Your endpoint's embedding models first, when you have an OpenAI-compatible endpoint: `OPENAI_EMBEDDING_MODEL` (the default), then the others it serves. Then the local ones: multilingual MiniLM (the app's own, built into the image), BGE small or base (English, tuned for retrieval), or MiniLM L6. |
+| Field                            | What it decides                                                                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dataset and split                | The rows embedded, read at the dataset's latest commit. A split over 50 MB is refused, as in the viewer.                                                                              |
+| Text to embed                    | One to four text columns, joined by a blank line. A row empty in all of them is skipped.                                                                                              |
+| Questions for the retrieval test | The column the test asks with. For a Q/A split, the question column.                                                                                                                  |
+| Embedding model                  | One of your OpenAI-compatible endpoint's embedding models: `OPENAI_EMBEDDING_MODEL` (the default), or another it serves. Without an endpoint that embeds, no collection can be built. |
 
-The worker then reads the split with your own token and embeds every row. A
-local model runs on its CPU: nothing is sent to a model provider. An endpoint
-model (`openai:<id>`) runs on your OpenAI-compatible endpoint, with your key:
-every row is sent there. The page shows the progress; a build can be
+The worker then reads the split with your own token and embeds every row on
+your OpenAI-compatible endpoint (the model is named `openai:<id>`), with your
+key: every row is sent there. The page shows the progress; a build can be
 cancelled. Each row becomes a point whose id is the row's position in the
 split, and whose payload holds the embedded `text` and the row's text
 `fields`.
@@ -70,10 +69,8 @@ context) alone to measure retrieval.
 ## Use it from your own code
 
 **Use it** gives the collection's Qdrant name and a Python snippet that queries
-it with `qdrant-client` and `fastembed`. Embed queries with the same model, and
-with `query_embed`, as the build embedded the rows with `passage_embed`. For an
-endpoint model, the snippet embeds the query with the `openai` client on the
-same endpoint and model id instead.
+it with `qdrant-client`, embedding the query with the `openai` client on the
+same endpoint and model id as the build.
 
 ::: warning An endpoint model is named by its id
 A collection built with `openai:embed-default` is searched with whatever your
@@ -85,8 +82,12 @@ another model, or you switch to another endpoint, rebuild the collection.
 
 - Qdrant must be configured: see [Configuration](./configuration.md). Without
   it the page says so and offers nothing to build.
+- A collection built with one of the local models the server used to run
+  (multilingual MiniLM, BGE, MiniLM L6) can no longer be searched or rebuilt:
+  delete it and build it again with an endpoint model.
 - 20 collections per user, and one build at a time.
 - Builds count towards the job quotas (`QUOTA_ACTIVE_RUNS`,
   `QUOTA_RUNS_PER_DAY`, see [Jobs](./jobs.md)).
 - Deleting a collection drops its vectors; deleting your account drops all of
-  them. The data export lists your collections, without their vectors.
+  them, those of a build still running included. The data export lists your
+  collections, without their vectors.

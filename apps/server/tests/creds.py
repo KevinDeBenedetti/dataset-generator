@@ -20,7 +20,6 @@ def make_creds(**values: Any) -> Credentials:
 # Everything configured, the operator's endpoint (so no SSRF pinning in unit tests).
 FULL = make_creds(
     openai_api_key="test-openai-key",
-    claude_token="sk-ant-oat01-test-token",
     hf_token="hf_test_token",
     github_token="ghp_testtoken",
     github_username="kevin",

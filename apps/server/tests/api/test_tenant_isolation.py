@@ -182,7 +182,7 @@ _NOT_RESOURCE_ROUTES = {
     ("PUT", "/quality-rules"),
     ("GET", "/prompts"),
     ("GET", "/models"),
-    ("PUT", "/models/defaults"),
+    ("PUT", "/models/default"),
     ("POST", "/models/test"),
     ("POST", "/agent/qa-test"),
     ("GET", "/jobs"),
@@ -197,6 +197,10 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/me/identities"),
     ("GET", "/me/export"),
     ("DELETE", "/me"),
+    # Reactive Resume: admins only, read with the server's own key — nothing
+    # stored per user (tests/api/test_resumes.py checks the gate).
+    ("GET", "/resumes"),
+    ("GET", "/resumes/{resume_id}"),
     # The backoffice: admins only (tests/api/test_admin.py walks every route).
     ("GET", "/admin/users"),
     ("GET", "/admin/users/{user_id}"),

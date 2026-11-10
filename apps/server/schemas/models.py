@@ -8,7 +8,6 @@ class ModelInfoOut(BaseModel):
     id: str
     provider: str
     label: str
-    vision: bool
 
 
 class ProviderOut(BaseModel):
@@ -33,31 +32,26 @@ class ProviderOut(BaseModel):
 
 class ModelsResponse(BaseModel):
     providers: List[ProviderOut]
-    defaults: Dict[str, str] = Field(
-        ..., description="Model reference per role (cleaning, qa, vision, jobs)"
+    model: str = Field(
+        "",
+        description="Your LLM, for every step: the one you saved, else "
+        "OPENAI_LLM_MODEL",
     )
-    roles: List[str]
     embedding_model: str = Field(
         "",
         description="What the duplicate and grounding checks embed with: "
-        '"openai:<id>" (OPENAI_EMBEDDING_MODEL, on your endpoint) or a local model',
-    )
-    local_embedding_model: str = Field(
-        "",
-        description="The local model they fall back to ('' when the checks are off)",
+        '"openai:<id>" (OPENAI_EMBEDDING_MODEL, on your endpoint), "" without one',
     )
 
 
-class ModelDefaultsUpdate(BaseModel):
-    defaults: Dict[str, str] = Field(
-        ..., description="Roles to change, mapped to a model reference"
+class ModelDefaultUpdate(BaseModel):
+    model: str = Field(
+        ..., max_length=200, description='Model reference, e.g. "openai:chat-default"'
     )
 
 
 class ModelTestRequest(BaseModel):
-    ref: str = Field(
-        ..., description='Model reference, e.g. "claude:claude-sonnet-5-5"'
-    )
+    ref: str = Field(..., description='Model reference, e.g. "openai:chat-default"')
     prompt: str = Field(
         "Reply with one short sentence confirming you are reachable.",
         min_length=1,

@@ -8,17 +8,12 @@ import os
 os.environ["OPENAI_API_KEY"] = "test-api-key"
 os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
 os.environ["OPENAI_LLM_MODEL"] = "gpt-4o-mini"
-os.environ["OPENAI_VLM_MODEL"] = "mistral-small-3.1-24b-instruct-2503"
-# Never download the local embedding model in tests: code paths that use it
-# take an injected fake embedder (see tests/services/test_semantic.py).
-os.environ["SEMANTIC_ENABLED"] = "false"
+# No OPENAI_EMBEDDING_MODEL: the checks take their lexical path, and the code
+# that embeds takes an injected fake (see tests/services/test_semantic.py).
 # The auth tests exercise the local email/password login and the plain cookie
 # names; outside development the app turns the former off and prefixes the
 # latter with __Host- (see Config), so pin the test-suite values.
 os.environ["ENABLE_LOCAL_LOGIN"] = "true"
-# The Claude provider exists in development and CI only; the suite runs as CI
-# (GitHub Actions sets it anyway). Production behaviour is tested explicitly.
-os.environ["CI"] = "true"
 
 import pytest
 from contextlib import contextmanager
@@ -251,6 +246,7 @@ def _build_test_app(
         me,
         quality_rules,
         recipes,
+        resumes,
     )
     from server.services.auth import (
         get_current_user,
@@ -286,6 +282,7 @@ def _build_test_app(
     test_app.include_router(hub.router)
     test_app.include_router(github.router)
     test_app.include_router(recipes.router)
+    test_app.include_router(resumes.router)
     test_app.include_router(collections.router)
 
     @test_app.get("/")

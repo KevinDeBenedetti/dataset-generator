@@ -1,6 +1,6 @@
-"""Turn an uploaded file (PDF or image) into page images for VLM extraction.
+"""Turn an uploaded file (PDF or image) into page images the LLM transcribes.
 
-The file ingestion path rasterises every page so the vision model can read
+The file ingestion path rasterises every page so the LLM can read
 scanned/figure-heavy documents too — unlike a text-only PDF parser, which would
 silently drop image-only pages.
 """
@@ -22,7 +22,7 @@ SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 PDF_TYPES = {"application/pdf", "application/x-pdf"}
 
-# Render PDF pages at 2x (~144 DPI): enough for the VLM to read body text without
+# Render PDF pages at 2x (~144 DPI): enough for the LLM to read body text without
 # ballooning the base64 image payload sent on every request.
 _PDF_ZOOM = 2.0
 

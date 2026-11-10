@@ -104,9 +104,9 @@ class QAService:
     def prepare(self) -> None:
         """Load the pool, the model and the question index up front.
 
-        Blocking (DB read, model load, one embedding batch over the dataset's
-        questions): the async pipeline runs it in a worker thread so the event
-        loop isn't stalled. Calling it is optional — everything also loads
+        Blocking (DB read, the embedding probe, one embedding batch over the
+        dataset's questions): the async pipeline runs it in a worker thread so
+        the event loop isn't stalled. Calling it is optional — everything also loads
         lazily on the first :meth:`process_qa_pairs`.
         """
         self._load_existing_entries()

@@ -3,13 +3,11 @@
 import { useModels } from '@/hooks/use-models'
 
 interface ModelSelectProps {
-  // A "<provider>:<model>" reference, or '' for the role default.
+  // A "<provider>:<model>" reference, or '' for your LLM.
   value: string
   onChange: (ref: string) => void
-  // The role whose default the empty option stands for (cleaning, qa, vision, jobs).
-  modelRole?: string
-  // Offer the empty "role default" option (off on the Models page, where the
-  // select *is* the default).
+  // Offer the empty "your LLM" option (off on the Models page, where the
+  // select *is* your LLM).
   allowDefault?: boolean
   disabled?: boolean
   id?: string
@@ -25,7 +23,6 @@ const DEFAULT_CLASS =
 export function ModelSelect({
   value,
   onChange,
-  modelRole,
   allowDefault = true,
   disabled,
   id,
@@ -33,7 +30,7 @@ export function ModelSelect({
   className = DEFAULT_CLASS,
 }: ModelSelectProps) {
   const { data, isPending } = useModels()
-  const roleDefault = modelRole ? data?.defaults[modelRole] : undefined
+  const llm = data?.model
 
   return (
     <select
@@ -44,9 +41,7 @@ export function ModelSelect({
       aria-label={ariaLabel}
       className={className}
     >
-      {allowDefault && (
-        <option value="">{roleDefault ? `Default (${roleDefault})` : 'Server default'}</option>
-      )}
+      {allowDefault && <option value="">{llm ? `Your LLM (${llm})` : 'Your LLM'}</option>}
       {!allowDefault && !value && <option value="">Pick a model…</option>}
       {(data?.providers ?? []).map((provider) => {
         const models = provider.models

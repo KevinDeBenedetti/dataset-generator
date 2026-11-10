@@ -38,7 +38,7 @@ export function Result({ result }: ResultProps) {
         <CardTitle>{result.dataset_name}</CardTitle>
         <CardDescription>
           <div className="flex flex-wrap gap-2 mt-2">
-            <Badge variant="secondary">Model: {result.model_qa}</Badge>
+            <Badge variant="secondary">Model: {result.model}</Badge>
             <Badge variant="secondary">Threshold: {result.similarity_threshold}</Badge>
             <Badge variant="secondary">Language: {result.target_language}</Badge>
             {result.pages_crawled != null && (

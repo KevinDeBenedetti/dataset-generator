@@ -291,7 +291,7 @@
           "generate"
         ],
         "summary": "Generate a dataset from an uploaded file (PDF or image)",
-        "description": "Create or extend a dataset from an uploaded PDF or image. Each page is transcribed with a vision model (the vision role default unless model_vlm is given), then mined for question-answer pairs.",
+        "description": "Create or extend a dataset from an uploaded PDF or image. Each page is transcribed by your LLM (it must read images), then mined for question-answer pairs.",
         "operationId": "create_dataset_for_file_dataset_generate_file_post",
         "requestBody": {
           "content": {
@@ -2480,6 +2480,74 @@
         }
       }
     },
+    "/resumes": {
+      "get": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "Your resumes",
+        "description": "Every resume the server's Reactive Resume key can read, newest change first.",
+        "operationId": "get_resumes_resumes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resumes/{resume_id}": {
+      "get": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "One resume, as text",
+        "description": "Its basics, summary and visible sections, the rich text as plain text.",
+        "operationId": "get_resume_resumes__resume_id__get",
+        "parameters": [
+          {
+            "name": "resume_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Its id, from GET /resumes",
+              "title": "Resume Id"
+            },
+            "description": "Its id, from GET /resumes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/q_a/{dataset_name}/stats": {
       "get": {
         "tags": [
@@ -2700,7 +2768,7 @@
           "models"
         ],
         "summary": "List Models",
-        "description": "Every provider with its status and models, plus your per-role defaults.",
+        "description": "The provider with its status and models, your LLM and the embedding model.",
         "operationId": "list_models_models_get",
         "parameters": [
           {
@@ -2740,19 +2808,19 @@
         }
       }
     },
-    "/models/defaults": {
+    "/models/default": {
       "put": {
         "tags": [
           "models"
         ],
-        "summary": "Put Model Defaults",
-        "description": "Set your default model for one or more roles.",
-        "operationId": "put_model_defaults_models_defaults_put",
+        "summary": "Put Default Model",
+        "description": "Set your LLM: the model of every step.",
+        "operationId": "put_default_model_models_default_put",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModelDefaultsUpdate"
+                "$ref": "#/components/schemas/ModelDefaultUpdate"
               }
             }
           },
@@ -4220,29 +4288,18 @@
             ],
             "title": "Target Language"
           },
-          "model_qa": {
+          "model": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Model Qa",
-            "description": "Model reference for QA"
-          },
-          "model_vlm": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Vlm",
-            "description": "Model reference for page transcription"
+            "title": "Model",
+            "description": "Model reference (default: your LLM)"
           },
           "similarity_threshold": {
             "type": "number",
@@ -5125,20 +5182,15 @@
             "title": "Dataset Name",
             "description": "Name of the dataset"
           },
-          "model_cleaning": {
+          "model": {
             "type": "string",
-            "title": "Model Cleaning",
-            "description": "Model used to clean (URL) or transcribe (file) the source"
+            "title": "Model",
+            "description": "The model of every step"
           },
           "target_language": {
             "type": "string",
             "title": "Target Language",
             "description": "Target language used"
-          },
-          "model_qa": {
-            "type": "string",
-            "title": "Model Qa",
-            "description": "Model used for QA generation"
           },
           "similarity_threshold": {
             "type": "number",
@@ -5212,9 +5264,8 @@
           "id",
           "qa_pairs",
           "dataset_name",
-          "model_cleaning",
+          "model",
           "target_language",
-          "model_qa",
           "similarity_threshold",
           "total_questions",
           "processing_time"
@@ -5224,8 +5275,7 @@
         "example": {
           "dataset_name": "my_dataset",
           "id": "123e4567-e89b-12d3-a456-426614174000",
-          "model_cleaning": "gpt-3.5-turbo",
-          "model_qa": "gpt-4",
+          "model": "openai:chat-default",
           "processing_time": 45.2,
           "qa_pairs": [
             {
@@ -5773,34 +5823,7 @@
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "A local model, or \"openai:<id>\" for an endpoint one"
-          },
-          "dimensions": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dimensions"
-          },
-          "size_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Size Mb",
-            "description": "Download size, roughly"
-          },
-          "languages": {
-            "type": "string",
-            "title": "Languages"
+            "description": "\"openai:<id>\": a model of your endpoint"
           },
           "description": {
             "type": "string",
@@ -5809,14 +5832,13 @@
           "provider": {
             "type": "string",
             "title": "Provider",
-            "description": "\"local\" (FastEmbed, on the server) or \"openai\" (your OpenAI-compatible endpoint: the rows are sent to it)",
-            "default": "local"
+            "description": "\"openai\": your OpenAI-compatible endpoint (the rows are sent to it)",
+            "default": "openai"
           }
         },
         "type": "object",
         "required": [
           "name",
-          "languages",
           "description"
         ],
         "title": "EmbeddingModelOut"
@@ -8097,7 +8119,7 @@
               }
             ],
             "title": "Model Ref",
-            "description": "Model reference, e.g. \"claude:claude-sonnet-5-5\" (jobs using a model only; default: the jobs role default)"
+            "description": "Model reference, e.g. \"openai:chat-default\" (jobs using a model only; default: your LLM)"
           }
         },
         "type": "object",
@@ -8141,22 +8163,20 @@
         ],
         "title": "LoginRequest"
       },
-      "ModelDefaultsUpdate": {
+      "ModelDefaultUpdate": {
         "properties": {
-          "defaults": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Defaults",
-            "description": "Roles to change, mapped to a model reference"
+          "model": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Model",
+            "description": "Model reference, e.g. \"openai:chat-default\""
           }
         },
         "type": "object",
         "required": [
-          "defaults"
+          "model"
         ],
-        "title": "ModelDefaultsUpdate"
+        "title": "ModelDefaultUpdate"
       },
       "ModelInfoOut": {
         "properties": {
@@ -8176,10 +8196,6 @@
           "label": {
             "type": "string",
             "title": "Label"
-          },
-          "vision": {
-            "type": "boolean",
-            "title": "Vision"
           }
         },
         "type": "object",
@@ -8187,8 +8203,7 @@
           "ref",
           "id",
           "provider",
-          "label",
-          "vision"
+          "label"
         ],
         "title": "ModelInfoOut"
       },
@@ -8197,7 +8212,7 @@
           "ref": {
             "type": "string",
             "title": "Ref",
-            "description": "Model reference, e.g. \"claude:claude-sonnet-5-5\""
+            "description": "Model reference, e.g. \"openai:chat-default\""
           },
           "prompt": {
             "type": "string",
@@ -8273,39 +8288,22 @@
             "type": "array",
             "title": "Providers"
           },
-          "defaults": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Defaults",
-            "description": "Model reference per role (cleaning, qa, vision, jobs)"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Roles"
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Your LLM, for every step: the one you saved, else OPENAI_LLM_MODEL",
+            "default": ""
           },
           "embedding_model": {
             "type": "string",
             "title": "Embedding Model",
-            "description": "What the duplicate and grounding checks embed with: \"openai:<id>\" (OPENAI_EMBEDDING_MODEL, on your endpoint) or a local model",
-            "default": ""
-          },
-          "local_embedding_model": {
-            "type": "string",
-            "title": "Local Embedding Model",
-            "description": "The local model they fall back to ('' when the checks are off)",
+            "description": "What the duplicate and grounding checks embed with: \"openai:<id>\" (OPENAI_EMBEDDING_MODEL, on your endpoint), \"\" without one",
             "default": ""
           }
         },
         "type": "object",
         "required": [
-          "providers",
-          "defaults",
-          "roles"
+          "providers"
         ],
         "title": "ModelsResponse"
       },
@@ -8674,7 +8672,7 @@
               }
             ],
             "title": "Model",
-            "description": "Model reference, e.g. \"claude:claude-sonnet-5-5\" (defaults to the qa role default)"
+            "description": "Model reference, e.g. \"openai:chat-default\" (default: your LLM)"
           }
         },
         "type": "object",
@@ -9395,6 +9393,285 @@
         ],
         "title": "ResolvePairResponse"
       },
+      "ResumeBasics": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline",
+            "default": ""
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "default": ""
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone",
+            "default": ""
+          },
+          "location": {
+            "type": "string",
+            "title": "Location",
+            "default": ""
+          },
+          "website": {
+            "type": "string",
+            "title": "Website",
+            "default": ""
+          },
+          "facts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Facts",
+            "description": "Custom fields without a link"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "description": "Custom fields with one"
+          }
+        },
+        "type": "object",
+        "title": "ResumeBasics"
+      },
+      "ResumeItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique in its section"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "subtitle": {
+            "type": "string",
+            "title": "Subtitle",
+            "description": "Company, school, issuer…, location, level",
+            "default": ""
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "default": ""
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The description as plain text, roles included",
+            "default": ""
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "An http(s) link, if any",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ResumeItem"
+      },
+      "ResumeLink": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "url"
+        ],
+        "title": "ResumeLink"
+      },
+      "ResumeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "is_public": {
+            "type": "boolean",
+            "title": "Is Public"
+          },
+          "basics": {
+            "$ref": "#/components/schemas/ResumeBasics"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "The summary as plain text",
+            "default": ""
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeSection"
+            },
+            "type": "array",
+            "title": "Sections",
+            "description": "The visible sections, in reading order, hidden items left out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "is_public",
+          "basics",
+          "sections"
+        ],
+        "title": "ResumeOut"
+      },
+      "ResumeSection": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "The section's key; custom:<id> for a custom one"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "items"
+        ],
+        "title": "ResumeSection"
+      },
+      "ResumeSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "is_public": {
+            "type": "boolean",
+            "title": "Is Public"
+          },
+          "is_locked": {
+            "type": "boolean",
+            "title": "Is Locked"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last change (ISO 8601)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "is_public",
+          "is_locked"
+        ],
+        "title": "ResumeSummary"
+      },
+      "ResumesOut": {
+        "properties": {
+          "instance": {
+            "type": "string",
+            "title": "Instance",
+            "description": "The Reactive Resume instance read (scheme, host, port)"
+          },
+          "resumes": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeSummary"
+            },
+            "type": "array",
+            "title": "Resumes",
+            "description": "Every resume of the API key's account, newest change first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance",
+          "resumes"
+        ],
+        "title": "ResumesOut"
+      },
       "SecretCheck": {
         "properties": {
           "kind": {
@@ -9660,36 +9937,25 @@
             "title": "Target Language",
             "description": "Target language for QA generation"
           },
-          "model_cleaning": {
+          "model": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Model Cleaning",
-            "description": "Model reference for text cleaning, e.g. \"openai:gpt-4o-mini\" (default: the cleaning role default)"
-          },
-          "model_qa": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Qa",
-            "description": "Model reference for QA generation, e.g. \"claude:claude-sonnet-5-5\" (default: the qa role default)"
+            "title": "Model",
+            "description": "Model reference, e.g. \"openai:chat-default\" (default: your LLM)"
           },
           "similarity_threshold": {
             "type": "number",
             "maximum": 1,
             "minimum": 0,
             "title": "Similarity Threshold",
-            "description": "Question similarity at or above which a pair is a duplicate (0.0-1.0): embedding cosine across the dataset when the local model is available, else a lexical ratio within the same source",
+            "description": "Question similarity at or above which a pair is a duplicate (0.0-1.0): embedding cosine across the dataset when the embedding model answers, else a lexical ratio within the same source",
             "default": 0.85
           },
           "persist": {

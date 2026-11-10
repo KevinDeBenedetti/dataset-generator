@@ -22,6 +22,7 @@ from server.api import (
     q_a,
     quality_rules,
     recipes,
+    resumes,
 )
 from server.core.database import get_db
 from server.models.user import User, UserRole
@@ -43,6 +44,7 @@ def _build_protected_app(test_db):
     app.include_router(jobs.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
     app.include_router(models.router, dependencies=auth_required)
+    app.include_router(resumes.router, dependencies=auth_required)
 
     def override_get_db():
         yield test_db
@@ -73,6 +75,22 @@ def test_protected_routes_reject_anonymous(test_db):
     assert client.get("/recipes").status_code == 401
     assert client.get("/collections").status_code == 401
     assert client.post("/collections/c1/search", json={"query": "q"}).status_code == 401
+    assert client.get("/resumes").status_code == 401
+    assert client.get("/resumes/r1").status_code == 401
+
+
+def test_routes_on_the_servers_own_key_stay_admin_only(test_db):
+    """Reactive Resume reads with the operator's key: a regular user is
+    turned away (403) before anything is read."""
+    app = _build_protected_app(test_db)
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="u1", email="user@example.com", role=UserRole.USER
+    )
+    client = TestClient(app)
+    with patch("server.services.reactive_resume.list_resumes") as listing:
+        assert client.get("/resumes").status_code == 403
+        assert client.get("/resumes/r1").status_code == 403
+    listing.assert_not_called()
 
 
 def test_protected_routes_allow_authenticated(test_db):
