@@ -119,7 +119,10 @@ import type {
   JobRunOut,
   ModelsResponse,
   ModelTestResponse,
+  ResumeDatasetIn,
+  ResumeDatasetOut,
   ResumeOut,
+  ResumeRunRequest,
   ResumesOut,
   UrlGenerationRequest,
 } from './gen/types.gen'
@@ -348,6 +351,17 @@ export async function updateDefaultModel(model: string): Promise<ModelsResponse>
     throw new Error(getErrorMessage(response.error, 'Failed to save your LLM'))
   }
   return response.data as unknown as ModelsResponse
+}
+
+// Measure an embedding model of your endpoint on the built-in test set, then
+// use it, with its thresholds, for every check of your datasets.
+export function setEmbeddingModel(model: string): Promise<ModelsResponse> {
+  return apiSend('PUT', '/models/embedding', { model }, 'Failed to measure the embedding model')
+}
+
+// Back to the server's embedding model.
+export function resetEmbeddingModel(): Promise<ModelsResponse> {
+  return apiSend('DELETE', '/models/embedding', undefined, 'Failed to reset the embedding model')
 }
 
 // Send one short prompt to a model (spends your own provider quota).
@@ -771,6 +785,38 @@ export function getResumes(): Promise<ResumesOut> {
 
 export function getResume(id: string): Promise<ResumeOut> {
   return hubGet(`/resumes/${encodeURIComponent(id)}`, 'Failed to read the resume')
+}
+
+const resumeDatasetPath = (id: string, suffix = '') =>
+  `/resumes/${encodeURIComponent(id)}/dataset${suffix}`
+
+/** The resume's dataset settings, or null before they are saved (404). */
+export async function getResumeDataset(id: string): Promise<ResumeDatasetOut | null> {
+  try {
+    return await hubGet<ResumeDatasetOut>(
+      resumeDatasetPath(id),
+      'Failed to read the dataset settings',
+    )
+  } catch (error) {
+    if (errorStatus(error) === 404) return null
+    throw error
+  }
+}
+
+export function saveResumeDataset(
+  id: string,
+  settings: ResumeDatasetIn,
+): Promise<ResumeDatasetOut> {
+  return apiSend('PUT', resumeDatasetPath(id), settings, 'Failed to save the dataset settings')
+}
+
+export function deleteResumeDataset(id: string): Promise<void> {
+  return apiSend('DELETE', resumeDatasetPath(id), undefined, 'Failed to forget the settings')
+}
+
+// Queues a generation with the saved settings; it stops at a draft to review.
+export function runResumeDataset(id: string, body: ResumeRunRequest): Promise<JobRunOut> {
+  return apiSend('POST', resumeDatasetPath(id, '/run'), body, 'Failed to start the generation')
 }
 
 export function getRecipes(): Promise<RecipesOut> {

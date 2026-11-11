@@ -28,29 +28,16 @@ function labelFor(pathname: string) {
   return seg.charAt(0).toUpperCase() + seg.slice(1)
 }
 
-export function AppTopbar() {
-  const pathname = usePathname() ?? '/dashboard'
+// Documentation, theme and notifications: in the top bar, and in the
+// navigation drawer on phones, where the top bar has no room for them.
+export function ShellTools() {
   const dark = useIsDark()
-  const { data: user } = useCurrentUser()
-  const logoutMutation = useLogout()
-
   return (
-    <header className="topbar">
-      <div className="crumbs">
-        <Icon name="layers" className="ic-sm" />
-        <span className="crumb-muted">DatasetGen</span>
-        <Icon name="chevronRight" />
-        <span>{labelFor(pathname)}</span>
-      </div>
-      <label className="topbar-search">
-        <Icon name="search" />
-        <input placeholder="Search datasets, sources, jobs…" />
-        <span className="kbd">⌘K</span>
-      </label>
-      <div className="topbar-spacer" />
+    <>
       <a
         className="icon-btn"
         title="Documentation"
+        aria-label="Documentation"
         href="https://github.com/KevinDeBenedetti/dataset-generator"
         target="_blank"
         rel="noreferrer"
@@ -66,17 +53,68 @@ export function AppTopbar() {
       >
         <Icon name={dark ? 'moon' : 'sun'} />
       </button>
-      <button className="icon-btn" title="Notifications" type="button">
+      <button className="icon-btn" title="Notifications" aria-label="Notifications" type="button">
         <span className="ping" />
         <Icon name="bell" />
       </button>
-      <div className="vsep" style={{ height: 22 }} />
+    </>
+  )
+}
+
+export function AppTopbar({
+  menuButtonRef,
+  navOpen,
+  onOpenNav,
+}: {
+  menuButtonRef: React.Ref<HTMLButtonElement>
+  navOpen: boolean
+  onOpenNav: () => void
+}) {
+  const pathname = usePathname() ?? '/dashboard'
+  const { data: user } = useCurrentUser()
+  const logoutMutation = useLogout()
+
+  return (
+    <header className="topbar">
+      {/* Below the drawer breakpoint the sidebar opens from here. */}
+      <button
+        ref={menuButtonRef}
+        type="button"
+        className="icon-btn topbar-menu"
+        aria-label="Open navigation"
+        aria-controls="app-sidebar"
+        aria-expanded={navOpen}
+        onClick={onOpenNav}
+      >
+        <Icon name="menu" />
+      </button>
+      <div className="crumbs">
+        {/* The drawer's header carries the product name on phones. */}
+        <span className="crumb-brand">
+          <Icon name="layers" className="ic-sm" />
+          <span className="crumb-muted">DatasetGen</span>
+          <Icon name="chevronRight" />
+        </span>
+        <span className="crumb-page">{labelFor(pathname)}</span>
+      </div>
+      <label className="topbar-search">
+        <Icon name="search" />
+        <input placeholder="Search datasets, sources, jobs…" />
+        <span className="kbd">⌘K</span>
+      </label>
+      <div className="topbar-spacer" />
+      <div className="topbar-tools">
+        <ShellTools />
+        <div className="vsep" style={{ height: 22 }} />
+      </div>
       <Link className="btn btn-primary btn-sm" href="/generate">
         <Icon name="plus" />
         New dataset
       </Link>
+      {/* The sidebar footer shows the same account, so this copy only appears
+          on screens wide enough to hold both. */}
       {user && (
-        <>
+        <div className="topbar-user">
           <div className="vsep" style={{ height: 22 }} />
           <span className="crumb-muted" title={`${user.email} (${user.role})`}>
             <Icon name="user" className="ic-sm" />
@@ -92,7 +130,7 @@ export function AppTopbar() {
           >
             <Icon name="logout" />
           </button>
-        </>
+        </div>
       )}
     </header>
   )

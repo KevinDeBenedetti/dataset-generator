@@ -81,3 +81,27 @@
   gap: 4px;
   margin-top: 6px;
 }
+
+/* The resume's Hugging Face dataset, above the resume in the panel. */
+.rs-dataset {
+  margin-bottom: 20px;
+}
+.rs-dataset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 16px;
+}
+.rs-dataset-wide {
+  grid-column: 1 / -1;
+}
+.rs-dataset-foot {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.rs-dataset-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}

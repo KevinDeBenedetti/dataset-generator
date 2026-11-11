@@ -44,11 +44,19 @@ sent to `OPENAI_BASE_URL`, and a user's key only to the base URL they saved
 as an in-cluster gateway: the operator set it. A URL a user types must be a
 public `https` endpoint that the backoffice allows.
 
-Without an embedding model — `OPENAI_EMBEDDING_MODEL` unset, no endpoint, or
-one that can't embed with it — the checks compare the words instead, and no
-collection can be built. Their thresholds are constants in
-`apps/server/core/config.py`, measured on a small local model the server no
-longer runs: an endpoint model scores differently, so retune them for it.
+`OPENAI_EMBEDDING_MODEL` is the default embedding model. On the **Models** page,
+each user can pick another of their endpoint's embedding models: **Measure and
+use** embeds a built-in test set with it (short English and French texts about
+a resume and software projects: rephrasings and look-alike questions, faithful
+and wrong answers, covered and uncovered sections), puts each threshold where
+it best separates them, and saves the model with its thresholds for every
+check of that user's datasets. Each model scores on its own scale, so measure
+the one you use: the defaults (constants in `apps/server/core/config.py`) were
+measured on a small local model the server no longer runs.
+
+Without an embedding model — none set, no endpoint, or one that can't embed
+with it — the checks compare the words instead, and no collection can be
+built.
 
 A LiteLLM gateway, for example, with a virtual key and the aliases it serves:
 

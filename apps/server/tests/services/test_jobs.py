@@ -303,6 +303,26 @@ async def _until(predicate, timeout=2.0):  # noqa: ASYNC109 — a test helper's 
         await asyncio.sleep(0.01)
 
 
+async def test_a_worker_leaves_the_runs_of_a_job_it_does_not_know(db, monkeypatch):
+    """A worker started before a job existed (a dev worker the code changed
+    under, an old pod mid-deploy) leaves its runs queued for one that knows it,
+    rather than failing them with "Unknown job" — and still runs the others."""
+
+    async def runner(creds, options, model_ref, progress):
+        return JobOutcome(JobResult(dry_run=True))
+
+    _patch_runner(monkeypatch, "github-personal", runner)
+    newer = await start_run(OWNER, FULL, "knowledge-corpus", {})
+    known = await start_run(OWNER, FULL, "github-personal", {}, "openai:gpt-x")
+    monkeypatch.delitem(JOBS, "knowledge-corpus")  # this worker predates it
+
+    assert await queue.run_once("old-worker") == known["id"]  # the older run skipped
+    assert get_run(OWNER, known["id"])["status"] == "succeeded"
+    assert await queue.run_once("old-worker") is None
+    left = get_run(OWNER, newer["id"])
+    assert (left["status"], left["error"]) == ("queued", None)
+
+
 async def test_unknown_job_and_bad_options(db):
     with pytest.raises(UnknownJobError):
         await start_run(OWNER, FULL, "nope", {})

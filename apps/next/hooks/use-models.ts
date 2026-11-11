@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getModels, testModel, updateDefaultModel } from '@/api/sdk'
+import {
+  getModels,
+  resetEmbeddingModel,
+  setEmbeddingModel,
+  testModel,
+  updateDefaultModel,
+} from '@/api/sdk'
 import type { ModelsResponse } from '@/api/types'
 
 export const MODELS_QUERY_KEY = ['models']
@@ -19,6 +25,19 @@ export function useUpdateDefaultModel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (model: string) => updateDefaultModel(model),
+    onSuccess: (data: ModelsResponse) => {
+      queryClient.setQueryData([...MODELS_QUERY_KEY, { discover: false }], data)
+      queryClient.invalidateQueries({ queryKey: MODELS_QUERY_KEY })
+    },
+  })
+}
+
+/** Measure an embedding model and use it; null goes back to the server's. */
+export function useEmbeddingModel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (model: string | null) =>
+      model ? setEmbeddingModel(model) : resetEmbeddingModel(),
     onSuccess: (data: ModelsResponse) => {
       queryClient.setQueryData([...MODELS_QUERY_KEY, { discover: false }], data)
       queryClient.invalidateQueries({ queryKey: MODELS_QUERY_KEY })

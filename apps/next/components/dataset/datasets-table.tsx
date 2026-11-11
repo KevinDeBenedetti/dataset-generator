@@ -25,7 +25,7 @@ function formatDate(value?: string | null): string {
 export function DatasetsTable({ datasets }: DatasetsTableProps) {
   return (
     <div className="border rounded-lg overflow-x-auto">
-      <Table className="w-full">
+      <Table className="stack-table w-full">
         <TableCaption>{datasets.length} draft(s)</TableCaption>
         <TableHeader>
           <TableRow>
@@ -39,7 +39,7 @@ export function DatasetsTable({ datasets }: DatasetsTableProps) {
         <TableBody>
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
-              <TableCell className="font-medium">
+              <TableCell className="font-medium" data-label="Name">
                 {/* Drafts are keyed by name — the detail route takes that
                     name, URL-encoded. */}
                 <Link
@@ -49,12 +49,22 @@ export function DatasetsTable({ datasets }: DatasetsTableProps) {
                   {dataset.name}
                 </Link>
               </TableCell>
-              <TableCell className="text-muted-foreground">{dataset.description || '—'}</TableCell>
-              <TableCell className="text-center">{dataset.qa_sources_count ?? '—'}</TableCell>
-              <TableCell className="text-center">
+              {/* Descriptions wrap rather than stretching the table. */}
+              <TableCell
+                className="min-w-64 whitespace-normal text-muted-foreground"
+                data-label="Description"
+              >
+                {dataset.description || '—'}
+              </TableCell>
+              <TableCell className="text-center" data-label="Items">
+                {dataset.qa_sources_count ?? '—'}
+              </TableCell>
+              <TableCell className="text-center" data-label="Version">
                 {dataset.version != null ? `v${dataset.version}` : '—'}
               </TableCell>
-              <TableCell className="text-center">{formatDate(dataset.created_at)}</TableCell>
+              <TableCell className="text-center" data-label="Created">
+                {formatDate(dataset.created_at)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

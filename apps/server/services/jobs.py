@@ -190,17 +190,18 @@ async def start_run(
     """
     # The role default, the quotas and the insert all hit the database.
     return await asyncio.to_thread(
-        _queue_run, owner_id, creds, job_id, options, model_ref
+        queue_run, owner_id, creds, job_id, options, model_ref
     )
 
 
-def _queue_run(
+def queue_run(
     owner_id: str,
     creds: Credentials,
     job_id: str,
     options: Dict[str, Any],
     model_ref: Optional[str],
 ) -> Dict[str, Any]:
+    """:func:`start_run`, blocking — what the schedule sweep calls from a thread."""
     spec = _spec(job_id)
     parsed = spec.options.model_validate(options or {})
     model = (

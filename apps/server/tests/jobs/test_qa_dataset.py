@@ -26,6 +26,7 @@ from server.jobs.qa_dataset import (
     to_jsonl,
 )
 from server.jobs.github_snapshot import RepoData
+from server.services.providers import ProviderError
 from server.tests.creds import make_creds
 from server.tests.fake_embedder import FakeEmbedder
 from server.tests.jobs.conftest import b64
@@ -123,6 +124,41 @@ async def test_generate_pairs_gives_up_after_retry():
         await generate_pairs(
             complete, CompletionRequest("s", "u", 1), "r", "overview", "m"
         )
+
+
+async def test_generate_pairs_says_why_the_model_call_failed():
+    """A provider error was swallowed into "empty or unparseable": the reason
+    was in the worker's log only. It is the error's message now."""
+    calls = []
+
+    async def complete(_req):
+        calls.append(_req)
+        raise ProviderError(
+            "openai:m call failed: Error code: 400 - temperature is not supported"
+        )
+
+    with pytest.raises(JobError, match="400 - temperature is not supported"):
+        await generate_pairs(
+            complete, CompletionRequest("s", "u", 1), "r", "overview", "m"
+        )
+    assert len(calls) == 4  # retried like an empty answer
+
+
+async def test_generate_pairs_recovers_after_a_failed_call():
+    answers = iter(
+        [ProviderError("429"), '[{"question":"Why X?","answer":"Because."}]']
+    )
+
+    async def complete(_req):
+        answer = next(answers)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    pairs = await generate_pairs(
+        complete, CompletionRequest("s", "u", 1), "r", "overview", "m"
+    )
+    assert [p.answer for p in pairs] == ["Because."]
 
 
 def test_sanitize_drops_trivial_and_duplicate_pairs():

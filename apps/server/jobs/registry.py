@@ -34,7 +34,8 @@ from starlette.concurrency import run_in_threadpool
 from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
 from server.jobs import corpus as corpus_job
 from server.jobs import qa_dataset as qa_dataset_job
-from server.schemas.recipes import RecipeIn
+from server.jobs import resume_qa as resume_qa_job
+from server.schemas.recipes import HF_REPO_PATTERN, RecipeIn
 from server.services import collections as vector_collections
 from server.services.collections import COLLECTION_JOB_ID
 from server.services.drafts import GENERATION_JOB_ID
@@ -203,6 +204,102 @@ async def _run_github_recipe(
             errors=draft.dataset.errors,
         ),
         draft=_draft_to_dict(draft),
+    )
+
+
+# --- resume-qa -----------------------------------------------------------------
+# Q&A pairs from one resume on Reactive Resume (jobs/resume_qa.py): started and
+# scheduled from the Resume page (api/resumes.py, services/schedules.py), never
+# by POST /jobs/{id}/run. Admins only: the resume is read with the server's key.
+
+
+class ResumeQAOptions(BaseModel):
+    """What a resume's dataset is generated from and into — saved per resume
+    by the Resume page (services/schedules.py), copied into each run."""
+
+    resume_id: str = Field(..., max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    title: str = Field(
+        "", max_length=200, description="The resume's name, for the drafts list"
+    )
+    target_repo: str = Field(
+        ...,
+        max_length=193,
+        pattern=HF_REPO_PATTERN,
+        description="Hugging Face dataset it publishes to ('namespace/name' or 'name')",
+    )
+    language: Literal["auto", "en", "fr"] = Field(
+        "auto", description="The pairs' language; auto: the resume's own"
+    )
+    full_refresh: bool = Field(
+        False, description="Ignore the published version and regenerate every item"
+    )
+    publish: bool = Field(
+        False,
+        description="Publish what passes the checks at once and keep the rest "
+        "for review (what a scheduled run does); off: stop at a draft",
+    )
+
+
+async def _run_resume_qa(
+    creds: Credentials,
+    options: BaseModel,
+    model_ref: Optional[str],
+    progress: ProgressFn,
+) -> JobOutcome:
+    if not isinstance(options, ResumeQAOptions):
+        raise TypeError(f"Expected ResumeQAOptions, got {type(options).__name__}")
+    draft = await resume_qa_job.generate(
+        creds,
+        options.resume_id,
+        options.target_repo,
+        language=options.language,
+        full_refresh=options.full_refresh,
+        model_ref=model_ref,
+        on_progress=progress,
+    )
+    metrics = _qa_metrics(draft.stats())
+    errors = draft.dataset.errors
+    if resume_qa_job.unchanged(draft):
+        # Nothing moved since the published version: no model call was made,
+        # and there is nothing to review or publish.
+        return JobOutcome(
+            result=JobResult(
+                dry_run=True,
+                metrics=[("Unchanged", "the resume hasn't changed"), *metrics],
+                errors=errors,
+            )
+        )
+    if not options.publish:
+        return JobOutcome(
+            result=JobResult(dry_run=True, metrics=metrics, errors=errors),
+            draft=_draft_to_dict(draft),
+        )
+    # A scheduled run: what passed the checks is published now; the pairs held
+    # out for review stay a draft, published on top once reviewed.
+    result = await resume_qa_job.publish(creds, draft)
+    return JobOutcome(
+        result=JobResult(
+            dry_run=False, url=result["url"], metrics=metrics, errors=errors
+        ),
+        draft=_draft_to_dict(draft) if draft.dataset.review else None,
+    )
+
+
+async def _publish_resume_qa(
+    creds: Credentials,
+    data: Dict[str, Any],
+    exclude: Sequence[str],
+    promote: Sequence[str],
+    edits: Dict[str, Dict[str, str]],
+) -> JobResult:
+    draft = _draft_from_dict(data)
+    draft.dataset = draft.dataset.with_selection(exclude, promote, edits)
+    result = await resume_qa_job.publish(creds, draft)
+    return JobResult(
+        dry_run=False,
+        url=result["url"],
+        metrics=_qa_metrics(draft.stats()),
+        errors=draft.dataset.errors,
     )
 
 
@@ -390,6 +487,9 @@ class JobSpec:
     # A listed job is one of the GitHub page's whole-account cards (GET /jobs,
     # POST /jobs/{id}/run); the others are started from their own routes.
     listed: bool = True
+    # Runs on the server's own keys (the Reactive Resume one): only an admin
+    # may start or schedule it (services/schedules.py checks the role again).
+    admin_only: bool = False
 
     def missing(self, creds: Credentials) -> List[str]:
         """Labels only, never values — safe to serve to the dashboard."""
@@ -438,6 +538,22 @@ JOBS: Dict[str, JobSpec] = {
             publisher=_publish_github_personal,
             preview=_preview_github_personal,
             listed=False,
+        ),
+        JobSpec(
+            id=resume_qa_job.RESUME_JOB_ID,
+            title="Resume Q&A",
+            description="Q&A pairs from one of your resumes on Reactive Resume — "
+            "the facts it states and its sections — published to a private "
+            "Hugging Face dataset of its own. Started and scheduled from the "
+            "Resume page; a run you start stops at a draft to review.",
+            requires=(_HF_TOKEN,),
+            uses_model=True,
+            options=ResumeQAOptions,
+            runner=_run_resume_qa,
+            publisher=_publish_resume_qa,
+            preview=_preview_github_personal,
+            listed=False,
+            admin_only=True,
         ),
         JobSpec(
             id=GENERATION_JOB_ID,

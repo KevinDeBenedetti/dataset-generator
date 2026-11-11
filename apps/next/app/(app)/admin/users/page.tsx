@@ -22,25 +22,27 @@ function UserRow({ user, me }: { user: AdminUser; me?: string }) {
 
   return (
     <tr>
-      <td>
+      <td data-label="Account">
         <div style={{ fontWeight: 500 }}>{user.email}</div>
         <div className="hint">
           {[...user.providers, user.has_password ? 'password' : null].filter(Boolean).join(' · ') ||
             '—'}
         </div>
       </td>
-      <td>
+      <td data-label="Role">
         <span className={`badge badge-${user.role === 'admin' ? 'info' : 'secondary'}`}>
           {user.role}
           {user.locked ? ' · locked' : ''}
         </span>{' '}
         {!user.is_active && <span className="badge badge-destructive">disabled</span>}
       </td>
-      <td className="mono">
+      <td className="mono" data-label="Data">
         {user.datasets} / {user.pairs} / {user.runs}
       </td>
-      <td className="hint">{user.configured_keys.join(', ') || '—'}</td>
-      <td className="hint">
+      <td className="hint" data-label="Keys saved">
+        {user.configured_keys.join(', ') || '—'}
+      </td>
+      <td className="hint" data-label="Created · last sign-in">
         {when(user.created_at)} · {when(user.last_login_at)}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
@@ -125,7 +127,7 @@ export default function AdminUsersPage() {
       </div>
       <div className="card-body" style={{ overflowX: 'auto' }}>
         {error && <p className="hint">{error.message}</p>}
-        <table className="table" style={{ width: '100%' }}>
+        <table className="table stack-table" style={{ width: '100%' }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left' }}>Account</th>

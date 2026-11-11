@@ -17,8 +17,8 @@ function GenerateContent() {
   const draftId = dataset && 'draft_run_id' in dataset ? dataset.draft_run_id : null
 
   return (
-    <section className="max-w-3xl mx-auto flex flex-col gap-4 p-4">
-      <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">
+    <section className="max-w-3xl mx-auto flex flex-col gap-4 py-2 sm:p-4">
+      <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center wrap-anywhere">
         {presetTarget ? `Add data to ${presetTarget}` : 'Generate a dataset'}
       </h1>
 
@@ -76,7 +76,7 @@ export default function GeneratePage() {
   return (
     <Suspense
       fallback={
-        <section className="max-w-2xl mx-auto flex flex-col gap-4 p-4">
+        <section className="max-w-2xl mx-auto flex flex-col gap-4 py-2 sm:p-4">
           <h1 className="w-full mt-6 mb-4 text-3xl font-bold text-center">Generate a dataset</h1>
         </section>
       }

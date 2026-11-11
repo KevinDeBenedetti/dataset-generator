@@ -110,6 +110,28 @@ def test_a_recipe_draft_checks_new_and_held_out_pairs_only(db, owner, test_db):
     assert checks["flagged"] == {"h": "answer shorter than 3 words"}
 
 
+def test_the_rules_spare_the_exact_facts(db, owner, test_db):
+    """A resume's or a profile's facts are short by design: not flagged."""
+    fact = {**_pair("f", "Where is Kevin based?", "Lyon."), "category": "profile"}
+    repo = {**_pair("r", "What language is alpha in?", "Go."), "category": "repo"}
+    written = {
+        **_pair("w", "What did Kevin build?", "Things."),
+        "category": "experience",
+    }
+    _add(
+        test_db,
+        owner,
+        "r2",
+        "resume-qa",
+        {"dataset": {"pairs": [fact, repo, written], "new_ids": ["f", "r", "w"]}},
+    )
+
+    checks = draft_quality.check_draft(owner.id, "r2", 0.85)
+
+    assert checks["total"] == 3
+    assert checks["flagged"] == {"w": "answer shorter than 3 words"}
+
+
 def test_a_run_without_draft_or_of_someone_else(db, owner, test_db):
     _add(test_db, owner, "x1", "knowledge-corpus", None)
     with pytest.raises(RunConflictError):

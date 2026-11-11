@@ -3,6 +3,7 @@
 import type { ResumeOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { useResume } from '@/hooks'
+import { ResumeDataset } from './resume-dataset'
 
 // The server keeps http(s) links only; the label is the host, not the URL.
 function hostOf(url: string): string {
@@ -122,7 +123,10 @@ export function ResumeView({ id, onClose }: { id: string; onClose: () => void })
             <Icon name="loader" className="animate-spin" /> Reading the resume…
           </p>
         ) : (
-          <ResumeBody resume={resume} />
+          <>
+            <ResumeDataset resume={resume} />
+            <ResumeBody resume={resume} />
+          </>
         )}
       </div>
     </section>

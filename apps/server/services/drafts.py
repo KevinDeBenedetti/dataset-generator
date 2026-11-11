@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # The job kind of these drafts (jobs/registry.py), off the Jobs page.
 GENERATION_JOB_ID = "generation-draft"
 # What GET /jobs/drafts lists: the drafts still waiting for a review.
-DRAFT_JOBS = (GENERATION_JOB_ID, "github-recipe")
+DRAFT_JOBS = (GENERATION_JOB_ID, "github-recipe", "resume-qa")
 
 
 def _now() -> datetime:

@@ -95,6 +95,42 @@ def _openai_provider(monkeypatch, text="Hello"):
     return provider, client, built
 
 
+def _connection_error(url):
+    """What the SDK raises when nothing answers: "Connection error.", from
+    httpx's own error."""
+    import httpx2
+    import openai
+
+    try:
+        raise httpx.ConnectError("[Errno 111] Connection refused")
+    except httpx.ConnectError as cause:
+        error = openai.APIConnectionError(request=httpx2.Request("POST", url))
+        error.__cause__ = cause
+        return error
+
+
+async def test_an_unreachable_endpoint_is_named_with_the_reason(monkeypatch):
+    """A bare "Connection error." said neither where nor why: a localhost
+    base URL, for one, is the container itself in the local stack."""
+    provider, client, _ = _openai_provider(monkeypatch)
+    client.chat.completions.create = AsyncMock(
+        side_effect=_connection_error("http://localhost:8040/v1/chat/completions")
+    )
+    creds = make_creds(
+        openai_api_key="sk-x-0000000000000000",
+        openai_base_url="http://localhost:8040/v1",
+        base_url_trusted=True,
+    )
+    with pytest.raises(ProviderError) as failed:
+        await provider.complete("chat", CompletionRequest(user="Hi"), creds)
+    assert str(failed.value) == (
+        "openai:chat call failed: could not reach localhost:8040 "
+        "(ConnectError: [Errno 111] Connection refused)"
+    )
+    # Without a base URL, OpenAI's own host.
+    assert provider.address(FULL) == "api.openai.com"
+
+
 async def test_openai_text_completion(monkeypatch):
     provider, client, _ = _openai_provider(monkeypatch)
     result = await provider.complete(

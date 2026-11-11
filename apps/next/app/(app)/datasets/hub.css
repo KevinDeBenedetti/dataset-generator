@@ -144,7 +144,7 @@ figure.viz-hist {
 /* ---------- Datasets list ---------- */
 .hub-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 16px;
 }
 .hub-ds {
@@ -674,7 +674,7 @@ span.hub-th {
 }
 .hub-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: 16px;
 }
 .hub-col {
@@ -1133,5 +1133,15 @@ button.viz-bar-row:focus-visible .viz-bar-fill {
   }
   .hub-markdown {
     padding: 18px;
+  }
+  /* Names, ids and chart labels wrap instead of being cut off. */
+  .hub-ds-name,
+  .hub-ds-title .cell-sub,
+  .viz-bar-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .hub-stat-text {
+    overflow-wrap: anywhere;
   }
 }

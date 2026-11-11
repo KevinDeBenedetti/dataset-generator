@@ -73,6 +73,9 @@ class Credentials:
     # True when the OpenAI-compatible key and endpoint are the server's, lent
     # to this user (see :func:`resolve_credentials`).
     openai_from_server: bool = False
+    # Whose they are ('' for the env's or a test's): what the checks read the
+    # user's embedding model and its thresholds by (services/semantic.py).
+    user_id: str = ""
 
     def secret(self, kind: str) -> str:
         """The plaintext of a secret ('' when unset). Call it at the point of use."""
@@ -146,8 +149,8 @@ def resolve_credentials(user_id: str, is_admin: Optional[bool] = None) -> Creden
 
     creds = load_credentials(user_id)
     if config.allow_env_credentials:
-        return creds.filled_from(Credentials.from_env())
-    if config.server_llm_for_admins and not creds.has(OPENAI_API_KEY):
+        creds = creds.filled_from(Credentials.from_env())
+    elif config.server_llm_for_admins and not creds.has(OPENAI_API_KEY):
         if user_is_admin(user_id) if is_admin is None else is_admin:
             creds = creds.with_openai_of(Credentials.from_env())
-    return creds
+    return replace(creds, user_id=user_id)

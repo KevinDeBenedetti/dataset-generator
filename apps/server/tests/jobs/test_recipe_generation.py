@@ -186,7 +186,10 @@ async def test_generate_from_recipe(github):
     # A bare repo name is completed with the token's account.
     assert draft.repo_id == "kevin/github-qa"
     assert {p.category for p in draft.dataset.pairs} == {"repo", "overview", "docs"}
-    assert len(requests) == 2  # one overview, one docs batch
+    # One overview, one docs batch; then the grader, once per group of new
+    # pairs (its answers here grade nothing: the pairs stay, ungraded).
+    graded = [r for r in requests if r.system.startswith("You grade")]
+    assert len(requests) - len(graded) == 2 and len(graded) == 2
     assert any(e.startswith("gone: ") for e in draft.dataset.errors)
     # Profile facts off: the account was never read.
     assert "/users/kevin" not in github.calls

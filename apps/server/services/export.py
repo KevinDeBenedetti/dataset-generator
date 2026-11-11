@@ -4,6 +4,8 @@
 * ``settings.json`` — integration settings, model defaults, quality rules,
   and *which* keys are saved (not their values);
 * ``recipes.json`` — the dataset recipes (target repo and GitHub sources);
+* ``schedules.json`` — the jobs' saved options and presets (a resume's dataset
+  settings and when it is regenerated);
 * ``collections.json`` — the vector collections: the split each is built from,
   its columns, model and latest retrieval test (the vectors are derived data);
 * ``datasets/<name>.jsonl`` — every Q/A pair of each dataset.
@@ -25,6 +27,7 @@ from server.services.identities import list_identities
 from server.services.model_defaults import get_default_model
 from server.services.quality_rules import get_quality_rules
 from server.services.recipes import list_recipes
+from server.services.schedules import list_schedules
 from server.services.user_secrets import get_settings, secret_statuses
 
 
@@ -80,6 +83,7 @@ def build_export(db: Session, user: User) -> bytes:
             ),
         )
         archive.writestr("recipes.json", _json(list_recipes(db, user.id)))
+        archive.writestr("schedules.json", _json(list_schedules(db, user.id)))
         archive.writestr(
             "collections.json", _json(list_collections(db, user.id)["collections"])
         )

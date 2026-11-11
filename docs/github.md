@@ -8,7 +8,12 @@ The **GitHub** page shows your public GitHub data and makes datasets from it,
 in two ways: from your **whole account**, or from a **recipe** that picks what
 a dataset is generated from and names the Hugging Face dataset it publishes
 to. A Q&A generation stops at a draft that you review before anything reaches
-the Hub. Nothing runs on a schedule: a run starts when you start it.
+the Hub. A run starts when you start it.
+
+Your LLM grades every new Q&A pair, 0 to 1 (true to its source, useful to a
+visitor, its question self-contained): one graded below 0.6 is held out for
+review, with the grader's reason. The profile and repo facts are exact, not
+graded, and the length rule doesn't apply to them.
 
 Only public data is read: a private repo is refused, even one your token could
 read. A GitHub token saved in **Settings** only raises the API quota from 60 to

@@ -69,6 +69,7 @@ from server.services.semantic import (
     grounding_scores,
     nearest_texts,
     split_sections,
+    thresholds_of,
     uncovered_sections,
 )
 
@@ -132,6 +133,9 @@ class QAPair:
     sources: List[str] = field(default_factory=list)
     # Answer ↔ closest source chunk cosine (services/semantic.py).
     grounding: Optional[float] = None
+    # The LLM's grade, 0-1, and its reason (grade_pairs).
+    judge: Optional[float] = None
+    judge_note: Optional[str] = None
 
     def to_record(self) -> dict:
         # Key order matches the TS exporter's records, keeping the Hub diff clean;
@@ -154,6 +158,10 @@ class QAPair:
             rec["sources"] = self.sources
         if self.grounding is not None:
             rec["grounding"] = self.grounding
+        if self.judge is not None:
+            rec["judge"] = self.judge
+        if self.judge_note:
+            rec["judge_note"] = self.judge_note
         return rec
 
     @classmethod
@@ -185,6 +193,10 @@ class QAPair:
             grounding=float(grounding)
             if isinstance(grounding, (int, float)) and not isinstance(grounding, bool)
             else None,
+            judge=_confidence(rec.get("judge")),
+            judge_note=rec.get("judge_note")
+            if isinstance(rec.get("judge_note"), str)
+            else None,
         )
 
 
@@ -201,24 +213,25 @@ CompletionFn = Callable[[CompletionRequest], Awaitable[str]]
 def provider_completion(model_ref: str, creds: Credentials) -> CompletionFn:
     """CompletionFn over the provider registry, for the ``model_ref`` model.
 
-    A failed call degrades to '' so the retry-on-empty logic handles it.
+    A failed call raises :class:`ProviderError`: :func:`generate_pairs`
+    retries it like an empty answer, and says why when nothing recovers.
     """
 
     async def complete(req: CompletionRequest) -> str:
-        try:
-            result = await provider_complete(
-                model_ref,
-                ProviderRequest(
-                    system=req.system, user=req.user, max_tokens=req.max_tokens
-                ),
-                creds,
-            )
-        except ProviderError as exc:
-            logger.warning("%s query failed: %s", model_ref, exc)
-            return ""
+        result = await provider_complete(
+            model_ref,
+            ProviderRequest(
+                system=req.system, user=req.user, max_tokens=req.max_tokens
+            ),
+            creds,
+        )
         return result.text
 
     return complete
+
+
+# A provider's error, as a run reports it: enough for its status and message.
+MAX_ERROR_CHARS = 400
 
 
 def _token_budget(pairs: int) -> int:
@@ -468,17 +481,30 @@ async def generate_pairs(
     category: str,
     model: str,
 ) -> List[QAPair]:
-    """Retry an empty response once, then the whole request once more if nothing
-    usable came out — a fresh generation beats salvaging a broken one."""
+    """Retry an empty or failed response once, then the whole request once more
+    if nothing usable came out — a fresh generation beats salvaging a broken
+    one. When none recovers, the error says why: the provider's own error when
+    the last call failed (else only the worker's log would), or that the
+    answers were empty or unparseable."""
+    failure = ""
     for _ in range(2):
         raw = ""
         for _ in range(2):
-            raw = await complete(req)
+            try:
+                raw = await complete(req)
+                failure = ""
+            except ProviderError as exc:
+                logger.warning("%s: the model call failed: %s", repo, exc)
+                raw, failure = "", str(exc)
             if raw.strip():
                 break
-        pairs = parse_pairs(raw, repo, category, model)
+        # No answer at all (the calls failed): nothing to parse, or to log as
+        # unparseable.
+        pairs = parse_pairs(raw, repo, category, model) if raw.strip() else []
         if pairs:
             return pairs
+    if failure:
+        raise JobError(failure[:MAX_ERROR_CHARS])
     raise JobError("LLM returned no usable pairs (empty or unparseable) after retry")
 
 
@@ -754,6 +780,8 @@ class QADataset:
                 question=change["question"].strip(),
                 answer=change["answer"].strip(),
                 grounding=None,
+                judge=None,
+                judge_note=None,
             )
             edited.id = pair_id(edited)
             renamed[pair.id or ""] = edited.id
@@ -975,19 +1003,7 @@ def _plan_tasks(
             if task.docs is None
             else docs_batch_context(task.docs)[0]
         )
-        sections = _chunks([text])
-        if not sections:
-            continue
-        vectors = embedder.embed(sections)
-        task.avoid = nearest_texts(
-            vectors, index, MAX_AVOID_QUESTIONS, AVOID_MIN_SIMILARITY
-        )
-        uncovered = uncovered_sections(
-            sections, vectors, index, config.uncovered_section_threshold
-        )
-        # All sections uncovered says nothing the plain prompt doesn't.
-        if len(uncovered) < len(sections):
-            task.focus = uncovered[:MAX_FOCUS_SECTIONS]
+        task.avoid, task.focus = guidance_for(text, index, embedder)
     return tasks
 
 
@@ -997,6 +1013,216 @@ def _legacy_sources(pair: QAPair, sources: Dict[str, _Source]) -> List[str]:
         return [source_key(pair.repo or "", "overview")]
     prefix = source_key(pair.repo or "", "")
     return [k for k in sources if k.startswith(prefix) and not k.endswith("::overview")]
+
+
+def recheck_pairs(
+    embedder: Optional[Embedder],
+    recheck: List[QAPair],
+    sources: Dict[str, _Source],
+    kept: List[QAPair],
+    review: List[QAPair],
+) -> None:
+    """The pairs of changed sources, scored against the new text: kept when
+    still grounded, else sent to review — every one kept without an embedder.
+    Blocking (embeddings)."""
+    if embedder is None or not recheck:
+        kept.extend(recheck)
+        return
+    scores = _grounding_for(embedder, recheck, sources)
+    for pair, score in zip(recheck, scores, strict=True):
+        pair.grounding = score
+        (kept if score >= thresholds_of(embedder).grounding else review).append(pair)
+
+
+def question_index(
+    embedder: Optional[Embedder], pairs: Sequence[QAPair]
+) -> SemanticIndex:
+    """The questions of ``pairs``, embedded: what a new question is checked
+    against, and what a prompt is steered away from. Blocking."""
+    index = SemanticIndex()
+    if embedder is not None and pairs:
+        questions = [p.question for p in pairs]
+        index.add(questions, embedder.embed(questions))
+    return index
+
+
+def guidance_for(
+    text: str, index: SemanticIndex, embedder: Embedder
+) -> Tuple[List[str], List[str]]:
+    """``(avoid, focus)`` for a prompt over ``text``: the existing questions
+    nearest to it, and its sections no question covers yet. Blocking."""
+    sections = _chunks([text])
+    if not sections or not len(index):
+        return [], []
+    vectors = embedder.embed(sections)
+    avoid = nearest_texts(vectors, index, MAX_AVOID_QUESTIONS, AVOID_MIN_SIMILARITY)
+    uncovered = uncovered_sections(
+        sections, vectors, index, thresholds_of(embedder).uncovered
+    )
+    # All sections uncovered says nothing the plain prompt doesn't.
+    focus = uncovered[:MAX_FOCUS_SECTIONS] if len(uncovered) < len(sections) else []
+    return avoid, focus
+
+
+def screen_pairs(
+    embedder: Optional[Embedder],
+    fresh: List[QAPair],
+    sources: Dict[str, _Source],
+    index: SemanticIndex,
+    review: List[QAPair],
+    errors: List[str],
+) -> Tuple[List[QAPair], int]:
+    """The generated pairs that make it in, and how many were rephrasings.
+
+    A pair whose question is a rephrasing of an indexed one is dropped; one
+    whose answer is far from its sources goes to ``review``; the rest are
+    accepted and indexed in turn. Without an embedder, or when it fails
+    mid-run (noted in ``errors``), every pair is accepted unscreened — the
+    generation is done, its pairs are not lost to the checks. Blocking.
+    """
+    if embedder is None or not fresh:
+        return fresh, 0
+    try:
+        vectors = embedder.embed([p.question for p in fresh])
+        grounding = _grounding_for(embedder, fresh, sources)
+    except Exception as exc:  # noqa: BLE001 — an endpoint can fail mid-run
+        logger.warning("Semantic checks skipped: %s", exc)
+        errors.append(
+            f"Duplicate and grounding checks skipped ({embedder.model_name} "
+            f"failed): {exc}"
+        )
+        return fresh, 0
+    accepted: List[QAPair] = []
+    duplicates = 0
+    thresholds = thresholds_of(embedder)
+    for pair, vector, score in zip(fresh, vectors, grounding, strict=True):
+        match = find_semantic_duplicate(vector, index, thresholds.dedup)
+        if match is not None:
+            duplicates += 1
+            logger.info(
+                "rephrasing (%.2f) of %r dropped: %r",
+                match[1],
+                index.texts[match[0]],
+                pair.question,
+            )
+            continue
+        pair.grounding = score
+        if score < thresholds.grounding:
+            review.append(pair)
+            logger.info(
+                "far from its source (%.2f), to review: %r", score, pair.question
+            )
+            continue
+        index.add([pair.question], vector)
+        accepted.append(pair)
+    return accepted, duplicates
+
+
+# A new pair the LLM grades below this is held out for review, with its reason.
+JUDGE_THRESHOLD = 0.6
+JUDGE_CONTEXT_CHARS = 6000
+
+JUDGE_RUBRIC = (
+    "You grade question/answer pairs for a dataset that tests and feeds a "
+    "portfolio chatbot. Grade each pair from 0 to 1: 1 when every claim of the "
+    "answer is supported by the context, a recruiter or visitor would ask the "
+    "question, and the question names its subject (never 'this project' or a "
+    "pronoun alone); lower for each point that fails; 0 for an answer the "
+    "context contradicts. Respond ONLY with a JSON array covering every pair, "
+    '[{"id":"...","score":0.8,"reason":"a few words"}].'
+)
+
+
+def _parse_grades(raw: str) -> Dict[str, Tuple[float, str]]:
+    """``id -> (score, reason)`` from a grader's answer; what can't be read is
+    left out (those pairs stay ungraded)."""
+    text = _extract_json_array(raw)
+    try:
+        parsed = json.loads(text)
+        objects = parsed if isinstance(parsed, list) else []
+    except ValueError:
+        objects = []
+        for obj in _complete_objects(text):
+            try:
+                objects.append(json.loads(obj))
+            except ValueError:
+                continue
+    grades: Dict[str, Tuple[float, str]] = {}
+    for obj in objects:
+        if not isinstance(obj, dict) or not isinstance(obj.get("id"), str):
+            continue
+        score = _confidence(obj.get("score"))
+        if score is None:
+            continue
+        reason = obj.get("reason")
+        grades[obj["id"]] = (
+            score,
+            reason.strip()[:200] if isinstance(reason, str) else "",
+        )
+    return grades
+
+
+async def grade_pairs(
+    grader: CompletionFn,
+    pairs: List[QAPair],
+    sources: Dict[str, "_Source"],
+    review: List[QAPair],
+    errors: List[str],
+    *,
+    rubric: str = JUDGE_RUBRIC,
+    context_chars: int = JUDGE_CONTEXT_CHARS,
+) -> List[QAPair]:
+    """Grade new pairs with the LLM, one call per group sharing their sources
+    (a section's items, a repo's docs batch), against those sources' text.
+
+    Returns the pairs graded :data:`JUDGE_THRESHOLD` or above, and those it
+    couldn't grade (a failed call is noted in ``errors``: the pairs are kept,
+    not lost to the check); the others go to ``review``, their grade and its
+    reason recorded (``judge``, ``judge_note``)."""
+    groups: Dict[Tuple[str, ...], List[QAPair]] = {}
+    for pair in pairs:
+        groups.setdefault(tuple(pair.sources), []).append(pair)
+
+    async def grade(keys: Tuple[str, ...], group: List[QAPair]) -> None:
+        context = "\n\n".join(sources[k].text for k in keys if k in sources)
+        listing = "\n".join(
+            json.dumps(
+                {"id": p.id, "question": p.question, "answer": p.answer},
+                ensure_ascii=False,
+            )
+            for p in group
+        )
+        req = CompletionRequest(
+            system=rubric,
+            user=f"Context:\n{context[:context_chars]}\n\nPairs:\n{listing}",
+            max_tokens=min(1500, 200 + 80 * len(group)),
+        )
+        try:
+            raw = await grader(req)
+        except ProviderError as exc:
+            errors.append(
+                f"Grading skipped for {len(group)} pair(s): {str(exc)[:MAX_ERROR_CHARS]}"
+            )
+            return
+        grades = _parse_grades(raw)
+        for pair in group:
+            if pair.id in grades:
+                pair.judge, pair.judge_note = grades[pair.id]
+
+    await gather_limited(REPO_CONCURRENCY, [grade(k, g) for k, g in groups.items()])
+    kept: List[QAPair] = []
+    for pair in pairs:
+        if pair.judge is not None and pair.judge < JUDGE_THRESHOLD:
+            review.append(pair)
+            logger.info(
+                "graded %.2f (%s), to review: %r",
+                pair.judge,
+                pair.judge_note,
+                pair.question,
+            )
+        else:
+            kept.append(pair)
+    return kept
 
 
 async def build_qa_dataset(
@@ -1010,6 +1236,7 @@ async def build_qa_dataset(
     embedder: Optional[Embedder] = None,
     on_progress: Optional[ProgressFn] = None,
     selection: Optional[Selection] = None,
+    grader: Optional[CompletionFn] = None,
 ) -> QADataset:
     """Build the next version of the dataset from ``previous`` (empty = full run).
 
@@ -1112,21 +1339,8 @@ async def build_qa_dataset(
     review: List[QAPair] = []
 
     def prepare() -> Tuple[SemanticIndex, List[_Task]]:
-        if embedder is not None and recheck:
-            scores = _grounding_for(embedder, recheck, sources)
-            for pair, score in zip(recheck, scores, strict=True):
-                pair.grounding = score
-                if score >= config.answer_grounding_threshold:
-                    kept.append(pair)
-                else:
-                    review.append(pair)
-        else:
-            kept.extend(recheck)
-        index = SemanticIndex()
-        if embedder is not None:
-            questions = [p.question for p in profile + kept]
-            if questions:
-                index.add(questions, embedder.embed(questions))
+        recheck_pairs(embedder, recheck, sources, kept, review)
+        index = question_index(embedder, profile + kept)
         return index, _plan_tasks(repos, docs_by_repo, sources, index, embedder)
 
     carried = len(kept)
@@ -1183,50 +1397,11 @@ async def build_qa_dataset(
     existing = [p for p in clean if id(p) not in fresh_ids]
     fresh = [p for p in clean if id(p) in fresh_ids]
 
-    semantic_duplicates = 0
-
-    def screen() -> List[QAPair]:
-        nonlocal semantic_duplicates
-        if embedder is None or not fresh:
-            return fresh
-        accepted: List[QAPair] = []
-        try:
-            vectors = embedder.embed([p.question for p in fresh])
-            grounding = _grounding_for(embedder, fresh, sources)
-        except Exception as exc:  # noqa: BLE001 — an endpoint can fail mid-run
-            # The generation is done: keep its pairs, unscreened, rather than
-            # lose them to the checks — and say so in the run's errors.
-            logger.warning("Semantic checks skipped: %s", exc)
-            errors.append(
-                f"Duplicate and grounding checks skipped ({embedder.model_name} "
-                f"failed): {exc}"
-            )
-            return fresh
-        for pair, vector, score in zip(fresh, vectors, grounding, strict=True):
-            match = find_semantic_duplicate(
-                vector, index, config.semantic_dedup_threshold
-            )
-            if match is not None:
-                semantic_duplicates += 1
-                logger.info(
-                    "rephrasing (%.2f) of %r dropped: %r",
-                    match[1],
-                    index.texts[match[0]],
-                    pair.question,
-                )
-                continue
-            pair.grounding = score
-            if score < config.answer_grounding_threshold:
-                review.append(pair)
-                logger.info(
-                    "far from its source (%.2f), to review: %r", score, pair.question
-                )
-                continue
-            index.add([pair.question], vector)
-            accepted.append(pair)
-        return accepted
-
-    accepted = await cpu_bound(screen)  # embedding batches: core/cpu.py
+    accepted, semantic_duplicates = await cpu_bound(  # embedding batches: core/cpu.py
+        screen_pairs, embedder, fresh, sources, index, review, errors
+    )
+    if grader is not None:
+        accepted = await grade_pairs(grader, accepted, sources, review, errors)
 
     # A failed call's sources keep their previous hash (or none), so the next
     # run retries them instead of believing them up to date.
@@ -1392,6 +1567,8 @@ Each line of `train.jsonl` is one record:
 | `confidence` | number | 0–1: how well the source supports the answer, as reported by the LLM; 1.0 for `profile` and `repo` pairs — absent when the model gave none |
 | `sources` | list | Source the pair was generated from (`<repo>::overview` or `<repo>::<doc path>`) — absent for `profile` and `repo` pairs |
 | `grounding` | number | Cosine similarity between the answer and the closest passage of its source — absent when not computed |
+| `judge` | number | The LLM's grade of the pair, 0–1 (true to its source, useful, self-contained); below 0.6 the pair is held out in `review.jsonl` — absent when not graded |
+| `judge_note` | string | The grade's reason, in a few words |
 
 ## Composition
 
@@ -1422,11 +1599,18 @@ Each line of `train.jsonl` is one record:
 
 
 def publish_qa_dataset(
-    creds: Credentials, dataset: QADataset, username: str, repo_id: str
+    creds: Credentials,
+    dataset: QADataset,
+    username: str,
+    repo_id: str,
+    *,
+    card: Optional[str] = None,
+    commit_message: Optional[str] = None,
 ) -> dict:
     """Push ``train.jsonl``, ``review.jsonl``, ``manifest.json`` and ``README.md``
     to a private dataset in one commit — the manifest is what the next run
-    diffs against, so it must never land without the pairs it describes."""
+    diffs against, so it must never land without the pairs it describes.
+    ``card`` replaces the GitHub dataset card (another job's dataset)."""
     from huggingface_hub import CommitOperationAdd
 
     from server.services.huggingface import (
@@ -1447,12 +1631,13 @@ def publish_qa_dataset(
     except HuggingFaceNotConfiguredError as exc:
         raise JobError(str(exc)) from exc
     ensure_private_dataset_repo(api, repo_id)
-    card = dataset_card(
-        dataset,
-        username,
-        _env("HF_QA_DATASET_LICENSE"),
-        _env("HF_QA_DATASET_LICENSE_LINK"),
-    )
+    if card is None:
+        card = dataset_card(
+            dataset,
+            username,
+            _env("HF_QA_DATASET_LICENSE"),
+            _env("HF_QA_DATASET_LICENSE_LINK"),
+        )
     api.create_commit(
         repo_id=repo_id,
         repo_type="dataset",
@@ -1468,7 +1653,8 @@ def publish_qa_dataset(
             ),
             CommitOperationAdd("README.md", card.encode("utf-8")),
         ],
-        commit_message=f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
+        commit_message=commit_message
+        or f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
     )
     return {
         "repo": repo_id,
@@ -1602,6 +1788,7 @@ async def generate(
             previous=previous,
             embedder=embedder,
             on_progress=on_progress,
+            grader=complete,
         )
     finally:
         await client.close()
@@ -1728,6 +1915,7 @@ async def generate_from_recipe(
             embedder=embedder,
             on_progress=on_progress,
             selection=selection,
+            grader=complete,
         )
     finally:
         await client.close()

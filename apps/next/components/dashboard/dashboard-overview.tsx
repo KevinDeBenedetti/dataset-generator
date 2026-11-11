@@ -244,9 +244,9 @@ export function DashboardOverview() {
                   href={datasetHref(d.id)}
                   className="group flex items-center justify-between gap-3 py-3 transition-colors hover:bg-accent/40 -mx-2 px-2 rounded-md"
                 >
-                  <span className="min-w-0 flex-1 truncate font-medium inline-flex items-center gap-1.5">
+                  <span className="min-w-0 flex-1 font-medium inline-flex items-center gap-1.5">
                     {d.private && <Lock className="size-3 shrink-0 text-muted-foreground" />}
-                    <span className="truncate">{d.pretty_name || d.id}</span>
+                    <span className="min-w-0 wrap-anywhere">{d.pretty_name || d.id}</span>
                   </span>
                   <span className="shrink-0 text-sm text-muted-foreground">
                     {d.size_category ?? ''}
@@ -282,7 +282,7 @@ export function DashboardOverview() {
                   href={`/drafts/${encodeURIComponent(d.name)}`}
                   className="flex items-center justify-between gap-3 py-2 -mx-2 px-2 rounded-md hover:bg-accent/40"
                 >
-                  <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
+                  <span className="min-w-0 flex-1 font-medium wrap-anywhere">{d.name}</span>
                   <span className="shrink-0 text-sm text-muted-foreground">
                     {d.qa_sources_count ?? 0} pairs
                   </span>

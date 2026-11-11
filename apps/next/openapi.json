@@ -2548,6 +2548,199 @@
         }
       }
     },
+    "/resumes/{resume_id}/dataset": {
+      "get": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "The resume's dataset settings",
+        "description": "Where the resume's Q&A dataset publishes, its language, model and\npreset, with the next and the latest run. 404 until saved.",
+        "operationId": "get_resume_dataset_resumes__resume_id__dataset_get",
+        "parameters": [
+          {
+            "name": "resume_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Its id, from GET /resumes",
+              "title": "Resume Id"
+            },
+            "description": "Its id, from GET /resumes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeDatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "Save the resume's dataset settings",
+        "description": "Save them (the resume is read first: it must exist). A preset set or\nmoved runs first at its next time, then every day, week or month.",
+        "operationId": "put_resume_dataset_resumes__resume_id__dataset_put",
+        "parameters": [
+          {
+            "name": "resume_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Its id, from GET /resumes",
+              "title": "Resume Id"
+            },
+            "description": "Its id, from GET /resumes"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeDatasetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeDatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "Forget the resume's dataset settings",
+        "description": "The schedule stops; the dataset on Hugging Face stays.",
+        "operationId": "delete_resume_dataset_resumes__resume_id__dataset_delete",
+        "parameters": [
+          {
+            "name": "resume_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Its id, from GET /resumes",
+              "title": "Resume Id"
+            },
+            "description": "Its id, from GET /resumes"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resumes/{resume_id}/dataset/run": {
+      "post": {
+        "tags": [
+          "resumes"
+        ],
+        "summary": "Generate a draft from the resume",
+        "description": "Queue a generation with the saved settings (a worker runs it): poll\nGET /jobs/runs/{id}, review the draft, then POST /jobs/runs/{id}/publish.",
+        "operationId": "run_resume_dataset_resumes__resume_id__dataset_run_post",
+        "parameters": [
+          {
+            "name": "resume_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Its id, from GET /resumes",
+              "title": "Resume Id"
+            },
+            "description": "Its id, from GET /resumes"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/q_a/{dataset_name}/stats": {
       "get": {
         "tags": [
@@ -2843,6 +3036,68 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/embedding": {
+      "put": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Put Embedding Model",
+        "description": "Measure an embedding model of your endpoint on the built-in test set,\nthen use it, with its thresholds, for every check of your datasets.",
+        "operationId": "put_embedding_model_models_embedding_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingModelUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Delete Embedding Model",
+        "description": "Back to the server's embedding model (OPENAI_EMBEDDING_MODEL).",
+        "operationId": "delete_embedding_model_models_embedding_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
                 }
               }
             }
@@ -4335,6 +4590,84 @@
         ],
         "title": "Body_create_dataset_for_file_dataset_generate_file_post"
       },
+      "CalibrationCheck": {
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "accuracy": {
+            "type": "number",
+            "title": "Accuracy",
+            "description": "How well it separates its examples, 0-1"
+          },
+          "positives": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Positives",
+            "description": "min, median, max scores"
+          },
+          "negatives": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Negatives"
+          },
+          "examples": {
+            "type": "integer",
+            "title": "Examples"
+          }
+        },
+        "type": "object",
+        "required": [
+          "threshold",
+          "accuracy",
+          "positives",
+          "negatives",
+          "examples"
+        ],
+        "title": "CalibrationCheck"
+      },
+      "CalibrationOut": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dedup": {
+            "$ref": "#/components/schemas/CalibrationCheck"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/CalibrationCheck"
+          },
+          "uncovered": {
+            "$ref": "#/components/schemas/CalibrationCheck"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "dedup",
+          "grounding",
+          "uncovered"
+        ],
+        "title": "CalibrationOut"
+      },
       "CleanSimilarityPair": {
         "properties": {
           "keep_id": {
@@ -5661,6 +5994,30 @@
               }
             ],
             "title": "Grounding"
+          },
+          "judge": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge",
+            "description": "The LLM's grade, 0-1"
+          },
+          "judge_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge Note",
+            "description": "The grade's reason"
           }
         },
         "type": "object",
@@ -5842,6 +6199,21 @@
           "description"
         ],
         "title": "EmbeddingModelOut"
+      },
+      "EmbeddingModelUpdate": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Model",
+            "description": "An embedding model of your endpoint, \"openai:<id>\": measured on the built-in set, then used by your checks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model"
+        ],
+        "title": "EmbeddingModelUpdate"
       },
       "ErrorResponse": {
         "properties": {
@@ -8297,13 +8669,34 @@
           "embedding_model": {
             "type": "string",
             "title": "Embedding Model",
-            "description": "What the duplicate and grounding checks embed with: \"openai:<id>\" (OPENAI_EMBEDDING_MODEL, on your endpoint), \"\" without one",
+            "description": "What the duplicate and grounding checks embed with: \"openai:<id>\" (the one you chose, else OPENAI_EMBEDDING_MODEL, on your endpoint), \"\" without one",
             "default": ""
+          },
+          "embedding_chosen": {
+            "type": "boolean",
+            "title": "Embedding Chosen",
+            "description": "You chose it (else the server's OPENAI_EMBEDDING_MODEL)",
+            "default": false
+          },
+          "embedding_thresholds": {
+            "$ref": "#/components/schemas/ThresholdsOut"
+          },
+          "embedding_calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalibrationOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its thresholds' measurement; null: the defaults"
           }
         },
         "type": "object",
         "required": [
-          "providers"
+          "providers",
+          "embedding_thresholds"
         ],
         "title": "ModelsResponse"
       },
@@ -9445,6 +9838,206 @@
         "type": "object",
         "title": "ResumeBasics"
       },
+      "ResumeDatasetIn": {
+        "properties": {
+          "target_repo": {
+            "type": "string",
+            "maxLength": 193,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Target Repo",
+            "description": "Hugging Face dataset it publishes to ('namespace/name' or 'name')"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "en",
+              "fr"
+            ],
+            "title": "Language",
+            "description": "The pairs' language; auto: the resume's own",
+            "default": "auto"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = your LLM"
+          },
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Regenerate every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes what passes the checks and keeps the rest for review; off: it stops at a draft",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_repo"
+        ],
+        "title": "ResumeDatasetIn",
+        "description": "A resume's dataset settings: where it publishes, in which language, on\nwhich model, and the preset that regenerates it by itself."
+      },
+      "ResumeDatasetOut": {
+        "properties": {
+          "target_repo": {
+            "type": "string",
+            "maxLength": 193,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Target Repo",
+            "description": "Hugging Face dataset it publishes to ('namespace/name' or 'name')"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "en",
+              "fr"
+            ],
+            "title": "Language",
+            "description": "The pairs' language; auto: the resume's own",
+            "default": "auto"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = your LLM"
+          },
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Regenerate every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes what passes the checks and keeps the rest for review; off: it stops at a draft",
+            "default": true
+          },
+          "resume_id": {
+            "type": "string",
+            "title": "Resume Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "The resume's name when the settings were saved",
+            "default": ""
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At",
+            "description": "When the worker queues the next run"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRunRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most recent run, scheduled or started by you"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_repo",
+          "resume_id",
+          "updated_at"
+        ],
+        "title": "ResumeDatasetOut"
+      },
       "ResumeItem": {
         "properties": {
           "id": {
@@ -9569,6 +10162,18 @@
           "sections"
         ],
         "title": "ResumeOut"
+      },
+      "ResumeRunRequest": {
+        "properties": {
+          "full_refresh": {
+            "type": "boolean",
+            "title": "Full Refresh",
+            "description": "Ignore the published version and regenerate every item",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ResumeRunRequest"
       },
       "ResumeSection": {
         "properties": {
@@ -9909,6 +10514,32 @@
           "question2"
         ],
         "title": "SimilarityPair"
+      },
+      "ThresholdsOut": {
+        "properties": {
+          "dedup": {
+            "type": "number",
+            "title": "Dedup",
+            "description": "At or above: a rephrasing, dropped"
+          },
+          "grounding": {
+            "type": "number",
+            "title": "Grounding",
+            "description": "Below: an answer held for review"
+          },
+          "uncovered": {
+            "type": "number",
+            "title": "Uncovered",
+            "description": "Below: a section to ask about"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dedup",
+          "grounding",
+          "uncovered"
+        ],
+        "title": "ThresholdsOut"
       },
       "UrlGenerationRequest": {
         "properties": {

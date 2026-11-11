@@ -27,7 +27,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Protocol, Sequence, Tuple, cast
+from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -97,6 +97,33 @@ def _endpoint_configured(creds: Optional[Credentials]) -> bool:
     return creds is not None and _openai().configured(creds)
 
 
+@dataclass(frozen=True)
+class Thresholds:
+    """Where each check draws its line, on its embedding model's cosine scale:
+    a question at or above ``dedup`` of an existing one is a rephrasing, an
+    answer below ``grounding`` of its source is held for review, a section
+    below ``uncovered`` of every question is one to ask about."""
+
+    dedup: float
+    grounding: float
+    uncovered: float
+
+
+def default_thresholds() -> Thresholds:
+    """The defaults, measured on a small local model the server no longer runs
+    (core/config.py): an endpoint model is measured on the Models page."""
+    return Thresholds(
+        config.semantic_dedup_threshold,
+        config.answer_grounding_threshold,
+        config.uncovered_section_threshold,
+    )
+
+
+def thresholds_of(embedder: Any) -> Thresholds:
+    """The thresholds an embedder's checks use (a test's fake: the defaults)."""
+    return getattr(embedder, "thresholds", None) or default_thresholds()
+
+
 class EndpointEmbedder:
     """An embedding model of the caller's OpenAI-compatible endpoint.
 
@@ -104,10 +131,16 @@ class EndpointEmbedder:
     :class:`EmbeddingModelError`.
     """
 
-    def __init__(self, model_id: str, creds: Credentials):
+    def __init__(
+        self,
+        model_id: str,
+        creds: Credentials,
+        thresholds: Optional[Thresholds] = None,
+    ):
         self.model_id = model_id
         self.model_name = ENDPOINT_PREFIX + model_id
         self.creds = creds
+        self.thresholds = thresholds or default_thresholds()
 
     def embed(self, texts: Sequence[str]) -> np.ndarray:
         if not texts:
@@ -153,22 +186,57 @@ def _answers(embedder: EndpointEmbedder) -> bool:
     return ok
 
 
+@dataclass(frozen=True)
+class EmbeddingChoice:
+    """The model a user's checks embed with, and where its checks draw lines."""
+
+    model_id: str  # '' = none
+    thresholds: Thresholds
+    measured: bool  # measured for this model on the built-in set
+
+
+def embedding_choice(creds: Optional[Credentials]) -> EmbeddingChoice:
+    """For ``creds``' user: the embedding model chosen on the Models page,
+    else OPENAI_EMBEDDING_MODEL; with the thresholds measured for it there,
+    else the defaults. Never raises: a database failure leaves the defaults,
+    the checks run anyway."""
+    model_id = config.openai_embedding_model
+    thresholds, measured = default_thresholds(), False
+    user_id = creds.user_id if creds is not None else ""
+    if user_id:
+        try:
+            from server.services.calibration import load_choice
+
+            chosen, calibrated = load_choice(user_id, model_id)
+        except Exception as exc:  # noqa: BLE001 — degrade to the env's model
+            logger.warning("Could not read the embedding choice, using env: %s", exc)
+        else:
+            model_id = chosen or model_id
+            if calibrated is not None:
+                thresholds, measured = calibrated, True
+    return EmbeddingChoice(model_id, thresholds, measured)
+
+
 def default_embedding_model(creds: Optional[Credentials]) -> str:
-    """``openai:<OPENAI_EMBEDDING_MODEL>`` for ``creds`` with an endpoint, else
-    "" (unprobed: the checks compare the text when the endpoint can't embed)."""
-    if config.openai_embedding_model and _endpoint_configured(creds):
-        return ENDPOINT_PREFIX + config.openai_embedding_model
+    """``openai:<model>`` the checks embed with for ``creds``, with an endpoint,
+    else "" (unprobed: the checks compare the text when the endpoint can't embed)."""
+    model_id = embedding_choice(creds).model_id
+    if model_id and _endpoint_configured(creds):
+        return ENDPOINT_PREFIX + model_id
     return ""
 
 
 def get_embedder(creds: Optional[Credentials] = None) -> Optional[Embedder]:
     """The embedder of the duplicate, grounding and coverage checks for
-    ``creds``: OPENAI_EMBEDDING_MODEL on their endpoint when it answers, else
-    ``None`` — the lexical path. Blocking (a probe): call it in a thread."""
-    model_id = config.openai_embedding_model
-    if not model_id or not _endpoint_configured(creds):
+    ``creds``: their user's embedding model (or OPENAI_EMBEDDING_MODEL) on
+    their endpoint when it answers, with its thresholds — else ``None``, the
+    lexical path. Blocking (a database read, a probe): call it in a thread."""
+    choice = embedding_choice(creds)
+    if not choice.model_id or not _endpoint_configured(creds):
         return None
-    embedder = EndpointEmbedder(model_id, cast(Credentials, creds))
+    embedder = EndpointEmbedder(
+        choice.model_id, cast(Credentials, creds), choice.thresholds
+    )
     return embedder if _answers(embedder) else None
 
 

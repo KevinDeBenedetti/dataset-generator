@@ -46,11 +46,18 @@ def worker_name() -> str:
 
 
 def claim_next(worker: str) -> Optional[str]:
-    """Take the oldest queued run (or None). Safe with any number of workers."""
+    """Take the oldest queued run of a job this worker knows (or None). Safe
+    with any number of workers.
+
+    A run of a job it doesn't know stays queued for a worker that does: one
+    started before the job existed (a dev worker the code changed under, an
+    old pod during a rolling deploy) would otherwise fail it at once with
+    "Unknown job".
+    """
     with get_scoped_db() as db:
         row = db.scalar(
             select(JobRun)
-            .where(JobRun.status == "queued")
+            .where(JobRun.status == "queued", JobRun.job_id.in_(tuple(JOBS)))
             .order_by(JobRun.started_at, JobRun.id)
             .limit(1)
             .with_for_update(skip_locked=True)
@@ -234,8 +241,11 @@ async def run_once(worker: Optional[str] = None) -> Optional[str]:
 
 
 async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) -> None:
-    """The worker loop: sweep stale runs, claim, execute — until ``stop`` is set,
-    then drain the runs in progress for ``WORKER_DRAIN_SECONDS``."""
+    """The worker loop: sweep stale runs and queue the scheduled ones, claim,
+    execute — until ``stop`` is set, then drain the runs in progress for
+    ``WORKER_DRAIN_SECONDS``."""
+    from server.services.schedules import queue_due  # jobs -> queue: lazy
+
     worker = worker_name()
     slots = concurrency or config.worker_concurrency
     running: set[asyncio.Task] = set()
@@ -245,6 +255,10 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
     while not stop.is_set():
         if loop.time() - last_sweep > config.worker_heartbeat_seconds:
             await asyncio.to_thread(reap_stale)
+            try:
+                await asyncio.to_thread(queue_due)
+            except Exception as exc:  # noqa: BLE001 — DB blip: retry next sweep
+                logger.warning("schedule sweep failed: %s", exc)
             last_sweep = loop.time()
         claimed = None
         if len(running) < slots:

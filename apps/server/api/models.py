@@ -1,6 +1,7 @@
 """The model provider (an OpenAI-compatible endpoint), your LLM and the
 embedding model."""
 
+import logging
 import time
 from dataclasses import asdict
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
 from server.schemas.models import (
+    EmbeddingModelUpdate,
     ModelDefaultUpdate,
     ModelsResponse,
     ModelTestRequest,
@@ -25,9 +27,18 @@ from server.services.providers import (
     complete,
     validate_ref,
 )
-from server.services.semantic import default_embedding_model
+from server.services import calibration
+from server.services.semantic import (
+    ENDPOINT_PREFIX,
+    EmbeddingModelError,
+    EndpointEmbedder,
+    collection_models,
+    default_embedding_model,
+    embedding_choice,
+)
 
 router = APIRouter(prefix="/models", tags=["models"])
+logger = logging.getLogger(__name__)
 
 
 async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsResponse:
@@ -54,8 +65,28 @@ async def _snapshot(discover: bool, user_id: str, creds: Credentials) -> ModelsR
     return ModelsResponse(
         providers=providers,
         model=model,
-        embedding_model=default_embedding_model(creds),
+        **await run_in_threadpool(_embedding_view, user_id, creds),  # database
     )
+
+
+def _embedding_view(user_id: str, creds: Credentials) -> dict:
+    """The embedding model the user's checks use, its thresholds and their
+    measurement. Blocking (the database)."""
+    choice = embedding_choice(creds)
+    model_ref = default_embedding_model(creds)
+    chosen = False
+    report = None
+    try:
+        chosen = bool(calibration.load_choice(user_id, "")[0])
+        report = calibration.calibration_report(user_id, model_ref)
+    except Exception as exc:  # noqa: BLE001 — the page still shows the defaults
+        logger.warning("Could not read the embedding choice: %s", exc)
+    return {
+        "embedding_model": model_ref,
+        "embedding_chosen": chosen,
+        "embedding_thresholds": asdict(choice.thresholds),
+        "embedding_calibration": report if choice.measured else None,
+    }
 
 
 @router.get("", response_model=ModelsResponse)
@@ -83,6 +114,43 @@ async def put_default_model(
         await run_in_threadpool(set_default_model, user.id, body.model, creds)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await _snapshot(False, user.id, creds)
+
+
+@router.put("/embedding", response_model=ModelsResponse)
+async def put_embedding_model(
+    body: EmbeddingModelUpdate,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+) -> ModelsResponse:
+    """Measure an embedding model of your endpoint on the built-in test set,
+    then use it, with its thresholds, for every check of your datasets."""
+    ref = (
+        body.model
+        if body.model.startswith(ENDPOINT_PREFIX)
+        else ENDPOINT_PREFIX + body.model
+    )
+    if ref not in {m.name for m in collection_models(creds)}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{body.model}' is not an embedding model of your endpoint",
+        )
+    embedder = EndpointEmbedder(ref.removeprefix(ENDPOINT_PREFIX), creds)
+    try:
+        report = await run_in_threadpool(calibration.measure, embedder)
+    except EmbeddingModelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await run_in_threadpool(calibration.save_choice, user.id, ref, report)
+    return await _snapshot(False, user.id, creds)
+
+
+@router.delete("/embedding", response_model=ModelsResponse)
+async def delete_embedding_model(
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+) -> ModelsResponse:
+    """Back to the server's embedding model (OPENAI_EMBEDDING_MODEL)."""
+    await run_in_threadpool(calibration.reset_choice, user.id)
     return await _snapshot(False, user.id, creds)
 
 

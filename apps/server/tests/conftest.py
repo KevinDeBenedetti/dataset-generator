@@ -10,6 +10,9 @@ os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
 os.environ["OPENAI_LLM_MODEL"] = "gpt-4o-mini"
 # No OPENAI_EMBEDDING_MODEL: the checks take their lexical path, and the code
 # that embeds takes an injected fake (see tests/services/test_semantic.py).
+# Pinned empty, not just left unset: core/config.py loads the developer's .env,
+# which would fill it in (load_dotenv never overrides a variable already set).
+os.environ["OPENAI_EMBEDDING_MODEL"] = ""
 # The auth tests exercise the local email/password login and the plain cookie
 # names; outside development the app turns the former off and prefixes the
 # latter with __Host- (see Config), so pin the test-suite values.

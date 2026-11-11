@@ -283,7 +283,7 @@ export default function DraftDetailPage() {
               </div>
             )}
             {sources.length > 0 && (
-              <table className="table">
+              <table className="table stack-table">
                 <thead>
                   <tr>
                     <th>Source</th>
@@ -299,15 +299,21 @@ export default function DraftDetailPage() {
                       {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
                           false positive: static cell; the icon is aria-hidden (see
                           Icon) and the cell has visible accessible text (the label). */}
-                      <td>
+                      <td data-label="Source">
                         <SourceCell source={source} />
                       </td>
-                      <td>
+                      <td data-label="Type">
                         <span className="tag">{source.kind}</span>
                       </td>
-                      <td className="mono">{source.qa_count}</td>
-                      <td className="muted">{relativeTime(source.first_seen_at, now)}</td>
-                      <td className="muted">{relativeTime(source.last_seen_at, now)}</td>
+                      <td className="mono" data-label="Q/A pairs">
+                        {source.qa_count}
+                      </td>
+                      <td className="muted" data-label="First seen">
+                        {relativeTime(source.first_seen_at, now)}
+                      </td>
+                      <td className="muted" data-label="Last seen">
+                        {relativeTime(source.last_seen_at, now)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

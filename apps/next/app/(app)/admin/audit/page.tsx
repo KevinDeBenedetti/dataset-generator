@@ -32,7 +32,7 @@ export default function AdminAuditPage() {
       </div>
       <div className="card-body" style={{ overflowX: 'auto' }}>
         {error && <p className="hint">{error.message}</p>}
-        <table className="table" style={{ width: '100%' }}>
+        <table className="table stack-table" style={{ width: '100%' }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left' }}>When</th>
@@ -45,11 +45,15 @@ export default function AdminAuditPage() {
           <tbody>
             {(data?.entries ?? []).map((entry) => (
               <tr key={entry.id}>
-                <td className="hint">{new Date(entry.created_at).toLocaleString()}</td>
-                <td className="mono">{entry.action}</td>
-                <td>{entry.actor ?? '—'}</td>
-                <td>{entry.target ?? '—'}</td>
-                <td className="mono hint">
+                <td className="hint" data-label="When">
+                  {new Date(entry.created_at).toLocaleString()}
+                </td>
+                <td className="mono" data-label="Action">
+                  {entry.action}
+                </td>
+                <td data-label="By">{entry.actor ?? '—'}</td>
+                <td data-label="On">{entry.target ?? '—'}</td>
+                <td className="mono hint" data-label="Detail">
                   {Object.keys(entry.detail).length ? JSON.stringify(entry.detail) : ''}
                   {entry.ip ? ` · ${entry.ip}` : ''}
                 </td>
