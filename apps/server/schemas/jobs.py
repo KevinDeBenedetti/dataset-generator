@@ -68,6 +68,8 @@ class DraftPair(BaseModel):
     repo: Optional[str] = None
     confidence: Optional[float] = None
     grounding: Optional[float] = None
+    judge: Optional[float] = Field(None, description="The LLM's grade, 0-1")
+    judge_note: Optional[str] = Field(None, description="The grade's reason")
 
 
 class DraftPreview(BaseModel):

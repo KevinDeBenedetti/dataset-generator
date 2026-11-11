@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Icon } from '@/components/app/icon'
+import { ShellTools } from '@/components/app/app-topbar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +52,17 @@ const NAV: { label: string; items: NavItem[] }[] = [
   },
 ]
 
-export function AppSidebar() {
+// The static sidebar on wide screens; below the drawer breakpoint
+// (app-shell.css) the same element slides in over the page while `open`.
+export function AppSidebar({
+  open,
+  onClose,
+  ref,
+}: {
+  open: boolean
+  onClose: () => void
+  ref?: React.Ref<HTMLElement>
+}) {
   const pathname = usePathname() ?? ''
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
@@ -79,7 +90,12 @@ export function AppSidebar() {
   const logoutMutation = useLogout()
 
   return (
-    <aside className="sidebar">
+    <aside
+      id="app-sidebar"
+      ref={ref}
+      className={cn('sidebar', open && 'open')}
+      aria-label="Navigation"
+    >
       <div className="sb-brand">
         <div className="sb-logo">
           <Icon name="layers" />
@@ -90,6 +106,14 @@ export function AppSidebar() {
           </div>
           <div className="sb-ver">v{pkg.version}</div>
         </div>
+        <button
+          type="button"
+          className="icon-btn sb-close"
+          aria-label="Close navigation"
+          onClick={onClose}
+        >
+          <Icon name="x" />
+        </button>
       </div>
       <nav className="sb-scroll">
         {NAV.map((group) => (
@@ -104,6 +128,7 @@ export function AppSidebar() {
                     key={it.href}
                     href={it.href}
                     className={cn('sb-link', isActive(it.href) && 'active')}
+                    onClick={onClose}
                   >
                     <Icon name={it.icon} />
                     <span>{it.label}</span>
@@ -137,7 +162,11 @@ export function AppSidebar() {
         {user?.role === 'admin' && (
           <div className="sb-group">
             <div className="sb-label">Admin</div>
-            <Link href="/admin" className={cn('sb-link', isActive('/admin') && 'active')}>
+            <Link
+              href="/admin"
+              className={cn('sb-link', isActive('/admin') && 'active')}
+              onClick={onClose}
+            >
               <Icon name="shield" />
               <span>Backoffice</span>
             </Link>
@@ -145,7 +174,11 @@ export function AppSidebar() {
         )}
         <div className="sb-group">
           <div className="sb-label">Account</div>
-          <Link href="/settings" className={cn('sb-link', isActive('/settings') && 'active')}>
+          <Link
+            href="/settings"
+            className={cn('sb-link', isActive('/settings') && 'active')}
+            onClick={onClose}
+          >
             <Icon name="settings" />
             <span>Settings</span>
           </Link>
@@ -156,6 +189,10 @@ export function AppSidebar() {
         </div>
       </nav>
       <div className="sb-foot">
+        {/* Phones only: the top bar has no room for these there. */}
+        <div className="sb-tools">
+          <ShellTools />
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger className="sb-user">
             <span className="avatar">{initialsFor(user?.email)}</span>

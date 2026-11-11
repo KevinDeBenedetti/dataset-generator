@@ -3,8 +3,10 @@
 from server.models import (  # noqa: F401
     dataset,
     dataset_recipe,
+    embedding_calibration,
     identity,
     job_run,
+    job_schedule,
     model_defaults,
     platform_settings,
     quality_rules,

@@ -13,13 +13,17 @@ import { cn } from '@/lib/utils'
 type Section = 'new' | 'review' | 'removed'
 type Edit = { question: string; answer: string }
 
-// Answers this far from their source are worth a second look.
+// Answers this far from their source, or graded this low by the LLM, are
+// worth a second look (the server holds grades below 0.6 for review).
 const LOW_GROUNDING = 0.6
+const LOW_GRADE = 0.6
 
 function Score({ label, value }: { label: string; value: number | null | undefined }) {
   if (value == null) return null
+  const low =
+    (label === 'grounding' && value < LOW_GROUNDING) || (label === 'grade' && value < LOW_GRADE)
   return (
-    <span className={cn('tag', label === 'grounding' && value < LOW_GROUNDING && 'gh-low')}>
+    <span className={cn('tag', low && 'gh-low')}>
       {label} {formatPercent(value, 1)}
     </span>
   )
@@ -59,6 +63,12 @@ function PairCard({
         {pair.repo && <span className="tag">{pair.repo}</span>}
         <Score label="confidence" value={pair.confidence} />
         <Score label="grounding" value={pair.grounding} />
+        <Score label="grade" value={pair.judge} />
+        {pair.judge_note && (pair.judge ?? 1) < LOW_GRADE && (
+          <span className="tag gh-low" title="The grader's reason">
+            {pair.judge_note}
+          </span>
+        )}
         {flag && <span className="tag gh-low">fails your rules: {flag}</span>}
         {edit && <span className="badge badge-info">Edited</span>}
         {editable && onEdit && !draft && (
@@ -200,7 +210,14 @@ export function DraftReview({ runId }: { runId: string }) {
   }
   if (run.error) return <p className="hub-error">{run.error.message}</p>
   const data = run.data
-  const fromRecipe = data.job === 'github-recipe'
+  // Back to where the draft was started: a recipe's GitHub page, a resume's
+  // page, else the drafts list.
+  const back =
+    data.job === 'github-recipe'
+      ? { href: '/github', label: 'GitHub' }
+      : data.job === 'resume-qa'
+        ? { href: '/resume', label: 'Resume' }
+        : { href: '/drafts', label: 'Drafts' }
   const recipeName =
     (data.options?.recipe as { name?: string } | undefined)?.name ??
     (data.options?.title as string | undefined) ??
@@ -209,9 +226,9 @@ export function DraftReview({ runId }: { runId: string }) {
 
   const header = (
     <>
-      <Link href={fromRecipe ? '/github' : '/drafts'} className="btn btn-ghost btn-sm hub-back">
+      <Link href={back.href} className="btn btn-ghost btn-sm hub-back">
         <Icon name="chevronLeft" />
-        {fromRecipe ? 'GitHub' : 'Drafts'}
+        {back.label}
       </Link>
       <div className="page-head">
         <div>

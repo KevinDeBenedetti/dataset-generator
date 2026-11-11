@@ -45,7 +45,7 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
         </a>
       </div>
       <div className="hub-table-wrap">
-        <table className="table">
+        <table className="table stack-table">
           <thead>
             <tr>
               <th>Path</th>
@@ -62,12 +62,12 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
               const used = usage.get(file.path)
               return (
                 <tr key={file.path}>
-                  <td className="mono hub-path">
+                  <td className="mono hub-path" data-label="Path">
                     {slash > 0 && <span className="muted">{file.path.slice(0, slash + 1)}</span>}
                     {file.path.slice(slash + 1)}
                     {file.lfs && <span className="tag hub-lfs">LFS</span>}
                   </td>
-                  <td>
+                  <td data-label="Used by">
                     {used ? (
                       <span className="hub-chips">
                         {used.map((label) => (
@@ -80,7 +80,9 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
                       <span className="muted">—</span>
                     )}
                   </td>
-                  <td className="num mono">{formatBytes(file.size)}</td>
+                  <td className="num mono" data-label="Size">
+                    {formatBytes(file.size)}
+                  </td>
                   <td className="num">
                     <a
                       className="icon-btn"

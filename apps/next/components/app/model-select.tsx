@@ -15,8 +15,10 @@ interface ModelSelectProps {
   className?: string
 }
 
+// max-w-full: a long model name never pushes the select past a narrow screen;
+// the open list still shows each name in full.
 const DEFAULT_CLASS =
-  'h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring'
+  'h-9 max-w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring'
 
 // Models grouped by provider; an unconfigured provider's models are listed but
 // disabled, so it's clear the option exists and what enabling it takes.

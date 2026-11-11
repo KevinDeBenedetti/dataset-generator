@@ -150,7 +150,23 @@ services:
       target: dev
       args:
         APP_PORT: ${SERVER_PORT:-8020}
-    command: ["uv", "run", "--no-sync", "python", "-m", "server.worker"]
+    # Restarted on every source change, like the API's --reload (watchfiles,
+    # which uvicorn's reloader uses too): a worker left on old code would not
+    # know a job added since. SIGINT drains the run in progress first, for up
+    # to the stop grace period.
+    command:
+      - uv
+      - run
+      - --no-sync
+      - watchfiles
+      - --target-type
+      - command
+      - --filter
+      - python
+      - --sigint-timeout
+      - "30"
+      - python -m server.worker
+      - /app/server
     volumes:
       - ./apps/server:/app/server
       - ./pyproject.toml:/app/pyproject.toml:ro

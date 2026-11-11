@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -30,6 +31,28 @@ class ProviderOut(BaseModel):
     )
 
 
+class ThresholdsOut(BaseModel):
+    dedup: float = Field(..., description="At or above: a rephrasing, dropped")
+    grounding: float = Field(..., description="Below: an answer held for review")
+    uncovered: float = Field(..., description="Below: a section to ask about")
+
+
+class CalibrationCheck(BaseModel):
+    threshold: float
+    accuracy: float = Field(..., description="How well it separates its examples, 0-1")
+    positives: Dict[str, float] = Field(..., description="min, median, max scores")
+    negatives: Dict[str, float]
+    examples: int
+
+
+class CalibrationOut(BaseModel):
+    model: str
+    dedup: CalibrationCheck
+    grounding: CalibrationCheck
+    uncovered: CalibrationCheck
+    measured_at: Optional[datetime] = None
+
+
 class ModelsResponse(BaseModel):
     providers: List[ProviderOut]
     model: str = Field(
@@ -40,7 +63,24 @@ class ModelsResponse(BaseModel):
     embedding_model: str = Field(
         "",
         description="What the duplicate and grounding checks embed with: "
-        '"openai:<id>" (OPENAI_EMBEDDING_MODEL, on your endpoint), "" without one',
+        '"openai:<id>" (the one you chose, else OPENAI_EMBEDDING_MODEL, on your '
+        'endpoint), "" without one',
+    )
+    embedding_chosen: bool = Field(
+        False, description="You chose it (else the server's OPENAI_EMBEDDING_MODEL)"
+    )
+    embedding_thresholds: ThresholdsOut
+    embedding_calibration: Optional[CalibrationOut] = Field(
+        None, description="Its thresholds' measurement; null: the defaults"
+    )
+
+
+class EmbeddingModelUpdate(BaseModel):
+    model: str = Field(
+        ...,
+        max_length=200,
+        description='An embedding model of your endpoint, "openai:<id>": '
+        "measured on the built-in set, then used by your checks",
     )
 
 

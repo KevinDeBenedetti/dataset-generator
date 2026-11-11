@@ -17,7 +17,7 @@ v5 and v6, read as the portfolio's indexer reads them (portfolio-next,
 import html
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 import httpx
 
@@ -57,6 +57,25 @@ def instance_origin() -> str:
     parts = urlsplit(instance_url())
     port = f":{parts.port}" if parts.port else ""
     return f"{parts.scheme}://{parts.hostname or ''}{port}"
+
+
+def _https_upgrade(request_url: str, location: str) -> Optional[str]:
+    """The https address of the instance when ``location`` only moves the
+    request to https on the same host and path (an ingress enforcing TLS),
+    else None: any other redirect is the operator's to look into."""
+    root = urlsplit(instance_url())
+    if root.scheme != "http" or not location:
+        return None
+    target = urlsplit(urljoin(request_url, location))
+    asked = urlsplit(request_url)
+    if (target.scheme, target.hostname, target.path) != (
+        "https",
+        asked.hostname,
+        asked.path,
+    ) or target.port not in (None, 443):
+        return None
+    # On https's own port: an http port given in REACTIVE_RESUME_URL goes.
+    return f"https://{target.netloc.rsplit(':443', 1)[0]}{root.path}"
 
 
 def _not_an_instance() -> ResumeUnavailableError:
@@ -106,6 +125,14 @@ async def _get(
 
     status = response.status_code
     if 300 <= status < 400:
+        https = _https_upgrade(
+            str(response.request.url), response.headers.get("location", "")
+        )
+        if https:
+            raise ResumeUnavailableError(
+                f"{instance_origin()} only answers over https: set "
+                f"REACTIVE_RESUME_URL={https}, so the key travels encrypted"
+            )
         raise ResumeUnavailableError(
             f"{instance_origin()} redirects ({status}): set REACTIVE_RESUME_URL "
             "to the instance's final address"

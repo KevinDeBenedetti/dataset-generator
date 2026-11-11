@@ -501,7 +501,7 @@ function Misses({
         </div>
       </div>
       <div className="coll-table-wrap">
-        <table className="table">
+        <table className="table stack-table">
           <thead>
             <tr>
               <th>Asked</th>
@@ -513,14 +513,14 @@ function Misses({
           <tbody>
             {result.misses.map((miss) => (
               <tr key={miss.row_idx}>
-                <td>{miss.query}</td>
-                <td>
+                <td data-label="Asked">{miss.query}</td>
+                <td data-label="Its own row">
                   <Link href={rowHref(collection, miss.row_idx)} className="hint">
                     Row {formatCount(miss.row_idx)}
                   </Link>
                   <div className="coll-cell-text">{miss.expected}</div>
                 </td>
-                <td>
+                <td data-label="Came first instead">
                   {miss.top_row_idx != null ? (
                     <>
                       <span className="coll-top-head">
@@ -538,7 +538,9 @@ function Misses({
                     <span className="hint">Nothing came back</span>
                   )}
                 </td>
-                <td className="coll-num mono">{miss.rank ?? `>${result.k}`}</td>
+                <td className="coll-num mono" data-label="Rank">
+                  {miss.rank ?? `>${result.k}`}
+                </td>
               </tr>
             ))}
           </tbody>

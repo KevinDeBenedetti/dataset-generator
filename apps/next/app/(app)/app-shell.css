@@ -196,6 +196,7 @@ kbd {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
 }
 .card-title {
@@ -215,6 +216,7 @@ kbd {
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -370,6 +372,76 @@ kbd {
   border-bottom: none;
 }
 
+/* Source URL of a generation run (components/dataset/recent-runs.tsx). */
+.table td.run-source {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phones: a list-style table (class stack-table) shows one block per row,
+   each cell under its column name taken from data-label, so every column
+   stays readable without sideways scrolling. The header row is replaced by
+   those labels, kept for screen readers. */
+@media (max-width: 640px) {
+  table.stack-table,
+  table.stack-table tbody,
+  table.stack-table tr,
+  table.stack-table td {
+    display: block;
+    width: 100%;
+  }
+  table.stack-table caption {
+    display: block;
+    margin: 0 0 6px;
+  }
+  table.stack-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  table.stack-table tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  table.stack-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  table.stack-table td {
+    padding: 5px 14px;
+    border: none;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table.stack-table td.run-source {
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+  }
+  /* A card body already insets its content. */
+  .card-body table.stack-table td {
+    padding-inline: 0;
+  }
+  table.stack-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--muted-foreground);
+  }
+}
+
 /* ---------- Progress ---------- */
 .progress {
   height: 7px;
@@ -385,8 +457,11 @@ kbd {
 }
 
 /* ---------- Tabs ---------- */
+/* Wraps onto a second row rather than pushing tabs out of view. */
 .tabs {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 2px;
   padding: 3px;
   background: var(--muted);
@@ -590,29 +665,44 @@ kbd {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 6px;
   border-radius: calc(var(--radius) - 3px);
+  text-align: left;
   cursor: pointer;
 }
 .sb-user:hover {
   background: var(--sidebar-accent);
 }
 .sb-user .meta {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
+/* A long address wraps instead of being cut off. */
 .sb-user .nm {
   font-size: 13px;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .sb-user .em {
   font-size: 11.5px;
   color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+/* Phones only (see the media queries below): documentation, theme and
+   notifications move here from the top bar. */
+.sb-tools {
+  display: none;
+}
+/* Drawer only: the button that closes it and the page dimmer behind it.
+   (Scoped: .icon-btn, declared later, would otherwise show it.) */
+.sidebar .sb-close {
+  display: none;
+}
+.sb-backdrop {
+  display: none;
 }
 
 .main {
@@ -633,11 +723,37 @@ kbd {
   background: color-mix(in oklch, var(--background) 80%, transparent);
   backdrop-filter: blur(10px);
 }
+/* Never squeezed on wide screens (the search field gives way first); on
+   phones the page name may wrap. */
 .crumbs {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
   font-size: 13.5px;
+}
+.crumb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.crumb-page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Opens the navigation drawer; shown below the drawer breakpoint only.
+   (Scoped: .icon-btn, declared later, would otherwise show it.) */
+.topbar .topbar-menu {
+  display: none;
+}
+.topbar-tools,
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
 }
 .crumbs .ic {
   width: 15px;
@@ -654,7 +770,8 @@ kbd {
   gap: 9px;
   height: 34px;
   padding: 0 11px;
-  min-width: 240px;
+  flex: 0 1 240px;
+  min-width: 140px;
   border: 1px solid var(--input);
   border-radius: calc(var(--radius) - 2px);
   color: var(--muted-foreground);
@@ -715,6 +832,11 @@ kbd {
   width: 100%;
   margin: 0 auto;
 }
+/* A URL or id longer than the line breaks instead of widening the page
+   (only when it cannot fit; zero specificity, so components can override). */
+.content :where(p, li, dd, dt, td, th, h1, h2, h3, h4, blockquote, figcaption) {
+  overflow-wrap: break-word;
+}
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -737,7 +859,12 @@ kbd {
 .page-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 9px;
+  max-width: 100%;
+}
+.page-actions > * {
+  max-width: 100%;
 }
 
 /* Stat cards */
@@ -838,6 +965,13 @@ kbd {
   font-family: var(--font-mono), ui-monospace, monospace;
 }
 
+/* The top bar's copy of the account: the sidebar footer, always on screen
+   here, shows the same address, role and sign-out. */
+@media (max-width: 1279px) {
+  .topbar-user {
+    display: none;
+  }
+}
 @media (max-width: 1100px) {
   .stat-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -845,13 +979,63 @@ kbd {
   .grid-3 {
     grid-template-columns: 1fr;
   }
+  /* The search field has no behaviour yet: below this width it would only
+     crowd the page name and the actions, so it stays a wide-screen
+     placeholder. */
+  .topbar-search {
+    display: none;
+  }
 }
+/* Drawer breakpoint (DRAWER_QUERY in components/app/app-shell.tsx): the
+   sidebar slides in over the page from the top bar's menu button. */
 @media (max-width: 920px) {
   .app {
     grid-template-columns: 1fr;
   }
   .sidebar {
-    display: none;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    width: min(288px, 86vw);
+    height: 100vh;
+    height: 100dvh;
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+  .sidebar.open {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.2s ease;
+  }
+  .sidebar .sb-close {
+    display: inline-flex;
+    margin-left: auto;
+  }
+  .sb-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    border: none;
+    background: color-mix(in oklch, var(--foreground) 30%, transparent);
+  }
+  body:has(.sidebar.open) {
+    overflow: hidden;
+  }
+  .topbar {
+    padding: 0 16px;
+    gap: 10px;
+  }
+  .topbar .topbar-menu {
+    display: inline-flex;
+    margin-left: -6px;
+  }
+  .topbar-tools {
+    gap: 6px;
   }
   .grid-2 {
     grid-template-columns: 1fr;
@@ -859,7 +1043,30 @@ kbd {
   .content {
     padding: 20px 16px 50px;
   }
-  .topbar-search {
+}
+/* Phones: the top bar keeps the menu, the page name and New dataset. The
+   product name is in the drawer header; documentation, theme and
+   notifications move to the drawer footer. */
+@media (max-width: 600px) {
+  .crumb-brand,
+  .topbar-tools {
     display: none;
+  }
+  .crumbs {
+    flex-shrink: 1;
+  }
+  .sb-tools {
+    display: flex;
+    gap: 6px;
+    padding: 0 0 8px;
+  }
+  .stat-delta {
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar.open {
+    transition: none;
   }
 }

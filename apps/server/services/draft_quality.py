@@ -23,6 +23,10 @@ from server.services.quality_rules import get_quality_rules, rejection_reason
 # draft answers in seconds. The pairs beyond it are not compared.
 MAX_CHECKED = 400
 
+# Pairs built from exact data, not written by a model (jobs/qa_dataset.py
+# DETERMINISTIC_CATEGORIES, the resume job's facts): the rules don't apply.
+FACT_CATEGORIES = ("profile", "repo")
+
 
 def review_pairs(row: JobRun) -> List[Dict[str, Any]]:
     """The pairs of a draft that the review decides on."""
@@ -68,6 +72,10 @@ def check_draft(owner_id: str, run_id: str, threshold: float) -> Dict[str, Any]:
     rules = {**get_quality_rules(owner_id), "auto_reject_enabled": True}
     flagged: Dict[str, str] = {}
     for pair in pairs:
+        # Exact facts (a profile's, a repo's metadata) are short by design:
+        # "Kevin is based in Lyon." isn't a weak answer, the rules don't apply.
+        if pair.get("category") in FACT_CATEGORIES:
+            continue
         reason = rejection_reason(
             str(pair.get("answer", "")), pair.get("confidence"), rules
         )

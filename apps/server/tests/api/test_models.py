@@ -2,6 +2,7 @@
 
 from server.api.deps import get_credentials
 from server.tests.creds import FULL, make_creds
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -72,6 +73,51 @@ def test_put_default(client: TestClient, owner):
     assert response.status_code == 200
     update.assert_called_once_with(owner.id, "openai:gpt-4o", FULL)
     assert response.json()["model"] == "openai:gpt-4o"
+
+
+def test_an_embedding_model_is_measured_then_used(
+    client: TestClient, owner, monkeypatch
+):
+    """PUT /models/embedding measures the model on the built-in set, saves it
+    with its thresholds; DELETE goes back to the server's."""
+    from server.services import calibration
+    from server.tests.fake_embedder import FakeEmbedder
+
+    monkeypatch.setattr(config, "openai_embedding_model", "embed-default")
+    monkeypatch.setattr(
+        "server.api.models.collection_models",
+        lambda creds: [
+            SimpleNamespace(name="openai:embed-default"),
+            SimpleNamespace(name="openai:embed-large"),
+        ],
+    )
+    seen = []
+    real_measure = calibration.measure
+
+    def fake_measure(embedder):
+        seen.append(embedder.model_name)
+        return {**real_measure(FakeEmbedder()), "model": embedder.model_name}
+
+    monkeypatch.setattr(calibration, "measure", fake_measure)
+    saved = {}
+    monkeypatch.setattr(
+        calibration, "save_choice", lambda user, ref, report: saved.update(ref=ref)
+    )
+    with patch("server.api.models.get_default_model", return_value="openai:m"):
+        refused = client.put("/models/embedding", json={"model": "openai:nope"})
+        assert refused.status_code == 400 and "not an embedding model" in refused.text
+
+        response = client.put("/models/embedding", json={"model": "embed-large"})
+    assert response.status_code == 200, response.text
+    assert seen == ["openai:embed-large"] and saved == {"ref": "openai:embed-large"}
+    body = response.json()
+    assert set(body["embedding_thresholds"]) == {"dedup", "grounding", "uncovered"}
+
+    reset = []
+    monkeypatch.setattr(calibration, "reset_choice", lambda user: reset.append(user))
+    with patch("server.api.models.get_default_model", return_value="openai:m"):
+        assert client.delete("/models/embedding").status_code == 200
+    assert reset == [owner.id]
 
 
 def test_put_default_rejects_bad_ref(client: TestClient):

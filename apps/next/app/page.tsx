@@ -110,13 +110,15 @@ function Brand() {
 export default function HomePage() {
   return (
     <>
-      {/* Landing navigation */}
-      <nav className="sticky top-0 z-30 h-[60px] border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-full w-full max-w-[1080px] items-center gap-3.5 px-7">
+      {/* Landing navigation: one sticky row from md up. On phones the actions
+          and the section links wrap onto rows of their own, and the bar
+          scrolls away with the page. */}
+      <nav className="z-30 border-b border-border bg-background/80 backdrop-blur-md md:sticky md:top-0">
+        <div className="mx-auto flex min-h-[60px] w-full max-w-[1080px] flex-wrap items-center gap-x-3.5 gap-y-2 px-7 py-3 md:h-[60px] md:flex-nowrap md:py-0">
           <Link href="/">
             <Brand />
           </Link>
-          <div className="ml-[18px] hidden gap-1 md:flex">
+          <div className="order-last -ml-2.5 flex w-full flex-wrap gap-1 md:order-none md:ml-[18px] md:w-auto">
             {[
               { href: '#features', label: 'Features' },
               { href: '#workflow', label: 'Pipeline' },
@@ -132,7 +134,7 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 md:ml-auto">
             <ThemeToggle />
             <Button asChild size="sm" variant="ghost">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer">

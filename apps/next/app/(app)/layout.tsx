@@ -1,15 +1,6 @@
 import './app-shell.css'
-import { AppSidebar } from '@/components/app/app-sidebar'
-import { AppTopbar } from '@/components/app/app-topbar'
+import { AppShell } from '@/components/app/app-shell'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="app">
-      <AppSidebar />
-      <div className="main">
-        <AppTopbar />
-        <div className="content">{children}</div>
-      </div>
-    </div>
-  )
+  return <AppShell>{children}</AppShell>
 }

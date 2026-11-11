@@ -231,6 +231,58 @@ async def test_a_redirect_is_never_followed(instance):
 
 
 @pytest.mark.parametrize(
+    ("location", "message"),
+    [
+        # An ingress enforcing TLS: the value to set is named, port and path kept.
+        (
+            "https://cv.example.org:8443/rr/api/openapi/resumes",
+            None,
+        ),
+        (
+            "https://cv.example.org/rr/api/openapi/resumes",
+            "REACTIVE_RESUME_URL=https://cv.example.org/rr,",
+        ),
+        # Anywhere else: not followed, and the target isn't echoed.
+        ("https://evil.example/rr/api/openapi/resumes", None),
+        ("http://cv.example.org/elsewhere", None),
+    ],
+)
+async def test_an_https_upgrade_names_the_address_to_set(
+    instance, monkeypatch, location, message
+):
+    monkeypatch.setattr(config, "reactive_resume_url", "http://cv.example.org/rr/")
+    instance.json(
+        "/rr/api/openapi/resumes", {}, status=301, headers={"location": location}
+    )
+
+    with pytest.raises(rr.ResumeUnavailableError) as refused:
+        await rr.list_resumes()
+    if message:
+        assert message in str(refused.value) and "encrypted" in str(refused.value)
+    else:
+        assert "final address" in str(refused.value)
+        assert "evil" not in str(refused.value)
+    assert len(instance.requests) == 1  # never followed
+
+
+@pytest.mark.parametrize(
+    "configured", ["http://cv.example.org", "http://cv.example.org:80/"]
+)
+async def test_an_instance_root_upgraded_to_https(instance, monkeypatch, configured):
+    monkeypatch.setattr(config, "reactive_resume_url", configured)
+    instance.json(
+        "/api/openapi/resumes",
+        {},
+        status=301,
+        headers={"location": "https://cv.example.org/api/openapi/resumes"},
+    )
+    with pytest.raises(
+        rr.ResumeUnavailableError, match="REACTIVE_RESUME_URL=https://cv.example.org,"
+    ):
+        await rr.list_resumes()
+
+
+@pytest.mark.parametrize(
     ("status", "message"),
     [
         (401, "doesn't know REACTIVE_RESUME_API_KEY"),

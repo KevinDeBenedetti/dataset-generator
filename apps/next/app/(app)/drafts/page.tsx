@@ -26,8 +26,8 @@ function ToReview() {
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent/40"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{d.title}</span>
-                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                  <span className="block font-medium wrap-anywhere">{d.title}</span>
+                  <span className="block font-mono text-xs text-muted-foreground wrap-anywhere">
                     {d.target_repo}
                   </span>
                 </span>
@@ -47,7 +47,7 @@ export default function DraftsPage() {
   const drafts = data ?? []
 
   return (
-    <section className="max-w-3xl mx-auto flex flex-col gap-4 w-full p-4">
+    <section className="max-w-3xl mx-auto flex flex-col gap-4 w-full py-2 sm:p-4">
       <div className="mt-6 mb-4 text-center">
         <h1 className="text-3xl font-bold">Drafts</h1>
         <p className="mt-2 text-sm text-muted-foreground">

@@ -238,6 +238,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Phones: a one-line description would show a few words only; it wraps. */
+@media (max-width: 640px) {
+  .gh-repo-desc {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 .gh-repo-meta {
   display: flex;
   flex-wrap: wrap;

@@ -3,7 +3,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from server.core.config import config
 from server.services.credentials import Credentials
 from server.services.datasets import get_dataset_pairs
 from server.services.dedup import (
@@ -21,6 +20,7 @@ from server.services.semantic import (
     get_embedder,
     grounding_scores,
     split_sections,
+    thresholds_of,
 )
 
 # Sentinel: "resolve the caller's embedder" (None means "explicitly none").
@@ -287,7 +287,7 @@ class QAService:
         for item, score in zip(new_items, scores, strict=True):
             if score is None:
                 continue
-            needs_review = score < config.answer_grounding_threshold
+            needs_review = score < thresholds_of(self.embedder).grounding
             item["metadata"]["grounding_score"] = score
             item["metadata"]["needs_review"] = needs_review
             if needs_review:

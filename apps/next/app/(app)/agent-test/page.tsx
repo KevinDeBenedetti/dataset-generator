@@ -53,7 +53,7 @@ export default function AgentTestPage() {
   }
 
   return (
-    <section className="max-w-3xl mx-auto flex flex-col gap-4 p-4">
+    <section className="max-w-3xl mx-auto flex flex-col gap-4 py-2 sm:p-4">
       <h1 className="w-full mt-6 mb-1 text-3xl font-bold text-center">Verify QA agent</h1>
       <p className="text-sm text-muted-foreground text-center mb-2">
         Runs the QA agent on the text below and shows the raw model response and the parsed pairs —
@@ -74,7 +74,7 @@ export default function AgentTestPage() {
           onChange={(e) => setLanguage(e.target.value)}
           disabled={loading}
           aria-label="Target language"
-          className="h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+          className="h-9 max-w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
         >
           {LANGUAGES.map((l) => (
             <option key={l.value} value={l.value}>

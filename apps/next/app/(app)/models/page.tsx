@@ -5,8 +5,13 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
-import { useModels, useTestModel, useUpdateDefaultModel } from '@/hooks/use-models'
-import type { ModelTestResponse, ProviderOut } from '@/api/types'
+import {
+  useEmbeddingModel,
+  useModels,
+  useTestModel,
+  useUpdateDefaultModel,
+} from '@/hooks/use-models'
+import type { ModelsResponse, ModelTestResponse, ProviderOut } from '@/api/types'
 
 function ProviderCard({ provider }: { provider: ProviderOut }) {
   const [selected, setSelected] = useState(provider.models[0]?.ref ?? '')
@@ -110,20 +115,96 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
   )
 }
 
-// Set by the deployment (OPENAI_EMBEDDING_MODEL), not per user: the duplicate
-// thresholds belong to a model.
-function EmbeddingModel({ model }: { model: string }) {
+const pct = (value: number) => `${Math.round(value * 100)}%`
+
+/** The checks' embedding model: picked among your endpoint's, measured on the
+ * built-in test set, and used with the thresholds the measurement put. */
+function EmbeddingModel({ data }: { data: ModelsResponse }) {
+  const options = data.providers.flatMap((p) => p.embedding_models ?? []).map((m) => m.ref)
+  const current = data.embedding_model ?? ''
+  const [picked, setPicked] = useState(current || options[0] || '')
+  const choose = useEmbeddingModel()
+  const t = data.embedding_thresholds
+  const report = data.embedding_calibration
+
+  const measure = () =>
+    choose.mutate(picked, {
+      onSuccess: (next) => {
+        const r = next.embedding_calibration
+        toast.success(
+          r
+            ? `Measured: duplicates from ${pct(r.dedup.threshold)}, grounding below ${pct(r.grounding.threshold)} held out`
+            : 'Embedding model saved',
+        )
+      },
+      onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+    })
+
   return (
     <div className="field">
-      <span className="label">Embedding model</span>
-      <div className="input mono" aria-readonly="true" title={model || undefined}>
-        {model ? model.replace(/^openai:/, '') : 'None'}
-      </div>
+      <label htmlFor="embedding-model" className="label">
+        Embedding model
+      </label>
+      {options.length === 0 ? (
+        <div className="input mono" aria-readonly="true">
+          None
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select
+            id="embedding-model"
+            className="input"
+            value={picked}
+            onChange={(e) => setPicked(e.target.value)}
+            disabled={choose.isPending}
+          >
+            {options.map((ref) => (
+              <option key={ref} value={ref}>
+                {ref.replace(/^openai:/, '')}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={!picked || choose.isPending}
+            onClick={measure}
+            title="Measure its thresholds on the built-in test set, then use it"
+          >
+            <Icon
+              name={choose.isPending ? 'loader' : 'check'}
+              className={choose.isPending ? 'animate-spin' : undefined}
+            />
+            Measure and use
+          </button>
+        </div>
+      )}
       <div className="hint">
-        {model
-          ? "Duplicate and grounding checks, and new collections, embed with it on your endpoint; when it doesn't answer, the checks compare the words."
-          : 'None on your endpoint (OPENAI_EMBEDDING_MODEL): the duplicate and grounding checks compare the words, and no collection can be built.'}
+        {current ? (
+          <>
+            {current.replace(/^openai:/, '')}
+            {data.embedding_chosen ? ' (yours)' : ' (the server’s)'}: a rephrasing from{' '}
+            {pct(t.dedup)} is dropped, an answer below {pct(t.grounding)} of its source is held for
+            review, a section below {pct(t.uncovered)} is asked about.{' '}
+            {report
+              ? `Measured on the built-in test set: they separate rephrasings ${pct(report.dedup.accuracy)}, faithful answers ${pct(report.grounding.accuracy)} and covered sections ${pct(report.uncovered.accuracy)} of the time.`
+              : 'Default thresholds: not measured for this model yet.'}
+          </>
+        ) : (
+          'None on your endpoint: the duplicate and grounding checks compare the words, and no collection can be built.'
+        )}
       </div>
+      {data.embedding_chosen && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          style={{ alignSelf: 'flex-start' }}
+          disabled={choose.isPending}
+          onClick={() => choose.mutate(null)}
+        >
+          Back to the server’s model
+        </button>
+      )}
     </div>
   )
 }
@@ -214,7 +295,7 @@ export default function ModelsPage() {
                   image pages — so it must read images.
                 </div>
               </div>
-              <EmbeddingModel model={modelsQuery.data.embedding_model ?? ''} />
+              <EmbeddingModel data={modelsQuery.data} />
             </div>
             <div className="card-foot" style={{ gap: 10 }}>
               <button

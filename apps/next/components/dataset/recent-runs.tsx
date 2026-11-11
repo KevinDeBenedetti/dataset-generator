@@ -52,7 +52,7 @@ export function RecentRuns() {
         </div>
       )}
       {runs.length > 0 && (
-        <table className="table">
+        <table className="table stack-table">
           <thead>
             <tr>
               <th>Dataset</th>
@@ -65,30 +65,31 @@ export function RecentRuns() {
           <tbody>
             {runs.map((run) => (
               <tr key={`${run.dataset}-${run.run_name ?? run.version}`}>
-                <td>
+                <td data-label="Dataset">
                   <Link href={`/drafts/${encodeURIComponent(run.dataset)}`} className="cell-title">
                     {run.dataset}
                   </Link>
                 </td>
-                <td>
+                <td data-label="Version">
                   <span className="tag">
                     {run.run_name ?? (run.version != null ? `v${run.version}` : '—')}
                   </span>
                 </td>
-                <td className="muted">{run.item_count ?? '—'}</td>
+                <td className="muted" data-label="Pairs">
+                  {run.item_count ?? '—'}
+                </td>
+                {/* Cut to one line on wide screens (full URL on hover); the
+                    stacked phone layout shows it whole. */}
                 <td
-                  className="muted"
+                  className="muted run-source"
                   title={run.source_url ?? undefined}
-                  style={{
-                    maxWidth: 220,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  data-label="Source"
                 >
                   {run.source_url ?? '—'}
                 </td>
-                <td className="muted">{formatDate(run.created_at)}</td>
+                <td className="muted" data-label="Started">
+                  {formatDate(run.created_at)}
+                </td>
               </tr>
             ))}
           </tbody>

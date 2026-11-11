@@ -183,6 +183,8 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/prompts"),
     ("GET", "/models"),
     ("PUT", "/models/default"),
+    ("PUT", "/models/embedding"),
+    ("DELETE", "/models/embedding"),
     ("POST", "/models/test"),
     ("POST", "/agent/qa-test"),
     ("GET", "/jobs"),
@@ -201,6 +203,13 @@ _NOT_RESOURCE_ROUTES = {
     # stored per user (tests/api/test_resumes.py checks the gate).
     ("GET", "/resumes"),
     ("GET", "/resumes/{resume_id}"),
+    # A resume's dataset settings: keyed by the caller's own id and the
+    # resume's (a Reactive Resume id, not a row of ours), so another user's
+    # answer 404 by construction; admins only (tests/api/test_resumes.py).
+    ("GET", "/resumes/{resume_id}/dataset"),
+    ("PUT", "/resumes/{resume_id}/dataset"),
+    ("DELETE", "/resumes/{resume_id}/dataset"),
+    ("POST", "/resumes/{resume_id}/dataset/run"),
     # The backoffice: admins only (tests/api/test_admin.py walks every route).
     ("GET", "/admin/users"),
     ("GET", "/admin/users/{user_id}"),

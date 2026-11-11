@@ -35,6 +35,24 @@ from server.services.providers.base import (
 
 logger = logging.getLogger(__name__)
 
+
+def _unreachable(exc: BaseException) -> bool:
+    """The SDK couldn't connect (refused, no DNS, timeout, TLS…): it says only
+    "Connection error." — neither where nor why."""
+    import openai
+
+    return isinstance(exc, openai.APIConnectionError)
+
+
+def _root_cause(exc: BaseException) -> str:
+    """The error at the bottom of ``exc``'s chain, as "Type: message"."""
+    cause = exc
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    text = str(cause).strip()
+    return f"{type(cause).__name__}: {text}" if text else type(cause).__name__
+
+
 # Live model discovery must never hold up a page load.
 _DISCOVERY_TIMEOUT_S = 5.0
 _REQUEST_TIMEOUT_S = 120.0
@@ -188,6 +206,28 @@ class OpenAIProvider:
         url = (creds.openai_base_url or "").strip()
         return (urlsplit(url).hostname or url) if url else "api.openai.com"
 
+    def address(self, creds: Credentials) -> str:
+        """``host:port`` the calls go to: what a connection error names."""
+        url = (creds.openai_base_url or "").strip()
+        if not url:
+            return "api.openai.com"
+        parts = urlsplit(url)
+        host = parts.hostname or url
+        return f"{host}:{parts.port}" if parts.port else host
+
+    def _failure(
+        self, what: str, model: str, creds: Credentials, exc: BaseException
+    ) -> ProviderError:
+        """A failed call, as the run reports it — a connection error names the
+        address it couldn't reach and why (a localhost one, say, which is the
+        container itself in the local stack)."""
+        detail = (
+            f"could not reach {self.address(creds)} ({_root_cause(exc)})"
+            if _unreachable(exc)
+            else str(exc)
+        )
+        return ProviderError(f"{self.name}:{model} {what} failed: {redact(detail)}")
+
     def lent(self, creds: Credentials) -> bool:
         """The calls use the server's key and endpoint, not the caller's own."""
         return creds.openai_from_server and self.configured(creds)
@@ -313,8 +353,13 @@ class OpenAIProvider:
         else:
             kwargs["max_tokens"] = req.max_tokens
             kwargs["temperature"] = config.temperature
-        async with self.build_client(creds) as client:
-            response = await client.chat.completions.create(**kwargs)
+        try:
+            async with self.build_client(creds) as client:
+                response = await client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            if _unreachable(exc):
+                raise self._failure("call", model, creds, exc) from exc
+            raise  # the registry words the others
         text = (response.choices[0].message.content or "").strip()
         usage = (
             response.usage.model_dump() if getattr(response, "usage", None) else None
@@ -360,7 +405,5 @@ class OpenAIProvider:
         except ProviderError:
             raise
         except Exception as exc:
-            raise ProviderError(
-                f"{self.name}:{model} embedding failed: {redact(str(exc))}"
-            ) from exc
+            raise self._failure("embedding", model, creds, exc) from exc
         return vectors
