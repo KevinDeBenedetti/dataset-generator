@@ -99,6 +99,22 @@ A few details keep generation deterministic:
   URL is baked into `client.gen.ts` from whatever input was used; `api/sdk.ts`
   supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.
 
+## Pull requests
+
+`.github/workflows/pr-description.yml` keeps the description of every pull
+request opened from a branch of this repository up to date: on each push,
+Claude Code reads the commits and the diff and rewrites a managed block at the
+top of the description, between `<!-- pr-description:start -->` and
+`<!-- pr-description:end -->`. Write your own notes outside that block: they are
+kept. Bot and fork pull requests are skipped, and the workflow sits outside
+`ci-cd.yml`, so a failure never blocks a merge.
+
+It runs the shared
+[`pr-description` workflow](https://github.com/KevinDeBenedetti/github-workflows/blob/main/docs/workflows/pr-description.md)
+on the owner's Claude subscription, through the `CLAUDE_CODE_OAUTH_TOKEN`
+repository secret (`claude setup-token`). Without the secret the job only
+prints a warning.
+
 ## Dependencies
 
 `make upgrade` rewrites both lockfiles within the declared constraints, skipping
