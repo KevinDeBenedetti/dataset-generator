@@ -1,0 +1,31 @@
+# Keeps each pull request's title and description up to date with Claude Code,
+# on the owner's Claude subscription: on every push, Claude reads the commits
+# and the diff, rewrites the managed block of the description and the title.
+# Outside ci-cd.yml on purpose: a missing token or a model error never blocks a
+# merge. Bot (Dependabot, release-please) and fork pull requests are skipped by
+# the called workflow.
+#
+# Needs the CLAUDE_CODE_OAUTH_TOKEN repository secret (`claude setup-token`).
+name: PR description
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  describe:
+    name: PR description
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/pr-description.yml@c5d1ed7d6719a31dd4098249873ab98baf9a392e # v0.43.0
+    # TODO: uncomment once the pin above is bumped to the github-workflows
+    # release that adds `update-title` (v0.43.0 rejects the unknown input).
+    # The title is a Conventional Commit header: with squash merges it is the
+    # commit release-please reads.
+    # with:
+    #   update-title: true
+    permissions:
+      contents: read          # check out the pull request history
+      pull-requests: write    # rewrite the managed block of the PR body and the title
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
