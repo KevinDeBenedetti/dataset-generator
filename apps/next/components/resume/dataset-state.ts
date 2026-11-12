@@ -50,6 +50,19 @@ export function toSettings(form: DatasetForm): ResumeDatasetIn {
   }
 }
 
+/** A value of a run's result metrics — (label, value) pairs, in display
+ * order — else null (an older run, or a label it doesn't have). */
+export function runMetric(metrics: unknown, label: string): string | number | null {
+  if (!Array.isArray(metrics)) return null
+  for (const entry of metrics) {
+    if (Array.isArray(entry) && entry[0] === label) {
+      const value: unknown = entry[1]
+      return typeof value === 'string' || typeof value === 'number' ? value : null
+    }
+  }
+  return null
+}
+
 /** Whether the form differs from what is saved (always, before a first save). */
 export function isDirty(
   form: DatasetForm,

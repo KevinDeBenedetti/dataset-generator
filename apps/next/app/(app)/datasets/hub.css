@@ -1144,4 +1144,16 @@ button.viz-bar-row:focus-visible .viz-bar-fill {
   .hub-stat-text {
     overflow-wrap: anywhere;
   }
+  /* A smaller icon leaves the title the width it needs. */
+  .hub-head-main {
+    gap: 10px;
+  }
+  .hub-head-ic {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .hub-head-actions > .select {
+    width: 100%;
+  }
 }

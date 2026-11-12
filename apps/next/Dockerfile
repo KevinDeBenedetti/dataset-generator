@@ -15,8 +15,10 @@ WORKDIR /app
 # =============================================================================
 FROM base AS dependencies
 
-# Copy only dependency files to maximize cache
+# Copy only dependency files to maximize cache (patches/: package.json's
+# patchedDependencies, applied by `bun install`)
 COPY package.json bun.lock ./
+COPY patches ./patches
 
 # Use cache mount to speed up installation
 RUN --mount=type=cache,target=/root/.bun/install/cache \
@@ -75,7 +77,7 @@ RUN bun run build
 # Stage: prod
 # Plain Node (no bun, no sources, no devDependencies), non-root.
 # =============================================================================
-FROM node:24-slim AS prod
+FROM node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS prod
 
 ARG APP_PORT=3000
 ENV NODE_ENV=production \

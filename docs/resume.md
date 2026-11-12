@@ -53,6 +53,11 @@ resume, holds the settings:
 | Regenerate   | Only when you generate it, every day, every Monday or the 1st of every month, at a time of your choice (UTC)       |
 | Publish      | For a scheduled run: publish what passes the checks at once and keep the doubtful pairs for review (on by default) |
 
+Under **Model**, the card names the embedding model of the duplicate and
+grounding checks, and whether it is yours or the server's, measured or not. It
+is one per account, picked and measured on the **Models** page, not per
+dataset.
+
 **Generate a draft** queues a run with the saved settings: it stops at a draft
 that you review in **Drafts** before anything reaches the Hub. A scheduled run
 publishes what passes and keeps the pairs held out for review as a draft of its
@@ -75,13 +80,21 @@ being `resume`, so the two join as they are:
   job it doesn't list), each answered by saying so, with what the resume does
   say on the topic and how to reach you. They test, and teach, the portfolio's
   chat to decline instead of inventing. Asked again only when the resume
-  changes; one it now answers is dropped.
+  changes; one it now answers is dropped. They are written and graded from the
+  resume's email and website, the contact their answers give, then the whole
+  resume.
 
 Your LLM then grades every new pair, 0 to 1: true to its source, useful to a
 visitor, its question self-contained. A pair graded below 0.6 is held out for
 review with the grader's reason (`judge`, `judge_note`); an unanswerable
-question the resume does answer is dropped. The exact facts are not graded,
-and the length rule of the **Quality** page doesn't apply to them.
+question the resume does answer is dropped: a new one counts with the dropped
+pairs, a published one with the removed pairs.
+The exact facts are not graded, and the length rule of the **Quality** page
+doesn't apply to them.
+
+The card then shows the latest run: the pairs new, kept, held out, removed and
+dropped, and what the embedding checks did with which model, such as "nothing
+new to compare" when no section changed.
 
 Runs are incremental: every item is hashed into the dataset's `manifest.json`,
 an unchanged item keeps its pairs with no model call, and a resume that hasn't

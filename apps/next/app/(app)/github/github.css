@@ -198,6 +198,16 @@
 .gh-repo.is-open {
   background: color-mix(in oklch, var(--muted) 60%, transparent);
 }
+.gh-repo-pick {
+  display: inline-flex;
+  flex: none;
+  padding: 10px;
+  margin: -10px;
+  cursor: pointer;
+}
+.gh-repo-pick:has(:disabled) {
+  cursor: default;
+}
 .gh-repo-check {
   margin-top: 3px;
   width: 15px;

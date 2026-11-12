@@ -1162,6 +1162,36 @@ def _parse_grades(raw: str) -> Dict[str, Tuple[float, str]]:
     return grades
 
 
+def embedding_checks(
+    embedder: Optional[Embedder], fresh: Sequence[QAPair], recheck: Sequence[QAPair]
+) -> Optional[Dict[str, int]]:
+    """What the embedding checks worked on this run, for the manifest: the new
+    pairs screened (rephrasings, grounding) and the changed sources' old pairs
+    re-checked. None without an embedder (the words were compared)."""
+    if embedder is None:
+        return None
+    return {"compared": len(fresh), "rechecked": len(recheck)}
+
+
+def embedding_summary(manifest: Dict[str, Any]) -> Optional[str]:
+    """:func:`embedding_checks` in a few words, for a run's result — None for a
+    draft made before the checks were recorded."""
+    if "embedding_checks" not in manifest:
+        return None
+    checks = manifest["embedding_checks"]
+    if checks is None:
+        return "off: no embedding model, the words are compared"
+    compared, rechecked = checks.get("compared", 0), checks.get("rechecked", 0)
+    if not compared and not rechecked:
+        return "nothing new to compare"
+    parts = []
+    if compared:
+        parts.append(f"{compared} new pair(s) checked for rephrasings and grounding")
+    if rechecked:
+        parts.append(f"{rechecked} changed pair(s) re-checked against their source")
+    return ", ".join(parts)
+
+
 async def grade_pairs(
     grader: CompletionFn,
     pairs: List[QAPair],
@@ -1171,6 +1201,7 @@ async def grade_pairs(
     *,
     rubric: str = JUDGE_RUBRIC,
     context_chars: int = JUDGE_CONTEXT_CHARS,
+    outcome: str = "to review",
 ) -> List[QAPair]:
     """Grade new pairs with the LLM, one call per group sharing their sources
     (a section's items, a repo's docs batch), against those sources' text.
@@ -1178,7 +1209,8 @@ async def grade_pairs(
     Returns the pairs graded :data:`JUDGE_THRESHOLD` or above, and those it
     couldn't grade (a failed call is noted in ``errors``: the pairs are kept,
     not lost to the check); the others go to ``review``, their grade and its
-    reason recorded (``judge``, ``judge_note``)."""
+    reason recorded (``judge``, ``judge_note``). ``outcome`` names what the
+    caller does with those in the log ("dropped" when it discards them)."""
     groups: Dict[Tuple[str, ...], List[QAPair]] = {}
     for pair in pairs:
         groups.setdefault(tuple(pair.sources), []).append(pair)
@@ -1215,9 +1247,10 @@ async def grade_pairs(
         if pair.judge is not None and pair.judge < JUDGE_THRESHOLD:
             review.append(pair)
             logger.info(
-                "graded %.2f (%s), to review: %r",
+                "graded %.2f (%s), %s: %r",
                 pair.judge,
                 pair.judge_note,
+                outcome,
                 pair.question,
             )
         else:
@@ -1440,6 +1473,7 @@ async def build_qa_dataset(
         review=review,
         manifest={
             "embedding_model": embedder.model_name if embedder else None,
+            "embedding_checks": embedding_checks(embedder, fresh, recheck),
             "sources": dict(sorted(manifest_sources.items())),
         },
         new_ids=[p.id for p in accepted if p.id],
@@ -1689,6 +1723,8 @@ class Draft:
             "removed": len(self.dataset.removed),
             "full_refresh": self.full_refresh,
             "model": self.model_ref,
+            "embedding_model": self.dataset.manifest.get("embedding_model"),
+            "embedding_checks": embedding_summary(self.dataset.manifest),
         }
 
 

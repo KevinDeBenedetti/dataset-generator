@@ -17,9 +17,17 @@ import {
   Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LandingMenu, type LandingLink } from '@/components/app/landing-menu'
 import { ThemeToggle } from '@/components/app/theme-toggle'
 
 const GITHUB_URL = 'https://github.com/KevinDeBenedetti/dataset-generator'
+
+const NAV_LINKS: LandingLink[] = [
+  { href: '#features', label: 'Features' },
+  { href: '#workflow', label: 'Pipeline' },
+  { href: '#formats', label: 'Exports' },
+  { href: GITHUB_URL, label: 'Docs', external: true },
+]
 
 const features = [
   {
@@ -102,7 +110,10 @@ function Brand() {
       <span className="flex size-[26px] items-center justify-center rounded-md bg-primary text-primary-foreground">
         <Layers className="size-4" />
       </span>
-      Dataset<span className="opacity-50">Gen</span>
+      {/* One text node, or the flex gap splits the name in two. */}
+      <span>
+        Dataset<span className="opacity-50">Gen</span>
+      </span>
     </span>
   )
 }
@@ -110,67 +121,64 @@ function Brand() {
 export default function HomePage() {
   return (
     <>
-      {/* Landing navigation: one sticky row from md up. On phones the actions
-          and the section links wrap onto rows of their own, and the bar
-          scrolls away with the page. */}
-      <nav className="z-30 border-b border-border bg-background/80 backdrop-blur-md md:sticky md:top-0">
-        <div className="mx-auto flex min-h-[60px] w-full max-w-[1080px] flex-wrap items-center gap-x-3.5 gap-y-2 px-7 py-3 md:h-[60px] md:flex-nowrap md:py-0">
-          <Link href="/">
+      {/* Landing navigation: one sticky row. From md up the section links sit
+          in the bar; on phones they move into the menu button's list. */}
+      <nav className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-full max-w-[1080px] items-center gap-2 px-4 sm:gap-3.5 sm:px-7 md:h-[60px]">
+          <Link href="/" className="shrink-0">
             <Brand />
           </Link>
-          <div className="order-last -ml-2.5 flex w-full flex-wrap gap-1 md:order-none md:ml-[18px] md:w-auto">
-            {[
-              { href: '#features', label: 'Features' },
-              { href: '#workflow', label: 'Pipeline' },
-              { href: '#formats', label: 'Exports' },
-              { href: GITHUB_URL, label: 'Docs' },
-            ].map(({ href, label }) => (
+          <div className="ml-1 hidden gap-1 md:flex">
+            {NAV_LINKS.map(({ href, label, external }) => (
               <Link
                 key={label}
                 href={href}
+                {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
                 className="rounded-md px-2.5 py-[7px] text-[13.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 {label}
               </Link>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2 md:ml-auto">
-            <ThemeToggle />
-            <Button asChild size="sm" variant="ghost">
-              <a href={GITHUB_URL} target="_blank" rel="noreferrer">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <ThemeToggle className="hidden md:inline-flex" />
+            <Button asChild size="sm" variant="ghost" className="hidden md:inline-flex">
+              <a href={GITHUB_URL} target="_blank" rel="noreferrer" aria-label="GitHub">
                 <GitBranch className="size-4" />
-                GitHub
+                <span className="hidden lg:inline">GitHub</span>
               </a>
             </Button>
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="max-md:h-9">
               <Link href="/dashboard">
-                Open the dashboard
-                <ArrowRight className="size-4" />
+                <span className="sm:hidden">Dashboard</span>
+                <span className="hidden sm:inline">Open the dashboard</span>
+                <ArrowRight className="size-4 max-[359px]:hidden" />
               </Link>
             </Button>
+            <LandingMenu links={NAV_LINKS} />
           </div>
         </div>
       </nav>
 
-      <div className="mx-auto max-w-[1080px] px-7">
+      <div className="mx-auto max-w-[1080px] px-4 sm:px-7">
         {/* Hero */}
-        <header className="pb-14 pt-[78px]">
-          <div className="inline-flex h-7 items-center gap-2 rounded-full border border-border bg-card pl-2 pr-3 text-[12.5px] text-muted-foreground">
-            <span className="inline-flex h-[17px] items-center gap-1.5 rounded-full border border-success/30 bg-success/15 px-2 text-[10.5px] font-medium text-success">
+        <header className="pb-10 pt-10 sm:pb-14 sm:pt-[78px]">
+          <div className="inline-flex min-h-7 max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-border bg-card py-1 pl-2 pr-3 text-[12.5px] text-muted-foreground sm:rounded-full">
+            <span className="inline-flex h-[17px] shrink-0 items-center gap-1.5 rounded-full border border-success/30 bg-success/15 px-2 text-[10.5px] font-medium text-success">
               <span className="size-1.5 rounded-full bg-current" />
               v0.7.7
             </span>
             File / GitHub → LLM → dataset pipeline, open-source
           </div>
-          <h1 className="mt-[22px] max-w-[16ch] text-[38px] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-[52px]">
+          <h1 className="mt-[22px] max-w-[16ch] text-[34px] font-semibold leading-[1.04] tracking-[-0.035em] min-[380px]:text-[38px] sm:text-[52px]">
             Clean Q/A datasets,{' '}
             <span className="text-muted-foreground">straight from your files and repos.</span>
           </h1>
-          <p className="mt-5 max-w-[56ch] text-[17px] leading-[1.55] text-muted-foreground">
+          <p className="mt-5 max-w-[56ch] text-base leading-[1.55] text-muted-foreground sm:text-[17px]">
             Mine files and GitHub repos, generate context-aware question-answer pairs with an LLM,
             catch duplicates, and export to JSONL or CSV — all from a single interface.
           </p>
-          <div className="mt-[30px] flex flex-wrap gap-[11px]">
+          <div className="mt-[30px] flex flex-col gap-[11px] sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
               <Link href="/generate">
                 <Sparkles className="size-4" />
@@ -204,11 +212,11 @@ export default function HomePage() {
             <span className="size-[11px] rounded-full bg-border" />
             <span className="size-[11px] rounded-full bg-border" />
             <span className="size-[11px] rounded-full bg-border" />
-            <span className="ml-2 font-mono text-xs text-muted-foreground">
+            <span className="ml-2 min-w-0 truncate font-mono text-xs text-muted-foreground">
               ~/dataset-generator — make start
             </span>
           </div>
-          <pre className="overflow-x-auto whitespace-pre px-5 py-[18px] font-mono text-[13px] leading-[1.85]">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-[12px] leading-[1.75] sm:whitespace-pre sm:px-5 sm:py-[18px] sm:text-[13px] sm:leading-[1.85]">
             <span className="text-muted-foreground"># Run the pipeline on a source</span>
             {'\n'}
             <span className="text-success">$</span> <span className="text-info">datasetgen</span>{' '}
@@ -237,11 +245,11 @@ export default function HomePage() {
         </div>
 
         {/* Features */}
-        <section id="features" className="scroll-mt-20 border-t border-border py-14">
+        <section id="features" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
             {'// features'}
           </div>
-          <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
+          <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
             The whole pipeline, without gluing scripts together.
           </h2>
           <p className="mt-3 max-w-[58ch] text-[15px] text-muted-foreground">
@@ -252,7 +260,7 @@ export default function HomePage() {
             {features.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="rounded-[10px] border border-border bg-card p-[22px] shadow-xs"
+                className="rounded-[10px] border border-border bg-card p-5 shadow-xs sm:p-[22px]"
               >
                 <div className="flex size-[38px] items-center justify-center rounded-[9px] bg-secondary text-muted-foreground">
                   <Icon className="size-[19px]" />
@@ -267,16 +275,16 @@ export default function HomePage() {
         </section>
 
         {/* Workflow */}
-        <section id="workflow" className="scroll-mt-20 border-t border-border py-14">
+        <section id="workflow" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
             {'// pipeline'}
           </div>
-          <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
+          <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
             Six steps, from raw page to versioned dataset.
           </h2>
           <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 md:grid-cols-6">
             {steps.map(({ num, icon: Icon, title, description }) => (
-              <div key={num} className="bg-card p-5">
+              <div key={num} className="bg-card p-4 sm:p-5">
                 <div className="font-mono text-xs text-muted-foreground">{num}</div>
                 <Icon className="mt-3.5 size-[18px]" />
                 <h4 className="mt-2.5 text-[13.5px] font-semibold">{title}</h4>
@@ -287,11 +295,11 @@ export default function HomePage() {
         </section>
 
         {/* Formats */}
-        <section id="formats" className="scroll-mt-20 border-t border-border py-14">
+        <section id="formats" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
             {'// exports'}
           </div>
-          <h2 className="mt-3 max-w-[20ch] text-3xl font-semibold tracking-[-0.03em]">
+          <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
             Send your data wherever you need it.
           </h2>
           <div className="mt-[30px] grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
@@ -311,16 +319,16 @@ export default function HomePage() {
         </section>
 
         {/* CTA */}
-        <section className="border-t border-border py-14">
-          <div className="rounded-2xl border border-border bg-card p-11 text-center">
-            <h2 className="text-[28px] font-semibold tracking-[-0.03em]">
+        <section className="border-t border-border py-10 sm:py-14">
+          <div className="rounded-2xl border border-border bg-card px-5 py-8 text-center sm:p-11">
+            <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-[28px]">
               Build your first dataset in minutes.
             </h2>
             <p className="mx-auto mt-3 max-w-[48ch] text-muted-foreground">
               Pick a source, run the pipeline, review the Q/A pairs and export. Without leaving the
               interface.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-[11px]">
+            <div className="mt-6 flex flex-col justify-center gap-[11px] sm:flex-row sm:flex-wrap">
               <Button asChild size="lg">
                 <Link href="/generate">
                   <Sparkles className="size-4" />
@@ -336,10 +344,10 @@ export default function HomePage() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-border pb-16 pt-[34px]">
-        <div className="mx-auto max-w-[1080px] px-7">
-          <div className="flex flex-wrap justify-between gap-[30px] text-[13px]">
-            <div className="max-w-[280px]">
+      <footer className="border-t border-border pb-12 pt-[34px] sm:pb-16">
+        <div className="mx-auto max-w-[1080px] px-4 sm:px-7">
+          <div className="grid grid-cols-2 gap-[30px] text-[13px] min-[480px]:flex min-[480px]:flex-wrap min-[480px]:justify-between">
+            <div className="col-span-2 max-w-[280px]">
               <Link href="/">
                 <Brand />
               </Link>
@@ -395,7 +403,7 @@ function FooterCol({ title, links }: { title: string; links: { href: string; lab
         <Link
           key={label}
           href={href}
-          className="block py-[5px] text-muted-foreground transition-colors hover:text-foreground"
+          className="block py-2 text-muted-foreground transition-colors hover:text-foreground sm:py-[5px]"
         >
           {label}
         </Link>

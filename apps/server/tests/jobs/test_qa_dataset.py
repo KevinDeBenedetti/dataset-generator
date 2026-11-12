@@ -15,6 +15,7 @@ from server.jobs.qa_dataset import (
     build_qa_dataset,
     dataset_card,
     dedupe_key,
+    embedding_summary,
     generate_pairs,
     load_previous_state,
     pair_id,
@@ -996,3 +997,44 @@ async def test_generate_reads_the_previous_version_from_the_full_repo_id(
     # Otherwise the bare name 404s and is silently treated as a first run.
     assert draft.repo_id == "kevin/github-personal"
     assert api.hf_hub_download.call_args.kwargs["repo_id"] == "kevin/github-personal"
+
+
+# --- what a run's result says about the embedding checks ---------------------------
+
+
+def test_embedding_summary_says_what_the_checks_did():
+    assert embedding_summary({}) is None  # a draft made before they were recorded
+    assert embedding_summary({"embedding_checks": None}) == (
+        "off: no embedding model, the words are compared"
+    )
+    assert embedding_summary({"embedding_checks": {"compared": 0, "rechecked": 0}}) == (
+        "nothing new to compare"
+    )
+    assert embedding_summary({"embedding_checks": {"compared": 3, "rechecked": 1}}) == (
+        "3 new pair(s) checked for rephrasings and grounding, "
+        "1 changed pair(s) re-checked against their source"
+    )
+
+
+def test_a_run_result_names_the_embedding_model_and_what_it_checked():
+    from server.jobs.registry import _qa_metrics
+
+    dataset = QADataset(
+        [],
+        0,
+        [],
+        manifest={
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_checks": {"compared": 0, "rechecked": 0},
+        },
+    )
+    draft = qa_dataset.Draft(dataset, "kevin", "kevin/qa", False, "openai:m")
+    metrics = dict(_qa_metrics(draft.stats()))
+    assert metrics["Embedding model"] == "openai/text-embedding-3-small"
+    assert metrics["Embedding checks"] == "nothing new to compare"
+
+    # A draft stored before the checks were recorded keeps its old metrics.
+    older = QADataset([], 0, [], manifest={"embedding_model": None})
+    old_draft = qa_dataset.Draft(older, "kevin", "kevin/qa", False, "openai:m")
+    labels = dict(_qa_metrics(old_draft.stats()))
+    assert "Embedding checks" not in labels and "Embedding model" not in labels

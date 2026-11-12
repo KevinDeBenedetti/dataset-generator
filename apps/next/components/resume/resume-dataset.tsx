@@ -14,11 +14,19 @@ import {
   useDeleteResumeDataset,
   useHubDatasets,
   useJobRun,
+  useModels,
   useResumeDataset,
   useRunResumeDataset,
   useSaveResumeDataset,
 } from '@/hooks'
-import { type DatasetForm, type Every, initialForm, isDirty, toSettings } from './dataset-state'
+import {
+  type DatasetForm,
+  type Every,
+  initialForm,
+  isDirty,
+  runMetric,
+  toSettings,
+} from './dataset-state'
 
 const EVERY: { value: Every; label: string }[] = [
   { value: '', label: 'Only when I generate it' },
@@ -50,6 +58,30 @@ function RunErrors({ run }: { run: JobRunOut }) {
         ))}
       </ul>
     </details>
+  )
+}
+
+/** The embedding model the duplicate and grounding checks use: one per
+ * account, picked and measured on the Models page, not per dataset. */
+function EmbeddingHint() {
+  const { data } = useModels()
+  if (!data) return null
+  const model = data.embedding_model?.replace(/^openai:/, '')
+  if (!model) {
+    return (
+      <div className="hint">
+        No embedding model: the duplicate and grounding checks compare words.{' '}
+        <Link href="/models">Pick one on Models</Link>
+      </div>
+    )
+  }
+  const whose = data.embedding_chosen ? 'yours' : 'the server’s'
+  const measured = data.embedding_calibration ? 'measured' : 'not measured'
+  return (
+    <div className="hint">
+      Embedding checks: <span className="mono">{model}</span> ({whose}, {measured}) ·{' '}
+      <Link href="/models">change it on Models</Link>
+    </div>
   )
 }
 
@@ -90,6 +122,9 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
   const datasetLink = <Link href={datasetHref(target)}>Open the dataset</Link>
   if (run.status === 'succeeded' && run.preview) {
     const preview = run.preview
+    const dropped = Number(runMetric(metrics, 'Dropped') ?? 0)
+    const checks = runMetric(metrics, 'Embedding checks')
+    const embedding = runMetric(metrics, 'Embedding model')
     return (
       <div className="gh-run">
         {run.result?.url && (
@@ -114,7 +149,21 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
               <b>{preview.removed?.length}</b> removed
             </span>
           )}
+          {dropped > 0 && (
+            <span title="Failed the checks: trivial, duplicated, or graded wrong">
+              <b>{dropped}</b> dropped
+            </span>
+          )}
         </div>
+        {checks != null && (
+          <div className="hint">
+            Embedding checks
+            {embedding && embedding !== 'none'
+              ? ` (${String(embedding).replace(/^openai:/, '')})`
+              : ''}
+            : {checks}
+          </div>
+        )}
         <div className="gh-run-review">
           <span className="hint">
             {run.result?.url
@@ -250,6 +299,7 @@ function DatasetCard({
             value={form.model_ref ?? ''}
             onChange={(ref) => set({ model_ref: ref || null })}
           />
+          <EmbeddingHint />
         </div>
         <div className="field">
           <label className="label" htmlFor="rs-every">

@@ -1,0 +1,36 @@
+diff --git a/dist/esm/server/dev/hot-reloader-turbopack.js b/dist/esm/server/dev/hot-reloader-turbopack.js
+index 9bb593dab4ad6fb9220caff1eee68d4c1e36ad59..78a8a54777197614adae22de3b14fb4458f4068b 100644
+--- a/dist/esm/server/dev/hot-reloader-turbopack.js
++++ b/dist/esm/server/dev/hot-reloader-turbopack.js
+@@ -813,9 +813,12 @@ export async function createHotReloaderTurbopack(opts, serverFields, distDir, re
+         state.subscriptions.set(id, subscription);
+         // Baseline capture and subscription setup are not atomic, so the first
+         // emission can be a real update. Ignore only the usual issues-only result.
++        // Patched: also ignore a first `restart`. It reaches every open tab, so
++        // two tabs reload each other forever (each reload subscribes again),
++        // and the page subscribing has just loaded, so it is already current.
+         try {
+             const initial = await subscription.next();
+-            if (!initial.done && initial.value.value.type !== 'issues') {
++            if (!initial.done && initial.value.value.type !== 'issues' && initial.value.value.type !== 'restart') {
+                 processIssues(state.clientIssues, key, initial.value, false, true);
+                 sendTurbopackMessage(initial.value.value);
+             }
+diff --git a/dist/server/dev/hot-reloader-turbopack.js b/dist/server/dev/hot-reloader-turbopack.js
+index 62f64df2f99401cd29d870f20b90cbd6f8fb21f6..4bad9255edd8a74f9829ea3256ea751fc523671f 100644
+--- a/dist/server/dev/hot-reloader-turbopack.js
++++ b/dist/server/dev/hot-reloader-turbopack.js
+@@ -869,9 +869,12 @@ async function createHotReloaderTurbopack(opts, serverFields, distDir, resetFetc
+         state.subscriptions.set(id, subscription);
+         // Baseline capture and subscription setup are not atomic, so the first
+         // emission can be a real update. Ignore only the usual issues-only result.
++        // Patched: also ignore a first `restart`. It reaches every open tab, so
++        // two tabs reload each other forever (each reload subscribes again),
++        // and the page subscribing has just loaded, so it is already current.
+         try {
+             const initial = await subscription.next();
+-            if (!initial.done && initial.value.value.type !== 'issues') {
++            if (!initial.done && initial.value.value.type !== 'issues' && initial.value.value.type !== 'restart') {
+                 (0, _utils2.processIssues)(state.clientIssues, key, initial.value, false, true);
+                 sendTurbopackMessage(initial.value.value);
+             }

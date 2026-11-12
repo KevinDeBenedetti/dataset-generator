@@ -82,7 +82,7 @@ class GitHubPersonalOptions(BaseModel):
 
 
 def _qa_metrics(stats: Dict[str, Any]) -> List[Tuple[str, Any]]:
-    return [
+    metrics: List[Tuple[str, Any]] = [
         ("Pairs", stats["records"]),
         ("Kept", stats["kept"]),
         ("New", stats["new"]),
@@ -92,6 +92,14 @@ def _qa_metrics(stats: Dict[str, Any]) -> List[Tuple[str, Any]]:
         ("Removed", stats.get("removed", 0)),
         ("Model", stats["model"]),
     ]
+    # What the embedding checks did — absent from drafts made before they were
+    # recorded (qa_dataset.embedding_summary).
+    if stats.get("embedding_checks") is not None:
+        metrics += [
+            ("Embedding model", stats.get("embedding_model") or "none"),
+            ("Embedding checks", stats["embedding_checks"]),
+        ]
+    return metrics
 
 
 def _draft_to_dict(draft: qa_dataset_job.Draft) -> Dict[str, Any]:

@@ -47,6 +47,7 @@ from server.jobs.qa_dataset import (
     _token_budget,
     content_hash,
     dedupe_key,
+    embedding_checks,
     grade_pairs,
     generate_pairs,
     guidance_for,
@@ -258,6 +259,21 @@ def basics_text(view: Dict[str, Any]) -> str:
         if _text(link.get("url"))
     ]
     return "\n".join(line for line in lines if line)
+
+
+def contact_text(view: Dict[str, Any]) -> str:
+    """How to reach the person, as the resume gives it: email and website,
+    never the phone. Not in :func:`basics_text`; it starts the text the
+    unanswerable questions are written and graded from, since their answers
+    point there — a grader that doesn't see it calls it invented. First, not
+    last: that text is cut at :data:`UNANSWERABLE_CONTEXT_CHARS`."""
+    basics = view.get("basics") or {}
+    lines = []
+    if _text(basics.get("email")):
+        lines.append(f"Email: {_text(basics.get('email'))}")
+    if _text(basics.get("website")):
+        lines.append(f"Website: {_text(basics.get('website'))}")
+    return "\n".join(lines)
 
 
 def resume_sources(view: Dict[str, Any], items: Sequence[Item]) -> Dict[str, _Source]:
@@ -567,8 +583,10 @@ async def build_resume_dataset(
     basics = view.get("basics") or {}
     who = _text(basics.get("name")) or _text(view.get("name")) or "the person"
     if unanswerable:
-        whole = "\n\n".join(src.text for src in sources.values())
-        sources[UNANSWERABLE_KEY] = _Source(UNANSWERABLE_KEY, whole)
+        parts = [contact_text(view), *(src.text for src in sources.values())]
+        sources[UNANSWERABLE_KEY] = _Source(
+            UNANSWERABLE_KEY, "\n\n".join(part for part in parts if part)
+        )
     for src in sources.values():
         src.changed = previous.sources.get(src.key) != content_hash(src.text)
 
@@ -656,6 +674,9 @@ async def build_resume_dataset(
 
     kept_unanswerable: List[QAPair] = []
     new_unanswerable: List[QAPair] = []
+    # New unanswerable pairs the grader failed — the resume answers them, or
+    # their answer is wrong: dropped, not reviewed, and counted as dropped.
+    answered: List[QAPair] = []
     if unanswerable:
         whole = sources[UNANSWERABLE_KEY]
         kept_unanswerable = previous_unanswerable
@@ -665,10 +686,11 @@ async def build_resume_dataset(
                 grader,
                 kept_unanswerable,
                 sources,
-                [],  # answered now: dropped, not reviewed
+                [],  # a published pair: it leaves as removed, not as dropped
                 errors,
                 rubric=UNANSWERABLE_RUBRIC,
                 context_chars=UNANSWERABLE_CONTEXT_CHARS,
+                outcome="dropped",
             )
         missing = unanswerable - len(kept_unanswerable)
         # Asked again only when the resume changed (a failed try leaves its
@@ -701,11 +723,13 @@ async def build_resume_dataset(
                     grader,
                     new_unanswerable,
                     sources,
-                    [],  # answered by the resume after all: dropped
+                    answered,
                     errors,
                     rubric=UNANSWERABLE_RUBRIC,
                     context_chars=UNANSWERABLE_CONTEXT_CHARS,
+                    outcome="dropped",
                 )
+    dropped += len(answered)
     manifest_sources: Dict[str, str] = {}
     for key, src in sources.items():
         if key not in failed:
@@ -748,6 +772,7 @@ async def build_resume_dataset(
         review=review,
         manifest={
             "embedding_model": embedder.model_name if embedder else None,
+            "embedding_checks": embedding_checks(embedder, fresh, recheck),
             "sources": dict(sorted(manifest_sources.items())),
             "changed": changed,
             "resume": {

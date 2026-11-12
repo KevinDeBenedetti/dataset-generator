@@ -116,14 +116,17 @@ export function RepoList({
             const label = recipe ? selectionLabel(recipe, repo.name) : null
             return (
               <li key={repo.name} className={cn('gh-repo', open === repo.name && 'is-open')}>
-                <input
-                  type="checkbox"
-                  className="gh-repo-check"
-                  aria-label={`Use ${repo.name} in the recipe`}
-                  checked={label !== null}
-                  disabled={!recipe || !repo.eligible}
-                  onChange={(e) => onToggle(repo.name, e.target.checked)}
-                />
+                {/* The label widens the hit area around the box, not the layout. */}
+                <label className="gh-repo-pick">
+                  <input
+                    type="checkbox"
+                    className="gh-repo-check"
+                    aria-label={`Use ${repo.name} in the recipe`}
+                    checked={label !== null}
+                    disabled={!recipe || !repo.eligible}
+                    onChange={(e) => onToggle(repo.name, e.target.checked)}
+                  />
+                </label>
                 <button type="button" className="gh-repo-main" onClick={() => onOpen(repo.name)}>
                   <span className="gh-repo-name">
                     {repo.name}
