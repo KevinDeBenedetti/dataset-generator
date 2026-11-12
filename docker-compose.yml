@@ -57,6 +57,8 @@ services:
           path: ./apps/next/bun.lock
         - action: rebuild
           path: ./apps/next/next.config.ts
+        - action: rebuild
+          path: ./apps/next/patches
 
   server:
     container_name: server-fastapi

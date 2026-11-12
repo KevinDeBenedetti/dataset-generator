@@ -524,7 +524,11 @@ kbd {
   flex: none;
   overflow: hidden;
 }
+/* inline-flex keeps an icon on the text's line (svg is display: block). */
 .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 12px;
   padding: 2px 7px;
@@ -1064,6 +1068,108 @@ kbd {
     white-space: normal;
   }
 }
+/* Phones: cards give their content the width; the page keeps its 16px gutter. */
+@media (max-width: 640px) {
+  .card-head {
+    padding: 16px;
+    gap: 12px;
+  }
+  .card-body {
+    padding: 0 16px 16px;
+  }
+  .card-foot {
+    padding: 14px 16px;
+  }
+  .stat {
+    padding: 14px 14px 12px;
+  }
+  .stat-val {
+    font-size: 24px;
+    margin-top: 8px;
+  }
+  .stat-grid {
+    gap: 12px;
+  }
+  .page-head {
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+}
+
+/* Touch screens: targets a finger can hit, and form text at 16px so iOS
+   doesn't zoom the page in when a field gets focus. Same layout, larger hit
+   areas; a mouse keeps the compact sizes. */
+@media (pointer: coarse) {
+  .app :is(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea),
+  .input,
+  .textarea,
+  .select {
+    font-size: 16px;
+  }
+  .input,
+  .select {
+    height: 42px;
+  }
+  .btn {
+    height: 42px;
+  }
+  .btn-sm {
+    height: 36px;
+  }
+  .btn-lg {
+    height: 46px;
+  }
+  .btn-icon {
+    width: 42px;
+    height: 42px;
+  }
+  .btn-icon.btn-sm {
+    width: 36px;
+    height: 36px;
+  }
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+  }
+  .tab {
+    height: 38px;
+    padding: 0 14px;
+  }
+  .sb-link {
+    height: 44px;
+  }
+  .switch {
+    width: 44px;
+    height: 26px;
+  }
+  .switch::after {
+    width: 22px;
+    height: 22px;
+  }
+  .switch.on::after {
+    transform: translateX(18px);
+  }
+  .check,
+  .app :is(input[type='checkbox'], input[type='radio']) {
+    width: 20px;
+    height: 20px;
+  }
+  .app [data-slot='button'] {
+    min-height: 40px;
+  }
+  /* Icon buttons stay square. */
+  .app [data-slot='button'][data-size^='icon'] {
+    min-width: 40px;
+  }
+  .app [data-slot='select-trigger'] {
+    min-height: 42px;
+  }
+  /* Search boxes: the label around the input is the target. */
+  .app .hub-search {
+    height: 42px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .sidebar.open {

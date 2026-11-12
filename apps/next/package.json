@@ -58,5 +58,8 @@
   },
   "overrides": {
     "js-yaml": "^4.3.0"
+  },
+  "patchedDependencies": {
+    "next@16.4.5": "patches/next@16.4.5.patch"
   }
 }

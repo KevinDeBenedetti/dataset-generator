@@ -20,12 +20,14 @@ from server.jobs.qa_dataset import (
     QADataset,
     QAPair,
     content_hash,
+    embedding_summary,
     removed_pairs,
     sanitize_pairs,
 )
 from server.jobs.resume_qa import (
     FACTS_CATEGORY,
     build_resume_dataset,
+    contact_text,
     dataset_card,
     detect_language,
     items_of,
@@ -727,6 +729,86 @@ async def test_unanswerable_questions_are_asked_and_the_answered_ones_dropped():
     assert [p.question for p in unanswerable] == ["Does Kevin have a PhD?"]
     assert unanswerable[0].id in dataset.new_ids
     assert "unanswerable" in dataset.manifest["sources"]
+
+
+def test_the_contact_is_the_email_and_website_never_the_phone():
+    assert (
+        contact_text(VIEW) == "Email: kevin@example.com\nWebsite: https://kevin.example"
+    )
+    assert contact_text({"basics": {"phone": "+33 6 00 00 00 00"}}) == ""
+
+
+async def test_the_unanswerable_grader_sees_the_contact_their_answers_give():
+    # The answers point to the resume's email: graded without it in the
+    # context, every one was called invented and dropped.
+    complete, requests = _grading(lambda q: 0.9)
+
+    await build_resume_dataset(VIEW, complete, "m", grader=complete, unanswerable=2)
+
+    graded = [r for r in requests if r.system.startswith("Each question")]
+    assert graded and all("Email: kevin@example.com" in r.user for r in graded)
+
+
+async def test_a_long_resume_keeps_the_contact_in_the_graded_text():
+    # The graded text is cut: the contact leads it, or a long resume loses it.
+    long_view = {**VIEW, "summary": "Data platforms. " * 1000}
+    complete, requests = _grading(lambda q: 0.9)
+
+    await build_resume_dataset(
+        long_view, complete, "m", grader=complete, unanswerable=2
+    )
+
+    graded = [r for r in requests if r.system.startswith("Each question")]
+    assert graded and all("Email: kevin@example.com" in r.user for r in graded)
+
+
+async def test_a_published_unanswerable_pair_now_answered_is_removed_not_dropped():
+    good, _ = _grading(lambda q: 0.9)
+    first = await build_resume_dataset(VIEW, good, "m", grader=good, unanswerable=6)
+    previous = PreviousState(first.pairs, first.manifest["sources"])
+    changed = {**VIEW, "summary": "Ten years of Python and Go. PhD in 2020."}
+    bad, _ = _grading(lambda q: 0.1 if "PhD" in q else 0.9)
+
+    again = await build_resume_dataset(
+        changed, bad, "m", previous=previous, grader=bad, unanswerable=6
+    )
+
+    assert "Does Kevin have a PhD?" not in {p.question for p in again.pairs}
+    assert [p.question for p in removed_pairs(previous, again)] == [
+        "Does Kevin have a PhD?"
+    ]
+    # Counted once: the model writes the same question again, and that new
+    # pair is the one dropped.
+    assert again.dropped == first.dropped + 1
+
+
+async def test_the_unanswerable_pairs_the_grader_drops_are_counted():
+    # ("What did Kevin study?" never reaches the grader: a fact already asks it.)
+    good, _ = _grading(lambda q: 0.9)
+    bad, _ = _grading(lambda q: 0.1 if "PhD" in q else 0.9)
+
+    all_kept = await build_resume_dataset(VIEW, good, "m", grader=good, unanswerable=6)
+    one_dropped = await build_resume_dataset(VIEW, bad, "m", grader=bad, unanswerable=6)
+
+    assert one_dropped.dropped == all_kept.dropped + 1
+    assert not one_dropped.review  # dropped, not held for review
+
+
+async def test_the_manifest_records_what_the_embedding_checks_did():
+    complete, _ = _grading(lambda q: 0.9)
+
+    plain = await build_resume_dataset(VIEW, complete, "m")
+    first = await build_resume_dataset(VIEW, complete, "m", embedder=FakeEmbedder())
+    previous = PreviousState(first.pairs, first.manifest["sources"])
+    again = await build_resume_dataset(
+        VIEW, complete, "m", previous=previous, embedder=FakeEmbedder()
+    )
+
+    assert plain.manifest["embedding_checks"] is None
+    assert first.manifest["embedding_checks"]["compared"] > 0
+    # Nothing changed: the model is there, with nothing to compare.
+    assert again.manifest["embedding_checks"] == {"compared": 0, "rechecked": 0}
+    assert embedding_summary(again.manifest) == "nothing new to compare"
 
 
 async def test_an_unchanged_resume_keeps_its_unanswerable_questions():

@@ -31,7 +31,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 /** A bento tile — rounded, subtly bordered, hover-lift. */
 function Tile({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn('rounded-2xl border bg-card p-5 transition-colors', className)}>
+    <div className={cn('rounded-2xl border bg-card p-4 transition-colors sm:p-5', className)}>
       {children}
     </div>
   )
@@ -49,12 +49,12 @@ function StatTile({
   hint?: string
 }) {
   return (
-    <Tile className="flex flex-col justify-between gap-6 hover:bg-accent/30">
+    <Tile className="flex flex-col justify-between gap-4 hover:bg-accent/30 sm:gap-6">
       <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="size-5" />
       </div>
       <div>
-        <p className="text-3xl font-semibold tracking-tight">{value}</p>
+        <p className="text-2xl font-semibold tracking-tight sm:text-3xl">{value}</p>
         <p className="text-sm text-muted-foreground">{label}</p>
         {hint && <p className="mt-0.5 text-xs text-muted-foreground/70">{hint}</p>}
       </div>
@@ -120,13 +120,13 @@ export function DashboardOverview() {
 
   if (hub.isPending && drafts.isPending) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {['a', 'b', 'c', 'd'].map((key) => (
           <Skeleton key={key} className="h-32 rounded-2xl" />
         ))}
-        <Skeleton className="h-64 rounded-2xl sm:col-span-2 lg:row-span-2" />
-        <Skeleton className="h-28 rounded-2xl sm:col-span-2" />
-        <Skeleton className="h-28 rounded-2xl sm:col-span-2" />
+        <Skeleton className="h-64 rounded-2xl col-span-2 lg:row-span-2" />
+        <Skeleton className="h-28 rounded-2xl col-span-2" />
+        <Skeleton className="h-28 rounded-2xl col-span-2" />
       </div>
     )
   }
@@ -134,7 +134,7 @@ export function DashboardOverview() {
   const connected = !hub.error
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {connected ? (
         <>
           <StatTile
@@ -151,7 +151,7 @@ export function DashboardOverview() {
           />
         </>
       ) : (
-        <Tile className="flex flex-col justify-between gap-4 sm:col-span-2">
+        <Tile className="flex flex-col justify-between gap-4 col-span-2">
           <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Cloud className="size-5" />
           </div>
@@ -198,7 +198,7 @@ export function DashboardOverview() {
           </Button>
           <Link
             href="/datasets"
-            className="inline-flex items-center gap-1.5 text-sm text-primary-foreground/80 hover:text-primary-foreground"
+            className="-mx-2 inline-flex items-center gap-1.5 px-2 py-2 text-sm text-primary-foreground/80 hover:text-primary-foreground"
           >
             <FolderOpen className="size-4" />
             Browse datasets
@@ -207,13 +207,16 @@ export function DashboardOverview() {
       </Tile>
 
       {/* Recently updated on the Hub — the large tile */}
-      <Tile className="sm:col-span-2 lg:row-span-2">
+      <Tile className="col-span-2 lg:row-span-2">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-muted-foreground" />
             <h2 className="font-semibold">Recently updated datasets</h2>
           </div>
-          <Link href="/datasets" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            href="/datasets"
+            className="-m-2 p-2 text-sm text-muted-foreground hover:text-foreground"
+          >
             View all
           </Link>
         </div>
@@ -262,13 +265,16 @@ export function DashboardOverview() {
       </Tile>
 
       {/* Drafts waiting for review */}
-      <Tile className="flex flex-col gap-3 sm:col-span-2 hover:bg-accent/30">
+      <Tile className="flex flex-col gap-3 col-span-2 hover:bg-accent/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileClock className="size-4 text-muted-foreground" />
             <h2 className="font-semibold">Waiting for review</h2>
           </div>
-          <Link href="/drafts" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            href="/drafts"
+            className="-m-2 p-2 text-sm text-muted-foreground hover:text-foreground"
+          >
             All drafts
           </Link>
         </div>
@@ -297,7 +303,7 @@ export function DashboardOverview() {
       </Tile>
 
       {/* Generation activity */}
-      <Tile className="flex flex-col gap-4 sm:col-span-2 hover:bg-accent/30">
+      <Tile className="flex flex-col gap-4 col-span-2 hover:bg-accent/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="size-4 text-muted-foreground" />
@@ -310,7 +316,7 @@ export function DashboardOverview() {
 
       {/* Languages of the published datasets */}
       {connected && published.total > 0 && (
-        <Tile className="flex flex-col gap-3 sm:col-span-2 hover:bg-accent/30">
+        <Tile className="flex flex-col gap-3 col-span-2 hover:bg-accent/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Languages className="size-4 text-muted-foreground" />

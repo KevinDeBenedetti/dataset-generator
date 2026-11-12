@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ResumeDatasetOut } from '../../api/types'
-import { initialForm, isDirty, toSettings } from './dataset-state'
+import { initialForm, isDirty, runMetric, toSettings } from './dataset-state'
 
 const RESUME = { name: 'Engineer', slug: 'engineer' }
 
@@ -66,5 +66,24 @@ describe('the resume dataset form', () => {
     expect(isDirty(initialForm(RESUME, null, 'kevin'), RESUME, null, 'kevin')).toBe(true)
     const changed = { ...initialForm(RESUME, SAVED, 'kevin'), every: 'day' as const }
     expect(isDirty(changed, RESUME, SAVED, 'kevin')).toBe(true)
+  })
+})
+
+describe('runMetric', () => {
+  const METRICS = [
+    ['Dropped', 6],
+    ['Embedding model', 'openai/text-embedding-3-small'],
+    ['Embedding checks', 'nothing new to compare'],
+  ]
+
+  it('reads a value by its label', () => {
+    expect(runMetric(METRICS, 'Dropped')).toBe(6)
+    expect(runMetric(METRICS, 'Embedding checks')).toBe('nothing new to compare')
+  })
+
+  it('is null for a missing label, an odd value or no metrics', () => {
+    expect(runMetric(METRICS, 'To review')).toBeNull()
+    expect(runMetric([['Errors', ['a']]], 'Errors')).toBeNull()
+    expect(runMetric(undefined, 'Dropped')).toBeNull()
   })
 })
