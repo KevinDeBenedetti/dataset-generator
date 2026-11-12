@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.15.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.14.0...v0.15.0) (2026-11-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* the two scheduled dataset-sync workflows are removed, so the Hub is no longer refreshed on a cron. Operators must generate datasets from the GitHub page or the Jobs page. `OPENAI_EMBEDDING_MODEL` now defaults to empty, so vector collections embed locally unless it is set.
+
+### Features
+
+* add GitHub workflow for automatic PR description updates ([7e0f4df](https://github.com/KevinDeBenedetti/dataset-generator/commit/7e0f4dfa8ec8e14bf63d17b607b7d359fe83a390))
+* make Hugging Face the source of truth for datasets ([85b38a4](https://github.com/KevinDeBenedetti/dataset-generator/commit/85b38a462a3468e8c2aab4f3ce17c8d1803b9963))
+* **next:** add landing menu component and patch next version ([0dbd88e](https://github.com/KevinDeBenedetti/dataset-generator/commit/0dbd88e41b69b7cd5da44b83fd13708f3b0068a6))
+
+
+### Bug Fixes
+
+* add unit tests for calibration, draft quality, job handling, and schedules ([56f4fdf](https://github.com/KevinDeBenedetti/dataset-generator/commit/56f4fdfd7220582df825a46d1cced360dff45ad7))
+
+
+### Chores
+
+* **deps:** bump the weekly-all group across 1 directory with 9 updates ([b677240](https://github.com/KevinDeBenedetti/dataset-generator/commit/b677240faeeb9cbb796c9b011574f58e74e72e54))
+* remove redundant code blocks from changes section ([c701f5b](https://github.com/KevinDeBenedetti/dataset-generator/commit/c701f5b3be932651dbc25acb0e968d03c916a562))
+
 ## [0.14.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.13.1...v0.14.0) (2026-10-31)
 
 
