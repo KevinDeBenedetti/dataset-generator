@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.0...v0.15.1) (2026-11-13)
+
+
+### Chores
+
+* **docker:** remove unnecessary package managers from images ([3d9367a](https://github.com/KevinDeBenedetti/dataset-generator/commit/3d9367a2604bacd7c8acba778b339e0f8a3296f8))
+
 ## [0.15.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.14.0...v0.15.0) (2026-11-12)
 
 
