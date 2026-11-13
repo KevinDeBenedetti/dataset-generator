@@ -90,9 +90,13 @@ WORKDIR /app
 # Debian security updates not yet folded into the node:24-slim tag (e.g.
 # perl-base CVE-2026-13221/-42496/-8376, CRITICAL in Trivy): apply them here
 # rather than wait for an upstream rebuild.
+# Then the package managers go: this stage only runs `node server.js` (and the
+# `node -e` healthcheck), and the npm bundled with the base image carried every
+# CVE Trivy reported for this image, none of them from the app's lockfile.
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 COPY --from=builder --chown=1000:1000 /app/.next/standalone ./
 COPY --from=builder --chown=1000:1000 /app/.next/static ./.next/static
