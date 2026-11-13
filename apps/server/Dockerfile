@@ -89,12 +89,16 @@ FROM base AS prod
 
 ARG APP_PORT=8000
 
+# pip goes too: the app runs from the uv virtualenv copied below, and the
+# healthcheck uses the standard library only. The pip bundled with the base
+# image carried the CVEs Trivy reported for this image, none from uv.lock.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && apt-get update \
     && apt-get install -y --no-install-recommends tini \
-    && useradd --system --uid 10001 --create-home --home-dir /home/app app
+    && useradd --system --uid 10001 --create-home --home-dir /home/app app \
+    && python -m pip uninstall --yes --root-user-action=ignore pip
 
 ENV PATH=/app/.venv/bin:$PATH \
     HOME=/home/app \
