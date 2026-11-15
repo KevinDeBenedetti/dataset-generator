@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.1...v0.15.2) (2026-11-15)
+
+
+### Chores
+
+* update dependencies for improved performance ([2cd0ecb](https://github.com/KevinDeBenedetti/dataset-generator/commit/2cd0ecb2a8377a0b1eecf46baac4bcca40485b3f))
+
 ## [0.15.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.0...v0.15.1) (2026-11-13)
 
 
