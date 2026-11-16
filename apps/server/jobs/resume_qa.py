@@ -25,11 +25,16 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from server.core.cpu import cpu_bound
-from server.jobs.github_snapshot import gather_limited
-from server.jobs.qa_dataset import (
+from server.jobs.qa_build import (
+    Run,
+    generate_draft,
+    SourcePlan,
+    Task,
+    TaskGroup,
+    build,
+    publish_dataset,
     ANSWER_STYLE,
     JSON_FORMAT_INSTRUCTION,
     CompletionFn,
@@ -40,31 +45,19 @@ from server.jobs.qa_dataset import (
     ProgressFn,
     QADataset,
     QAPair,
-    _guidance,
-    _model_for,
-    _size_category,
-    _Source,
-    _token_budget,
-    base_of,
-    content_hash,
+    guidance,
+    size_category,
+    Source,
+    token_budget,
     dedupe_key,
-    embedding_checks,
     foreign_note,
     grade_pairs,
     generate_pairs,
-    guidance_for,
-    read_published,
-    provider_completion,
-    publish_qa_dataset,
-    question_index,
-    recheck_pairs,
-    removed_pairs,
     sanitize_pairs,
-    screen_pairs,
 )
 from server.services import reactive_resume as rr
-from server.services.credentials import HF_TOKEN, Credentials
-from server.services.semantic import Embedder, SemanticIndex, get_embedder
+from server.services.credentials import Credentials
+from server.services.semantic import Embedder
 
 logger = logging.getLogger(__name__)
 
@@ -278,17 +271,17 @@ def contact_text(view: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def resume_sources(view: Dict[str, Any], items: Sequence[Item]) -> Dict[str, _Source]:
+def resume_sources(view: Dict[str, Any], items: Sequence[Item]) -> Dict[str, Source]:
     """Every hashed source: the basics, the summary and each item."""
-    sources: Dict[str, _Source] = {}
+    sources: Dict[str, Source] = {}
     text = basics_text(view)
     if text:
-        sources["basics"] = _Source("basics", text)
+        sources["basics"] = Source("basics", text)
     summary = _text(view.get("summary"))
     if summary:
-        sources["summary"] = _Source("summary", summary)
+        sources["summary"] = Source("summary", summary)
     for item in items:
-        sources[item.key] = _Source(item.key, item.context())
+        sources[item.key] = Source(item.key, item.context())
     return sources
 
 
@@ -466,9 +459,9 @@ async def batch_pairs(
                 f"Generate {want} distinct question/answer pairs from this part "
                 f"of {who}'s resume:\n\n{batch.context()}"
                 + _name_the_person(who)
-                + _guidance(batch.avoid, batch.focus)
+                + guidance(batch.avoid, batch.focus)
             ),
-            max_tokens=_token_budget(want),
+            max_tokens=token_budget(want),
         ),
         batch.section_title,
         batch.items[0].category,
@@ -534,9 +527,9 @@ async def unanswerable_pairs(
                 f"Write {count} such pairs from this resume:\n\n"
                 f"{resume[:UNANSWERABLE_CONTEXT_CHARS]}"
                 + _name_the_person(who)
-                + _guidance(avoid, ())
+                + guidance(avoid, ())
             ),
-            max_tokens=_token_budget(count),
+            max_tokens=token_budget(count),
         ),
         "unanswerable",
         UNANSWERABLE_CATEGORY,
@@ -586,93 +579,55 @@ async def build_resume_dataset(
     who = _text(basics.get("name")) or _text(view.get("name")) or "the person"
     if unanswerable:
         parts = [contact_text(view), *(src.text for src in sources.values())]
-        sources[UNANSWERABLE_KEY] = _Source(
+        sources[UNANSWERABLE_KEY] = Source(
             UNANSWERABLE_KEY, "\n\n".join(part for part in parts if part)
         )
-    for src in sources.values():
-        src.changed = previous.sources.get(src.key) != content_hash(src.text)
-
-    kept: List[QAPair] = []
-    recheck: List[QAPair] = []
-    previous_unanswerable: List[QAPair] = []
-    for pair in previous.pairs:
-        if pair.category == FACTS_CATEGORY:
-            continue
-        if pair.category == UNANSWERABLE_CATEGORY:
-            if unanswerable:
-                previous_unanswerable.append(pair)
-            continue
-        keys = [k for k in pair.sources if k in sources]
-        if not keys:
-            continue  # its item is gone from the resume
-        pair.sources = keys
-        (recheck if any(sources[k].changed for k in keys) else kept).append(pair)
-
+    previous_unanswerable = [
+        p
+        for p in previous.pairs
+        if unanswerable and p.category == UNANSWERABLE_CATEGORY
+    ]
     facts = profile_facts(view, items, language)
-    review: List[QAPair] = []
-    errors: List[str] = []
-    batches = _batches([i for i in items if sources[i.key].changed])
 
-    def prepare() -> SemanticIndex:
-        recheck_pairs(embedder, recheck, sources, kept, review)
-        if embedder is None or not batches:
-            return SemanticIndex()  # nothing to generate: no embedding spent
-        index = question_index(embedder, facts + kept)
-        for batch in batches:
-            batch.avoid, batch.focus = guidance_for(batch.context(), index, embedder)
-        return index
+    def groups() -> List[TaskGroup]:
+        """One model call per batch of changed items, each its own group."""
+        out: List[TaskGroup] = []
+        for batch in _batches([i for i in items if sources[i.key].changed]):
 
-    index = await cpu_bound(prepare)  # embedding batches: core/cpu.py
-    changed = sum(s.changed for s in sources.values())
-    logger.info(
-        "%s: %d source(s) changed of %d; %d pair(s) carried over, %d re-checked "
-        "(%d to review), %d model call(s) to make",
-        who,
-        changed,
-        len(sources),
-        len(kept),
-        len(recheck),
-        len(review),
-        len(batches),
+            async def run(
+                avoid: List[str], focus: List[str], batch: _Batch = batch
+            ) -> List[QAPair]:
+                batch.avoid, batch.focus = avoid, focus
+                return await batch_pairs(complete, model, who, language, batch)
+
+            task = Task(batch.keys, batch.section_title, batch.context(), run)
+            out.append(TaskGroup(batch.section_title, [task]))
+        return out
+
+    # The shared build (jobs/qa_build.py): sections' pairs kept, re-checked,
+    # regenerated and screened. The facts are rebuilt, and the unanswerable
+    # pairs are this job's own, handled below: neither is carried by it.
+    result = await build(
+        SourcePlan(
+            sources=sources,
+            facts=facts,
+            groups=groups,
+            sources_of=lambda pair: (
+                None
+                if pair.category in (FACTS_CATEGORY, UNANSWERABLE_CATEGORY)
+                else pair.sources
+            ),
+            concurrency=SECTION_CONCURRENCY,
+        ),
+        previous,
+        embedder=embedder,
+        grader=grader,
+        on_progress=on_progress,
     )
-
-    done = 0
-    if on_progress is not None:
-        on_progress(0, len(batches), "")
-
-    async def for_batch(batch: _Batch) -> List[QAPair]:
-        nonlocal done
-        pairs: List[QAPair] = []
-        try:
-            pairs = await batch_pairs(complete, model, who, language, batch)
-        except JobError as exc:
-            batch.failed = True
-            errors.append(f"{batch.section_title}: {exc}")
-        done += 1
-        if on_progress is not None:
-            on_progress(done, len(batches), batch.section_title)
-        return pairs
-
-    generated: List[QAPair] = []
-    for pairs in await gather_limited(
-        SECTION_CONCURRENCY, [for_batch(b) for b in batches]
-    ):
-        generated += pairs
-
-    # Existing pairs first, so a regenerated question never displaces one.
-    clean, dropped = sanitize_pairs(facts + kept + generated)
-    fresh_ids = {id(p) for p in generated}
-    existing = [p for p in clean if id(p) not in fresh_ids]
-    fresh = [p for p in clean if id(p) in fresh_ids]
-    accepted, semantic_duplicates = await cpu_bound(  # embedding batches: core/cpu.py
-        screen_pairs, embedder, fresh, sources, index, review, errors
-    )
-    if grader is not None:
-        accepted = await grade_pairs(grader, accepted, sources, review, errors)
-
-    # A failed call's sources keep their previous hash (or none), so the next
-    # run retries them instead of believing them up to date.
-    failed = {k for b in batches if b.failed for k in b.keys}
+    existing, accepted, review = result.existing, result.accepted, result.review
+    errors, dropped, changed = result.errors, result.dropped, result.changed
+    # The unanswerable source, when its own call fails below.
+    failed: Set[str] = set()
 
     kept_unanswerable: List[QAPair] = []
     new_unanswerable: List[QAPair] = []
@@ -732,17 +687,9 @@ async def build_resume_dataset(
                     outcome="dropped",
                 )
     dropped += len(answered)
-    manifest_sources: Dict[str, str] = {}
-    for key, src in sources.items():
-        if key not in failed:
-            manifest_sources[key] = content_hash(src.text)
-        elif key in previous.sources:
-            manifest_sources[key] = previous.sources[key]
 
     pairs = existing + accepted + kept_unanswerable + new_unanswerable
-    kept_count = sum(p.category != FACTS_CATEGORY for p in existing) + len(
-        kept_unanswerable
-    )
+    kept_count = result.kept + len(kept_unanswerable)
     # A fact is rebuilt every run, but it is new to the dataset when the
     # published version lacks it or says otherwise (its id is its question's):
     # the review lists it then, as it lists the generated pairs.
@@ -760,7 +707,7 @@ async def build_resume_dataset(
         len(new_facts),
         len(accepted),
         dropped,
-        semantic_duplicates,
+        result.semantic_duplicates,
         len(review),
         len(errors),
     )
@@ -770,12 +717,10 @@ async def build_resume_dataset(
         errors,
         kept=kept_count,
         new=len(new_facts) + len(accepted) + len(new_unanswerable),
-        semantic_duplicates=semantic_duplicates,
+        semantic_duplicates=result.semantic_duplicates,
         review=review,
         manifest={
-            "embedding_model": embedder.model_name if embedder else None,
-            "embedding_checks": embedding_checks(embedder, fresh, recheck),
-            "sources": dict(sorted(manifest_sources.items())),
+            **result.manifest(embedder, failed=sorted(failed)),
             "changed": changed,
             "resume": {
                 "id": _text(view.get("id")),
@@ -834,46 +779,42 @@ async def generate(
     """
     if language not in LANGUAGES:
         raise JobError(f"Unknown language '{language}': one of {', '.join(LANGUAGES)}")
-    model_ref, model = _model_for(creds, model_ref, complete)
-    if not creds.has(HF_TOKEN):
-        raise JobError("Your Hugging Face token is required (add it in Settings)")
-    if not target_repo.strip():
-        raise JobError("The dataset repo is required (e.g. 'kevindb/resume-qa')")
 
-    # Before the resume is read: the token is checked, then the published
-    # version read, before anything is spent.
-    repo_id, previous = await read_published(
-        creds, target_repo, full_refresh, own_resume_pair
-    )
+    async def make(run: Run) -> Tuple[QADataset, str]:
+        # After the wrapper's checks: nothing is read before the token is known good.
+        try:
+            view = await rr.get_resume(resume_id)
+        except rr.ResumeNotFoundError as exc:
+            raise JobError(
+                f"Reactive Resume has no resume '{resume_id}' any more"
+            ) from exc
+        except (rr.ResumeNotConfiguredError, rr.ResumeUnavailableError) as exc:
+            raise JobError(str(exc)) from exc
 
-    try:
-        view = await rr.get_resume(resume_id)
-    except rr.ResumeNotFoundError as exc:
-        raise JobError(f"Reactive Resume has no resume '{resume_id}' any more") from exc
-    except (rr.ResumeNotConfiguredError, rr.ResumeUnavailableError) as exc:
-        raise JobError(str(exc)) from exc
+        logger.info("generating Q&A pairs for resume %s with %s…", resume_id, run.model)
+        dataset = await build_resume_dataset(
+            view,
+            run.complete,
+            run.model,
+            previous=run.previous,
+            embedder=run.embedder,
+            language=language,
+            on_progress=on_progress,
+            grader=run.complete,
+            unanswerable=UNANSWERABLE_PAIRS,
+        )
+        who = _text((view.get("basics") or {}).get("name")) or _text(view.get("name"))
+        return dataset, who
 
-    embedder = await asyncio.to_thread(get_embedder, creds)
-    complete = complete or provider_completion(model_ref, creds)
-
-    logger.info("generating Q&A pairs for resume %s with %s…", resume_id, model)
-    dataset = await build_resume_dataset(
-        view,
-        complete,
-        model,
-        previous=previous,
-        embedder=embedder,
-        language=language,
-        on_progress=on_progress,
-        grader=complete,
-        unanswerable=UNANSWERABLE_PAIRS,
-    )
-    for err in dataset.errors:
-        logger.warning("non-fatal: %s", err)
-    dataset.removed = removed_pairs(previous, dataset)
-    who = _text((view.get("basics") or {}).get("name")) or _text(view.get("name"))
-    return Draft(
-        dataset, who, repo_id, full_refresh, model_ref, base_of(previous, full_refresh)
+    return await generate_draft(
+        creds,
+        target_repo,
+        own_resume_pair,
+        make,
+        missing_repo="The dataset repo is required (e.g. 'kevindb/resume-qa')",
+        full_refresh=full_refresh,
+        model_ref=model_ref,
+        complete=complete,
     )
 
 
@@ -939,7 +880,7 @@ def dataset_card(dataset: QADataset, who: str, foreign: int = 0) -> str:
         "- question-answering",
         "- text-generation",
         "size_categories:",
-        f"- {_size_category(len(dataset.pairs) + foreign)}",
+        f"- {size_category(len(dataset.pairs) + foreign)}",
         "---",
     ]
     body = f"""# Resume Q&A dataset — {who}
@@ -997,10 +938,9 @@ async def publish(creds: Credentials, draft: Draft) -> dict:
     if not draft.repo_id:
         raise JobError("The dataset repo is required (e.g. 'kevindb/resume-qa')")
     return await asyncio.to_thread(
-        publish_qa_dataset,
+        publish_dataset,
         creds,
         draft.dataset,
-        draft.username,
         draft.repo_id,
         card=lambda foreign: dataset_card(draft.dataset, draft.username, foreign),
         commit_message=f"Export resume Q&A dataset ({len(draft.dataset.pairs)} pairs)",

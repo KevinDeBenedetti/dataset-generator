@@ -20,26 +20,13 @@ Ported from portfolio-next (``scripts/generate-and-export-qa-dataset.ts``,
 """
 
 import asyncio
-import hashlib
-import json
 import logging
-import re
-import unicodedata
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from server.core.config import _env, config
-from server.core.cpu import cpu_bound
-from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
-from server.services.hub_repo import (
-    ROOT_PAIRS_PATH,
-    DatasetMoved,
-    HubDatasetRepo,
-    HubRepoError,
-    HubTokenMissing,
-    open_repo,
-)
+from server.core.config import _env
+from server.services.credentials import GITHUB_TOKEN, Credentials
 import httpx
 
 from server.jobs.github_snapshot import (
@@ -61,192 +48,76 @@ from server.jobs.tech_stack import (
     rank_stack,
     repo_technologies,
 )
-from server.services.providers import (
-    CompletionRequest as ProviderRequest,
-    ProviderError,
-    complete as provider_complete,
-    get_provider,
-    parse_ref,
-)
 from server.services.semantic import (
     Embedder,
-    SemanticIndex,
-    find_semantic_duplicate,
-    get_embedder,
-    grounding_scores,
-    nearest_texts,
-    split_sections,
-    thresholds_of,
-    uncovered_sections,
+)
+from server.jobs.qa_build import (
+    Run,
+    generate_draft,
+    SourcePlan,
+    Task,
+    TaskGroup,
+    build,
+    ANSWER_STYLE,
+    CompletionFn,
+    CompletionRequest,
+    Draft,
+    JSON_FORMAT_INSTRUCTION,
+    JobError,
+    PreviousState,
+    ProgressFn,
+    QADataset,
+    QAPair,
+    Source,
+    guidance,
+    size_category,
+    token_budget,
+    foreign_note,
+    generate_pairs,
+    publish_dataset,
 )
 
 logger = logging.getLogger(__name__)
 
+
 REPO_CONCURRENCY = 3
+
+
 BASE_PAIRS_PER_REPO = 4
+
+
 DOCS_BATCH_SIZE = 3
+
+
 PAIRS_PER_DOC = 2
+
+
 DOCS_BATCH_CHAR_BUDGET = 6000
+
+
 # A repo with a docs/ folder used to get up to 8 files x 2 pairs, so a few
 # well-documented repos held most of the dataset while a repo with only a
 # README had three pairs. Capping the docs keeps a visitor's "what is X?" about
 # equally well covered whichever repo X is.
 MAX_DOCS_PER_REPO = 6
+
+
 MAX_DOC_CHARS = 3000
 
-# Targeted generation (see _guidance): how many existing questions a prompt
-# lists as "don't ask again", the similarity under which a question is too far
-# from the source to be worth listing, and how many uncovered sections (each
-# cut to a one-line excerpt) the prompt points the LLM to.
-MAX_AVOID_QUESTIONS = 15
-AVOID_MIN_SIMILARITY = 0.3
-MAX_FOCUS_SECTIONS = 5
-FOCUS_SECTION_CHARS = 300
-
-ANSWER_STYLE = (
-    "Keep answers concise (1 to 3 sentences max) and rephrase them in your own "
-    "words — never copy a passage verbatim from the given context. Each pair must "
-    "cover a different aspect: no rewording the same question in another form."
-)
-JSON_FORMAT_INSTRUCTION = (
-    "Respond ONLY with a compact JSON array (no extra whitespace, indentation, or "
-    "line breaks), no surrounding text, in the format "
-    '[{"question":"...","answer":"...","confidence":0.9}], where "confidence" is a '
-    "score between 0 and 1 reflecting how well the given context supports the "
-    "answer."
-)
 
 CATEGORIES = ("profile", "overview", "docs", "repo")
+
+
 # Pairs built from GitHub data alone: rebuilt every run, never carried over.
 DETERMINISTIC_CATEGORIES = ("profile", "repo")
 
 
-class JobError(RuntimeError):
-    pass
-
-
-@dataclass
-class QAPair:
-    question: str
-    answer: str
-    category: str
-    repo: Optional[str] = None
-    model: Optional[str] = None
-    id: Optional[str] = None
-    source: str = "github"
-    confidence: Optional[float] = None
-    # Source keys (see source_key) the pair was generated from — what lets the
-    # next run keep it untouched while those sources are unchanged.
-    sources: List[str] = field(default_factory=list)
-    # Answer ↔ closest source chunk cosine (services/semantic.py).
-    grounding: Optional[float] = None
-    # The LLM's grade, 0-1, and its reason (grade_pairs).
-    judge: Optional[float] = None
-    judge_note: Optional[str] = None
-
-    def to_record(self) -> dict:
-        # Key order matches the TS exporter's records, keeping the Hub diff clean;
-        # sources/grounding are additive fields, after the original ones.
-        rec: Dict[str, Any] = {
-            "question": self.question,
-            "answer": self.answer,
-            "source": self.source,
-            "category": self.category,
-        }
-        if self.repo:
-            rec["repo"] = self.repo
-        if self.model:
-            rec["model"] = self.model
-        if self.confidence is not None:
-            rec["confidence"] = self.confidence
-        if self.id:
-            rec["id"] = self.id
-        if self.sources:
-            rec["sources"] = self.sources
-        if self.grounding is not None:
-            rec["grounding"] = self.grounding
-        if self.judge is not None:
-            rec["judge"] = self.judge
-        if self.judge_note:
-            rec["judge_note"] = self.judge_note
-        return rec
-
-    @classmethod
-    def from_record(cls, rec: Any) -> Optional["QAPair"]:
-        """Rebuild a pair from a published ``train.jsonl`` line; None if malformed."""
-        if not isinstance(rec, dict):
-            return None
-        question, answer, category = (
-            rec.get("question"),
-            rec.get("answer"),
-            rec.get("category"),
-        )
-        if not all(isinstance(v, str) and v for v in (question, answer, category)):
-            return None
-        sources = rec.get("sources")
-        grounding = rec.get("grounding")
-        return cls(
-            question=question,
-            answer=answer,
-            category=category,
-            repo=rec.get("repo") or None,
-            model=rec.get("model") or None,
-            id=rec.get("id") or None,
-            source=rec.get("source") or "github",
-            confidence=_confidence(rec.get("confidence")),
-            sources=[s for s in sources if isinstance(s, str)]
-            if isinstance(sources, list)
-            else [],
-            grounding=float(grounding)
-            if isinstance(grounding, (int, float)) and not isinstance(grounding, bool)
-            else None,
-            judge=_confidence(rec.get("judge")),
-            judge_note=rec.get("judge_note")
-            if isinstance(rec.get("judge_note"), str)
-            else None,
-        )
-
-
-@dataclass
-class CompletionRequest:
-    system: str
-    user: str
-    max_tokens: int
-
-
-CompletionFn = Callable[[CompletionRequest], Awaitable[str]]
-
-
-def provider_completion(model_ref: str, creds: Credentials) -> CompletionFn:
-    """CompletionFn over the provider registry, for the ``model_ref`` model.
-
-    A failed call raises :class:`ProviderError`: :func:`generate_pairs`
-    retries it like an empty answer, and says why when nothing recovers.
-    """
-
-    async def complete(req: CompletionRequest) -> str:
-        result = await provider_complete(
-            model_ref,
-            ProviderRequest(
-                system=req.system, user=req.user, max_tokens=req.max_tokens
-            ),
-            creds,
-        )
-        return result.text
-
-    return complete
-
-
-# A provider's error, as a run reports it: enough for its status and message.
-MAX_ERROR_CHARS = 400
-
-
-def _token_budget(pairs: int) -> int:
-    return min(1500, 400 + pairs * 150)
-
-
 MAX_PROFILE_STACK_LANGUAGES = 4
+
+
 MAX_PROFILE_STACK_TOOLS = 8
+
+
 MAX_PROFILE_PROJECTS = 8
 
 
@@ -389,132 +260,6 @@ def _join(items: List[str]) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} or {items[-1]}"
 
 
-def _extract_json_array(text: str) -> str:
-    fenced = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
-    fenced = re.sub(r"```\s*$", "", fenced).strip()
-    if fenced.startswith("["):
-        return fenced
-    start, end = fenced.find("["), fenced.rfind("]")
-    return fenced[start : end + 1] if start != -1 and end > start else fenced
-
-
-def _complete_objects(text: str) -> List[str]:
-    """Top-level ``{...}`` objects, string-aware — salvages the complete pairs
-    before a max-tokens cutoff (the cut object never closes its braces)."""
-    objects: List[str] = []
-    depth, start = 0, -1
-    in_string = escaped = False
-    for i, ch in enumerate(text):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            continue
-        if ch == '"':
-            in_string = True
-        elif ch == "{":
-            if depth == 0:
-                start = i
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0 and start != -1:
-                objects.append(text[start : i + 1])
-                start = -1
-    return objects
-
-
-def _to_pair(obj, repo: str, category: str, model: str) -> Optional[QAPair]:
-    if not isinstance(obj, dict):
-        return None
-    question, answer = obj.get("question"), obj.get("answer")
-    if not isinstance(question, str) or not isinstance(answer, str):
-        return None
-    if not question.strip() or not answer.strip():
-        return None
-    return QAPair(
-        question=question.strip(),
-        answer=answer.strip(),
-        category=category,
-        repo=repo,
-        model=model,
-        confidence=_confidence(obj.get("confidence")),
-    )
-
-
-def _confidence(value: Any) -> Optional[float]:
-    """A model-reported score clamped to [0, 1]; None when absent or not a number."""
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        return None
-    try:
-        score = float(value)
-    except ValueError:
-        return None
-    return round(min(1.0, max(0.0, score)), 3)
-
-
-def parse_pairs(raw: str, repo: str, category: str, model: str) -> List[QAPair]:
-    text = _extract_json_array(raw)
-    try:
-        parsed = json.loads(text)
-        if not isinstance(parsed, list):
-            raise ValueError("not a JSON array")
-        return [p for p in (_to_pair(o, repo, category, model) for o in parsed) if p]
-    except ValueError:
-        salvaged = []
-        for obj in _complete_objects(text):
-            try:
-                pair = _to_pair(json.loads(obj), repo, category, model)
-            except ValueError:
-                continue
-            if pair:
-                salvaged.append(pair)
-        if salvaged:
-            logger.warning(
-                "%s: malformed LLM output, salvaged %d pair(s)", repo, len(salvaged)
-            )
-        else:
-            logger.warning("%s: could not parse LLM output: %.200s", repo, raw)
-        return salvaged
-
-
-async def generate_pairs(
-    complete: CompletionFn,
-    req: CompletionRequest,
-    repo: str,
-    category: str,
-    model: str,
-) -> List[QAPair]:
-    """Retry an empty or failed response once, then the whole request once more
-    if nothing usable came out — a fresh generation beats salvaging a broken
-    one. When none recovers, the error says why: the provider's own error when
-    the last call failed (else only the worker's log would), or that the
-    answers were empty or unparseable."""
-    failure = ""
-    for _ in range(2):
-        raw = ""
-        for _ in range(2):
-            try:
-                raw = await complete(req)
-                failure = ""
-            except ProviderError as exc:
-                logger.warning("%s: the model call failed: %s", repo, exc)
-                raw, failure = "", str(exc)
-            if raw.strip():
-                break
-        # No answer at all (the calls failed): nothing to parse, or to log as
-        # unparseable.
-        pairs = parse_pairs(raw, repo, category, model) if raw.strip() else []
-        if pairs:
-            return pairs
-    if failure:
-        raise JobError(failure[:MAX_ERROR_CHARS])
-    raise JobError("LLM returned no usable pairs (empty or unparseable) after retry")
-
-
 def _system_prompt(subject: str, focus: str) -> str:
     return (
         "You generate question/answer pairs in English for a fine-tuning dataset, "
@@ -532,24 +277,6 @@ def _name_the_repo(repo: str) -> str:
         f'(e.g. "What does {repo} use for …?") — never "this project", "the '
         'repository" or "it".'
     )
-
-
-def _guidance(avoid: Sequence[str], focus: Sequence[str]) -> str:
-    """Prompt tail steering the LLM off known questions, onto uncovered topics."""
-    blocks: List[str] = []
-    if avoid:
-        blocks.append(
-            "These questions already exist in the dataset — do NOT ask them "
-            "again or rephrase them; ask about something else:\n"
-            + "\n".join(f"- {q}" for q in avoid)
-        )
-    if focus:
-        blocks.append(
-            "No existing question covers these parts of the context yet — "
-            "prioritize them:\n"
-            + "\n".join("- " + " ".join(s.split())[:FOCUS_SECTION_CHARS] for s in focus)
-        )
-    return "".join(f"\n\n{b}" for b in blocks)
 
 
 def overview_context(repo: RepoData) -> str:
@@ -595,9 +322,9 @@ async def overview_pairs(
                 f"Generate {BASE_PAIRS_PER_REPO} distinct question/answer pairs "
                 f"from this context:\n\n{context}"
                 + _name_the_repo(repo.name)
-                + _guidance(avoid, focus)
+                + guidance(avoid, focus)
             ),
-            max_tokens=_token_budget(BASE_PAIRS_PER_REPO),
+            max_tokens=token_budget(BASE_PAIRS_PER_REPO),
         ),
         repo.name,
         "overview",
@@ -658,9 +385,9 @@ async def docs_batch_pairs(
                 f"question/answer pairs from this documentation:\n\n"
                 + context
                 + _name_the_repo(repo.name)
-                + _guidance(avoid, focus)
+                + guidance(avoid, focus)
             ),
-            max_tokens=_token_budget(want),
+            max_tokens=token_budget(want),
         ),
         repo.name,
         "docs",
@@ -669,164 +396,6 @@ async def docs_batch_pairs(
     for pair in pairs:
         pair.sources = [source_key(repo.name, doc.path) for doc in included]
     return pairs
-
-
-def dedupe_key(text: str) -> str:
-    """Lowercased, accent- and punctuation-stripped."""
-    decomposed = unicodedata.normalize("NFD", text.lower())
-    stripped = "".join(c for c in decomposed if not ("̀" <= c <= "ͯ"))
-    return re.sub(r"[\W_]+", " ", stripped).strip()
-
-
-def _is_low_quality(pair: QAPair) -> bool:
-    if len(pair.question) < 8 or len(pair.answer) < 2:
-        return True
-    return dedupe_key(pair.question) == dedupe_key(pair.answer)
-
-
-def pair_id(pair: QAPair) -> str:
-    """Content-derived, so an unchanged pair keeps its id across runs."""
-    key = f"{pair.category}:{pair.repo or ''}:{pair.question}"
-    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
-
-
-def sanitize_pairs(pairs: List[QAPair]) -> Tuple[List[QAPair], int]:
-    """Drop trivial pairs, dedupe by normalized question (first wins), assign ids."""
-    seen = set()
-    out: List[QAPair] = []
-    for pair in pairs:
-        if _is_low_quality(pair):
-            continue
-        key = dedupe_key(pair.question)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        pair.id = pair_id(pair)
-        out.append(pair)
-    return out, len(pairs) - len(out)
-
-
-@dataclass
-class QADataset:
-    pairs: List[QAPair]
-    dropped: int
-    errors: List[str]
-    # Incremental-run accounting (see build_qa_dataset).
-    kept: int = 0
-    new: int = 0
-    semantic_duplicates: int = 0
-    review: List[QAPair] = field(default_factory=list)
-    manifest: Dict[str, Any] = field(default_factory=dict)
-    # Ids of the pairs generated this run (a subset of ``pairs``) — what a
-    # draft review shows, as opposed to the pairs carried over.
-    new_ids: List[str] = field(default_factory=list)
-    # Pairs of the published version this draft no longer has (a source gone
-    # or deselected, a fact that changed): what publishing it would delete.
-    removed: List[QAPair] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """JSON-safe form, for storing an unpublished draft."""
-        return {
-            "pairs": [p.to_record() for p in self.pairs],
-            "review": [p.to_record() for p in self.review],
-            "removed": [p.to_record() for p in self.removed],
-            "dropped": self.dropped,
-            "errors": self.errors,
-            "kept": self.kept,
-            "new": self.new,
-            "semantic_duplicates": self.semantic_duplicates,
-            "manifest": self.manifest,
-            "new_ids": self.new_ids,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "QADataset":
-        def pairs(key: str) -> List[QAPair]:
-            return [p for p in map(QAPair.from_record, data.get(key, [])) if p]
-
-        return cls(
-            pairs=pairs("pairs"),
-            dropped=data.get("dropped", 0),
-            errors=list(data.get("errors", [])),
-            kept=data.get("kept", 0),
-            new=data.get("new", 0),
-            semantic_duplicates=data.get("semantic_duplicates", 0),
-            review=pairs("review"),
-            manifest=dict(data.get("manifest", {})),
-            new_ids=list(data.get("new_ids", [])),
-            removed=pairs("removed"),
-        )
-
-    def with_selection(
-        self,
-        exclude: Sequence[str] = (),
-        promote: Sequence[str] = (),
-        edits: Optional[Dict[str, Dict[str, str]]] = None,
-    ) -> "QADataset":
-        """This draft after a review: ``exclude`` drops new pairs from the
-        export, ``promote`` moves pairs from the review list into it, and
-        ``edits`` (id → question and answer) rewrites new or promoted pairs.
-
-        An edited pair gets the id of its new content and loses its grounding
-        score, computed for the model's answer, not the reviewer's. Pairs
-        carried over from the published version are never edited here.
-        """
-        excluded = set(exclude) & set(self.new_ids)
-        promoted = [p for p in self.review if p.id in set(promote)]
-        kept_new = [i for i in self.new_ids if i not in excluded]
-        editable = set(kept_new) | {p.id for p in promoted}
-        changes = {k: v for k, v in (edits or {}).items() if k in editable}
-        renamed: Dict[str, str] = {}
-
-        def apply(pair: QAPair) -> QAPair:
-            change = changes.get(pair.id or "")
-            if not change:
-                return pair
-            edited = replace(
-                pair,
-                question=change["question"].strip(),
-                answer=change["answer"].strip(),
-                grounding=None,
-                judge=None,
-                judge_note=None,
-            )
-            edited.id = pair_id(edited)
-            renamed[pair.id or ""] = edited.id
-            return edited
-
-        pairs: List[QAPair] = []
-        seen: Set[str] = set()
-        for pair in [p for p in self.pairs if p.id not in excluded] + promoted:
-            pair = apply(pair)
-            # An edit can turn a pair into another one's twin: keep the first.
-            if pair.id and pair.id in seen:
-                continue
-            seen.add(pair.id or "")
-            pairs.append(pair)
-        new_ids = [renamed.get(i, i) for i in kept_new]
-        new_ids += [renamed.get(p.id, p.id) for p in promoted if p.id]
-        return QADataset(
-            pairs=pairs,
-            dropped=self.dropped,
-            errors=self.errors,
-            kept=self.kept,
-            new=len(kept_new) + len(promoted),
-            semantic_duplicates=self.semantic_duplicates,
-            review=[p for p in self.review if p not in promoted],
-            manifest=self.manifest,
-            new_ids=[i for i in dict.fromkeys(new_ids) if i in seen],
-            removed=self.removed,
-        )
-
-
-def removed_pairs(previous: "PreviousState", dataset: QADataset) -> List[QAPair]:
-    """Pairs of the published version that the draft no longer holds, in
-    its pairs or in its review list."""
-    current = {p.id for p in dataset.pairs} | {p.id for p in dataset.review}
-    return [p for p in previous.pairs if p.id and p.id not in current]
-
-
-ProgressFn = Callable[[int, int, str], None]
 
 
 # --- Incremental state -------------------------------------------------------
@@ -846,104 +415,11 @@ def _source_repo(key: str) -> str:
     return key.split("::", 1)[0]
 
 
-def content_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-@dataclass
-class PreviousState:
-    """The last published version: the job's own pairs and its source manifest."""
-
-    pairs: List[QAPair] = field(default_factory=list)
-    sources: Dict[str, str] = field(default_factory=dict)
-    # The commit it was read at (None: the repo did not exist, or was not
-    # read) — what a draft built on this version is published on top of.
-    commit: Optional[str] = None
-
-
-# Tells a job's own row from a foreign one (a pair added from a file, say):
-# the pair when the row is the job's, else None.
-OwnPair = Callable[[Dict[str, Any]], Optional[QAPair]]
-
-
 def own_github_pair(row: Dict[str, Any]) -> Optional[QAPair]:
     """The row as a GitHub Q&A pair, when it is one: a pair in one of the
     job's categories. Anything else is a foreign row, published back as it is."""
     pair = QAPair.from_record(row)
     return pair if pair is not None and pair.category in CATEGORIES else None
-
-
-_MOVED = (
-    "The dataset '{repo}' changed on Hugging Face since this draft was generated. "
-    "Start a new run: it builds on the current version. This draft is kept, "
-    "unpublished."
-)
-
-
-def open_qa_repo(creds: Credentials, repo_id: str) -> HubDatasetRepo:
-    """Open a Q&A job's dataset repo (services/hub_repo.py): the token is
-    checked and a bare repo name completed. Every refusal is a JobError."""
-    try:
-        return open_repo(creds, repo_id, new_pairs_path=ROOT_PAIRS_PATH)
-    except HubTokenMissing as exc:
-        raise JobError(
-            "Your Hugging Face token is required (add it in Settings)"
-        ) from exc
-    except HubRepoError as exc:
-        raise JobError(str(exc)) from exc
-
-
-def load_previous_state(
-    repo: HubDatasetRepo, own: OwnPair = own_github_pair
-) -> PreviousState:
-    """The published version the next run builds on: the job's own pairs, the
-    manifest's source hashes and the commit they were read at.
-
-    A repo that does not exist, or has no rows yet, is a first run (empty
-    state). Anything else — the Hub unreachable, a permission error, a file
-    that cannot be read — raises: silently starting over would re-spend the
-    whole generation budget.
-    """
-    try:
-        version = repo.read()
-    except Exception as exc:
-        raise JobError(
-            f"could not read the previous dataset from {repo.repo_id}: {exc} — "
-            "run with full_refresh to regenerate from scratch"
-        ) from exc
-
-    pairs = [pair for pair in map(own, version.rows) if pair is not None]
-    raw = (version.manifest or {}).get("sources", {})
-    if isinstance(raw, dict):
-        sources = {k: v for k, v in raw.items() if isinstance(v, str)}
-    else:
-        sources = {}
-        logger.warning("unreadable manifest.json — treating every source as changed")
-    logger.info(
-        "previous version: %d pair(s), %d tracked source(s), %d foreign row(s)",
-        len(pairs),
-        len(sources),
-        len(version.rows) - len(pairs),
-    )
-    return PreviousState(pairs, sources, version.commit)
-
-
-async def read_published(
-    creds: Credentials,
-    repo_id: str,
-    full_refresh: bool,
-    own: OwnPair = own_github_pair,
-) -> Tuple[str, PreviousState]:
-    """The dataset's full repo id and the version a run builds on.
-
-    The repo is opened first — the token checked, before any model usage is
-    spent — then read, unless ``full_refresh`` ignores what is published.
-    """
-    repo = await asyncio.to_thread(open_qa_repo, creds, repo_id)
-    if full_refresh:
-        logger.info("full refresh: ignoring the previously published version")
-        return repo.repo_id, PreviousState()
-    return repo.repo_id, await asyncio.to_thread(load_previous_state, repo, own)
 
 
 @dataclass
@@ -963,344 +439,12 @@ class Selection:
     carry_over: Set[str] = field(default_factory=set)
 
 
-@dataclass
-class _Source:
-    key: str
-    text: str
-    changed: bool = True
-
-
-@dataclass
-class _Task:
-    """One LLM call to make: a changed overview, or a batch of changed docs."""
-
-    repo: RepoData
-    label: str
-    docs: Optional[List[RepoDoc]] = None
-    avoid: List[str] = field(default_factory=list)
-    focus: List[str] = field(default_factory=list)
-    keys: List[str] = field(default_factory=list)
-    failed: bool = False
-
-
-def _chunks(texts: Sequence[str]) -> List[str]:
-    chunks: List[str] = []
-    for text in texts:
-        chunks += split_sections(text) or ([text] if text.strip() else [])
-    return chunks
-
-
-def _grounding_for(
-    embedder: Embedder, pairs: List[QAPair], sources: Dict[str, _Source]
-) -> List[float]:
-    """Each pair's answer ↔ closest chunk of its own sources' current text."""
-    by_text: Dict[Tuple[str, ...], Any] = {}
-    scores: List[float] = []
-    answers = embedder.embed([p.answer for p in pairs]) if pairs else []
-    for pair, answer_vector in zip(pairs, answers, strict=True):
-        keys = tuple(k for k in pair.sources if k in sources)
-        if keys not in by_text:
-            chunks = _chunks([sources[k].text for k in keys])
-            by_text[keys] = embedder.embed(chunks) if chunks else []
-        score = grounding_scores(answer_vector, by_text[keys])[0]
-        scores.append(round(float(score), 3))
-    return scores
-
-
-def _plan_tasks(
-    repos: List[RepoData],
-    docs_by_repo: Dict[str, List[RepoDoc]],
-    sources: Dict[str, _Source],
-    index: SemanticIndex,
-    embedder: Optional[Embedder],
-) -> List[_Task]:
-    """LLM calls for changed sources, each with its avoid/focus lists.
-
-    Blocking (embeddings) — run in a worker thread.
-    """
-    tasks: List[_Task] = []
-    for repo in repos:
-        key = source_key(repo.name, "overview")
-        # A recipe may leave a repo's README out: then it has no overview.
-        if key in sources and sources[key].changed:
-            tasks.append(_Task(repo, "overview", keys=[key]))
-        changed_docs = [
-            d
-            for d in docs_by_repo.get(repo.name, [])
-            if sources[source_key(repo.name, d.path)].changed
-        ]
-        for i in range(0, len(changed_docs), DOCS_BATCH_SIZE):
-            batch = changed_docs[i : i + DOCS_BATCH_SIZE]
-            tasks.append(
-                _Task(
-                    repo,
-                    f"docs {i // DOCS_BATCH_SIZE + 1}",
-                    docs=batch,
-                    keys=[source_key(repo.name, d.path) for d in batch],
-                )
-            )
-
-    if embedder is None or not len(index):
-        return tasks
-    for task in tasks:
-        text = (
-            overview_context(task.repo)
-            if task.docs is None
-            else docs_batch_context(task.docs)[0]
-        )
-        task.avoid, task.focus = guidance_for(text, index, embedder)
-    return tasks
-
-
-def _legacy_sources(pair: QAPair, sources: Dict[str, _Source]) -> List[str]:
+def _legacy_sources(pair: QAPair, sources: Dict[str, Source]) -> List[str]:
     """Sources of a pair published before pairs recorded them."""
     if pair.category == "overview":
         return [source_key(pair.repo or "", "overview")]
     prefix = source_key(pair.repo or "", "")
     return [k for k in sources if k.startswith(prefix) and not k.endswith("::overview")]
-
-
-def recheck_pairs(
-    embedder: Optional[Embedder],
-    recheck: List[QAPair],
-    sources: Dict[str, _Source],
-    kept: List[QAPair],
-    review: List[QAPair],
-) -> None:
-    """The pairs of changed sources, scored against the new text: kept when
-    still grounded, else sent to review — every one kept without an embedder.
-    Blocking (embeddings)."""
-    if embedder is None or not recheck:
-        kept.extend(recheck)
-        return
-    scores = _grounding_for(embedder, recheck, sources)
-    for pair, score in zip(recheck, scores, strict=True):
-        pair.grounding = score
-        (kept if score >= thresholds_of(embedder).grounding else review).append(pair)
-
-
-def question_index(
-    embedder: Optional[Embedder], pairs: Sequence[QAPair]
-) -> SemanticIndex:
-    """The questions of ``pairs``, embedded: what a new question is checked
-    against, and what a prompt is steered away from. Blocking."""
-    index = SemanticIndex()
-    if embedder is not None and pairs:
-        questions = [p.question for p in pairs]
-        index.add(questions, embedder.embed(questions))
-    return index
-
-
-def guidance_for(
-    text: str, index: SemanticIndex, embedder: Embedder
-) -> Tuple[List[str], List[str]]:
-    """``(avoid, focus)`` for a prompt over ``text``: the existing questions
-    nearest to it, and its sections no question covers yet. Blocking."""
-    sections = _chunks([text])
-    if not sections or not len(index):
-        return [], []
-    vectors = embedder.embed(sections)
-    avoid = nearest_texts(vectors, index, MAX_AVOID_QUESTIONS, AVOID_MIN_SIMILARITY)
-    uncovered = uncovered_sections(
-        sections, vectors, index, thresholds_of(embedder).uncovered
-    )
-    # All sections uncovered says nothing the plain prompt doesn't.
-    focus = uncovered[:MAX_FOCUS_SECTIONS] if len(uncovered) < len(sections) else []
-    return avoid, focus
-
-
-def screen_pairs(
-    embedder: Optional[Embedder],
-    fresh: List[QAPair],
-    sources: Dict[str, _Source],
-    index: SemanticIndex,
-    review: List[QAPair],
-    errors: List[str],
-) -> Tuple[List[QAPair], int]:
-    """The generated pairs that make it in, and how many were rephrasings.
-
-    A pair whose question is a rephrasing of an indexed one is dropped; one
-    whose answer is far from its sources goes to ``review``; the rest are
-    accepted and indexed in turn. Without an embedder, or when it fails
-    mid-run (noted in ``errors``), every pair is accepted unscreened — the
-    generation is done, its pairs are not lost to the checks. Blocking.
-    """
-    if embedder is None or not fresh:
-        return fresh, 0
-    try:
-        vectors = embedder.embed([p.question for p in fresh])
-        grounding = _grounding_for(embedder, fresh, sources)
-    except Exception as exc:  # noqa: BLE001 — an endpoint can fail mid-run
-        logger.warning("Semantic checks skipped: %s", exc)
-        errors.append(
-            f"Duplicate and grounding checks skipped ({embedder.model_name} "
-            f"failed): {exc}"
-        )
-        return fresh, 0
-    accepted: List[QAPair] = []
-    duplicates = 0
-    thresholds = thresholds_of(embedder)
-    for pair, vector, score in zip(fresh, vectors, grounding, strict=True):
-        match = find_semantic_duplicate(vector, index, thresholds.dedup)
-        if match is not None:
-            duplicates += 1
-            logger.info(
-                "rephrasing (%.2f) of %r dropped: %r",
-                match[1],
-                index.texts[match[0]],
-                pair.question,
-            )
-            continue
-        pair.grounding = score
-        if score < thresholds.grounding:
-            review.append(pair)
-            logger.info(
-                "far from its source (%.2f), to review: %r", score, pair.question
-            )
-            continue
-        index.add([pair.question], vector)
-        accepted.append(pair)
-    return accepted, duplicates
-
-
-# A new pair the LLM grades below this is held out for review, with its reason.
-JUDGE_THRESHOLD = 0.6
-JUDGE_CONTEXT_CHARS = 6000
-
-JUDGE_RUBRIC = (
-    "You grade question/answer pairs for a dataset that tests and feeds a "
-    "portfolio chatbot. Grade each pair from 0 to 1: 1 when every claim of the "
-    "answer is supported by the context, a recruiter or visitor would ask the "
-    "question, and the question names its subject (never 'this project' or a "
-    "pronoun alone); lower for each point that fails; 0 for an answer the "
-    "context contradicts. Respond ONLY with a JSON array covering every pair, "
-    '[{"id":"...","score":0.8,"reason":"a few words"}].'
-)
-
-
-def _parse_grades(raw: str) -> Dict[str, Tuple[float, str]]:
-    """``id -> (score, reason)`` from a grader's answer; what can't be read is
-    left out (those pairs stay ungraded)."""
-    text = _extract_json_array(raw)
-    try:
-        parsed = json.loads(text)
-        objects = parsed if isinstance(parsed, list) else []
-    except ValueError:
-        objects = []
-        for obj in _complete_objects(text):
-            try:
-                objects.append(json.loads(obj))
-            except ValueError:
-                continue
-    grades: Dict[str, Tuple[float, str]] = {}
-    for obj in objects:
-        if not isinstance(obj, dict) or not isinstance(obj.get("id"), str):
-            continue
-        score = _confidence(obj.get("score"))
-        if score is None:
-            continue
-        reason = obj.get("reason")
-        grades[obj["id"]] = (
-            score,
-            reason.strip()[:200] if isinstance(reason, str) else "",
-        )
-    return grades
-
-
-def embedding_checks(
-    embedder: Optional[Embedder], fresh: Sequence[QAPair], recheck: Sequence[QAPair]
-) -> Optional[Dict[str, int]]:
-    """What the embedding checks worked on this run, for the manifest: the new
-    pairs screened (rephrasings, grounding) and the changed sources' old pairs
-    re-checked. None without an embedder (the words were compared)."""
-    if embedder is None:
-        return None
-    return {"compared": len(fresh), "rechecked": len(recheck)}
-
-
-def embedding_summary(manifest: Dict[str, Any]) -> Optional[str]:
-    """:func:`embedding_checks` in a few words, for a run's result — None for a
-    draft made before the checks were recorded."""
-    if "embedding_checks" not in manifest:
-        return None
-    checks = manifest["embedding_checks"]
-    if checks is None:
-        return "off: no embedding model, the words are compared"
-    compared, rechecked = checks.get("compared", 0), checks.get("rechecked", 0)
-    if not compared and not rechecked:
-        return "nothing new to compare"
-    parts = []
-    if compared:
-        parts.append(f"{compared} new pair(s) checked for rephrasings and grounding")
-    if rechecked:
-        parts.append(f"{rechecked} changed pair(s) re-checked against their source")
-    return ", ".join(parts)
-
-
-async def grade_pairs(
-    grader: CompletionFn,
-    pairs: List[QAPair],
-    sources: Dict[str, "_Source"],
-    review: List[QAPair],
-    errors: List[str],
-    *,
-    rubric: str = JUDGE_RUBRIC,
-    context_chars: int = JUDGE_CONTEXT_CHARS,
-    outcome: str = "to review",
-) -> List[QAPair]:
-    """Grade new pairs with the LLM, one call per group sharing their sources
-    (a section's items, a repo's docs batch), against those sources' text.
-
-    Returns the pairs graded :data:`JUDGE_THRESHOLD` or above, and those it
-    couldn't grade (a failed call is noted in ``errors``: the pairs are kept,
-    not lost to the check); the others go to ``review``, their grade and its
-    reason recorded (``judge``, ``judge_note``). ``outcome`` names what the
-    caller does with those in the log ("dropped" when it discards them)."""
-    groups: Dict[Tuple[str, ...], List[QAPair]] = {}
-    for pair in pairs:
-        groups.setdefault(tuple(pair.sources), []).append(pair)
-
-    async def grade(keys: Tuple[str, ...], group: List[QAPair]) -> None:
-        context = "\n\n".join(sources[k].text for k in keys if k in sources)
-        listing = "\n".join(
-            json.dumps(
-                {"id": p.id, "question": p.question, "answer": p.answer},
-                ensure_ascii=False,
-            )
-            for p in group
-        )
-        req = CompletionRequest(
-            system=rubric,
-            user=f"Context:\n{context[:context_chars]}\n\nPairs:\n{listing}",
-            max_tokens=min(1500, 200 + 80 * len(group)),
-        )
-        try:
-            raw = await grader(req)
-        except ProviderError as exc:
-            errors.append(
-                f"Grading skipped for {len(group)} pair(s): {str(exc)[:MAX_ERROR_CHARS]}"
-            )
-            return
-        grades = _parse_grades(raw)
-        for pair in group:
-            if pair.id in grades:
-                pair.judge, pair.judge_note = grades[pair.id]
-
-    await gather_limited(REPO_CONCURRENCY, [grade(k, g) for k, g in groups.items()])
-    kept: List[QAPair] = []
-    for pair in pairs:
-        if pair.judge is not None and pair.judge < JUDGE_THRESHOLD:
-            review.append(pair)
-            logger.info(
-                "graded %.2f (%s), %s: %r",
-                pair.judge,
-                pair.judge_note,
-                outcome,
-                pair.question,
-            )
-        else:
-            kept.append(pair)
-    return kept
 
 
 async def build_qa_dataset(
@@ -1354,7 +498,6 @@ async def build_qa_dataset(
     live = {r.name for r in snapshot.repos} | (
         selection.carry_over if selection is not None else set()
     )
-    errors: List[str] = []
 
     async def docs_for(repo: RepoData) -> List[RepoDoc]:
         return await fetch_repo_docs(
@@ -1376,182 +519,112 @@ async def build_qa_dataset(
     def has_overview(repo: RepoData) -> bool:
         return selection is None or repo.name in selection.overview_repos
 
-    sources: Dict[str, _Source] = {}
+    sources: Dict[str, Source] = {}
     for repo in repos:
         if has_overview(repo):
             key = source_key(repo.name, "overview")
-            sources[key] = _Source(key, overview_context(repo))
+            sources[key] = Source(key, overview_context(repo))
         for doc in docs_by_repo[repo.name]:
             key = source_key(repo.name, doc.path)
-            sources[key] = _Source(key, doc.content)
-    for src in sources.values():
-        src.changed = previous.sources.get(src.key) != content_hash(src.text)
-
-    # Previous pairs: carried over, re-checked, or dropped.
-    kept: List[QAPair] = []
-    recheck: List[QAPair] = []
-    for pair in previous.pairs:
-        if pair.category in DETERMINISTIC_CATEGORIES or pair.repo not in live:
-            continue
-        if pair.repo not in processed:
-            kept.append(pair)
-            continue
-        keys = [
-            k for k in (pair.sources or _legacy_sources(pair, sources)) if k in sources
-        ]
-        if not keys:
-            continue
-        pair.sources = keys
-        (recheck if any(sources[k].changed for k in keys) else kept).append(pair)
-
-    # Deterministic pairs go first in the sanitize pass and into the semantic
-    # index, so an LLM rephrasing of "What is X?" is dropped as a duplicate.
-    profile = (
+            sources[key] = Source(key, doc.content)
+    # Deterministic pairs: the profile facts, then each repo's.
+    facts = (
         profile_pairs(snapshot.profile, len(snapshot.repos), snapshot.repos)
         if selection is None or selection.include_profile
         else []
     )
-    profile += [
+    facts += [
         p for repo in snapshot.repos if has_overview(repo) for p in repo_pairs(repo)
     ]
-    review: List[QAPair] = []
 
-    def prepare() -> Tuple[SemanticIndex, List[_Task]]:
-        recheck_pairs(embedder, recheck, sources, kept, review)
-        index = question_index(embedder, profile + kept)
-        return index, _plan_tasks(repos, docs_by_repo, sources, index, embedder)
+    def groups() -> List[TaskGroup]:
+        """The calls for what changed: per repo, its overview, then its changed
+        docs a few at a time."""
+        out: List[TaskGroup] = []
+        for repo in repos:
+            tasks: List[Task] = []
+            key = source_key(repo.name, "overview")
+            # A recipe may leave a repo's README out: then it has no overview.
+            if key in sources and sources[key].changed:
 
-    carried = len(kept)
-    index, tasks = await cpu_bound(prepare)  # embedding batches: core/cpu.py
-    logger.info(
-        "%d source(s) changed of %d; %d pair(s) carried over, %d re-checked "
-        "(%d to review), %d LLM call(s) to make",
-        sum(s.changed for s in sources.values()),
-        len(sources),
-        carried,
-        len(recheck),
-        len(review),
-        len(tasks),
-    )
+                async def overview(
+                    avoid: List[str], focus: List[str], repo: RepoData = repo
+                ) -> List[QAPair]:
+                    return await overview_pairs(complete, model, repo, avoid, focus)
 
-    tasks_by_repo: Dict[str, List[_Task]] = {}
-    for task in tasks:
-        tasks_by_repo.setdefault(task.repo.name, []).append(task)
-    done = 0
-    if on_progress is not None:
-        on_progress(0, len(tasks_by_repo), "")
-
-    async def for_repo(repo_tasks: List[_Task]) -> List[QAPair]:
-        nonlocal done
-        pairs: List[QAPair] = []
-        for task in repo_tasks:
-            try:
-                if task.docs is None:
-                    pairs += await overview_pairs(
-                        complete, model, task.repo, task.avoid, task.focus
+                tasks.append(
+                    Task(
+                        [key],
+                        f"{repo.name} (overview)",
+                        overview_context(repo),
+                        overview,
                     )
-                else:
-                    pairs += await docs_batch_pairs(
-                        complete, model, task.repo, task.docs, task.avoid, task.focus
+                )
+            changed_docs = [
+                d
+                for d in docs_by_repo.get(repo.name, [])
+                if sources[source_key(repo.name, d.path)].changed
+            ]
+            for i in range(0, len(changed_docs), DOCS_BATCH_SIZE):
+                batch = changed_docs[i : i + DOCS_BATCH_SIZE]
+
+                async def docs(
+                    avoid: List[str],
+                    focus: List[str],
+                    repo: RepoData = repo,
+                    batch: List[RepoDoc] = batch,
+                ) -> List[QAPair]:
+                    return await docs_batch_pairs(
+                        complete, model, repo, batch, avoid, focus
                     )
-            except JobError as exc:
-                task.failed = True
-                errors.append(f"{task.repo.name} ({task.label}): {exc}")
-        done += 1
-        logger.info("  [%d/%d] %s", done, len(tasks_by_repo), repo_tasks[0].repo.name)
-        if on_progress is not None:
-            on_progress(done, len(tasks_by_repo), repo_tasks[0].repo.name)
-        return pairs
 
-    generated: List[QAPair] = []
-    for pairs in await gather_limited(
-        REPO_CONCURRENCY, [for_repo(t) for t in tasks_by_repo.values()]
-    ):
-        generated += pairs
+                tasks.append(
+                    Task(
+                        [source_key(repo.name, d.path) for d in batch],
+                        f"{repo.name} (docs {i // DOCS_BATCH_SIZE + 1})",
+                        docs_batch_context(batch)[0],
+                        docs,
+                    )
+                )
+            if tasks:
+                out.append(TaskGroup(repo.name, tasks))
+        return out
 
-    # Existing pairs first, so a regenerated question never displaces one.
-    clean, dropped = sanitize_pairs(profile + kept + generated)
-    fresh_ids = {id(p) for p in generated}
-    existing = [p for p in clean if id(p) not in fresh_ids]
-    fresh = [p for p in clean if id(p) in fresh_ids]
+    def outside(repo: Optional[str]) -> bool:
+        """A repo that still exists but is not part of this run."""
+        return repo in live and repo not in processed
 
-    accepted, semantic_duplicates = await cpu_bound(  # embedding batches: core/cpu.py
-        screen_pairs, embedder, fresh, sources, index, review, errors
+    plan = SourcePlan(
+        sources=sources,
+        facts=facts,
+        groups=groups,
+        # A fact is rebuilt, never carried; neither is a pair of a repo gone
+        # from GitHub (its sources are not this run's).
+        sources_of=lambda pair: (
+            None
+            if pair.category in DETERMINISTIC_CATEGORIES
+            else (pair.sources or _legacy_sources(pair, sources))
+        ),
+        concurrency=REPO_CONCURRENCY,
+        outside_pair=lambda pair: (
+            pair.category not in DETERMINISTIC_CATEGORIES and outside(pair.repo)
+        ),
+        outside_source=lambda key: outside(_source_repo(key)),
     )
-    if grader is not None:
-        accepted = await grade_pairs(grader, accepted, sources, review, errors)
-
-    # A failed call's sources keep their previous hash (or none), so the next
-    # run retries them instead of believing them up to date.
-    failed = {k for t in tasks if t.failed for k in t.keys}
-    manifest_sources = {
-        k: v
-        for k, v in previous.sources.items()
-        if _source_repo(k) in live and _source_repo(k) not in processed
-    }
-    for key, src in sources.items():
-        if key not in failed:
-            manifest_sources[key] = content_hash(src.text)
-        elif key in previous.sources:
-            manifest_sources[key] = previous.sources[key]
-
-    pairs = existing + accepted
-    kept_count = sum(p.category not in DETERMINISTIC_CATEGORIES for p in existing)
-    logger.info(
-        "%d pair(s): %d kept, %d new; %d dropped, %d rephrasing(s), %d to review, "
-        "%d error(s)",
-        len(pairs),
-        kept_count,
-        len(accepted),
-        dropped,
-        semantic_duplicates,
-        len(review),
-        len(errors),
+    result = await build(
+        plan, previous, embedder=embedder, grader=grader, on_progress=on_progress
     )
     return QADataset(
-        pairs,
-        dropped,
-        errors,
-        kept=kept_count,
-        new=len(accepted),
-        semantic_duplicates=semantic_duplicates,
-        review=review,
-        manifest={
-            "embedding_model": embedder.model_name if embedder else None,
-            "embedding_checks": embedding_checks(embedder, fresh, recheck),
-            "sources": dict(sorted(manifest_sources.items())),
-        },
-        new_ids=[p.id for p in accepted if p.id],
+        result.existing + result.accepted,
+        result.dropped,
+        result.errors,
+        kept=result.kept,
+        new=len(result.accepted),
+        semantic_duplicates=result.semantic_duplicates,
+        review=result.review,
+        manifest=result.manifest(embedder),
+        new_ids=[p.id for p in result.accepted if p.id],
     )
-
-
-# --- Hugging Face export -----------------------------------------------------
-
-
-def foreign_note(foreign: int) -> str:
-    """The card's line about the rows a Q&A job did not generate."""
-    if not foreign:
-        return ""
-    return (
-        f"- {foreign} more row(s) come from another source (added from a file "
-        "or a web page): kept as they are, and not counted above.\n"
-    )
-
-
-def _size_category(n: int) -> str:
-    if n < 1_000:
-        return "n<1K"
-    if n < 10_000:
-        return "1K<n<10K"
-    if n < 100_000:
-        return "10K<n<100K"
-    return "100K<n<1M"
-
-
-def to_records(pairs: Sequence[QAPair]) -> List[Dict[str, Any]]:
-    """The pairs as published rows, ordered by id so a version's diff on the
-    Hub shows only what changed."""
-    return [p.to_record() for p in sorted(pairs, key=lambda p: p.id or "")]
 
 
 def dataset_card(
@@ -1592,7 +665,7 @@ def dataset_card(
         "- question-answering",
         "- text-generation",
         "size_categories:",
-        f"- {_size_category(len(pairs) + foreign)}",
+        f"- {size_category(len(pairs) + foreign)}",
         "---",
     ]
 
@@ -1687,129 +760,6 @@ Each line of `train.jsonl` is one record:
     return "\n".join(front) + "\n" + body
 
 
-def publish_qa_dataset(
-    creds: Credentials,
-    dataset: QADataset,
-    username: str,
-    repo_id: str,
-    *,
-    card: Optional[Callable[[int], str]] = None,
-    commit_message: Optional[str] = None,
-    base_commit: Optional[str] = None,
-    own: OwnPair = own_github_pair,
-) -> dict:
-    """Publish the dataset to its private repo in one commit: ``train.jsonl``,
-    ``review.jsonl``, ``manifest.json`` and the card — the manifest is what the
-    next run diffs against, so it never lands without the pairs it describes.
-
-    The repo's foreign rows (``own`` tells them apart) are published back as
-    they are, after the job's pairs. ``base_commit`` is the commit the draft
-    was built on ("" for a repo that did not exist): a repo that is no longer
-    there has moved, and nothing is written. None skips that check — a full
-    refresh, or a draft stored before commits were recorded. ``card`` builds
-    another job's card from the number of foreign rows.
-    """
-    if not dataset.pairs:
-        raise JobError("generated 0 pairs — refusing to publish an empty dataset")
-
-    repo = open_qa_repo(creds, repo_id)
-    moved = JobError(_MOVED.format(repo=repo.repo_id))
-    try:
-        current = repo.read()
-        if base_commit is not None and (current.commit or "") != base_commit:
-            raise moved
-        foreign = [row for row in current.rows if own(row) is None]
-        if card is None:
-            text = dataset_card(
-                dataset,
-                username,
-                _env("HF_QA_DATASET_LICENSE"),
-                _env("HF_QA_DATASET_LICENSE_LINK"),
-                foreign=len(foreign),
-            )
-        else:
-            text = card(len(foreign))
-        published = repo.publish(
-            current,
-            to_records(dataset.pairs) + foreign,
-            card=text,
-            message=commit_message
-            or f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
-            review=to_records(dataset.review),
-            manifest=dataset.manifest,
-        )
-    except DatasetMoved as exc:
-        raise moved from exc
-    except HubRepoError as exc:
-        raise JobError(str(exc)) from exc
-    return {
-        "repo": repo.repo_id,
-        "url": published.url,
-        "records": len(dataset.pairs),
-        "dropped": dataset.dropped,
-    }
-
-
-# --- generate, review, publish ------------------------------------------------
-
-
-@dataclass
-class Draft:
-    """A generated, not yet published version of the dataset."""
-
-    dataset: QADataset
-    username: str
-    repo_id: str
-    full_refresh: bool
-    model_ref: str
-    # The commit of the published version this draft was built on ("": the
-    # repo did not exist). None: not recorded — a full refresh, an older draft.
-    base_commit: Optional[str] = None
-
-    def stats(self) -> Dict[str, Any]:
-        return {
-            "records": len(self.dataset.pairs),
-            "dropped": self.dataset.dropped,
-            "errors": self.dataset.errors,
-            "kept": self.dataset.kept,
-            "new": self.dataset.new,
-            "semantic_duplicates": self.dataset.semantic_duplicates,
-            "review": len(self.dataset.review),
-            "removed": len(self.dataset.removed),
-            "full_refresh": self.full_refresh,
-            "model": self.model_ref,
-            "embedding_model": self.dataset.manifest.get("embedding_model"),
-            "embedding_checks": embedding_summary(self.dataset.manifest),
-        }
-
-
-def base_of(previous: PreviousState, full_refresh: bool) -> Optional[str]:
-    """The ``base_commit`` of a draft built on ``previous``."""
-    return None if full_refresh else (previous.commit or "")
-
-
-def _model_for(
-    creds: Credentials, model_ref: Optional[str], complete: Optional[CompletionFn]
-) -> Tuple[str, str]:
-    """``(model_ref, model)``, checked usable before anything is spent: the
-    run's model, else OPENAI_LLM_MODEL."""
-    model_ref = model_ref or config.openai_llm_model
-    if not model_ref:
-        raise JobError(
-            "No LLM configured: set OPENAI_LLM_MODEL, or pick one on the Models page"
-        )
-    provider_name, model = parse_ref(model_ref)
-    try:
-        provider = get_provider(provider_name)
-    except ProviderError as exc:
-        raise JobError(str(exc)) from exc
-    if complete is None and not provider.configured(creds):
-        raise JobError(
-            f"{' or '.join(provider.missing(creds))} is required to run {model_ref}"
-        )
-    return model_ref, model
-
-
 async def generate(
     creds: Credentials,
     complete: Optional[CompletionFn] = None,
@@ -1834,49 +784,42 @@ async def generate(
     username = creds.github_username
     if not username:
         raise JobError("Your GitHub username is required (set it in Settings)")
-    model_ref, model = _model_for(creds, model_ref, complete)
 
-    if not creds.has(HF_TOKEN):
-        raise JobError("Your Hugging Face token is required (add it in Settings)")
-    if not creds.hf_qa_repo:
-        raise JobError(
+    async def make(run: Run) -> Tuple[QADataset, str]:
+        client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
+        try:
+            logger.info("fetching GitHub snapshot for %s…", username)
+            snapshot, fetch_errors = await fetch_snapshot(client, username)
+            for err in fetch_errors:
+                logger.warning("non-fatal: %s", err)
+
+            logger.info("generating Q&A pairs with %s…", run.model)
+            dataset = await build_qa_dataset(
+                client,
+                snapshot,
+                run.complete,
+                run.model,
+                max_repos,
+                previous=run.previous,
+                embedder=run.embedder,
+                on_progress=on_progress,
+                grader=run.complete,
+            )
+        finally:
+            await client.close()
+        return dataset, username
+
+    return await generate_draft(
+        creds,
+        creds.hf_qa_repo or "",
+        own_github_pair,
+        make,
+        missing_repo=(
             "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
-        )
-    repo_id, previous = await read_published(creds, creds.hf_qa_repo, full_refresh)
-    embedder = await asyncio.to_thread(get_embedder, creds)
-
-    complete = complete or provider_completion(model_ref, creds)
-    client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
-    try:
-        logger.info("fetching GitHub snapshot for %s…", username)
-        snapshot, fetch_errors = await fetch_snapshot(client, username)
-        for err in fetch_errors:
-            logger.warning("non-fatal: %s", err)
-
-        logger.info("generating Q&A pairs with %s…", model)
-        dataset = await build_qa_dataset(
-            client,
-            snapshot,
-            complete,
-            model,
-            max_repos,
-            previous=previous,
-            embedder=embedder,
-            on_progress=on_progress,
-            grader=complete,
-        )
-    finally:
-        await client.close()
-    for err in dataset.errors:
-        logger.warning("non-fatal: %s", err)
-    dataset.removed = removed_pairs(previous, dataset)
-    return Draft(
-        dataset,
-        username,
-        repo_id,
-        full_refresh,
-        model_ref,
-        base_of(previous, full_refresh),
+        ),
+        full_refresh=full_refresh,
+        model_ref=model_ref,
+        complete=complete,
     )
 
 
@@ -1904,17 +847,40 @@ async def generate_from_recipe(
     include_profile = bool(recipe.get("include_profile", True))
     if not chosen and not include_profile:
         raise JobError("This recipe selects nothing: add a repo or the profile facts")
-    model_ref, model = _model_for(creds, model_ref, complete)
 
-    if not creds.has(HF_TOKEN):
-        raise JobError("Your Hugging Face token is required (add it in Settings)")
-    repo_id, previous = await read_published(
-        creds, str(recipe["target_repo"]), full_refresh
+    async def make(run: Run) -> Tuple[QADataset, str]:
+        client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
+        try:
+            dataset = await _build_from_recipe(
+                client, username, recipe, chosen, include_profile, run, on_progress
+            )
+        finally:
+            await client.close()
+        return dataset, username
+
+    return await generate_draft(
+        creds,
+        str(recipe["target_repo"]),
+        own_github_pair,
+        make,
+        missing_repo="This recipe names no dataset repo",
+        full_refresh=full_refresh,
+        model_ref=model_ref,
+        complete=complete,
     )
-    embedder = await asyncio.to_thread(get_embedder, creds)
-    complete = complete or provider_completion(model_ref, creds)
 
-    client = CorpusGitHubClient(creds.secret(GITHUB_TOKEN) or None)
+
+async def _build_from_recipe(
+    client: CorpusGitHubClient,
+    username: str,
+    recipe: Dict[str, Any],
+    chosen: List[Dict[str, Any]],
+    include_profile: bool,
+    run: Run,
+    on_progress: Optional[ProgressFn],
+) -> QADataset:
+    """Read what the recipe selects, then build its dataset."""
+    previous, complete, model = run.previous, run.complete, run.model
 
     async def read(
         source: Dict[str, Any],
@@ -1939,60 +905,74 @@ async def generate_from_recipe(
         )
         return repo, found, errors
 
-    try:
-        profile = await client.fetch_profile(username) if include_profile else None
-        results = await gather_limited(REPO_CONCURRENCY, [read(s) for s in chosen])
-        published = {p.repo.lower(): p.repo for p in previous.pairs if p.repo}
-        selection = Selection(include_profile=include_profile)
-        repos: List[RepoData] = []
-        errors: List[str] = []
-        for source, (repo, docs, problems) in zip(chosen, results, strict=True):
-            errors += problems
-            if repo is None:
-                name = str(source.get("repo") or "")
-                selection.carry_over.add(published.get(name.lower(), name))
-                continue
-            repos.append(repo)
-            selection.docs_by_repo[repo.name] = docs
-            if source.get("readme", True):
-                selection.overview_repos.add(repo.name)
-        snapshot = GitHubSnapshot(
-            username=username,
-            profile=profile,
-            repos=repos,
-            fetched_at=datetime.now(timezone.utc).isoformat(),
-        )
-        logger.info(
-            "recipe %r: %d repo(s), profile %s, generating with %s…",
-            recipe.get("name"),
-            len(repos),
-            "on" if include_profile else "off",
-            model,
-        )
-        dataset = await build_qa_dataset(
-            client,
-            snapshot,
-            complete,
-            model,
-            previous=previous,
-            embedder=embedder,
-            on_progress=on_progress,
-            selection=selection,
-            grader=complete,
-        )
-    finally:
-        await client.close()
+    profile = await client.fetch_profile(username) if include_profile else None
+    results = await gather_limited(REPO_CONCURRENCY, [read(s) for s in chosen])
+    published = {p.repo.lower(): p.repo for p in previous.pairs if p.repo}
+    selection = Selection(include_profile=include_profile)
+    repos: List[RepoData] = []
+    errors: List[str] = []
+    for source, (repo, docs, problems) in zip(chosen, results, strict=True):
+        errors += problems
+        if repo is None:
+            name = str(source.get("repo") or "")
+            selection.carry_over.add(published.get(name.lower(), name))
+            continue
+        repos.append(repo)
+        selection.docs_by_repo[repo.name] = docs
+        if source.get("readme", True):
+            selection.overview_repos.add(repo.name)
+    snapshot = GitHubSnapshot(
+        username=username,
+        profile=profile,
+        repos=repos,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    logger.info(
+        "recipe %r: %d repo(s), profile %s, generating with %s…",
+        recipe.get("name"),
+        len(repos),
+        "on" if include_profile else "off",
+        model,
+    )
+    dataset = await build_qa_dataset(
+        client,
+        snapshot,
+        complete,
+        model,
+        previous=previous,
+        embedder=run.embedder,
+        on_progress=on_progress,
+        selection=selection,
+        grader=complete,
+    )
     dataset.errors = errors + dataset.errors
-    for err in dataset.errors:
-        logger.warning("non-fatal: %s", err)
-    dataset.removed = removed_pairs(previous, dataset)
-    return Draft(
+    return dataset
+
+
+def publish_qa_dataset(
+    creds: Credentials,
+    dataset: QADataset,
+    username: str,
+    repo_id: str,
+    *,
+    base_commit: Optional[str] = None,
+) -> dict:
+    """Publish a GitHub Q&A dataset with its own card
+    (:func:`server.jobs.qa_build.publish_dataset`)."""
+    return publish_dataset(
+        creds,
         dataset,
-        username,
         repo_id,
-        full_refresh,
-        model_ref,
-        base_of(previous, full_refresh),
+        own=own_github_pair,
+        card=lambda foreign: dataset_card(
+            dataset,
+            username,
+            _env("HF_QA_DATASET_LICENSE"),
+            _env("HF_QA_DATASET_LICENSE_LINK"),
+            foreign=foreign,
+        ),
+        commit_message=f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
+        base_commit=base_commit,
     )
 
 

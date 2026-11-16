@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from server.jobs import registry, resume_qa
-from server.jobs.qa_dataset import (
+from server.jobs import qa_build, registry, resume_qa
+from server.jobs.qa_build import (
     Draft,
     JobError,
     PreviousState,
@@ -477,7 +477,7 @@ async def test_generate_reads_the_resume_with_the_servers_key_then_publishes(
     complete, requests = _counting_model()
     with (
         patch.object(resume_qa.rr, "get_resume", AsyncMock(return_value=VIEW)) as read,
-        patch.object(resume_qa, "get_embedder", lambda creds: None),
+        patch.object(qa_build, "get_embedder", lambda creds: None),
     ):
         draft = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
         result = await resume_qa.publish(CREDS, draft)
@@ -519,7 +519,7 @@ async def test_the_next_resume_run_keeps_its_own_pairs_and_foreign_rows(memory_h
     complete, _ = _counting_model()
     with (
         patch.object(resume_qa.rr, "get_resume", AsyncMock(return_value=VIEW)),
-        patch.object(resume_qa, "get_embedder", lambda creds: None),
+        patch.object(qa_build, "get_embedder", lambda creds: None),
     ):
         first = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
         await resume_qa.publish(CREDS, first)

@@ -2,8 +2,8 @@
 
 The model is served by the caller's OpenAI-compatible endpoint
 (:class:`EndpointEmbedder`, named ``openai:<id>``). It backs four checks shared
-by the in-app pipeline (``services/qa.py``) and the GitHub Q&A jobs
-(``jobs/qa_dataset.py``):
+by the in-app pipeline (``services/qa.py``) and the Q&A jobs' build
+(``jobs/qa_build.py``):
 
 * **semantic dedup** — a new question whose cosine to an existing one reaches
   the threshold is a rephrasing, not a new pair;

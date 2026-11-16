@@ -12,15 +12,17 @@ import pytest
 
 from server.jobs import qa_dataset
 from server.jobs.github_snapshot import RepoDoc
-from server.jobs.qa_dataset import (
+from server.jobs.qa_build import (
     JobError,
     PreviousState,
     QAPair,
     QADataset,
-    Selection,
-    build_qa_dataset,
     pair_id,
     removed_pairs,
+)
+from server.jobs.qa_dataset import (
+    Selection,
+    build_qa_dataset,
 )
 from server.tests.creds import make_creds
 from server.tests.jobs.conftest import b64

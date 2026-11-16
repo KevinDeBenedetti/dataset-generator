@@ -32,7 +32,11 @@ from server.jobs.github_snapshot import (
     GitHubAPIError,
     RepoData,
 )
-from server.jobs.qa_dataset import MAX_DOC_CHARS, MAX_DOCS_PER_REPO, overview_context
+from server.jobs.qa_dataset import (
+    MAX_DOC_CHARS,
+    MAX_DOCS_PER_REPO,
+    overview_context,
+)
 from server.services.credentials import GITHUB_TOKEN, Credentials
 
 logger = logging.getLogger(__name__)

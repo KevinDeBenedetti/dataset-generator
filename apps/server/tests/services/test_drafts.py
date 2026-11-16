@@ -11,7 +11,9 @@ from contextlib import contextmanager
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from server.jobs.qa_dataset import JobError
+from server.jobs.qa_build import (
+    JobError,
+)
 from server.services import drafts
 from server.services import jobs as jobs_service
 from server.services.hub_repo import (
