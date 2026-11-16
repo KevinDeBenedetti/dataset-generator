@@ -413,15 +413,27 @@ def _reset_login_rate_limiter():
 
 
 @pytest.fixture(autouse=True)
-def _no_cached_data_files():
-    """Every test reads its fake Hub afresh: the per-commit cache of a dataset's
-    pairs (services/huggingface.py) would otherwise carry one test's file to
-    the next one using the same fake commit id."""
-    from server.services import huggingface
+def _no_cached_hub_files():
+    """Every test reads its Hub afresh: the per-commit cache of a repo's files
+    (services/hub_repo.py) would otherwise carry one test's file to the next
+    one using the same commit id."""
+    from server.services import hub_repo
 
-    huggingface.forget_data_files()
+    hub_repo.forget_downloads()
     yield
-    huggingface.forget_data_files()
+    hub_repo.forget_downloads()
+
+
+@pytest.fixture
+def memory_hub(monkeypatch):
+    """The Hub, in memory, for every repo the code under test opens
+    (tests/fake_hub.py). The token's account is ``kevin``."""
+    from server.services import hub_repo
+    from server.tests.fake_hub import InMemoryHub
+
+    hub = InMemoryHub()
+    monkeypatch.setattr(hub_repo, "backend_for", lambda creds: hub)
+    return hub
 
 
 @pytest.fixture

@@ -109,6 +109,7 @@ def _draft_to_dict(draft: qa_dataset_job.Draft) -> Dict[str, Any]:
         "repo_id": draft.repo_id,
         "full_refresh": draft.full_refresh,
         "model_ref": draft.model_ref,
+        "base_commit": draft.base_commit,
     }
 
 
@@ -119,6 +120,7 @@ def _draft_from_dict(data: Dict[str, Any]) -> qa_dataset_job.Draft:
         repo_id=data["repo_id"],
         full_refresh=data.get("full_refresh", False),
         model_ref=data.get("model_ref", ""),
+        base_commit=data.get("base_commit"),
     )
 
 
@@ -350,13 +352,14 @@ async def _publish_generation(
     promote: Sequence[str],
     edits: Dict[str, Dict[str, str]],
 ) -> JobResult:
-    from server.services.huggingface import publish_generation_draft
+    from server.services.drafts import publish_generation_draft
+    from server.services.hub_repo import HubRepoError
 
     try:
         result = await run_in_threadpool(
             publish_generation_draft, creds, data, list(exclude), edits
         )
-    except ValueError as exc:
+    except (ValueError, HubRepoError) as exc:
         raise qa_dataset_job.JobError(str(exc)) from exc
     return JobResult(
         dry_run=False,

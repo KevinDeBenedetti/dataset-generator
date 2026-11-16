@@ -7,10 +7,9 @@ covered with the generation and the publication mocked.
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from huggingface_hub.errors import EntryNotFoundError
 
 from server.jobs import registry, resume_qa
 from server.jobs.qa_dataset import (
@@ -34,6 +33,7 @@ from server.jobs.resume_qa import (
     profile_facts,
     resume_sources,
 )
+from server.services import hub_repo
 from server.tests.creds import make_creds
 from server.tests.fake_embedder import FakeEmbedder
 
@@ -471,20 +471,12 @@ CREDS = make_creds(
 )
 
 
-def _hub(private=True):
-    api = MagicMock()
-    api.whoami.return_value = {"name": "kevin"}
-    api.hf_hub_download.side_effect = EntryNotFoundError("missing")
-    api.repo_info.return_value = MagicMock(private=private)
-    return api
-
-
-async def test_generate_reads_the_resume_with_the_servers_key_then_publishes():
+async def test_generate_reads_the_resume_with_the_servers_key_then_publishes(
+    memory_hub,
+):
     complete, requests = _counting_model()
-    api = _hub()
     with (
         patch.object(resume_qa.rr, "get_resume", AsyncMock(return_value=VIEW)) as read,
-        patch("server.services.huggingface._api", return_value=api),
         patch.object(resume_qa, "get_embedder", lambda creds: None),
     ):
         draft = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
@@ -507,19 +499,54 @@ async def test_generate_reads_the_resume_with_the_servers_key_then_publishes():
     unanswerable = [p for p in draft.dataset.pairs if p.category == "unanswerable"]
     assert len(unanswerable) == 1 and unanswerable[0].sources == ["unanswerable"]
     assert draft.dataset.new == 4 + len(_facts()) + 1
+    # Built on a repo that did not exist yet, then created private.
+    assert draft.base_commit == ""
     assert result["url"] == "https://huggingface.co/datasets/kevin/resume-qa"
-    commit = api.create_commit.call_args.kwargs
-    assert commit["repo_id"] == "kevin/resume-qa"
-    assert commit["commit_message"].startswith("Export resume Q&A dataset")
-    files = {op.path_in_repo: op.path_or_fileobj for op in commit["operations"]}
-    assert set(files) == {"train.jsonl", "review.jsonl", "manifest.json", "README.md"}
+    assert memory_hub.is_private("kevin/resume-qa") is True
+    assert memory_hub.log("kevin/resume-qa")[-1].startswith("Export resume Q&A dataset")
+    files = memory_hub.files("kevin/resume-qa")
+    assert {"train.jsonl", "review.jsonl", "manifest.json", "README.md"} <= set(files)
     assert b"Resume Q&A" in files["README.md"]
     manifest = json.loads(files["manifest.json"])
     assert manifest["resume"]["id"] == "r1"
     assert set(manifest["sources"]) == ALL_SOURCES | {"unanswerable"}
 
 
-async def test_generate_checks_what_it_needs_before_spending_anything():
+async def test_the_next_resume_run_keeps_its_own_pairs_and_foreign_rows(memory_hub):
+    """The resume's categories are its section names, so its own rows are
+    told by their source: a pair added from a file stays in the dataset, and
+    a dataset that changed since the draft is not overwritten."""
+    complete, _ = _counting_model()
+    with (
+        patch.object(resume_qa.rr, "get_resume", AsyncMock(return_value=VIEW)),
+        patch.object(resume_qa, "get_embedder", lambda creds: None),
+    ):
+        first = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
+        await resume_qa.publish(CREDS, first)
+        own = [json.loads(line) for line in _lines(memory_hub)]
+        foreign = {"id": "f1", "question": "From a file?", "answer": "Yes."}
+        memory_hub.push(
+            "kevin/resume-qa", {"train.jsonl": hub_repo.to_jsonl([*own, foreign])}
+        )
+
+        again = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
+        assert again.dataset.kept > 0 and again.dataset.removed == []
+        stale = await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
+        await resume_qa.publish(CREDS, again)
+
+        rows = [json.loads(line) for line in _lines(memory_hub)]
+        assert rows[-1] == foreign and len(rows) == len(again.dataset.pairs) + 1
+        card = memory_hub.files("kevin/resume-qa")["README.md"].decode()
+        assert "- 1 more row(s) come from another source" in card
+        with pytest.raises(JobError, match="changed on Hugging Face since this draft"):
+            await resume_qa.publish(CREDS, stale)
+
+
+def _lines(hub):
+    return hub.files("kevin/resume-qa")["train.jsonl"].decode("utf-8").splitlines()
+
+
+async def test_generate_checks_what_it_needs_before_spending_anything(memory_hub):
     complete, requests = _counting_model()
     with pytest.raises(JobError, match="Hugging Face token"):
         await resume_qa.generate(
@@ -529,14 +556,13 @@ async def test_generate_checks_what_it_needs_before_spending_anything():
         await resume_qa.generate(CREDS, "r1", "  ", complete=complete)
     with pytest.raises(JobError, match="language"):
         await resume_qa.generate(CREDS, "r1", "x", language="de", complete=complete)
-    api = _hub()
     gone = AsyncMock(side_effect=resume_qa.rr.ResumeNotFoundError("No such resume"))
-    with (
-        patch.object(resume_qa.rr, "get_resume", gone),
-        patch("server.services.huggingface._api", return_value=api),
-    ):
+    with patch.object(resume_qa.rr, "get_resume", gone):
         with pytest.raises(JobError, match="no resume 'r1' any more"):
             await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
+    memory_hub.rejects_token = True
+    with pytest.raises(JobError, match="rejected your token"):
+        await resume_qa.generate(CREDS, "r1", "resume-qa", complete=complete)
     assert requests == []
 
 

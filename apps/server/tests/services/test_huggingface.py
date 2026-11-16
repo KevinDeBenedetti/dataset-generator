@@ -23,7 +23,6 @@ from server.services.huggingface import (
     export_dataset_to_hub,
     import_dataset_from_hub,
     is_huggingface_configured,
-    qualify_repo_id,
     resolve_repo_id,
     slugify,
 )
@@ -138,31 +137,6 @@ def test_repo_id_uses_the_configured_namespace(token, api):
 
 def test_explicit_repo_id_wins(token, api):
     assert resolve_repo_id(CREDS, "Docs FR", "someone/else") == "someone/else"
-
-
-def test_qualify_repo_id_completes_a_bare_name(token, api):
-    # A bare id 404s on commit/download/info: it needs its namespace.
-    assert qualify_repo_id(CREDS, "github-personal") == "kevin/github-personal"
-    assert qualify_repo_id(CREDS, "  github-personal ") == "kevin/github-personal"
-
-
-def test_qualify_repo_id_prefers_the_configured_namespace(token, api):
-    org = make_creds(hf_token="hf_test_token", hf_namespace="my-org")
-    assert qualify_repo_id(org, "github-personal") == "my-org/github-personal"
-
-
-def test_qualify_repo_id_keeps_a_full_id_without_calling_the_hub(token, monkeypatch):
-    def no_hub(creds):
-        raise AssertionError("a full id needs no Hub call")
-
-    monkeypatch.setattr(hf, "_api", no_hub)
-    assert qualify_repo_id(CREDS, "someone/else") == "someone/else"
-
-
-def test_qualify_repo_id_needs_a_namespace(token, api, monkeypatch):
-    monkeypatch.setattr(api, "whoami", lambda: {})
-    with pytest.raises(HuggingFaceNotConfiguredError, match="namespace"):
-        qualify_repo_id(CREDS, "github-personal")
 
 
 # --- export ------------------------------------------------------------------

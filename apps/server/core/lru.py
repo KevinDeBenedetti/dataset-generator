@@ -1,7 +1,7 @@
 """A least-recently-used cache bounded by the total weight of its entries.
 
 Shared by the Hub reader (services/hub.py: tables, statistics, cards,
-resolutions) and the Hub writer (services/huggingface.py: a dataset's pairs).
+resolutions) and the Hub dataset repo (services/hub_repo.py: a commit's files).
 """
 
 import threading

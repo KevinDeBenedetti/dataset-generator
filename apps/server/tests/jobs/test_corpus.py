@@ -279,7 +279,7 @@ def test_push_requires_a_complete_export(tmp_path):
         push_corpus(CREDS, tmp_path, "ns/kb")
 
 
-def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
+def test_push_uploads_one_commit_to_a_private_repo(tmp_path, memory_hub):
     (tmp_path / "manifest.json").write_text(
         json.dumps(
             {
@@ -289,7 +289,6 @@ def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
         )
     )
     api = MagicMock()
-    api.whoami.return_value = {"name": "kevin"}
     api.repo_info.return_value = MagicMock(private=True)
     with patch("server.services.huggingface._api", return_value=api):
         url = push_corpus(CREDS, tmp_path, "ns/kb")
@@ -303,20 +302,19 @@ def test_push_uploads_one_commit_to_a_private_repo(tmp_path):
     assert "- profile: 3 records (data/p.jsonl)" in kwargs["commit_description"]
 
 
-def test_push_rejects_bad_token(tmp_path):
+def test_push_rejects_bad_token(tmp_path, memory_hub):
     (tmp_path / "manifest.json").write_text("{}")
     api = MagicMock()
-    api.whoami.side_effect = RuntimeError("401")
+    memory_hub.rejects_token = True
     with patch("server.services.huggingface._api", return_value=api):
         with pytest.raises(JobError, match="rejected your token"):
             push_corpus(CREDS, tmp_path, "ns/kb")
     api.upload_folder.assert_not_called()
 
 
-def test_push_completes_a_bare_repo_name(tmp_path):
+def test_push_completes_a_bare_repo_name(tmp_path, memory_hub):
     (tmp_path / "manifest.json").write_text(json.dumps({"files": []}))
     api = MagicMock()
-    api.whoami.return_value = {"name": "kevin"}
     api.repo_info.return_value = MagicMock(private=True)
     with patch("server.services.huggingface._api", return_value=api):
         url = push_corpus(CREDS, tmp_path, "kb")

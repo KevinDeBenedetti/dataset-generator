@@ -6,10 +6,9 @@ function counting its calls; the Hub is a mock (``_api``).
 
 import json
 from dataclasses import replace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from huggingface_hub.errors import EntryNotFoundError
 
 from server.jobs import qa_dataset
 from server.jobs.github_snapshot import RepoDoc
@@ -131,14 +130,6 @@ def test_removed_pairs_survive_the_draft_round_trip():
     assert [p.id for p in again.with_selection().removed] == ["x"]
 
 
-def _hub(api_name="kevin"):
-    api = MagicMock()
-    api.whoami.return_value = {"name": api_name}
-    # First publish: nothing on the Hub yet.
-    api.hf_hub_download.side_effect = EntryNotFoundError("missing")
-    return api
-
-
 def _portfolio_routes(github):
     github.json(
         "/repos/kevin/portfolio",
@@ -160,7 +151,7 @@ def _portfolio_routes(github):
     )
 
 
-async def test_generate_from_recipe(github):
+async def test_generate_from_recipe(github, memory_hub):
     _portfolio_routes(github)
     complete, requests = _counting_model()
     recipe = {
@@ -173,11 +164,8 @@ async def test_generate_from_recipe(github):
         ],
     }
 
-    with (
-        patch(
-            "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
-        ),
-        patch("server.services.huggingface._api", return_value=_hub()),
+    with patch(
+        "server.jobs.qa_dataset.CorpusGitHubClient", return_value=github.client()
     ):
         draft = await qa_dataset.generate_from_recipe(
             CREDS, recipe, model_ref="openai:m", complete=complete
@@ -204,20 +192,18 @@ async def test_an_empty_recipe_is_refused_before_anything_is_spent():
         )
 
 
-async def test_a_rejected_hub_token_stops_the_run_first(github):
-    api = _hub()
-    api.whoami.side_effect = RuntimeError("401")
+async def test_a_rejected_hub_token_stops_the_run_first(github, memory_hub):
+    memory_hub.rejects_token = True
 
     async def complete(_req):  # pragma: no cover — must never be reached
         raise AssertionError("generation started with a rejected HF token")
 
-    with patch("server.services.huggingface._api", return_value=api):
-        with pytest.raises(JobError, match="rejected your token"):
-            await qa_dataset.generate_from_recipe(
-                CREDS,
-                {"name": "x", "target_repo": "kevin/q", "sources": [{"repo": "a"}]},
-                complete=complete,
-            )
+    with pytest.raises(JobError, match="rejected your token"):
+        await qa_dataset.generate_from_recipe(
+            CREDS,
+            {"name": "x", "target_repo": "kevin/q", "sources": [{"repo": "a"}]},
+            complete=complete,
+        )
 
 
 # --- review edits -------------------------------------------------------------------
