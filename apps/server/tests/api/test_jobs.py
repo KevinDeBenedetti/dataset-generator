@@ -10,7 +10,9 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from server.jobs.qa_dataset import JobError as QADatasetJobError
+from server.jobs.qa_build import (
+    JobError as QADatasetJobError,
+)
 from server.services.jobs import RunConflictError, UnknownJobError, UnknownRunError
 
 RUN = {

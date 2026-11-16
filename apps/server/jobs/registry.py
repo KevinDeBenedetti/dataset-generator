@@ -33,6 +33,7 @@ from starlette.concurrency import run_in_threadpool
 
 from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
 from server.jobs import corpus as corpus_job
+from server.jobs import qa_build
 from server.jobs import qa_dataset as qa_dataset_job
 from server.jobs import resume_qa as resume_qa_job
 from server.schemas.recipes import HF_REPO_PATTERN, RecipeIn
@@ -42,7 +43,7 @@ from server.services.drafts import GENERATION_JOB_ID
 from server.services.recipes import RECIPE_JOB_ID
 
 # Both jobs raise their own JobError for anything the caller can act on.
-JOB_ERRORS: Tuple[Type[Exception], ...] = (corpus_job.JobError, qa_dataset_job.JobError)
+JOB_ERRORS: Tuple[Type[Exception], ...] = (corpus_job.JobError, qa_build.JobError)
 
 # (done, total, label) — e.g. repos generated so far.
 ProgressFn = Callable[[int, int, str], None]
@@ -93,7 +94,7 @@ def _qa_metrics(stats: Dict[str, Any]) -> List[Tuple[str, Any]]:
         ("Model", stats["model"]),
     ]
     # What the embedding checks did — absent from drafts made before they were
-    # recorded (qa_dataset.embedding_summary).
+    # recorded (qa_build.embedding_summary).
     if stats.get("embedding_checks") is not None:
         metrics += [
             ("Embedding model", stats.get("embedding_model") or "none"),
@@ -102,7 +103,7 @@ def _qa_metrics(stats: Dict[str, Any]) -> List[Tuple[str, Any]]:
     return metrics
 
 
-def _draft_to_dict(draft: qa_dataset_job.Draft) -> Dict[str, Any]:
+def _draft_to_dict(draft: qa_build.Draft) -> Dict[str, Any]:
     return {
         "dataset": draft.dataset.to_dict(),
         "username": draft.username,
@@ -113,9 +114,9 @@ def _draft_to_dict(draft: qa_dataset_job.Draft) -> Dict[str, Any]:
     }
 
 
-def _draft_from_dict(data: Dict[str, Any]) -> qa_dataset_job.Draft:
-    return qa_dataset_job.Draft(
-        dataset=qa_dataset_job.QADataset.from_dict(data["dataset"]),
+def _draft_from_dict(data: Dict[str, Any]) -> qa_build.Draft:
+    return qa_build.Draft(
+        dataset=qa_build.QADataset.from_dict(data["dataset"]),
         username=data["username"],
         repo_id=data["repo_id"],
         full_refresh=data.get("full_refresh", False),
@@ -330,9 +331,7 @@ async def _run_generation_draft(
     model_ref: Optional[str],
     progress: ProgressFn,
 ) -> JobOutcome:  # pragma: no cover — these runs are created finished
-    raise qa_dataset_job.JobError(
-        "A generation draft is created by the generate routes"
-    )
+    raise qa_build.JobError("A generation draft is created by the generate routes")
 
 
 def _preview_generation(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -360,7 +359,7 @@ async def _publish_generation(
             publish_generation_draft, creds, data, list(exclude), edits
         )
     except (ValueError, HubRepoError) as exc:
-        raise qa_dataset_job.JobError(str(exc)) from exc
+        raise qa_build.JobError(str(exc)) from exc
     return JobResult(
         dry_run=False,
         url=result["url"],

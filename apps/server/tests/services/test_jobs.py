@@ -9,9 +9,13 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.orm import sessionmaker
 
-from server.jobs import qa_dataset
+from server.jobs import qa_build
 from server.jobs.corpus import JobError as CorpusJobError
-from server.jobs.qa_dataset import Draft, QADataset, QAPair
+from server.jobs.qa_build import (
+    Draft,
+    QADataset,
+    QAPair,
+)
 from server.jobs.registry import (
     JOBS,
     GitHubPersonalOptions,
@@ -446,7 +450,7 @@ async def test_a_publish_cancelled_after_its_claim_can_be_retried(db, monkeypatc
 
 async def test_failed_run_records_the_error(db, monkeypatch):
     async def runner(creds, options, model_ref, progress):
-        raise qa_dataset.JobError("HF_TOKEN is required")
+        raise qa_build.JobError("HF_TOKEN is required")
 
     _patch_runner(monkeypatch, "github-personal", runner)
     run = await start_run(OWNER, FULL, "github-personal", {})

@@ -4,15 +4,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from server.jobs import qa_build
 from server.jobs import qa_dataset
-from server.jobs.qa_dataset import (
+from server.jobs.qa_build import (
     CompletionRequest,
     JobError,
     PreviousState,
     QAPair,
     QADataset,
-    build_qa_dataset,
-    dataset_card,
     dedupe_key,
     embedding_summary,
     generate_pairs,
@@ -20,11 +19,16 @@ from server.jobs.qa_dataset import (
     open_qa_repo,
     pair_id,
     parse_pairs,
+    sanitize_pairs,
+    to_records,
+)
+from server.jobs.qa_dataset import (
+    own_github_pair,
+    build_qa_dataset,
+    dataset_card,
     profile_pairs,
     publish_qa_dataset,
     repo_pairs,
-    sanitize_pairs,
-    to_records,
 )
 from server.services import hub_repo
 from server.jobs.github_snapshot import RepoData
@@ -477,7 +481,7 @@ async def test_generate_requires_the_llms_credentials():
 
 
 async def test_generate_requires_an_llm(monkeypatch):
-    monkeypatch.setattr(qa_dataset.config, "openai_llm_model", "")
+    monkeypatch.setattr(qa_build.config, "openai_llm_model", "")
     creds = make_creds(github_username="kevin", openai_api_key="sk-000000000000")
     with pytest.raises(JobError, match="No LLM configured"):
         await qa_dataset.generate(creds)
@@ -876,7 +880,7 @@ def test_load_previous_state(memory_hub):
         },
     )
 
-    state = load_previous_state(open_qa_repo(CREDS, "ns/qa"))
+    state = load_previous_state(open_qa_repo(CREDS, "ns/qa"), own_github_pair)
     # The foreign row is not the job's to keep, recheck or drop.
     [read] = state.pairs
     assert (read.sources, read.grounding) == (["r::overview"], 0.7)
@@ -885,17 +889,22 @@ def test_load_previous_state(memory_hub):
 
 
 def test_load_previous_state_first_run_and_errors(memory_hub):
-    assert load_previous_state(open_qa_repo(CREDS, "ns/qa")) == PreviousState()
+    assert (
+        load_previous_state(open_qa_repo(CREDS, "ns/qa"), own_github_pair)
+        == PreviousState()
+    )
 
     # A line that is not JSON would be lost at the next publication: the run stops.
     memory_hub.push("ns/qa", {"train.jsonl": b'{"question": "Q?"}\nnot json\n'})
     with pytest.raises(JobError, match="full_refresh"):
-        load_previous_state(open_qa_repo(CREDS, "ns/qa"))
+        load_previous_state(open_qa_repo(CREDS, "ns/qa"), own_github_pair)
 
 
 def test_a_manifest_without_usable_sources_regenerates_everything(memory_hub):
     memory_hub.push("ns/qa", {"train.jsonl": b"", "manifest.json": b'{"sources": [1]}'})
-    assert load_previous_state(open_qa_repo(CREDS, "ns/qa")).sources == {}
+    assert (
+        load_previous_state(open_qa_repo(CREDS, "ns/qa"), own_github_pair).sources == {}
+    )
 
 
 def test_opening_the_repo_needs_a_token():
@@ -1041,7 +1050,7 @@ async def test_generate_requires_the_hub(monkeypatch):
 
 
 async def test_publish_requires_a_repo():
-    draft = qa_dataset.Draft(_draft_dataset(), "kevin", "", False, "m")
+    draft = qa_build.Draft(_draft_dataset(), "kevin", "", False, "m")
     with pytest.raises(JobError, match="Q&A dataset repo"):
         await qa_dataset.publish(CREDS, draft)
 
@@ -1116,13 +1125,13 @@ def test_a_run_result_names_the_embedding_model_and_what_it_checked():
             "embedding_checks": {"compared": 0, "rechecked": 0},
         },
     )
-    draft = qa_dataset.Draft(dataset, "kevin", "kevin/qa", False, "openai:m")
+    draft = qa_build.Draft(dataset, "kevin", "kevin/qa", False, "openai:m")
     metrics = dict(_qa_metrics(draft.stats()))
     assert metrics["Embedding model"] == "openai/text-embedding-3-small"
     assert metrics["Embedding checks"] == "nothing new to compare"
 
     # A draft stored before the checks were recorded keeps its old metrics.
     older = QADataset([], 0, [], manifest={"embedding_model": None})
-    old_draft = qa_dataset.Draft(older, "kevin", "kevin/qa", False, "openai:m")
+    old_draft = qa_build.Draft(older, "kevin", "kevin/qa", False, "openai:m")
     labels = dict(_qa_metrics(old_draft.stats()))
     assert "Embedding checks" not in labels and "Embedding model" not in labels

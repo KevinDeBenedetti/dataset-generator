@@ -22,10 +22,24 @@ _Avoid_: conflict, stale repo
 A dataset card the app wrote, and may therefore replace on the next publication; any other card belongs to the dataset's owner and is left as it is.
 _Avoid_: generated card, README
 
+### Building a Q&A dataset
+
+**Incremental Q&A build**:
+The making of a dataset's next version from the published one: pairs of unchanged sources are kept, pairs of changed sources are re-checked and regenerated, and new pairs are screened before they join.
+_Avoid_: pipeline, generation run, sync
+
+**Source**:
+One piece of text a Q&A job generates pairs from and tracks for changes, such as a repository's overview, one documentation file or one resume item.
+_Avoid_: input, document, chunk
+
+**Fact**:
+A pair built directly from structured data, with no model call, and rebuilt on every run.
+_Avoid_: deterministic pair, profile pair
+
 ### Rows
 
 **Own row**:
-A row of a dataset that the Q&A job publishing it generated, recognised by a category that job uses.
+A row of a dataset that the Q&A job publishing it generated.
 _Avoid_: job pair, managed row
 
 **Foreign row**:
