@@ -26,7 +26,6 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from server.core.config import config
-from server.core.lru import WeightedLRU
 from server.services.credentials import HF_TOKEN, Credentials
 from server.services.datasets import (
     get_dataset_pairs,
@@ -502,119 +501,6 @@ def import_dataset_from_hub(
     }
 
 
-# (token fingerprint, repo, commit) -> the bytes of that commit's
-# data/train.jsonl: what a file or URL draft counts when it is made and merges
-# into when it is published. A commit's content never changes, so an entry is
-# never stale, and the token in the key keeps one account's download (a gated
-# repo's, say) from ever serving another. Room for one file of the largest
-# size a read accepts.
-_data_files = WeightedLRU(lambda: config.max_hub_import_bytes, len)
-
-
-def forget_data_files() -> None:
-    """Drop every cached data file (tests)."""
-    _data_files.clear()
-
-
-def existing_pairs(creds: Credentials, repo_id: str) -> List[Dict[str, Any]]:
-    """The rows of a dataset repo in the app's layout (``data/train.jsonl``).
-
-    An unknown repo, or one without that file, has none. Capped like an
-    import (``config.max_hub_import_bytes``). The head commit is resolved on
-    every call, with the caller's token — a publication merges into what is
-    there now — but the file itself is downloaded once per commit.
-    """
-    from huggingface_hub.errors import RepositoryNotFoundError
-    from huggingface_hub.hf_api import RepoFile
-
-    api = _api(creds)
-    try:
-        sha = api.dataset_info(repo_id, expand=["sha"]).sha
-    except RepositoryNotFoundError:
-        return []
-    key = (token_fingerprint(creds), repo_id, sha) if sha else None
-    raw = _data_files.get(key) if key else None
-    if raw is None:
-        found = api.get_paths_info(
-            repo_id, [DATA_PATH_IN_REPO], repo_type="dataset", revision=sha
-        )
-        sizes = {f.path: f.size for f in found if isinstance(f, RepoFile)}
-        if DATA_PATH_IN_REPO not in sizes:
-            return []
-        _check_sizes(repo_id, sizes, [DATA_PATH_IN_REPO], config.max_hub_import_bytes)
-        raw = _download_file(
-            creds, repo_id, DATA_PATH_IN_REPO, config.max_hub_import_bytes, revision=sha
-        )
-        if key:
-            _data_files.put(key, raw)
-    return [row for row in _parse_rows(DATA_PATH_IN_REPO, raw) if isinstance(row, dict)]
-
-
-def publish_generation_draft(
-    creds: Credentials,
-    draft: Dict[str, Any],
-    exclude: List[str],
-    edits: Dict[str, Dict[str, str]],
-) -> Dict[str, Any]:
-    """Merge a reviewed file or URL draft into its dataset repo, in one commit.
-
-    The repo's current pairs are read again (it may have moved since the draft
-    was made); the draft's pairs replace those with the same id and join the
-    others. The repo is created private, or must already be.
-    """
-    from huggingface_hub import CommitOperationAdd
-
-    repo_id = str(draft["repo_id"])
-    api = _api(creds)
-    ensure_private_dataset_repo(api, repo_id)
-    left_out = set(exclude)
-    new: List[Dict[str, Any]] = []
-    for pair in draft.get("pairs") or []:
-        if not isinstance(pair, dict) or pair.get("id") in left_out:
-            continue
-        change = edits.get(str(pair.get("id")))
-        if change:
-            pair = {
-                **pair,
-                "question": change["question"].strip(),
-                "answer": change["answer"].strip(),
-            }
-        new.append(pair)
-    if not new:
-        raise ValueError("Nothing to publish: every pair of the draft was left out")
-
-    merged: Dict[str, Dict[str, Any]] = {}
-    unkeyed: List[Dict[str, Any]] = []
-    for row in existing_pairs(creds, repo_id):
-        if row.get("id"):
-            merged[str(row["id"])] = row
-        else:
-            unkeyed.append(row)
-    for pair in new:
-        merged[str(pair["id"])] = pair
-    pairs = unkeyed + list(merged.values())
-    sources = sorted({str(p["source_url"]) for p in pairs if p.get("source_url")})
-    title = str(draft.get("title") or repo_id.split("/")[-1])
-    api.create_commit(
-        repo_id=repo_id,
-        repo_type="dataset",
-        operations=[
-            CommitOperationAdd(DATA_PATH_IN_REPO, _to_jsonl(pairs)),
-            CommitOperationAdd(
-                "README.md",
-                _dataset_card(title, len(pairs), draft.get("language"), sources),
-            ),
-        ],
-        commit_message=f"Add {len(new)} Q/A pair(s) from {draft.get('source') or title}",
-    )
-    return {
-        "repo_id": repo_id,
-        "url": f"https://huggingface.co/datasets/{repo_id}",
-        "pairs": len(pairs),
-        "new": len(new),
-    }
-
-
 def resolve_repo_id(
     creds: Credentials, dataset_name: str, repo_id: Optional[str] = None
 ) -> str:
@@ -633,27 +519,6 @@ def resolve_repo_id(
             "namespace in Settings (your user or organization name)."
         )
     return f"{namespace}/{slugify(dataset_name)}"
-
-
-def qualify_repo_id(creds: Credentials, repo_id: str) -> str:
-    """``namespace/name`` for a repo id that may be a bare name.
-
-    The Hub's repo-creation endpoint accepts a bare ``github-qa`` and creates
-    ``<you>/github-qa``, but every other endpoint (commit, download, info) needs
-    the full id and answers 404 to the bare one. So a configured bare name is
-    completed once, up front, with the namespace saved in Settings — or the token's own
-    account — and the full id is what gets used everywhere.
-    """
-    repo_id = repo_id.strip()
-    if "/" in repo_id:
-        return repo_id
-    namespace = creds.hf_namespace or _api(creds).whoami().get("name")
-    if not namespace:
-        raise HuggingFaceNotConfiguredError(
-            f"Hugging Face repo '{repo_id}' has no namespace and none could be "
-            "determined. Use the full 'user/name' id, or set your namespace in Settings."
-        )
-    return f"{namespace}/{repo_id}"
 
 
 def ensure_private_dataset_repo(api: Any, repo_id: str) -> None:
@@ -718,13 +583,14 @@ def _size_category(count: int) -> str:
     return "100K<n<1M"
 
 
-def _dataset_card(
+def dataset_card(
     dataset_name: str,
     pair_count: int,
     target_language: Optional[str],
     source_labels: List[str],
+    data_path: str = DATA_PATH_IN_REPO,
 ) -> bytes:
-    """A dataset card whose front matter wires up the Hub viewer."""
+    """A dataset card whose front matter points the Hub viewer at ``data_path``."""
     language = target_language or "en"
     sources = "\n".join(f"- `{label}`" for label in source_labels[:20])
     if len(source_labels) > 20:
@@ -742,7 +608,7 @@ tags:
 - question-answering
 configs:
 - config_name: default
-  data_files: {DATA_PATH_IN_REPO}
+  data_files: {data_path}
 ---
 
 # {dataset_name}
@@ -806,7 +672,7 @@ def export_dataset_to_hub(
         commit_message=f"Export {len(pairs)} Q/A pair(s) from {dataset_name}",
     )
     api.upload_file(
-        path_or_fileobj=_dataset_card(
+        path_or_fileobj=dataset_card(
             dataset_name,
             len(pairs),
             dataset.get("target_language"),

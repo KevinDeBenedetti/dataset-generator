@@ -25,7 +25,7 @@ from server.services.web import WebFetchError
 
 from server.schemas.recipes import HF_REPO_PATTERN
 from server.services.drafts import create_generation_draft
-from server.services.huggingface import HuggingFaceNotConfiguredError
+from server.services.hub_repo import HubTokenMissing, HubTokenRejected
 
 router = APIRouter(
     prefix="/dataset",
@@ -148,7 +148,7 @@ async def _keep_draft(
             language=language.value,
             model_ref=model_ref,
         )
-    except HuggingFaceNotConfiguredError as e:
+    except (HubTokenMissing, HubTokenRejected) as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         ) from e

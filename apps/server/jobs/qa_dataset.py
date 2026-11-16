@@ -27,12 +27,19 @@ import re
 import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from server.core.config import _env, config
 from server.core.cpu import cpu_bound
 from server.services.credentials import GITHUB_TOKEN, HF_TOKEN, Credentials
+from server.services.hub_repo import (
+    ROOT_PAIRS_PATH,
+    DatasetMoved,
+    HubDatasetRepo,
+    HubRepoError,
+    HubTokenMissing,
+    open_repo,
+)
 import httpx
 
 from server.jobs.github_snapshot import (
@@ -845,60 +852,98 @@ def content_hash(text: str) -> str:
 
 @dataclass
 class PreviousState:
-    """The last published version: its pairs and its source manifest."""
+    """The last published version: the job's own pairs and its source manifest."""
 
     pairs: List[QAPair] = field(default_factory=list)
     sources: Dict[str, str] = field(default_factory=dict)
+    # The commit it was read at (None: the repo did not exist, or was not
+    # read) — what a draft built on this version is published on top of.
+    commit: Optional[str] = None
 
 
-def load_previous_state(api: Any, repo_id: str) -> PreviousState:
-    """Read ``train.jsonl`` + ``manifest.json`` from the published dataset.
+# Tells a job's own row from a foreign one (a pair added from a file, say):
+# the pair when the row is the job's, else None.
+OwnPair = Callable[[Dict[str, Any]], Optional[QAPair]]
 
-    A missing repo or file is a first run (empty state). Anything else — the
-    Hub unreachable, a permission error — raises: silently starting over would
-    re-spend the whole generation budget.
-    """
-    from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 
-    def read(filename: str) -> Optional[str]:
-        try:
-            path = api.hf_hub_download(
-                repo_id=repo_id, filename=filename, repo_type="dataset"
-            )
-        except (EntryNotFoundError, RepositoryNotFoundError):
-            return None
-        return Path(path).read_text(encoding="utf-8")
+def own_github_pair(row: Dict[str, Any]) -> Optional[QAPair]:
+    """The row as a GitHub Q&A pair, when it is one: a pair in one of the
+    job's categories. Anything else is a foreign row, published back as it is."""
+    pair = QAPair.from_record(row)
+    return pair if pair is not None and pair.category in CATEGORIES else None
 
+
+_MOVED = (
+    "The dataset '{repo}' changed on Hugging Face since this draft was generated. "
+    "Start a new run: it builds on the current version. This draft is kept, "
+    "unpublished."
+)
+
+
+def open_qa_repo(creds: Credentials, repo_id: str) -> HubDatasetRepo:
+    """Open a Q&A job's dataset repo (services/hub_repo.py): the token is
+    checked and a bare repo name completed. Every refusal is a JobError."""
     try:
-        train, manifest = read("train.jsonl"), read("manifest.json")
+        return open_repo(creds, repo_id, new_pairs_path=ROOT_PAIRS_PATH)
+    except HubTokenMissing as exc:
+        raise JobError(
+            "Your Hugging Face token is required (add it in Settings)"
+        ) from exc
+    except HubRepoError as exc:
+        raise JobError(str(exc)) from exc
+
+
+def load_previous_state(
+    repo: HubDatasetRepo, own: OwnPair = own_github_pair
+) -> PreviousState:
+    """The published version the next run builds on: the job's own pairs, the
+    manifest's source hashes and the commit they were read at.
+
+    A repo that does not exist, or has no rows yet, is a first run (empty
+    state). Anything else — the Hub unreachable, a permission error, a file
+    that cannot be read — raises: silently starting over would re-spend the
+    whole generation budget.
+    """
+    try:
+        version = repo.read()
     except Exception as exc:
         raise JobError(
-            f"could not read the previous dataset from {repo_id}: {exc} — "
+            f"could not read the previous dataset from {repo.repo_id}: {exc} — "
             "run with full_refresh to regenerate from scratch"
         ) from exc
 
-    pairs: List[QAPair] = []
-    for line in (train or "").splitlines():
-        try:
-            pair = QAPair.from_record(json.loads(line))
-        except ValueError:
-            pair = None
-        if pair is not None:
-            pairs.append(pair)
-
-    sources: Dict[str, str] = {}
-    if manifest:
-        try:
-            raw = json.loads(manifest).get("sources", {})
-            sources = {k: v for k, v in raw.items() if isinstance(v, str)}
-        except (ValueError, AttributeError):
-            logger.warning(
-                "unreadable manifest.json — treating every source as changed"
-            )
+    pairs = [pair for pair in map(own, version.rows) if pair is not None]
+    raw = (version.manifest or {}).get("sources", {})
+    if isinstance(raw, dict):
+        sources = {k: v for k, v in raw.items() if isinstance(v, str)}
+    else:
+        sources = {}
+        logger.warning("unreadable manifest.json — treating every source as changed")
     logger.info(
-        "previous version: %d pair(s), %d tracked source(s)", len(pairs), len(sources)
+        "previous version: %d pair(s), %d tracked source(s), %d foreign row(s)",
+        len(pairs),
+        len(sources),
+        len(version.rows) - len(pairs),
     )
-    return PreviousState(pairs, sources)
+    return PreviousState(pairs, sources, version.commit)
+
+
+async def read_published(
+    creds: Credentials,
+    repo_id: str,
+    full_refresh: bool,
+    own: OwnPair = own_github_pair,
+) -> Tuple[str, PreviousState]:
+    """The dataset's full repo id and the version a run builds on.
+
+    The repo is opened first — the token checked, before any model usage is
+    spent — then read, unless ``full_refresh`` ignores what is published.
+    """
+    repo = await asyncio.to_thread(open_qa_repo, creds, repo_id)
+    if full_refresh:
+        logger.info("full refresh: ignoring the previously published version")
+        return repo.repo_id, PreviousState()
+    return repo.repo_id, await asyncio.to_thread(load_previous_state, repo, own)
 
 
 @dataclass
@@ -1483,6 +1528,16 @@ async def build_qa_dataset(
 # --- Hugging Face export -----------------------------------------------------
 
 
+def foreign_note(foreign: int) -> str:
+    """The card's line about the rows a Q&A job did not generate."""
+    if not foreign:
+        return ""
+    return (
+        f"- {foreign} more row(s) come from another source (added from a file "
+        "or a web page): kept as they are, and not counted above.\n"
+    )
+
+
 def _size_category(n: int) -> str:
     if n < 1_000:
         return "n<1K"
@@ -1493,13 +1548,10 @@ def _size_category(n: int) -> str:
     return "100K<n<1M"
 
 
-def to_jsonl(pairs: List[QAPair]) -> str:
-    ordered = sorted(pairs, key=lambda p: p.id or "")
-    body = "\n".join(
-        json.dumps(p.to_record(), ensure_ascii=False, separators=(",", ":"))
-        for p in ordered
-    )
-    return body + "\n" if pairs else ""
+def to_records(pairs: Sequence[QAPair]) -> List[Dict[str, Any]]:
+    """The pairs as published rows, ordered by id so a version's diff on the
+    Hub shows only what changed."""
+    return [p.to_record() for p in sorted(pairs, key=lambda p: p.id or "")]
 
 
 def dataset_card(
@@ -1507,7 +1559,10 @@ def dataset_card(
     username: str,
     license_id: str = "",
     license_link: str = "",
+    foreign: int = 0,
 ) -> str:
+    """The GitHub Q&A dataset's README. ``foreign`` rows — the dataset's rows
+    this job did not generate — count in its size, not in its statistics."""
     pairs = dataset.pairs
     by_category = {c: 0 for c in CATEGORIES}
     repo_counts: Dict[str, int] = {}
@@ -1537,7 +1592,7 @@ def dataset_card(
         "- question-answering",
         "- text-generation",
         "size_categories:",
-        f"- {_size_category(len(pairs))}",
+        f"- {_size_category(len(pairs) + foreign)}",
         "---",
     ]
 
@@ -1611,7 +1666,7 @@ Each line of `train.jsonl` is one record:
   stack, links; both deterministic, no LLM), {by_category["overview"]} from repo READMEs,
   {by_category["docs"]} from `docs/` folders.
 - This version: {dataset.kept} pair(s) carried over from unchanged sources, {dataset.new} newly generated.
-- Deduplicated by normalized question text{semantic_note}; trivial or self-answering pairs dropped.
+{foreign_note(foreign)}- Deduplicated by normalized question text{semantic_note}; trivial or self-answering pairs dropped.
 {review_note}
 
 ### Pairs per repository
@@ -1638,61 +1693,58 @@ def publish_qa_dataset(
     username: str,
     repo_id: str,
     *,
-    card: Optional[str] = None,
+    card: Optional[Callable[[int], str]] = None,
     commit_message: Optional[str] = None,
+    base_commit: Optional[str] = None,
+    own: OwnPair = own_github_pair,
 ) -> dict:
-    """Push ``train.jsonl``, ``review.jsonl``, ``manifest.json`` and ``README.md``
-    to a private dataset in one commit — the manifest is what the next run
-    diffs against, so it must never land without the pairs it describes.
-    ``card`` replaces the GitHub dataset card (another job's dataset)."""
-    from huggingface_hub import CommitOperationAdd
+    """Publish the dataset to its private repo in one commit: ``train.jsonl``,
+    ``review.jsonl``, ``manifest.json`` and the card — the manifest is what the
+    next run diffs against, so it never lands without the pairs it describes.
 
-    from server.services.huggingface import (
-        HuggingFaceNotConfiguredError,
-        _api,
-        ensure_private_dataset_repo,
-        qualify_repo_id,
-    )
-
+    The repo's foreign rows (``own`` tells them apart) are published back as
+    they are, after the job's pairs. ``base_commit`` is the commit the draft
+    was built on ("" for a repo that did not exist): a repo that is no longer
+    there has moved, and nothing is written. None skips that check — a full
+    refresh, or a draft stored before commits were recorded. ``card`` builds
+    another job's card from the number of foreign rows.
+    """
     if not dataset.pairs:
         raise JobError("generated 0 pairs — refusing to publish an empty dataset")
 
-    api = _api(creds)
+    repo = open_qa_repo(creds, repo_id)
+    moved = JobError(_MOVED.format(repo=repo.repo_id))
     try:
-        # A bare "github-qa" would 404 on commit — complete it with the namespace
-        # (also fixes drafts stored before this was done at generation time).
-        repo_id = qualify_repo_id(creds, repo_id)
-    except HuggingFaceNotConfiguredError as exc:
-        raise JobError(str(exc)) from exc
-    ensure_private_dataset_repo(api, repo_id)
-    if card is None:
-        card = dataset_card(
-            dataset,
-            username,
-            _env("HF_QA_DATASET_LICENSE"),
-            _env("HF_QA_DATASET_LICENSE_LINK"),
+        current = repo.read()
+        if base_commit is not None and (current.commit or "") != base_commit:
+            raise moved
+        foreign = [row for row in current.rows if own(row) is None]
+        if card is None:
+            text = dataset_card(
+                dataset,
+                username,
+                _env("HF_QA_DATASET_LICENSE"),
+                _env("HF_QA_DATASET_LICENSE_LINK"),
+                foreign=len(foreign),
+            )
+        else:
+            text = card(len(foreign))
+        published = repo.publish(
+            current,
+            to_records(dataset.pairs) + foreign,
+            card=text,
+            message=commit_message
+            or f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
+            review=to_records(dataset.review),
+            manifest=dataset.manifest,
         )
-    api.create_commit(
-        repo_id=repo_id,
-        repo_type="dataset",
-        operations=[
-            CommitOperationAdd("train.jsonl", to_jsonl(dataset.pairs).encode("utf-8")),
-            # Rewritten every run (empty included) so a stale list never lingers.
-            CommitOperationAdd(
-                "review.jsonl", to_jsonl(dataset.review).encode("utf-8")
-            ),
-            CommitOperationAdd(
-                "manifest.json",
-                (json.dumps(dataset.manifest, indent=2) + "\n").encode("utf-8"),
-            ),
-            CommitOperationAdd("README.md", card.encode("utf-8")),
-        ],
-        commit_message=commit_message
-        or f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",
-    )
+    except DatasetMoved as exc:
+        raise moved from exc
+    except HubRepoError as exc:
+        raise JobError(str(exc)) from exc
     return {
-        "repo": repo_id,
-        "url": f"https://huggingface.co/datasets/{repo_id}",
+        "repo": repo.repo_id,
+        "url": published.url,
         "records": len(dataset.pairs),
         "dropped": dataset.dropped,
     }
@@ -1710,6 +1762,9 @@ class Draft:
     repo_id: str
     full_refresh: bool
     model_ref: str
+    # The commit of the published version this draft was built on ("": the
+    # repo did not exist). None: not recorded — a full refresh, an older draft.
+    base_commit: Optional[str] = None
 
     def stats(self) -> Dict[str, Any]:
         return {
@@ -1726,6 +1781,11 @@ class Draft:
             "embedding_model": self.dataset.manifest.get("embedding_model"),
             "embedding_checks": embedding_summary(self.dataset.manifest),
         }
+
+
+def base_of(previous: PreviousState, full_refresh: bool) -> Optional[str]:
+    """The ``base_commit`` of a draft built on ``previous``."""
+    return None if full_refresh else (previous.commit or "")
 
 
 def _model_for(
@@ -1776,34 +1836,13 @@ async def generate(
         raise JobError("Your GitHub username is required (set it in Settings)")
     model_ref, model = _model_for(creds, model_ref, complete)
 
-    repo_id = creds.hf_qa_repo
     if not creds.has(HF_TOKEN):
         raise JobError("Your Hugging Face token is required (add it in Settings)")
-    if not repo_id:
+    if not creds.hf_qa_repo:
         raise JobError(
             "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
         )
-
-    from server.services.huggingface import (
-        HuggingFaceNotConfiguredError,
-        _api,
-        qualify_repo_id,
-    )
-
-    try:
-        await asyncio.to_thread(_api(creds).whoami)
-    except Exception as exc:
-        raise JobError(f"Hugging Face rejected your token: {exc}") from exc
-    try:
-        repo_id = await asyncio.to_thread(qualify_repo_id, creds, repo_id)
-    except HuggingFaceNotConfiguredError as exc:
-        raise JobError(str(exc)) from exc
-
-    previous = PreviousState()
-    if full_refresh:
-        logger.info("full refresh: ignoring the previously published version")
-    else:
-        previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
+    repo_id, previous = await read_published(creds, creds.hf_qa_repo, full_refresh)
     embedder = await asyncio.to_thread(get_embedder, creds)
 
     complete = complete or provider_completion(model_ref, creds)
@@ -1831,7 +1870,14 @@ async def generate(
     for err in dataset.errors:
         logger.warning("non-fatal: %s", err)
     dataset.removed = removed_pairs(previous, dataset)
-    return Draft(dataset, username, repo_id, full_refresh, model_ref)
+    return Draft(
+        dataset,
+        username,
+        repo_id,
+        full_refresh,
+        model_ref,
+        base_of(previous, full_refresh),
+    )
 
 
 async def generate_from_recipe(
@@ -1862,28 +1908,9 @@ async def generate_from_recipe(
 
     if not creds.has(HF_TOKEN):
         raise JobError("Your Hugging Face token is required (add it in Settings)")
-    from server.services.huggingface import (
-        HuggingFaceNotConfiguredError,
-        _api,
-        qualify_repo_id,
+    repo_id, previous = await read_published(
+        creds, str(recipe["target_repo"]), full_refresh
     )
-
-    try:
-        await asyncio.to_thread(_api(creds).whoami)
-    except Exception as exc:
-        raise JobError(f"Hugging Face rejected your token: {exc}") from exc
-    try:
-        repo_id = await asyncio.to_thread(
-            qualify_repo_id, creds, str(recipe["target_repo"])
-        )
-    except HuggingFaceNotConfiguredError as exc:
-        raise JobError(str(exc)) from exc
-
-    if full_refresh:
-        logger.info("full refresh: ignoring the previously published version")
-        previous = PreviousState()
-    else:
-        previous = await asyncio.to_thread(load_previous_state, _api(creds), repo_id)
     embedder = await asyncio.to_thread(get_embedder, creds)
     complete = complete or provider_completion(model_ref, creds)
 
@@ -1959,7 +1986,14 @@ async def generate_from_recipe(
     for err in dataset.errors:
         logger.warning("non-fatal: %s", err)
     dataset.removed = removed_pairs(previous, dataset)
-    return Draft(dataset, username, repo_id, full_refresh, model_ref)
+    return Draft(
+        dataset,
+        username,
+        repo_id,
+        full_refresh,
+        model_ref,
+        base_of(previous, full_refresh),
+    )
 
 
 async def publish(creds: Credentials, draft: Draft) -> dict:
@@ -1969,5 +2003,10 @@ async def publish(creds: Credentials, draft: Draft) -> dict:
             "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')"
         )
     return await asyncio.to_thread(
-        publish_qa_dataset, creds, draft.dataset, draft.username, draft.repo_id
+        publish_qa_dataset,
+        creds,
+        draft.dataset,
+        draft.username,
+        draft.repo_id,
+        base_commit=draft.base_commit,
     )

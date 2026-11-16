@@ -98,6 +98,15 @@ shown and can't be edited here.
 **Publish to Hugging Face** pushes exactly what you reviewed, in one commit
 (data, held-out pairs, manifest and card), then opens the dataset page.
 
+The commit goes on top of the version the draft was built on. If the dataset
+changed on the Hub in between (another draft published into it, an edit made
+there), nothing is written: the draft stays as it is and a new run builds on
+the current version. Rows the job did not generate, such as pairs added from a
+file with **Add data**, are not its to remove: they stay in `train.jsonl` as
+they are, after the job's pairs, and the card mentions them. A line of
+`train.jsonl` that is not a JSON object stops the run, since skipping it would
+delete it at the next publication; fix it on the Hub, or use *Full Refresh*.
+
 ## API
 
 | Route                                  | Returns                                                       |

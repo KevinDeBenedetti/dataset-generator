@@ -10,9 +10,9 @@ most 50 MB, cached per commit (see [Datasets on Hugging Face](./datasets.md)).
 Hugging Face exports are always **private** repos — an export into an existing
 repo the Hub does not confirm private is refused; an import reads at most 50 MB
 of data files, from a repo of at most 5,000 files and folders. A file or web
-page draft reads its dataset's `data/train.jsonl` (50 MB at most) once per
-commit: counted when the draft is made, read again at publication only if the
-dataset changed meanwhile.
+page draft reads its dataset's rows, review list, manifest and card (50 MB at
+most together), each file once per commit: counted when the draft is made, read
+again at publication only if the dataset changed meanwhile.
 
 PostgreSQL is the only database (`postgres://` / `postgresql://` URLs are
 accepted). Drafts — generated, not yet published — live in three tables:

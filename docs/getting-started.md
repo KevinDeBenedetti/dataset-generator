@@ -113,8 +113,13 @@ QA generation → deduplication → save (a new version of the draft).
 
 Add your Hugging Face token (write access) in **Settings**, open the draft
 under **Drafts**, review it — leave pairs out, edit a question or an answer —
-then use **Publish to Hugging Face**. The reviewed pairs are merged into the
-dataset's `data/train.jsonl` by id, in one commit with its card. API:
+then use **Publish to Hugging Face**. The reviewed pairs are merged by id into
+the dataset's rows, in one commit: `data/train.jsonl` for a new dataset, or the
+file an existing one already keeps them in (a recipe's `train.jsonl`, say). The
+rows already there stay as they are. The card is rewritten only when the app
+wrote it; one you wrote yourself, or a recipe's, is left alone. If the dataset
+changes on the Hub while you publish, it is read and merged again once, and
+nothing is overwritten. API:
 `GET /jobs/drafts`, `GET /jobs/runs/{run_id}` and
 `POST /jobs/runs/{run_id}/publish` (`exclude`, `edits`).
 

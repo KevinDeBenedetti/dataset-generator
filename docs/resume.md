@@ -102,6 +102,11 @@ changed since the published version costs nothing — a daily schedule only
 spends tokens on the days you edit it. **Regenerate every section** ignores the
 published version.
 
+Publishing follows the same rules as a GitHub dataset's
+([Reviewing and publishing](./github.md#reviewing-and-publishing)): the commit
+goes on top of the version the draft was built on, a dataset that changed
+since is not overwritten, and rows the job did not generate stay as they are.
+
 ## API
 
 | Route                                   | Returns                                                         |
