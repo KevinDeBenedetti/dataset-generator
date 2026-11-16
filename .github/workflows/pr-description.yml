@@ -17,7 +17,7 @@ permissions: {}
 jobs:
   describe:
     name: PR description
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/pr-description.yml@a3ad20900d4919ccf6ddd54a27f9520b35dfcb9c # v0.47.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/pr-description.yml@0ca5f46911f525a18f91a74b26443a91f717eae6 # v0.48.0
     # TODO: uncomment once the pin above is bumped to the github-workflows
     # release that adds `update-title` (v0.43.0 rejects the unknown input).
     # The title is a Conventional Commit header: with squash merges it is the
