@@ -3,7 +3,7 @@
   "info": {
     "title": "Datasets Generator API",
     "description": "API to generate datasets from web scraping",
-    "version": "0.15.2"
+    "version": "0.16.0"
   },
   "paths": {
     "/auth/login": {

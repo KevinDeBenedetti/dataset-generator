@@ -140,7 +140,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Datasets Generator API",
         description="API to generate datasets from web scraping",
-        version="0.15.2",  # x-release-please-version
+        version="0.16.0",  # x-release-please-version
         lifespan=lifespan,
         # The interactive docs advertise every route to anyone: development only.
         docs_url="/docs" if docs else None,
