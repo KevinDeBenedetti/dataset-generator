@@ -18,6 +18,15 @@ export function modelRemoved(collection: { model: string }): boolean {
   return !isEndpointModel(collection.model)
 }
 
+/** A built collection whose owner's endpoint is no longer the one that
+ * embedded it: a question would be embedded into another vector space. */
+export function endpointMoved(collection: {
+  status: string
+  current_endpoint?: string | null
+}): boolean {
+  return collection.status !== 'building' && Boolean(collection.current_endpoint)
+}
+
 /** `BAAI/bge-small-en-v1.5` → `bge-small-en-v1.5`; `openai:embed-default` → `embed-default`. */
 export function modelLabel(name: string): string {
   const id = isEndpointModel(name) ? name.slice(ENDPOINT_PREFIX.length) : name

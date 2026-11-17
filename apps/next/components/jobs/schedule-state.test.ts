@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { scheduleForm, toSchedule } from './schedule-state'
+import { differsFromCard, scheduleForm, skipNotice, toSchedule } from './schedule-state'
 
 describe('a schedule picker', () => {
   it('starts off, at 03:00, publishing once switched on', () => {
@@ -27,5 +27,56 @@ describe('a schedule picker', () => {
       publish: true,
     })
     expect(toSchedule({ every: 'day', time: '25:99', publish: true })?.at_hour).toBe(3)
+  })
+})
+
+describe('a schedule compared with its card', () => {
+  const saved = {
+    options: { max_repos: null, full_refresh: false, sources: ['profile', 'repos'] },
+    model_ref: 'openai:m',
+  }
+
+  it('matches when the card shows what the schedule runs', () => {
+    expect(
+      differsFromCard(saved, {
+        // An empty number is left out by the card, null in the schedule.
+        options: { full_refresh: false, sources: ['repos', 'profile'] },
+        modelRef: 'openai:m',
+      }),
+    ).toBe(false)
+  })
+
+  it('differs on an option, a list or the model', () => {
+    const card = {
+      options: { full_refresh: false, sources: ['profile', 'repos'] },
+      modelRef: 'openai:m',
+    }
+    expect(
+      differsFromCard(saved, { ...card, options: { ...card.options, full_refresh: true } }),
+    ).toBe(true)
+    expect(differsFromCard(saved, { ...card, options: { ...card.options, max_repos: 2 } })).toBe(
+      true,
+    )
+    expect(
+      differsFromCard(saved, { ...card, options: { ...card.options, sources: ['profile'] } }),
+    ).toBe(true)
+    expect(differsFromCard(saved, { ...card, modelRef: null })).toBe(true)
+  })
+})
+
+describe('a schedule whose latest time started no run', () => {
+  it('says when and why, and what to do', () => {
+    const notice = skipNotice(
+      { reason: "Unknown model 'openai:x'. Available: openai:y.", at: '2026-11-17T18:00:00Z' },
+      () => 'yesterday at 18:00',
+    )
+    expect(notice).toBe(
+      "The run scheduled for yesterday at 18:00 did not start: Unknown model 'openai:x'. Available: openai:y. Fix it, then save the schedule again.",
+    )
+  })
+
+  it('says nothing when the latest time ran, or was never due', () => {
+    expect(skipNotice(null)).toBeNull()
+    expect(skipNotice(undefined)).toBeNull()
   })
 })

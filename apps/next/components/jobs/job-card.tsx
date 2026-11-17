@@ -15,7 +15,7 @@ import {
   useStartJobRun,
 } from '@/hooks'
 import { SchedulePicker } from './schedule-picker'
-import { type ScheduleForm, scheduleForm, toSchedule } from './schedule-state'
+import { type ScheduleForm, differsFromCard, scheduleForm, toSchedule } from './schedule-state'
 import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
 
 // The subset of JSON schema the job option models produce (pydantic).
@@ -496,31 +496,50 @@ function JobSchedule({
   const saved = useJobSchedule(job.id)
   const save = useSaveJobSchedule(job.id)
   const form = scheduleForm(saved.data)
+  const store = (patch: Partial<ScheduleForm> = {}) => {
+    const timing = toSchedule({ ...form, ...patch })
+    save.mutate(timing && { ...timing, options: options(), model_ref: modelRef }, {
+      onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+    })
+  }
+  const stale = saved.data != null && differsFromCard(saved.data, { options: options(), modelRef })
 
   if (saved.isPending) return null
   return (
-    <SchedulePicker
-      id={`every-${job.id}`}
-      form={form}
-      disabled={save.isPending}
-      publishLabel={
-        job.has_draft
-          ? 'Publish what passes the checks at once, and keep the doubtful pairs for review'
-          : 'Publish what it builds'
-      }
-      onChange={(patch: Partial<ScheduleForm>) => {
-        const timing = toSchedule({ ...form, ...patch })
-        save.mutate(timing && { ...timing, options: options(), model_ref: modelRef }, {
-          onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
-        })
-      }}
-    >
-      At {form.time} UTC, with the options{job.uses_model ? ' and the model' : ''} above as they are
-      when you set this: change the schedule again to save new ones.
-      {job.has_draft && ' A run that finds nothing changed makes no model call.'}
-      {saved.data?.next_run_at &&
-        ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
-    </SchedulePicker>
+    <>
+      {stale && (
+        <div className="hint job-config-hint">
+          The schedule runs with other options{job.uses_model ? ' or another model' : ''} than
+          these.{' '}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={save.isPending}
+            onClick={() => store()}
+          >
+            Schedule these instead
+          </button>
+        </div>
+      )}
+      <SchedulePicker
+        id={`every-${job.id}`}
+        form={form}
+        disabled={save.isPending}
+        publishLabel={
+          job.has_draft
+            ? 'Publish what passes the checks at once, and keep the doubtful pairs for review'
+            : 'Publish what it builds'
+        }
+        skipped={saved.data?.skipped}
+        onChange={(patch: Partial<ScheduleForm>) => store(patch)}
+      >
+        At {form.time} UTC, with the options{job.uses_model ? ' and the model' : ''} saved with the
+        schedule.
+        {job.has_draft && ' A run that finds nothing changed makes no model call.'}
+        {saved.data?.next_run_at &&
+          ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
+      </SchedulePicker>
+    </>
   )
 }
 

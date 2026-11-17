@@ -22,9 +22,12 @@ Monday or the 1st of every month at a time of day (UTC). The worker queues the
 due runs with its sweep of stale ones (`job_schedules`, one row per user, job
 and resume or recipe): with the owner's own keys, under the same
 quotas, never two runs of a job at once, and once after a worker was down
-rather than once per missed time. A schedule whose run can't be queued then (a
-run in progress, a quota reached, an owner no longer admin) waits for its next
-time. The **GitHub** page
+rather than once per missed time. A schedule whose job already has a run in
+progress (two recipes at the same time, say) is tried again every five
+minutes until that run is done; one that can't be queued for another reason
+(a model the endpoint no longer serves, a quota reached, an owner no longer
+admin) waits for its next time, and its page says why under the schedule until
+a run starts or the schedule is saved again. The **GitHub** page
 starts the two jobs built from your whole account, **GitHub personal Q&A** and
 the **knowledge corpus**, and a recipe's run; see
 [GitHub datasets](./github.md). The build of a

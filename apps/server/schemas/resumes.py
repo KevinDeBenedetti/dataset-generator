@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from server.schemas.jobs import JobRunRef
+from server.schemas.jobs import JobRunRef, ScheduleSkip
 from server.schemas.recipes import HF_REPO_PATTERN
 
 
@@ -115,6 +115,9 @@ class ResumeDatasetOut(ResumeDatasetIn):
     )
     latest_run: Optional[JobRunRef] = Field(
         None, description="The most recent run, scheduled or started by you"
+    )
+    skipped: Optional[ScheduleSkip] = Field(
+        None, description="Why the latest scheduled time started no run, if so"
     )
     updated_at: datetime
 

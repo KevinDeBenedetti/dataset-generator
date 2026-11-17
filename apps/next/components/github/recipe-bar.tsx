@@ -190,6 +190,7 @@ function RecipeSchedule({ recipeId }: { recipeId: string }) {
       form={form}
       disabled={save.isPending}
       publishLabel="Publish what passes the checks at once, and keep the doubtful pairs for review"
+      skipped={saved.data?.skipped}
       onChange={(patch: Partial<ScheduleForm>) =>
         save.mutate(toSchedule({ ...form, ...patch }), {
           onError: (error) => toast.error(error.message),
@@ -197,8 +198,8 @@ function RecipeSchedule({ recipeId }: { recipeId: string }) {
       }
     >
       At {form.time} UTC, from the recipe as it is then. A run that finds nothing changed on GitHub
-      makes no model call and publishes nothing. One recipe runs at a time: give your recipes
-      different times.
+      makes no model call and publishes nothing. One recipe runs at a time: another one at the same
+      time starts once it is done.
       {saved.data?.next_run_at &&
         ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
     </SchedulePicker>

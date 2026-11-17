@@ -214,19 +214,127 @@ def test_the_sweep_skips_what_it_can_not_run_and_moves_on(db):
 
     assert len(queue_due(now)) == 1  # OWNER's; the manual one is never due
 
-    # A run of the job still in progress: this tick is skipped, not queued twice.
+    # A run of the job still in progress: not queued twice, tried again soon.
     busy.next_run_at = now - timedelta(minutes=1)
     db.commit()
     assert queue_due(now) == []
     db.refresh(busy)
-    assert _as_utc(busy.next_run_at) > now  # the date moved on anyway
+    assert _as_utc(busy.next_run_at) == now + schedules.RETRY_BUSY
     db.refresh(other)
     assert other.last_run_id is None
     assert _as_utc(other.next_run_at) > now
     assert db.query(JobRun).count() == 1
 
 
+def test_a_schedule_whose_job_is_busy_runs_once_the_other_run_is_done(db):
+    """Two schedules of one job at the same time: the second waits a few
+    minutes for the first run, not a whole day."""
+    busy = _due(db, scope="r1")
+    now = datetime.now(timezone.utc)
+    [first] = queue_due(now)
+    busy.next_run_at = now - timedelta(minutes=1)  # another tick, same minute
+    db.commit()
+
+    assert queue_due(now) == []
+    db.refresh(busy)
+    retry = _as_utc(busy.next_run_at)
+    assert retry == now + schedules.RETRY_BUSY
+
+    db.get(JobRun, first).status = "succeeded"
+    db.commit()
+    [second] = queue_due(retry)
+    assert second != first
+    db.refresh(busy)
+    # Queued: back on the calendar, at its next regular time.
+    assert _as_utc(busy.next_run_at) == schedules.next_run(
+        "day", busy.at_hour, busy.at_minute, retry
+    )
+
+
+def test_a_retry_never_goes_past_the_next_regular_time(db):
+    busy = _due(db, scope="r1")
+    now = datetime.now(timezone.utc)
+    queue_due(now)
+    regular = schedules.next_run("day", busy.at_hour, busy.at_minute, now)
+    late = regular - timedelta(minutes=1)
+    busy.next_run_at = late
+    db.commit()
+
+    assert queue_due(late) == []
+    db.refresh(busy)
+    assert _as_utc(busy.next_run_at) <= schedules.next_run(
+        "day", busy.at_hour, busy.at_minute, late
+    )
+
+
 def test_a_schedule_whose_time_has_not_come_waits(db):
     upsert_schedule(db, OWNER, RESUME_JOB_ID, "r1", options=OPTIONS, every="day")
     assert queue_due(datetime.now(timezone.utc)) == []
     assert db.query(JobRun).count() == 0
+
+
+# --- a tick that queued no run says why ------------------------------------------
+
+
+def test_a_skipped_schedule_keeps_the_reason_until_it_runs_or_is_saved(db, monkeypatch):
+    """A model the endpoint stopped serving: the schedule would be skipped
+    every day with only a log line. Its reason stays on the schedule."""
+    row = _due(db)
+    now = datetime.now(timezone.utc)
+
+    def gone(ref, creds):
+        raise ValueError(f"Unknown model '{ref}'. Available: openai:other")
+
+    monkeypatch.setattr("server.services.jobs.validate_ref", gone)
+    assert queue_due(now) == []
+
+    skipped = schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"]
+    assert skipped["reason"].startswith("Unknown model 'openai:chat-default'")
+    assert skipped["at"] == now.isoformat()
+
+    # The model is back: the next tick queues, and the reason goes.
+    monkeypatch.setattr("server.services.jobs.validate_ref", lambda ref, creds: ref)
+    row.next_run_at = now - timedelta(minutes=1)
+    db.commit()
+    assert len(queue_due(now)) == 1
+    db.expire_all()
+    assert schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"] is None
+
+
+def test_saving_a_schedule_again_clears_what_stopped_it(db, monkeypatch):
+    _due(db, owner=OTHER, scope="r2")  # not an admin: never queued
+    queue_due(datetime.now(timezone.utc))
+    db.expire_all()
+    assert (
+        "no longer an admin"
+        in (schedules.get_schedule(db, OTHER, RESUME_JOB_ID, "r2")["skipped"]["reason"])
+    )
+
+    saved = upsert_schedule(
+        db, OTHER, RESUME_JOB_ID, "r2", options=OPTIONS, every="day"
+    )
+    assert saved["skipped"] is None
+
+
+def test_a_schedule_waiting_for_a_run_in_progress_is_not_reported_as_skipped(db):
+    busy = _due(db, scope="r1")
+    now = datetime.now(timezone.utc)
+    queue_due(now)
+    busy.next_run_at = now - timedelta(minutes=1)
+    db.commit()
+    queue_due(now)  # its job is busy: tried again shortly
+    db.expire_all()
+    assert schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"] is None
+
+
+def test_a_long_reason_is_cut(db, monkeypatch):
+    _due(db)
+
+    def gone(ref, creds):
+        raise ValueError("Unknown model. Available: " + ", ".join(["m"] * 500))
+
+    monkeypatch.setattr("server.services.jobs.validate_ref", gone)
+    queue_due(datetime.now(timezone.utc))
+    db.expire_all()
+    reason = schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"]["reason"]
+    assert len(reason) == schedules.MAX_SKIP_REASON_CHARS

@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import type { Every, ScheduleForm } from './schedule-state'
+import { type Every, type ScheduleForm, type ScheduleSkip, skipNotice } from './schedule-state'
 
 const EVERY: { value: Every; label: string }[] = [
   { value: '', label: 'Only when I start it' },
@@ -17,6 +17,7 @@ export function SchedulePicker({
   form,
   disabled,
   publishLabel,
+  skipped,
   children,
   onChange,
 }: {
@@ -24,10 +25,13 @@ export function SchedulePicker({
   form: ScheduleForm
   disabled?: boolean
   publishLabel: string
+  /** Why the latest scheduled time started no run, when it didn't. */
+  skipped?: ScheduleSkip | null
   /** The hint under the publish toggle, shown once a preset is set. */
   children?: ReactNode
   onChange: (patch: Partial<ScheduleForm>) => void
 }) {
+  const notice = skipNotice(skipped)
   return (
     <div className="gh-recipe-row gh-schedule">
       <div className="field">
@@ -72,6 +76,7 @@ export function SchedulePicker({
             {publishLabel}
           </label>
           <span className="hint">{children}</span>
+          {notice && <span className="hint job-config-hint">{notice}</span>}
         </div>
       )}
     </div>
