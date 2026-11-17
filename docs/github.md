@@ -34,7 +34,18 @@ reviewed on its card: untick the new pairs you don't want, tick the held-out
 ones you do, then **Publish** pushes exactly that. *Max Repos* limits a test
 run to your most-starred repos; *Full Refresh* ignores the published version.
 The **Knowledge corpus** builds the splits you switch on; it publishes only
-with *Dry Run* off.
+with *Dry Run* off. When the server is set up for it
+([Configuration](./configuration.md)), an admin's published run then asks the
+site that indexes the corpus to read it again, and the run reports **Reindex:
+asked** or why it failed.
+
+Each card has a **Regenerate** picker too: every day, every Monday or the 1st
+of every month, at a time of day (UTC). A scheduled run copies the options and
+the model the card shows when you set the schedule — change it again to save
+new ones. With its publish box ticked, a scheduled Q&A run publishes what
+passes the checks and keeps the doubtful pairs as a draft, and a scheduled
+corpus run publishes whatever *Dry Run* says; unticked, the run stops where
+one you start by hand does.
 
 ## Recipes
 
@@ -48,6 +59,17 @@ with *Dry Run* off.
 
 Every change is saved as you go. Deleting a recipe leaves its Hugging Face
 dataset in place.
+
+**Regenerate** puts a recipe on a schedule: every day, every Monday or the 1st
+of every month, at a time of day (UTC). Each scheduled run generates from the
+recipe as it is at that moment — its selection, its dataset, its model — and
+builds on the published version, so a day nothing changed on GitHub makes no
+model call and publishes nothing. With **Publish what passes the checks** on,
+the pairs that pass are published at once and the doubtful ones wait as a
+draft; off, the run stops at a draft like one you start yourself. Only one
+recipe runs at a time, so give your recipes different times: a run that finds
+another in progress waits for its next time. Deleting a recipe removes its
+schedule.
 
 ## Choosing what a repo contributes
 
@@ -118,8 +140,10 @@ delete it at the next publication; fix it on the Hub, or use *Full Refresh*.
 | `GET /recipes`, `POST /recipes`        | Your recipes; a new one                                       |
 | `GET/PUT/DELETE /recipes/{recipe_id}`  | One recipe (another user's answers 404)                       |
 | `POST /recipes/{recipe_id}/run`        | Queues a generation; follow it with `GET /jobs/runs/{run_id}` |
+| `…/recipes/{recipe_id}/schedule`       | `GET`, `PUT`, `DELETE`: when it regenerates by itself         |
 | `GET /jobs`                            | The whole-account jobs, with their options and latest run     |
 | `POST /jobs/{job_id}/run`              | Queues one of them (`options`, `model_ref`)                   |
+| `…/jobs/{job_id}/schedule`             | `GET`, `PUT`, `DELETE`: when one of them runs by itself       |
 | `POST /jobs/runs/{run_id}/publish`     | Publishes the reviewed draft: `exclude`, `promote`, `edits`   |
 | `GET /jobs/runs/{run_id}/checks`       | Near-duplicates and quality-rule failures of the draft        |
 

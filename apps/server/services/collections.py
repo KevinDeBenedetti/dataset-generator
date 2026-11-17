@@ -25,9 +25,11 @@ import asyncio
 import json
 import logging
 import random
+import re
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, select
@@ -40,7 +42,7 @@ from server.core.database import get_scoped_db
 from server.models.job_run import JobRun
 from server.models.vector_collection import VectorCollection
 from server.services import hub, qdrant
-from server.services.credentials import Credentials
+from server.services.credentials import OPENAI_API_KEY, Credentials
 from server.services.semantic import (
     RetrievalEmbedder,
     collection_models,
@@ -103,6 +105,37 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+# What an empty base URL means to the OpenAI client.
+DEFAULT_ENDPOINT = "api.openai.com"
+
+
+def endpoint_host(creds: Credentials) -> str:
+    """The host of the caller's OpenAI-compatible endpoint, port included —
+    never the user and password a URL may carry before it (``netloc`` would)."""
+    url = urlsplit(creds.openai_base_url or "")
+    host = (url.hostname or "").lower()
+    if not host:
+        return DEFAULT_ENDPOINT
+    try:
+        port = url.port
+    except ValueError:  # a malformed port: the host alone still tells endpoints apart
+        port = None
+    return f"{host}:{port}" if port else host
+
+
+def _moved_endpoint(
+    row: VectorCollection, creds: Optional[Credentials]
+) -> Optional[str]:
+    """The caller's endpoint host when it is not the one ``row`` was built on:
+    its queries would then be embedded by another endpoint's model, into
+    another vector space. None when it is the same, or cannot be told (no
+    credentials at hand, a build from before the host was recorded)."""
+    if creds is None or not row.endpoint or not creds.has(OPENAI_API_KEY):
+        return None
+    current = endpoint_host(creds)
+    return current if current != row.endpoint else None
+
+
 def _embedder(model: str, creds: Credentials) -> RetrievalEmbedder:
     """The collection's model (an endpoint one runs on ``creds``); tests swap
     it for a fake."""
@@ -142,7 +175,16 @@ def _state(
     return "failed", error, None
 
 
-def _view(row: VectorCollection, run: Optional[JobRun]) -> Dict[str, Any]:
+def _serving(row: VectorCollection) -> bool:
+    """Whether the collection has vectors to answer with: it was built once.
+    A rebuild fills another Qdrant collection and takes over only when it is
+    complete, so a build in flight, or one that failed, leaves these in place."""
+    return row.built_at is not None
+
+
+def _view(
+    row: VectorCollection, run: Optional[JobRun], creds: Optional[Credentials] = None
+) -> Dict[str, Any]:
     status, error, progress = _state(row, run)
     return {
         "id": row.id,
@@ -155,6 +197,8 @@ def _view(row: VectorCollection, run: Optional[JobRun]) -> Dict[str, Any]:
         "query_column": row.query_column,
         "model": row.model,
         "status": status,
+        "serving": _serving(row),
+        "building_revision": row.building_revision if status == "building" else None,
         "error": error,
         "progress": progress,
         "run_id": row.run_id,
@@ -167,6 +211,8 @@ def _view(row: VectorCollection, run: Optional[JobRun]) -> Dict[str, Any]:
         "created_at": row.created_at,
         "updated_at": row.updated_at,
         "built_at": row.built_at,
+        "endpoint": row.endpoint,
+        "current_endpoint": _moved_endpoint(row, creds),
     }
 
 
@@ -188,16 +234,23 @@ def list_collections(
         "qdrant_configured": qdrant.is_configured(),
         "quota": config.quota_collections,
         "models": [asdict(m) for m in collection_models(creds)],
-        "collections": [_view(r, runs.get(r.run_id or "")) for r in rows],
+        "collections": [_view(r, runs.get(r.run_id or ""), creds) for r in rows],
     }
 
 
-def get_collection(db: Session, owner_id: str, collection_id: str) -> Dict[str, Any]:
+def get_collection(
+    db: Session,
+    owner_id: str,
+    collection_id: str,
+    creds: Optional[Credentials] = None,
+) -> Dict[str, Any]:
     row = _owned(db, owner_id, collection_id)
-    return _view(row, _runs(db, [row.run_id]).get(row.run_id or ""))
+    return _view(row, _runs(db, [row.run_id]).get(row.run_id or ""), creds)
 
 
 def _require_ready(db: Session, row: VectorCollection) -> None:
+    if _serving(row):
+        return  # its previous version answers, whatever a rebuild is doing
     status, error, _ = _state(row, _runs(db, [row.run_id]).get(row.run_id or ""))
     if status == "building":
         raise CollectionConflictError("This collection is still being built.")
@@ -323,8 +376,18 @@ def _reset_for_build(
     snapshot, _ = _resolve_split(
         creds, row.repo_id, revision, row.config_name, row.split
     )
-    previous = {"status": row.status, "revision": row.revision, "run_id": row.run_id}
-    row.status, row.revision, row.run_id = "building", snapshot.sha, None
+    previous = {
+        "status": row.status,
+        "revision": row.revision,
+        "building_revision": row.building_revision,
+        "run_id": row.run_id,
+    }
+    row.status, row.run_id = "building", None
+    if _serving(row):
+        # The vectors in Qdrant stay those of ``revision`` until the build is done.
+        row.building_revision = snapshot.sha
+    else:
+        row.revision, row.building_revision = snapshot.sha, None
     db.commit()
     return previous
 
@@ -428,6 +491,53 @@ def qdrant_names(db: Session, owner_id: str) -> List[str]:
     return [qdrant.collection_name(i) for i in ids]
 
 
+# A Qdrant collection of this deployment: its prefix, then "c_" and a row id
+# — and, for the collection one build filled, that build's own suffix.
+_OWN_NAME = re.compile(r"c_([0-9a-f]{32})(?:_[0-9a-f]{12})?")
+
+
+def drop_orphans() -> List[str]:
+    """Drop this deployment's Qdrant collections that no row names any more;
+    the names dropped.
+
+    A deletion drops its vectors once the row is gone, best effort
+    (:func:`server.services.qdrant.drop`): a Qdrant outage at that moment
+    leaves them behind, a deleted account's text in their payloads, with
+    nothing left to point at them. The worker runs this now and then, so they
+    stay at most one sweep. Only names this module makes are considered — the
+    deployment's prefix, ``c_`` and a row id — never another deployment's or
+    another app's. Blocking. Without Qdrant set up, nothing to do.
+    """
+    if not qdrant.is_configured():
+        return []
+    prefix = config.qdrant_collection_prefix
+    found: Dict[str, List[str]] = {}
+    for name in qdrant.names():
+        if not name.startswith(prefix):
+            continue
+        match = _OWN_NAME.fullmatch(name[len(prefix) :])
+        if match:
+            found.setdefault(match.group(1), []).append(name)
+    if not found:
+        return []
+    with get_scoped_db() as db:
+        known = set(
+            db.scalars(
+                select(VectorCollection.id).where(VectorCollection.id.in_(list(found)))
+            )
+        )
+    dropped = [
+        name
+        for collection_id, built in found.items()
+        if collection_id not in known
+        for name in built
+        if qdrant.drop_build(name)
+    ]
+    if dropped:
+        logger.warning("Qdrant: dropped %d orphaned collection(s)", len(dropped))
+    return dropped
+
+
 # --- the build (on a worker) --------------------------------------------------------
 
 
@@ -451,7 +561,7 @@ def _load_spec(collection_id: str) -> _BuildSpec:
         return _BuildSpec(
             id=row.id,
             repo_id=row.repo_id,
-            revision=row.revision,
+            revision=row.building_revision or row.revision,
             config_name=row.config_name,
             split=row.split,
             text_columns=tuple(row.text_columns or ()),
@@ -466,11 +576,13 @@ def _save_build(collection_id: str, built: Dict[str, Any]) -> None:
         if row is None:
             return
         row.status = "ready"
+        row.revision, row.building_revision = built["sha"], None
         row.vector_size = built["vector_size"]
         row.rows_total = built["rows"]
         row.points_count = built["points"]
         row.fields = built["fields"]
         row.built_at = _now()
+        row.endpoint = built["endpoint"]
         # The test of the previous vectors says nothing about these.
         row.evaluation = None
         db.commit()
@@ -489,9 +601,9 @@ def _write_batch(
     payloads: List[Dict[str, Any]],
     new_size: Optional[int] = None,
 ) -> None:
-    """Store one batch of points — ``new_size`` (the first batch) replaces the
-    vectors of an earlier build with an empty collection first — then check
-    that the collection still exists.
+    """Store one batch of points in ``name``, this build's own Qdrant
+    collection — ``new_size`` (the first batch) creates it — then check that
+    the collection's row still exists.
 
     Its owner's account may be deleted mid-build: the deletion drops the
     account's Qdrant collections once their rows are gone, and the first batch
@@ -507,7 +619,7 @@ def _write_batch(
         qdrant.upsert(name, ids, vectors, payloads)
     finally:
         if not _defined(collection_id):
-            qdrant.drop(name)
+            qdrant.drop(qdrant.collection_name(collection_id))
             raise CollectionBuildError("The collection was deleted during its build.")
 
 
@@ -571,27 +683,35 @@ async def _build(
     embedder = await asyncio.to_thread(_embedder, spec.model, creds)
     # The endpoint embeds: the batches wait on the network, not on a CPU slot.
     run = asyncio.to_thread
-    name = qdrant.collection_name(spec.id)
+    # This build's own Qdrant collection: the one the collection's name points
+    # at keeps answering until :func:`build` switches the name over.
+    name = qdrant.build_name(qdrant.collection_name(spec.id))
     vector_size = 0
-    for start in range(0, len(ids), BUILD_BATCH):
-        batch = ids[start : start + BUILD_BATCH]
-        vectors = await run(embedder.embed_passages, [texts[i] for i in batch])
-        first = not vector_size
-        if first:
-            vector_size = int(vectors.shape[1])
-        payloads = [_payload(i, texts[i], values, fields) for i in batch]
-        await asyncio.to_thread(
-            _write_batch,
-            spec.id,
-            name,
-            batch,
-            vectors,
-            payloads,
-            vector_size if first else None,
-        )
-        progress(start + len(batch), len(ids), "Embedding rows")
+    try:
+        for start in range(0, len(ids), BUILD_BATCH):
+            batch = ids[start : start + BUILD_BATCH]
+            vectors = await run(embedder.embed_passages, [texts[i] for i in batch])
+            first = not vector_size
+            if first:
+                vector_size = int(vectors.shape[1])
+            payloads = [_payload(i, texts[i], values, fields) for i in batch]
+            await asyncio.to_thread(
+                _write_batch,
+                spec.id,
+                name,
+                batch,
+                vectors,
+                payloads,
+                vector_size if first else None,
+            )
+            progress(start + len(batch), len(ids), "Embedding rows")
 
-    points = await asyncio.to_thread(qdrant.count, name)
+        points = await asyncio.to_thread(qdrant.count, name)
+    except BaseException:
+        # What this build wrote is no use to anyone. Synchronous on purpose:
+        # it must run when the build is cancelled too.
+        qdrant.drop_build(name)
+        raise
     logger.info(
         "Collection %s: %d points from %s@%s %s/%s (%s)",
         spec.id,
@@ -610,6 +730,8 @@ async def _build(
         "fields": fields,
         "sha": snapshot.sha,
         "model": spec.model,
+        "endpoint": endpoint_host(creds),
+        "built": name,
     }
 
 
@@ -619,10 +741,16 @@ async def build(
     """Embed the collection's split into Qdrant — the ``vector-collection`` job.
 
     A failure or a cancellation is the run's to record: the row keeps saying
-    "building" and :func:`_state` reads the run.
+    "building" and :func:`_state` reads the run. What the failed build wrote
+    is dropped; a collection built before keeps its vectors and its commit.
     """
     spec = await asyncio.to_thread(_load_spec, collection_id)
     built = await _build(creds, spec, progress)
+    # The new vectors take over, then the row says so: until here a search
+    # answered on the previous version, at the previous commit.
+    await asyncio.to_thread(
+        qdrant.publish, qdrant.collection_name(collection_id), built.pop("built")
+    )
     await asyncio.to_thread(_save_build, collection_id, built)
     return built
 

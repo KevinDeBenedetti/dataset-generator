@@ -21,6 +21,7 @@ from server.jobs.registry import JOBS, JobSpec
 from server.models.job_run import JobRun
 from server.services.model_defaults import resolve_model
 from server.services.credentials import Credentials
+from server.services.drafts import GENERATION_JOB_ID
 from server.services.providers import get_provider, parse_ref, validate_ref
 
 logger = logging.getLogger(__name__)
@@ -137,11 +138,19 @@ def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
                 "has_draft": spec.publisher is not None,
                 "configured": not missing,
                 "missing": missing,
-                "options_schema": spec.options.model_json_schema(),
+                "options_schema": _form_schema(spec),
                 "latest_run": latest.get(spec.id),
             }
         )
     return out
+
+
+def _form_schema(spec: JobSpec) -> Dict[str, Any]:
+    """The job's options as its card offers them: without ``publish``, which
+    only a schedule sets on its runs (jobs/registry.py SCHEDULED_PUBLISH)."""
+    schema = spec.options.model_json_schema()
+    schema.get("properties", {}).pop("publish", None)
+    return schema
 
 
 def _check_quotas(db, owner_id: str) -> None:
@@ -160,9 +169,15 @@ def _check_quotas(db, owner_id: str) -> None:
             )
     if config.quota_runs_per_day:
         since = _now() - timedelta(days=1)
+        # What a worker ran: a file or web page draft is a run row too
+        # (services/drafts.py), made in its request, and takes no worker time.
         today = (
             db.query(JobRun)
-            .filter(JobRun.owner_id == owner_id, JobRun.started_at >= since)
+            .filter(
+                JobRun.owner_id == owner_id,
+                JobRun.started_at >= since,
+                JobRun.job_id != GENERATION_JOB_ID,
+            )
             .count()
         )
         if today >= config.quota_runs_per_day:

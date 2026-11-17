@@ -18,6 +18,7 @@ import {
 import {
   useCancelJobRun,
   useCollection,
+  useCollections,
   useDeleteCollection,
   useEvaluateCollection,
   useHubDataset,
@@ -27,9 +28,11 @@ import {
 import { cn } from '@/lib/utils'
 import { BuildProgress, StatusBadge } from './collections-page'
 import {
+  comparisonRows,
   DUPLICATE_SCORE,
   isEndpointModel,
   modelLabel,
+  modelRemoved,
   percent,
   pythonSnippet,
   rowHref,
@@ -170,6 +173,8 @@ function Building({ collection }: { collection: CollectionOut }) {
           {isEndpointModel(collection.model)
             ? 'The rows are sent to your endpoint to be embedded.'
             : 'The first build with a model downloads it too.'}
+          {collection.serving &&
+            ` Search and the test keep answering on the version at ${shortSha(collection.revision)} until this one is complete.`}
         </p>
         <BuildProgress collection={collection} />
       </div>
@@ -194,7 +199,11 @@ function Failed({ collection }: { collection: CollectionOut }) {
       </span>
       <div>
         <div className="card-title">The build didn&apos;t finish</div>
-        <p className="card-desc">{collection.error ?? 'The build failed.'}</p>
+        <p className="card-desc">
+          {collection.error ?? 'The build failed.'}
+          {collection.serving &&
+            ` The previous version, at ${shortSha(collection.revision)}, still answers.`}
+        </p>
       </div>
       <button
         type="button"
@@ -234,6 +243,54 @@ function NewerCommit({ collection }: { collection: CollectionOut }) {
       >
         Rebuild at {shortSha(sha)}
       </button>
+    </div>
+  )
+}
+
+/** The owner's endpoint is no longer the one that embedded the points: a
+ * question would be embedded by another endpoint's model. */
+function MovedEndpoint({ collection }: { collection: CollectionOut }) {
+  const rebuild = useRebuildCollection(collection.id)
+  if (!collection.current_endpoint || collection.status !== 'ready') return null
+  return (
+    <div className="hub-notice coll-warn-box">
+      <Icon name="alert" />
+      <span>
+        Built on <span className="mono">{collection.endpoint}</span>, but your endpoint is now{' '}
+        <span className="mono">{collection.current_endpoint}</span>: a search or a test would embed
+        its questions with another endpoint&apos;s model, and compare vectors that don&apos;t match.
+        Build it again on your endpoint.
+      </span>
+      <button
+        type="button"
+        className="btn btn-outline btn-sm"
+        disabled={rebuild.isPending}
+        onClick={() =>
+          rebuild.mutate(collection.revision, { onError: (error) => toast.error(error.message) })
+        }
+      >
+        Build it again
+      </button>
+    </div>
+  )
+}
+
+/** Built with a local model, which the server no longer runs: nothing can
+ * search, test or rebuild it as it is. */
+function RemovedModel({ collection }: { collection: CollectionOut }) {
+  return (
+    <div className="card coll-state">
+      <div className="coll-state-text">
+        <div className="card-title">This collection has to be made again</div>
+        <p className="card-desc">
+          It was built with <span className="mono">{modelLabel(collection.model)}</span>, a local
+          model this server no longer runs: a question can&apos;t be embedded for its vectors, so it
+          can&apos;t be searched or tested, and building it again would use the same model. Delete
+          it, then create it again from{' '}
+          <Link href={datasetHref(collection.repo_id)}>its dataset</Link> with one of your
+          endpoint&apos;s embedding models.
+        </p>
+      </div>
     </div>
   )
 }
@@ -477,6 +534,80 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
           )}
         </>
       )}
+      <Comparison collection={{ ...collection, evaluation: result }} />
+    </div>
+  )
+}
+
+/** The collections of the same split at the same commit, their latest tests
+ * side by side: which model and which columns find the rows best. */
+function Comparison({ collection }: { collection: CollectionOut }) {
+  const all = useCollections()
+  const rows = comparisonRows(collection, all.data?.collections ?? [])
+  if (rows.length === 0) return null
+  return (
+    <div className="card coll-compare">
+      <div className="card-head">
+        <div>
+          <div className="card-title">Collections of this split</div>
+          <p className="card-desc">
+            Every collection of this split at this commit is tested on the same sampled rows, so
+            their figures compare: which embedding model, on which columns, finds the rows best.
+          </p>
+        </div>
+      </div>
+      <div className="coll-table-wrap">
+        <table className="table stack-table">
+          <thead>
+            <tr>
+              <th>Collection</th>
+              <th>Model</th>
+              <th>Embeds</th>
+              <th className="coll-num">Found first</th>
+              <th className="coll-num">In the top k</th>
+              <th className="coll-num">MRR</th>
+              <th className="coll-num">Rows</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ collection: other, current, caveat }) => {
+              const test = other.evaluation
+              return (
+                <tr key={other.id} className={cn(current && 'coll-compare-current')}>
+                  <td data-label="Collection">
+                    {current ? (
+                      <span>
+                        {other.name} <span className="badge">This one</span>
+                      </span>
+                    ) : (
+                      <Link href={`/collections/${other.id}`}>{other.name}</Link>
+                    )}
+                    {caveat && <div className="hint coll-cell-text">{caveat}</div>}
+                  </td>
+                  <td className="mono" data-label="Model">
+                    {modelLabel(other.model)}
+                  </td>
+                  <td className="mono" data-label="Embeds">
+                    {other.text_columns.join(', ')}
+                  </td>
+                  <td className="coll-num mono" data-label="Found first">
+                    {test ? percent(test.hit_at_1) : '—'}
+                  </td>
+                  <td className="coll-num mono" data-label="In the top k">
+                    {test ? percent(test.hit_at_k) : '—'}
+                  </td>
+                  <td className="coll-num mono" data-label="MRR">
+                    {test ? test.mrr.toFixed(2) : '—'}
+                  </td>
+                  <td className="coll-num mono" data-label="Rows">
+                    {test ? formatCount(test.queries) : '—'}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -638,9 +769,11 @@ export function CollectionPage({ id }: { id: string }) {
       <Header collection={c} />
       {c.status === 'building' && <Building collection={c} />}
       {c.status === 'failed' && <Failed collection={c} />}
-      <NewerCommit collection={c} />
+      {!modelRemoved(c) && <NewerCommit collection={c} />}
+      <MovedEndpoint collection={c} />
+      {modelRemoved(c) && c.status !== 'building' && <RemovedModel collection={c} />}
 
-      {c.status === 'ready' && (
+      {(c.status === 'ready' || c.serving) && !modelRemoved(c) && (
         <>
           <nav className="tabs hub-tabs" aria-label="Collection sections">
             {TABS.map((t) => (

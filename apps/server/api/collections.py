@@ -149,10 +149,11 @@ async def post_collection(
 def get_collection(
     collection_id: str,
     user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
     db: Session = Depends(get_db),
 ):
     return _call(
-        lambda: collections.get_collection(db, user.id, collection_id),
+        lambda: collections.get_collection(db, user.id, collection_id, creds),
         "Reading the collection",
     )
 

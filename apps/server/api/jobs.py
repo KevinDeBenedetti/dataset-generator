@@ -1,11 +1,16 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
 from server.api.errors import internal_error
+from server.core.database import get_db
 from server.jobs.registry import JOB_ERRORS, JOBS
 from server.schemas.jobs import (
+    JobScheduleIn,
+    JobScheduleOut,
     DraftChecks,
     DraftsOut,
     JobRunOut,
@@ -16,7 +21,9 @@ from server.schemas.jobs import (
 from server.models.user import User
 from server.api.deps import get_credentials
 from server.services.auth import get_current_user
+from server.services import schedules
 from server.services.credentials import Credentials
+from server.services.providers import validate_ref
 from server.services.jobs import (
     QuotaExceededError,
     RunConflictError,
@@ -77,6 +84,106 @@ async def post_job_run(
     # An unusable model reference. After ValidationError, which subclasses it.
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# --- a whole-account job's schedule ------------------------------------------------
+
+
+def _scheduled_job(job_id: str) -> None:
+    """Only the jobs of the Jobs page: a recipe and a resume have their own
+    schedule routes (api/recipes.py, api/resumes.py)."""
+    spec = JOBS.get(job_id)
+    if spec is None or not spec.listed:
+        raise HTTPException(status_code=404, detail=f"Unknown job '{job_id}'")
+
+
+def _job_schedule(saved: dict) -> dict:
+    options = dict(saved["options"])
+    options.pop("publish", None)  # the schedule's own flag, below
+    return {
+        "job": saved["job"],
+        "options": options,
+        "model_ref": saved["model_ref"],
+        "every": saved["every"],
+        "at_hour": saved["at_hour"],
+        "at_minute": saved["at_minute"],
+        "publish": saved["publish"],
+        "next_run_at": saved["next_run_at"],
+        "latest_run": saved["last_run"],
+        "updated_at": saved["updated_at"],
+    }
+
+
+def _no_schedule(job_id: str) -> HTTPException:
+    return HTTPException(status_code=404, detail=f"'{job_id}' has no schedule yet")
+
+
+@router.get("/{job_id}/schedule", response_model=JobScheduleOut)
+def get_job_schedule(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> JobScheduleOut:
+    """The job's schedule: the options and model its runs copy, and the next
+    and latest scheduled run. 404 until one is saved."""
+    _scheduled_job(job_id)
+    try:
+        return JobScheduleOut(
+            **_job_schedule(schedules.get_schedule(db, user.id, job_id, ""))
+        )
+    except schedules.ScheduleNotFoundError:
+        raise _no_schedule(job_id) from None
+
+
+@router.put("/{job_id}/schedule", response_model=JobScheduleOut)
+async def put_job_schedule(
+    job_id: str,
+    body: JobScheduleIn,
+    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_credentials),
+    db: Session = Depends(get_db),
+) -> JobScheduleOut:
+    """Save it. Each scheduled run copies these options and builds on the
+    published version, so a day nothing changed costs no model call. A preset
+    set or moved runs first at its next time."""
+    _scheduled_job(job_id)
+    if body.model_ref:
+        try:
+            validate_ref(body.model_ref, creds)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        saved = await run_in_threadpool(
+            schedules.upsert_schedule,
+            db,
+            user.id,
+            job_id,
+            "",
+            options=body.options,
+            model_ref=body.model_ref,
+            every=body.every,
+            at_hour=body.at_hour,
+            at_minute=body.at_minute,
+            publish=body.publish,
+        )
+    except schedules.ScheduleInputError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return JobScheduleOut(**_job_schedule(saved))
+
+
+@router.delete("/{job_id}/schedule", status_code=204)
+def delete_job_schedule(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """The job stops running by itself; its dataset stays."""
+    _scheduled_job(job_id)
+    try:
+        schedules.delete_schedule(db, user.id, job_id, "")
+    except schedules.ScheduleNotFoundError:
+        raise _no_schedule(job_id) from None
+    return Response(status_code=204)
 
 
 @router.get("/drafts", response_model=DraftsOut)

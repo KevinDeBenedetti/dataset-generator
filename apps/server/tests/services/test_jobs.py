@@ -22,8 +22,10 @@ from server.jobs.registry import (
     JobOutcome,
     JobResult,
     KnowledgeCorpusOptions,
+    RecipeRunOptions,
 )
 from server.core.config import config
+from server.jobs import corpus as corpus_module
 from server.services import jobs as jobs_service
 from server.services import queue
 from server.tests.creds import FULL, NONE, make_creds
@@ -39,6 +41,8 @@ from server.services.jobs import (
 )
 
 PREFIX = "server.jobs.registry"
+# The real call, kept before any test replaces it with one on a fake site.
+_NOTIFY_REINDEX = corpus_module.notify_reindex
 OWNER = "owner-1"
 OTHER = "owner-2"  # a second user, who must never see OWNER's runs
 JOB_ENV = ("GITHUB_USERNAME", "HF_TOKEN", "HF_QA_DATASET_REPO", "HF_DATASET_REPO")
@@ -182,6 +186,130 @@ async def test_github_personal_publishes_the_reviewed_selection():
     assert result.dry_run is False and dict(result.metrics)["New"] == 2
 
 
+# --- github-recipe ---------------------------------------------------------------
+
+SAVED_RECIPE = {
+    "name": "Portfolio",
+    "target_repo": "kevin/github-qa",
+    "include_profile": True,
+    "sources": [{"repo": "alpha", "readme": True, "docs": None}],
+    "model_ref": None,
+}
+
+
+async def _run_recipe(options, *, draft=None, saved=SAVED_RECIPE, published=None):
+    """The recipe job's runner, with the generation and the Hub replaced."""
+    generate = AsyncMock(return_value=draft or _draft())
+    with (
+        patch(f"{PREFIX}.qa_dataset_job.generate_from_recipe", new=generate),
+        patch(f"{PREFIX}.load_recipe", return_value=saved) as load,
+        patch(
+            f"{PREFIX}.qa_dataset_job.publish",
+            new=AsyncMock(return_value={"url": "https://hf.test/ns/qa"}),
+        ) as publish,
+    ):
+        if saved is None:
+            from server.services.recipes import RecipeNotFoundError
+
+            load.side_effect = RecipeNotFoundError("gone")
+        outcome = await JOBS["github-recipe"].runner(
+            FULL, RecipeRunOptions(**options), None, noop
+        )
+    return outcome, generate, load, publish
+
+
+async def test_a_started_recipe_run_uses_the_recipe_it_was_given():
+    outcome, generate, load, publish = await _run_recipe(
+        {"recipe_id": "r1", "recipe": {**SAVED_RECIPE, "name": "As started"}}
+    )
+    assert generate.call_args.args[1]["name"] == "As started"
+    load.assert_not_called()
+    publish.assert_not_called()
+    assert outcome.result.dry_run is True and outcome.draft is not None
+
+
+async def test_a_scheduled_recipe_run_reads_the_recipe_as_it_is_then():
+    outcome, generate, load, _ = await _run_recipe({"recipe_id": "r1"})
+    load.assert_called_once_with(FULL.user_id, "r1")
+    assert generate.call_args.args[1]["sources"] == [
+        {"repo": "alpha", "readme": True, "docs": None}
+    ]
+    assert outcome.draft is not None  # publish is off: it stops at a draft
+
+
+async def test_a_scheduled_run_publishes_what_passes_and_keeps_the_rest():
+    outcome, _, _, publish = await _run_recipe({"recipe_id": "r1", "publish": True})
+    publish.assert_awaited_once()
+    assert outcome.result.dry_run is False
+    assert outcome.result.url == "https://hf.test/ns/qa"
+    # The draft holds a pair held out for review: it stays to be reviewed.
+    assert outcome.draft is not None
+
+    clean = _draft()
+    clean.dataset.review = []
+    outcome, _, _, _ = await _run_recipe(
+        {"recipe_id": "r1", "publish": True}, draft=clean
+    )
+    assert outcome.draft is None
+
+
+async def test_a_scheduled_run_that_changed_nothing_publishes_nothing():
+    same = _draft()
+    same.same_as_published = True
+    outcome, _, _, publish = await _run_recipe(
+        {"recipe_id": "r1", "publish": True}, draft=same
+    )
+    publish.assert_not_called()
+    assert outcome.draft is None and outcome.result.dry_run is True
+    assert outcome.result.metrics[0] == ("Unchanged", "nothing changed on GitHub")
+
+
+async def test_a_scheduled_run_whose_recipe_is_gone_says_so():
+    with pytest.raises(qa_build.JobError, match="no longer exists"):
+        await _run_recipe({"recipe_id": "r1", "publish": True}, saved=None)
+
+
+async def test_a_scheduled_whole_account_run_publishes_like_a_recipes():
+    with (
+        patch(
+            f"{PREFIX}.qa_dataset_job.generate", new=AsyncMock(return_value=_draft())
+        ),
+        patch(
+            f"{PREFIX}.qa_dataset_job.publish",
+            new=AsyncMock(return_value={"url": "https://hf.test/ns/qa"}),
+        ) as publish,
+    ):
+        by_hand = await JOBS["github-personal"].runner(
+            FULL, GitHubPersonalOptions(), None, noop
+        )
+        publish.assert_not_called()
+        scheduled = await JOBS["github-personal"].runner(
+            FULL, GitHubPersonalOptions(publish=True), None, noop
+        )
+    assert by_hand.result.dry_run is True and by_hand.draft is not None
+    publish.assert_awaited_once()
+    assert scheduled.result.url == "https://hf.test/ns/qa"
+    assert scheduled.draft is not None  # a pair was held out for review
+
+
+async def test_a_scheduled_corpus_run_publishes_whatever_dry_run_says():
+    with (
+        patch(
+            f"{PREFIX}.corpus_job.export_corpus",
+            new=AsyncMock(return_value={"files": []}),
+        ),
+        patch(
+            f"{PREFIX}.corpus_job.push_corpus",
+            return_value="https://huggingface.co/datasets/ns/corpus",
+        ) as push,
+    ):
+        outcome = await JOBS["knowledge-corpus"].runner(
+            FULL, KnowledgeCorpusOptions(dry_run=True, publish=True), None, noop
+        )
+    push.assert_called_once()
+    assert outcome.result.dry_run is False
+
+
 # --- knowledge-corpus -----------------------------------------------------------
 
 
@@ -228,6 +356,102 @@ async def test_corpus_pushes_when_not_dry_run():
         )
     push.assert_called_once()
     assert outcome.result.url == "https://huggingface.co/datasets/ns/corpus"
+
+
+async def _publish_corpus(monkeypatch, *, admin, answers):
+    """A corpus run that publishes, with the reindex site answering ``answers``."""
+    import httpx
+
+    from server.jobs import corpus as corpus_job
+
+    calls = []
+
+    def site(request: httpx.Request) -> httpx.Response:
+        calls.append(
+            (request.method, str(request.url), request.headers["authorization"])
+        )
+        if isinstance(answers, Exception):
+            raise answers
+        return httpx.Response(answers)
+
+    monkeypatch.setattr(
+        corpus_job,
+        "notify_reindex",
+        lambda: _NOTIFY_REINDEX(httpx.MockTransport(site)),
+    )
+    monkeypatch.setattr(f"{PREFIX}.user_is_admin", lambda user_id: admin)
+    with (
+        patch(
+            f"{PREFIX}.corpus_job.export_corpus",
+            new=AsyncMock(return_value={"files": []}),
+        ),
+        patch(
+            f"{PREFIX}.corpus_job.push_corpus",
+            return_value="https://huggingface.co/datasets/ns/corpus",
+        ),
+    ):
+        outcome = await JOBS["knowledge-corpus"].runner(
+            FULL, KnowledgeCorpusOptions(dry_run=False), None, noop
+        )
+    return outcome.result, calls
+
+
+@pytest.fixture
+def reindex_site(monkeypatch):
+    monkeypatch.setattr(config, "corpus_reindex_url", "https://site.test/api/sync")
+    monkeypatch.setattr(config, "corpus_reindex_secret", "s3cret")
+
+
+async def test_an_admins_corpus_publish_asks_the_site_to_reindex(
+    monkeypatch, reindex_site
+):
+    result, calls = await _publish_corpus(monkeypatch, admin=True, answers=202)
+    assert calls == [("POST", "https://site.test/api/sync", "Bearer s3cret")]
+    assert ("Reindex", "asked") in result.metrics and result.errors == []
+
+
+async def test_a_site_that_fails_is_reported_and_the_corpus_stays_published(
+    monkeypatch, reindex_site
+):
+    import httpx
+
+    result, _ = await _publish_corpus(monkeypatch, admin=True, answers=500)
+    assert result.url == "https://huggingface.co/datasets/ns/corpus"
+    assert ("Reindex", "failed") in result.metrics
+    assert result.errors == ["The reindex call answered 500"]
+
+    result, _ = await _publish_corpus(
+        monkeypatch, admin=True, answers=httpx.ConnectError("refused")
+    )
+    assert result.errors == ["The reindex call failed: ConnectError: refused"]
+    # The secret never reaches the report.
+    assert "s3cret" not in str(result.model_dump())
+
+
+async def test_the_site_is_the_operators_only_an_admins_run_calls_it(
+    monkeypatch, reindex_site
+):
+    result, calls = await _publish_corpus(monkeypatch, admin=False, answers=202)
+    assert calls == [] and result.metrics == [] and result.errors == []
+
+
+async def test_without_the_two_settings_nothing_is_called(monkeypatch):
+    monkeypatch.setattr(config, "corpus_reindex_url", "https://site.test/api/sync")
+    monkeypatch.setattr(config, "corpus_reindex_secret", "")
+    result, calls = await _publish_corpus(monkeypatch, admin=True, answers=202)
+    assert calls == [] and result.metrics == []
+
+
+async def test_a_dry_run_never_asks_for_a_reindex(monkeypatch, reindex_site):
+    called = []
+    monkeypatch.setattr(f"{PREFIX}.user_is_admin", lambda user_id: called.append(1))
+    with patch(
+        f"{PREFIX}.corpus_job.export_corpus", new=AsyncMock(return_value={"files": []})
+    ):
+        outcome = await JOBS["knowledge-corpus"].runner(
+            FULL, KnowledgeCorpusOptions(), None, noop
+        )
+    assert called == [] and outcome.result.metrics == []
 
 
 async def test_corpus_requires_hf_repo_to_push():

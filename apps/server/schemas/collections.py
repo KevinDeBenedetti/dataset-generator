@@ -67,6 +67,14 @@ class CollectionOut(BaseModel):
     query_column: Optional[str] = None
     model: str
     status: Literal["building", "ready", "failed"]
+    serving: bool = Field(
+        False,
+        description="Search and test answer — on the previous version while "
+        "a rebuild runs, or after one failed",
+    )
+    building_revision: Optional[str] = Field(
+        None, description="Commit sha a rebuild in flight is embedding"
+    )
     error: Optional[str] = None
     progress: Optional[CollectionProgress] = None
     run_id: Optional[str] = Field(None, description="The latest build's job run")
@@ -83,6 +91,14 @@ class CollectionOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     built_at: Optional[datetime] = None
+    endpoint: Optional[str] = Field(
+        None, description="Host of the endpoint that embedded the points"
+    )
+    current_endpoint: Optional[str] = Field(
+        None,
+        description="Host of your endpoint now, when it is not the one the "
+        "collection was built on: queries would be embedded elsewhere",
+    )
 
 
 class CollectionsOut(BaseModel):

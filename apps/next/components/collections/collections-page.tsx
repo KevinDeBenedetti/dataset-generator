@@ -8,9 +8,20 @@ import { Icon } from '@/components/app/icon'
 import { formatCount, shortSha, timeAgo } from '@/components/hub/format'
 import { useCollections } from '@/hooks'
 import { CreateCollectionForm } from './create-form'
-import { modelLabel, percent } from './format'
+import { modelLabel, modelRemoved, percent } from './format'
 
 export function StatusBadge({ collection }: { collection: CollectionOut }) {
+  if (collection.status !== 'building' && modelRemoved(collection)) {
+    return (
+      <span
+        className="badge badge-warning"
+        title="Built with a local model the server no longer runs"
+      >
+        <Icon name="alert" className="ic-sm" />
+        Model removed
+      </span>
+    )
+  }
   if (collection.status === 'ready') {
     return (
       <span className="badge badge-success">

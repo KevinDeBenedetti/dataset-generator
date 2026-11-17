@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from server.services.llm import LLMService, PromptManager
+from server.services.llm import LLMService, PromptManager, PageTranscriptionError
 from server.tests.creds import FULL
 from server.services.providers import CompletionResult, ProviderError
 
@@ -70,14 +70,14 @@ async def test_extract_text_from_image_sends_the_image():
     assert req.user == PromptManager.EXTRACTION_PROMPT
 
 
-async def test_extract_text_from_image_failure_returns_empty():
+async def test_extract_text_from_image_failure_is_an_error():
     with patch(
         "server.services.llm.complete",
         new=AsyncMock(side_effect=ProviderError("down")),
     ):
-        assert (
-            await LLMService(FULL).extract_text_from_image(b"x", model="openai:m") == ""
-        )
+        # Not an empty page: the caller must tell the two apart.
+        with pytest.raises(PageTranscriptionError, match="down"):
+            await LLMService(FULL).extract_text_from_image(b"x", model="openai:m")
 
 
 async def test_extract_text_from_image_requires_a_model():

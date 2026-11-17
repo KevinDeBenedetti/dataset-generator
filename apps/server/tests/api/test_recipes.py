@@ -181,3 +181,75 @@ def test_the_recipe_job_stays_off_the_jobs_page(client):
     jobs = [j["id"] for j in client.get("/jobs").json()["jobs"]]
     assert "github-recipe" not in jobs and "github-personal" in jobs
     assert client.post("/jobs/github-recipe/run", json={}).status_code == 404
+
+
+# --- a recipe's schedule ----------------------------------------------------------
+
+
+def test_a_recipe_can_be_scheduled_rescheduled_and_unscheduled(client):
+    recipe = client.post("/recipes", json=RECIPE).json()
+    url = f"/recipes/{recipe['id']}/schedule"
+    assert client.get(url).status_code == 404  # none yet
+
+    saved = client.put(url, json={"every": "day", "at_hour": 4, "at_minute": 30})
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert (body["recipe_id"], body["every"], body["publish"]) == (
+        recipe["id"],
+        "day",
+        True,
+    )
+    assert body["next_run_at"] is not None and body["latest_run"] is None
+    assert client.get(url).json()["at_hour"] == 4
+
+    off = client.put(url, json={"every": None, "publish": False}).json()
+    assert off["next_run_at"] is None and off["publish"] is False
+
+    assert client.delete(url).status_code == 204
+    assert client.get(url).status_code == 404
+    assert client.delete(url).status_code == 404
+
+
+def test_only_an_existing_recipe_of_yours_can_be_scheduled(client, client_for, test_db):
+    assert (
+        client.put("/recipes/nope/schedule", json={"every": "day"}).status_code == 404
+    )
+    recipe = client.post("/recipes", json=RECIPE).json()
+    assert (
+        client.put(
+            f"/recipes/{recipe['id']}/schedule", json={"every": "hourly"}
+        ).status_code
+        == 422
+    )
+    bob = client_for(create_user(test_db, email="bob@test.local", password="pw12345"))
+    url = f"/recipes/{recipe['id']}/schedule"
+    assert bob.put(url, json={"every": "day"}).status_code == 404
+    assert bob.get(url).status_code == 404
+
+
+def test_a_schedule_follows_its_recipe(client, alice, test_db):
+    """The schedule holds no copy of the recipe: only its id, and the model
+    the recipe names, which follows the recipe when it is edited. Deleting the
+    recipe deletes the schedule."""
+    from server.models.job_schedule import JobSchedule
+
+    recipe = client.post("/recipes", json=RECIPE).json()
+    client.put(f"/recipes/{recipe['id']}/schedule", json={"every": "week"})
+
+    def row():
+        test_db.expire_all()
+        return test_db.query(JobSchedule).filter_by(owner_id=alice.id).one_or_none()
+
+    assert row().options == {
+        "recipe_id": recipe["id"],
+        "recipe": None,
+        "full_refresh": False,
+        "publish": False,
+    }
+    assert row().model_ref is None
+
+    client.put(f"/recipes/{recipe['id']}", json={**RECIPE, "model_ref": "openai:m"})
+    assert row().model_ref == "openai:m"
+
+    assert client.delete(f"/recipes/{recipe['id']}").status_code == 204
+    assert row() is None

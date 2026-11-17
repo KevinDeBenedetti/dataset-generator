@@ -179,3 +179,58 @@ def test_a_used_up_quota_is_a_429(client: TestClient):
         response = client.post("/jobs/github-personal/run", json={"options": {}})
     assert response.status_code == 429
     assert response.json()["detail"] == "Daily limit reached"
+
+
+# --- a whole-account job's schedule ----------------------------------------------
+
+
+def test_a_job_can_be_scheduled_rescheduled_and_unscheduled(client: TestClient):
+    url = "/jobs/github-personal/schedule"
+    assert client.get(url).status_code == 404  # none yet
+
+    saved = client.put(
+        url, json={"options": {"max_repos": 2}, "every": "week", "at_hour": 6}
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert (body["job"], body["every"], body["at_hour"], body["publish"]) == (
+        "github-personal",
+        "week",
+        6,
+        True,
+    )
+    # The schedule's own flag is not one of the job's options.
+    assert body["options"] == {"max_repos": 2, "full_refresh": False}
+    assert body["next_run_at"] is not None
+    assert client.get(url).json()["options"]["max_repos"] == 2
+
+    off = client.put(url, json={"every": None}).json()
+    assert off["next_run_at"] is None
+
+    assert client.delete(url).status_code == 204
+    assert client.get(url).status_code == 404
+    assert client.delete(url).status_code == 404
+
+
+def test_only_the_jobs_of_the_jobs_page_take_this_schedule(client: TestClient):
+    # A recipe and a resume are scheduled from their own pages.
+    for job in ("github-recipe", "resume-qa", "generation-draft", "nope"):
+        assert (
+            client.put(f"/jobs/{job}/schedule", json={"every": "day"}).status_code
+            == 404
+        )
+        assert client.get(f"/jobs/{job}/schedule").status_code == 404
+
+
+def test_a_schedule_checks_its_options_and_its_preset(client: TestClient):
+    url = "/jobs/knowledge-corpus/schedule"
+    assert client.put(url, json={"options": {"sources": ["nope"]}}).status_code == 422
+    assert client.put(url, json={"every": "hourly"}).status_code == 422
+    saved = client.put(url, json={"options": {"sources": ["profile"]}, "every": "day"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["options"]["sources"] == ["profile"]
+
+
+def test_the_job_cards_do_not_offer_the_scheduled_publish_option(client: TestClient):
+    for job in client.get("/jobs").json()["jobs"]:
+        assert "publish" not in job["options_schema"]["properties"]

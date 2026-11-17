@@ -77,7 +77,10 @@ form with that dataset filled in.
 Every step — cleaning, Q&A, page transcription — runs on your LLM, set on the
 **Models** page, and a generation can pick another one. A model is an
 `openai:<model>` reference: a model of the OpenAI-compatible endpoint, called
-with the key saved in **Settings**.
+with the key saved in **Settings**. It must read images: when it cannot
+transcribe any page of an upload, the generation fails with an error naming
+the model and what its call answered; a page that fails alone is skipped and
+counted in the **Transcribe pages** step.
 
 Or via the API (replace the port with your `SERVER_PORT` if you changed it):
 

@@ -40,7 +40,8 @@ from server.schemas.recipes import HF_REPO_PATTERN, RecipeIn
 from server.services import collections as vector_collections
 from server.services.collections import COLLECTION_JOB_ID
 from server.services.drafts import GENERATION_JOB_ID
-from server.services.recipes import RECIPE_JOB_ID
+from server.services.recipes import RECIPE_JOB_ID, RecipeNotFoundError, load_recipe
+from server.services.user_secrets import user_is_admin
 
 # Both jobs raise their own JobError for anything the caller can act on.
 JOB_ERRORS: Tuple[Type[Exception], ...] = (corpus_job.JobError, qa_build.JobError)
@@ -70,6 +71,15 @@ class JobOutcome:
 # --- github-personal ----------------------------------------------------------
 
 
+# The option a schedule sets on its runs (services/schedules.py): the Jobs page
+# never offers it, a run started by hand stops at a draft.
+SCHEDULED_PUBLISH = Field(
+    False,
+    description="Publish what passes the checks at once and keep the doubtful "
+    "pairs as a draft (a scheduled run); off: stop at a draft",
+)
+
+
 class GitHubPersonalOptions(BaseModel):
     max_repos: Optional[int] = Field(
         None,
@@ -80,6 +90,7 @@ class GitHubPersonalOptions(BaseModel):
     full_refresh: bool = Field(
         False, description="Ignore the published version and regenerate every source"
     )
+    publish: bool = SCHEDULED_PUBLISH
 
 
 def _qa_metrics(stats: Dict[str, Any]) -> List[Tuple[str, Any]]:
@@ -140,13 +151,38 @@ async def _run_github_personal(
         model_ref=model_ref,
         on_progress=progress,
     )
+    return await _github_outcome(creds, draft, options.publish)
+
+
+async def _github_outcome(
+    creds: Credentials, draft: qa_build.Draft, publish: bool
+) -> JobOutcome:
+    """What a GitHub Q&A run ends with. Started by hand, a draft to review. A
+    scheduled one (``publish``) publishes what passed the checks and keeps the
+    pairs held out for review as a draft — or publishes nothing, and leaves no
+    draft to pile up day after day, when nothing moved since the published
+    version."""
+    metrics = _qa_metrics(draft.stats())
+    errors = draft.dataset.errors
+    if not publish:
+        return JobOutcome(
+            result=JobResult(dry_run=True, metrics=metrics, errors=errors),
+            draft=_draft_to_dict(draft),
+        )
+    if draft.same_as_published:
+        return JobOutcome(
+            result=JobResult(
+                dry_run=True,
+                metrics=[("Unchanged", "nothing changed on GitHub"), *metrics],
+                errors=errors,
+            )
+        )
+    result = await qa_dataset_job.publish(creds, draft)
     return JobOutcome(
         result=JobResult(
-            dry_run=True,
-            metrics=_qa_metrics(draft.stats()),
-            errors=draft.dataset.errors,
+            dry_run=False, url=result["url"], metrics=metrics, errors=errors
         ),
-        draft=_draft_to_dict(draft),
+        draft=_draft_to_dict(draft) if draft.dataset.review else None,
     )
 
 
@@ -184,13 +220,18 @@ async def _publish_github_personal(
 
 
 class RecipeRunOptions(BaseModel):
-    """Filled by POST /recipes/{id}/run: the recipe as it was when run."""
+    """A recipe's run. POST /recipes/{id}/run fills ``recipe``: the recipe as
+    it was when started. A scheduled run (services/schedules.py) leaves it out:
+    the recipe is read when the run starts, as it is then."""
 
     recipe_id: str = Field(..., max_length=64)
-    recipe: RecipeIn
+    recipe: Optional[RecipeIn] = Field(
+        None, description="The recipe to run; null = as saved when the run starts"
+    )
     full_refresh: bool = Field(
         False, description="Ignore the published version and regenerate every source"
     )
+    publish: bool = SCHEDULED_PUBLISH
 
 
 async def _run_github_recipe(
@@ -201,21 +242,25 @@ async def _run_github_recipe(
 ) -> JobOutcome:
     if not isinstance(options, RecipeRunOptions):
         raise TypeError(f"Expected RecipeRunOptions, got {type(options).__name__}")
+    recipe = options.recipe
+    if recipe is None:
+        try:
+            saved = await run_in_threadpool(
+                load_recipe, creds.user_id, options.recipe_id
+            )
+        except RecipeNotFoundError as exc:
+            raise qa_build.JobError(
+                "This run's recipe no longer exists: delete its schedule"
+            ) from exc
+        recipe = RecipeIn.model_validate(saved)
     draft = await qa_dataset_job.generate_from_recipe(
         creds,
-        options.recipe.model_dump(),
+        recipe.model_dump(),
         full_refresh=options.full_refresh,
         model_ref=model_ref,
         on_progress=progress,
     )
-    return JobOutcome(
-        result=JobResult(
-            dry_run=True,
-            metrics=_qa_metrics(draft.stats()),
-            errors=draft.dataset.errors,
-        ),
-        draft=_draft_to_dict(draft),
-    )
+    return await _github_outcome(creds, draft, options.publish)
 
 
 # --- resume-qa -----------------------------------------------------------------
@@ -412,6 +457,9 @@ class KnowledgeCorpusOptions(BaseModel):
         description="Splits to build",
     )
     dry_run: bool = Field(True, description="Build the corpus but don't publish it")
+    publish: bool = Field(
+        False, description="Publish whatever Dry Run says (a scheduled run)"
+    )
 
 
 async def _run_knowledge_corpus(
@@ -440,7 +488,8 @@ async def _run_knowledge_corpus(
             hf_repo or "",
         )
         url = None
-        if not options.dry_run:
+        dry_run = options.dry_run and not options.publish
+        if not dry_run:
             if not hf_repo:
                 raise corpus_job.JobError(
                     "The corpus dataset repo is required in Settings"
@@ -448,12 +497,18 @@ async def _run_knowledge_corpus(
             url = await run_in_threadpool(
                 corpus_job.push_corpus, creds, directory, hf_repo
             )
+    metrics = [(f["source"], f["records"]) for f in manifest.get("files", [])]
+    errors: List[str] = []
+    # The operator's site reads the corpus again — for an admin's run only:
+    # the URL and its secret are the server's (core/config.py).
+    if url and corpus_job.reindex_configured():
+        if await run_in_threadpool(user_is_admin, creds.user_id or ""):
+            problem = await corpus_job.notify_reindex()
+            metrics.append(("Reindex", "failed" if problem else "asked"))
+            if problem:
+                errors.append(problem)
     return JobOutcome(
-        JobResult(
-            dry_run=options.dry_run,
-            url=url,
-            metrics=[(f["source"], f["records"]) for f in manifest.get("files", [])],
-        )
+        JobResult(dry_run=dry_run, url=url, metrics=metrics, errors=errors)
     )
 
 

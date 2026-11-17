@@ -30,8 +30,11 @@ split, and whose payload holds the embedded `text` and the row's text
 `fields`.
 
 A collection keeps the commit it was built from. Once the dataset has a newer
-commit, its page says so and **Rebuild** embeds the new version, replacing the
-vectors.
+commit, its page says so and **Rebuild** embeds the new version. The rebuild
+fills a Qdrant collection of its own, and the collection's name is switched to
+it once it is complete: search and the retrieval test keep answering on the
+previous version meanwhile, and a rebuild that fails or is cancelled leaves
+that version in place. Outside the app, the name is an alias in Qdrant.
 
 ## Search it
 
@@ -57,7 +60,11 @@ pair twice in the dataset.
 ::: tip Compare models and columns
 The sample depends only on the split and its commit. Build two collections of
 the same split, with another model or other columns, and they are tested on
-the same rows.
+the same rows. Once the split has more than one collection, the test tab lists
+them side by side under **Collections of this split**, best first: model,
+embedded columns, found first, in the top k, MRR and rows tested. A test run
+with another question column, sample size or top k is flagged, since its
+figures don't compare.
 :::
 
 ::: warning Embed the answers, ask with the questions
@@ -76,12 +83,19 @@ same endpoint and model id as the build.
 A collection built with `openai:embed-default` is searched with whatever your
 endpoint serves under `embed-default` at the time. If the alias moves to
 another model, or you switch to another endpoint, rebuild the collection.
+A build records the host of the endpoint that embedded it: when yours is no
+longer that one, the collection's page says so and offers to build it again.
+A model changed behind the same alias, on the same host, cannot be told.
 :::
 
 ## Limits
 
 - Qdrant must be configured: see [Configuration](./configuration.md). Without
   it the page says so and offers nothing to build.
+- Deleting a collection, or an account, drops its vectors from Qdrant. If
+  Qdrant is down at that moment, the worker drops them within the hour: it
+  removes this deployment's collections (prefix, then `c_` and an id) that no
+  row names any more.
 - A collection built with one of the local models the server used to run
   (multilingual MiniLM, BGE, MiniLM L6) can no longer be searched or rebuilt:
   delete it and build it again with an endpoint model.

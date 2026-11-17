@@ -1235,6 +1235,10 @@ class Draft:
     # The commit of the published version this draft was built on ("": the
     # repo did not exist). None: not recorded — a full refresh, an older draft.
     base_commit: Optional[str] = None
+    # The run changed nothing: the same pairs with the same answers as the
+    # published version, and none held out. Known right after a generation
+    # only (it is not stored with the draft).
+    same_as_published: bool = False
 
     def stats(self) -> Dict[str, Any]:
         return {
@@ -1330,6 +1334,13 @@ async def generate_draft(
     for err in dataset.errors:
         logger.warning("non-fatal: %s", err)
     dataset.removed = removed_pairs(previous, dataset)
+    same = (
+        not full_refresh
+        and previous.commit is not None
+        and not dataset.review
+        and {(p.id, p.answer) for p in previous.pairs}
+        == {(p.id, p.answer) for p in dataset.pairs}
+    )
     return Draft(
         dataset,
         whose,
@@ -1337,4 +1348,5 @@ async def generate_draft(
         full_refresh,
         model_ref,
         base_of(previous, full_refresh),
+        same_as_published=same,
     )

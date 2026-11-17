@@ -96,6 +96,8 @@ import type {
   RecipeIn,
   RecipeOut,
   RecipeRunRequest,
+  RecipeScheduleIn,
+  RecipeScheduleOut,
   RecipesOut,
   HubCommits,
   HubCompare,
@@ -117,6 +119,8 @@ import type {
   ValidationError,
   JobInfo,
   JobRunOut,
+  JobScheduleIn,
+  JobScheduleOut,
   ModelsResponse,
   ModelTestResponse,
   ResumeDatasetIn,
@@ -840,6 +844,32 @@ export function deleteRecipe(id: string): Promise<void> {
   )
 }
 
+const recipeSchedulePath = (id: string) => `/recipes/${encodeURIComponent(id)}/schedule`
+
+/** The recipe's schedule, or null when it has none (404). */
+export async function getRecipeSchedule(id: string): Promise<RecipeScheduleOut | null> {
+  try {
+    return await hubGet<RecipeScheduleOut>(
+      recipeSchedulePath(id),
+      "Failed to read the recipe's schedule",
+    )
+  } catch (error) {
+    if (errorStatus(error) === 404) return null
+    throw error
+  }
+}
+
+export function saveRecipeSchedule(
+  id: string,
+  schedule: RecipeScheduleIn,
+): Promise<RecipeScheduleOut> {
+  return apiSend('PUT', recipeSchedulePath(id), schedule, 'Failed to save the schedule')
+}
+
+export function deleteRecipeSchedule(id: string): Promise<void> {
+  return apiSend('DELETE', recipeSchedulePath(id), undefined, 'Failed to remove the schedule')
+}
+
 export function runRecipe(id: string, request: RecipeRunRequest = {}): Promise<JobRunOut> {
   return apiSend(
     'POST',
@@ -1019,6 +1049,26 @@ export async function getJobs(): Promise<JobInfo[]> {
 }
 
 // Starts a run in the background (202) — poll getJobRun for its progress.
+const jobSchedulePath = (jobId: string) => `/jobs/${encodeURIComponent(jobId)}/schedule`
+
+/** A whole-account job's schedule, or null when it has none (404). */
+export async function getJobSchedule(jobId: string): Promise<JobScheduleOut | null> {
+  try {
+    return await hubGet<JobScheduleOut>(jobSchedulePath(jobId), "Failed to read the job's schedule")
+  } catch (error) {
+    if (errorStatus(error) === 404) return null
+    throw error
+  }
+}
+
+export function saveJobSchedule(jobId: string, schedule: JobScheduleIn): Promise<JobScheduleOut> {
+  return apiSend('PUT', jobSchedulePath(jobId), schedule, 'Failed to save the schedule')
+}
+
+export function deleteJobSchedule(jobId: string): Promise<void> {
+  return apiSend('DELETE', jobSchedulePath(jobId), undefined, 'Failed to remove the schedule')
+}
+
 export async function startJobRun(
   jobId: string,
   options: Record<string, unknown>,

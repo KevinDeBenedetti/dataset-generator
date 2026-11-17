@@ -25,7 +25,7 @@ from server.services.web import WebFetchError
 
 from server.schemas.recipes import HF_REPO_PATTERN
 from server.services.drafts import create_generation_draft
-from server.services.hub_repo import HubTokenMissing, HubTokenRejected
+from server.services.hub_repo import HubTokenMissing, HubTokenRejected, open_repo
 
 router = APIRouter(
     prefix="/dataset",
@@ -118,6 +118,27 @@ def _build_response(
     )
 
 
+async def _draft_target(
+    creds: Credentials, target_repo: Optional[str]
+) -> Optional[str]:
+    """The draft's dataset repo, opened before anything is generated: the full
+    ``namespace/name`` id, or None without a target.
+
+    A missing or refused Hugging Face token, or a bare name no namespace can
+    complete, answers 503 here — not after the model has run, when every pair
+    would already be paid for and lost.
+    """
+    if not target_repo:
+        return None
+    try:
+        repo = await run_in_threadpool(open_repo, creds, target_repo)
+    except (HubTokenMissing, HubTokenRejected) as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
+        ) from e
+    return repo.repo_id
+
+
 async def _keep_draft(
     user: User,
     creds: Credentials,
@@ -186,6 +207,7 @@ async def create_dataset_for_file(
     start_time = time.time()
     language = _language(target_language)
     model_ref = await run_in_threadpool(_model, user.id, creds, model)
+    target_repo = await _draft_target(creds, target_repo)
 
     # Refuse an oversized upload before holding it in memory: the size the
     # multipart parser saw first, then a bounded read in case it reported none.
@@ -270,6 +292,7 @@ async def create_dataset_for_url(
     start_time = time.time()
     language = _language(request.target_language)
     model_ref = await run_in_threadpool(_model, user.id, creds, request.model)
+    target_repo = await _draft_target(creds, request.target_repo)
 
     try:
         result = await DatasetPipeline(user.id, creds).process_url(
@@ -279,7 +302,7 @@ async def create_dataset_for_url(
             model=model_ref,
             similarity_threshold=request.similarity_threshold,
             # A draft replaces the local dataset.
-            persist=request.persist and not request.target_repo,
+            persist=request.persist and not target_repo,
         )
         response = _build_response(
             result,
@@ -289,11 +312,11 @@ async def create_dataset_for_url(
             language,
             time.time() - start_time,
         )
-        if request.target_repo:
+        if target_repo:
             response.draft_run_id = await _keep_draft(
                 user,
                 creds,
-                request.target_repo,
+                target_repo,
                 result,
                 title=request.dataset_name,
                 source=request.url,

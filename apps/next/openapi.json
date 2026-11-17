@@ -2480,6 +2480,134 @@
         }
       }
     },
+    "/recipes/{recipe_id}/schedule": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "The recipe's schedule",
+        "description": "When the recipe's dataset regenerates by itself, with the next and the\nlatest scheduled run. 404 for an unknown recipe, and until one is saved.",
+        "operationId": "get_recipe_schedule_recipes__recipe_id__schedule_get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Save the recipe's schedule",
+        "description": "Each scheduled run generates from the recipe as it is then — its\nselection, its dataset, its model — incrementally, so a day nothing\nchanged on GitHub costs no model call. A preset set or moved runs first\nat its next time. Only one recipe run goes at a time: give recipes\ndifferent times.",
+        "operationId": "put_recipe_schedule_recipes__recipe_id__schedule_put",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeScheduleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Remove the recipe's schedule",
+        "description": "The recipe stops regenerating by itself; it and its dataset stay.",
+        "operationId": "delete_recipe_schedule_recipes__recipe_id__schedule_delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/resumes": {
       "get": {
         "tags": [
@@ -4005,6 +4133,134 @@
         }
       }
     },
+    "/jobs/{job_id}/schedule": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job Schedule",
+        "description": "The job's schedule: the options and model its runs copy, and the next\nand latest scheduled run. 404 until one is saved.",
+        "operationId": "get_job_schedule_jobs__job_id__schedule_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Put Job Schedule",
+        "description": "Save it. Each scheduled run copies these options and builds on the\npublished version, so a day nothing changed costs no model call. A preset\nset or moved runs first at its next time.",
+        "operationId": "put_job_schedule_jobs__job_id__schedule_put",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobScheduleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Delete Job Schedule",
+        "description": "The job stops running by itself; its dataset stays.",
+        "operationId": "delete_job_schedule_jobs__job_id__schedule_delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/drafts": {
       "get": {
         "tags": [
@@ -5135,6 +5391,24 @@
             ],
             "title": "Status"
           },
+          "serving": {
+            "type": "boolean",
+            "title": "Serving",
+            "description": "Search and test answer — on the previous version while a rebuild runs, or after one failed",
+            "default": false
+          },
+          "building_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Revision",
+            "description": "Commit sha a rebuild in flight is embedding"
+          },
           "error": {
             "anyOf": [
               {
@@ -5247,6 +5521,30 @@
               }
             ],
             "title": "Built At"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint",
+            "description": "Host of the endpoint that embedded the points"
+          },
+          "current_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Endpoint",
+            "description": "Host of your endpoint now, when it is not the one the collection was built on: queries would be embedded elsewhere"
           }
         },
         "type": "object",
@@ -8497,6 +8795,172 @@
         "type": "object",
         "title": "JobRunRequest"
       },
+      "JobScheduleIn": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "description": "Validated against the job's options_schema"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = your LLM"
+          },
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Run every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes: what passes the checks for a Q&A job (the rest waits as a draft), the corpus for the knowledge corpus; off: it stops at a draft, or builds without publishing",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "JobScheduleIn",
+        "description": "A whole-account job's schedule: the options and model its runs copy,\nand when the worker starts one by itself."
+      },
+      "JobScheduleOut": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "description": "Validated against the job's options_schema"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref",
+            "description": "Model reference; null = your LLM"
+          },
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Run every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes: what passes the checks for a Q&A job (the rest waits as a draft), the corpus for the knowledge corpus; off: it stops at a draft, or builds without publishing",
+            "default": true
+          },
+          "job": {
+            "type": "string",
+            "title": "Job"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At",
+            "description": "When the worker queues the next run"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRunRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most recent scheduled run"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "updated_at"
+        ],
+        "title": "JobScheduleOut"
+      },
       "JobsResponse": {
         "properties": {
           "jobs": {
@@ -9661,6 +10125,134 @@
         },
         "type": "object",
         "title": "RecipeRunRequest"
+      },
+      "RecipeScheduleIn": {
+        "properties": {
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Regenerate every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes what passes the checks and keeps the rest for review; off: it stops at a draft",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "RecipeScheduleIn",
+        "description": "When a recipe's dataset regenerates by itself, and what a scheduled\nrun does with its result."
+      },
+      "RecipeScheduleOut": {
+        "properties": {
+          "every": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every",
+            "description": "Regenerate every day, week or month; null = only when you start it"
+          },
+          "at_hour": {
+            "type": "integer",
+            "maximum": 23,
+            "minimum": 0,
+            "title": "At Hour",
+            "description": "Hour of a scheduled run (UTC)",
+            "default": 3
+          },
+          "at_minute": {
+            "type": "integer",
+            "maximum": 59,
+            "minimum": 0,
+            "title": "At Minute",
+            "description": "Minute of a scheduled run",
+            "default": 0
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "A scheduled run publishes what passes the checks and keeps the rest for review; off: it stops at a draft",
+            "default": true
+          },
+          "recipe_id": {
+            "type": "string",
+            "title": "Recipe Id"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At",
+            "description": "When the worker queues the next run"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRunRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most recent scheduled run"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe_id",
+          "updated_at"
+        ],
+        "title": "RecipeScheduleOut"
       },
       "RecipeSource": {
         "properties": {

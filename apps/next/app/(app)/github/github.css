@@ -95,6 +95,18 @@
   display: flex;
   gap: 8px;
 }
+.gh-schedule {
+  align-items: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.gh-schedule-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 240px;
+}
 .gh-toggle {
   display: inline-flex;
   align-items: center;

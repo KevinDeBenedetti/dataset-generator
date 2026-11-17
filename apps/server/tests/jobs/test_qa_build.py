@@ -446,3 +446,50 @@ async def test_a_full_refresh_reads_nothing_and_records_no_commit(memory_hub):
 
     assert memory_hub.downloads == []
     assert (draft.base_commit, draft.full_refresh) == (None, True)
+
+
+async def test_a_draft_knows_when_it_changed_nothing(memory_hub):
+    """What a scheduled run goes by: the same pairs with the same answers as
+    the published version, none held out — then there is nothing to publish."""
+    creds = make_creds(openai_api_key="sk-000000000000", hf_token="hf_000000000000")
+    stays = pair("What stays?", "a")
+    memory_hub.push("kevin/qa", {"train.jsonl": to_jsonl(to_records([stays]))})
+
+    async def draft_of(pairs, review=(), **options):
+        async def make(run: Run):
+            return QADataset(list(pairs), 0, [], review=list(review)), "Kevin"
+
+        return await generate_draft(
+            creds,
+            "kevin/qa",
+            own_topic_pair,
+            make,
+            missing_repo="-",
+            complete=_echo,
+            **options,
+        )
+
+    assert (await draft_of([stays])).same_as_published is True
+    # A new pair, a changed answer, a pair gone, one held out: something to publish.
+    assert (await draft_of([stays, pair("New?", "a")])).same_as_published is False
+    reworded = pair("What stays?", "a")
+    reworded.answer = "Another answer."
+    assert (await draft_of([reworded])).same_as_published is False
+    assert (await draft_of([])).same_as_published is False
+    assert (
+        await draft_of([stays], review=[pair("Held out?", "a")])
+    ).same_as_published is False
+    # A full refresh never compares: it is published whatever it holds.
+    assert (await draft_of([stays], full_refresh=True)).same_as_published is False
+
+
+async def test_a_first_version_is_never_the_same_as_published(memory_hub):
+    creds = make_creds(openai_api_key="sk-000000000000", hf_token="hf_000000000000")
+
+    async def make(run: Run):
+        return QADataset([], 0, []), "Kevin"
+
+    draft = await generate_draft(
+        creds, "kevin/new", own_topic_pair, make, missing_repo="-", complete=_echo
+    )
+    assert draft.same_as_published is False

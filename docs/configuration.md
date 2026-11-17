@@ -35,7 +35,7 @@ among those configured and those their endpoint lists.
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `OPENAI_LLM_MODEL`        | The LLM of every step: cleaning, Q&A generation, scoring, the dataset jobs, and the transcription of uploaded PDF and image pages — so it must read images |
 | `OPENAI_EMBEDDING_MODEL`  | The embedding model: the duplicate, grounding and coverage checks, and the first choice of a new collection                                                |
-| `OPENAI_REASONING_EFFORT` | Sent to the Q&A model (default `low`); `off` for models that refuse the parameter                                                                          |
+| `OPENAI_REASONING_EFFORT` | Sent to the LLM (default `low`); `off` for models that refuse the parameter                                                                                |
 | `SERVER_LLM_FOR_ADMINS`   | Outside development: admins who saved no key call `OPENAI_BASE_URL` with `OPENAI_API_KEY` (other users bring their own)                                    |
 
 A key and its endpoint always travel together: the server's key is only ever
@@ -90,11 +90,19 @@ reads `REDIS_URL` from `.env`, so set it there as
 worker (`QDRANT_API_KEY` too when the Qdrant requires one: set in `.env`, the
 local stack's Qdrant requires it, and its dashboard asks for it); without it the
 Collections page says so and builds nothing. `QDRANT_COLLECTION_PREFIX`
-(default `dataset_`) lets several deployments share one Qdrant.
+(default `dataset_`) lets several deployments share one Qdrant, each with its
+own prefix: never two with the same one, since the worker drops the
+collections under its prefix that none of its rows names.
 
 The [Resume](./resume.md) page reads Reactive Resume with two server secrets:
 `REACTIVE_RESUME_URL`, the instance's root (blank: rxresu.me), and
 `REACTIVE_RESUME_API_KEY`, a key of your account there. Admins only.
+
+After an admin's **Knowledge corpus** run has published, the server can tell
+the site that indexes the corpus to read it again: it POSTs
+`CORPUS_REINDEX_URL` with `CORPUS_REINDEX_SECRET` as a bearer token. Set both
+or neither. They are the operator's, so another user's run never calls the
+URL; a site that is down is reported in the run, which stays published.
 
 `make dev-local` runs the API outside Docker (on `127.0.0.1:8020`, the
 `SERVER_PORT` the front-end and the SSO callbacks expect, with a worker

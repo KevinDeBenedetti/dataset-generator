@@ -131,6 +131,9 @@ _RESOURCE_ROUTES = {
     },
     ("DELETE", "/recipes/{recipe_id}"): {},
     ("POST", "/recipes/{recipe_id}/run"): {"json": {}},
+    ("GET", "/recipes/{recipe_id}/schedule"): {},
+    ("PUT", "/recipes/{recipe_id}/schedule"): {"json": {"every": "day"}},
+    ("DELETE", "/recipes/{recipe_id}/schedule"): {},
     ("GET", "/collections/{collection_id}"): {},
     ("POST", "/collections/{collection_id}/build"): {"json": {}},
     ("DELETE", "/collections/{collection_id}"): {},
@@ -172,6 +175,10 @@ _NOT_RESOURCE_ROUTES = {
     # Your own recipes: the list and a new one are the caller's by construction.
     ("GET", "/recipes"),
     ("POST", "/recipes"),
+    # A whole-account job's schedule is keyed by the caller and the job.
+    ("GET", "/jobs/{job_id}/schedule"),
+    ("PUT", "/jobs/{job_id}/schedule"),
+    ("DELETE", "/jobs/{job_id}/schedule"),
     # Your own collections: the list and a new one (built from a Hub dataset
     # read with your own token) are the caller's by construction.
     ("GET", "/collections"),
