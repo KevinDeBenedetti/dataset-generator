@@ -3,8 +3,9 @@
 // Relative imports only: vitest has no `@/` alias.
 import type { ResumeDatasetIn, ResumeDatasetOut, ResumeOut } from '../../api/types'
 import { defaultTargetRepo } from '../github/recipe-state'
+import { type Every, timeOf } from '../jobs/schedule-state'
 
-export type Every = '' | 'day' | 'week' | 'month'
+export type { Every } from '../jobs/schedule-state'
 
 export interface DatasetForm {
   target_repo: string
@@ -38,7 +39,7 @@ export function initialForm(
 
 /** The body the form saves. */
 export function toSettings(form: DatasetForm): ResumeDatasetIn {
-  const [hour = 3, minute = 0] = form.time.split(':').map((n) => Number(n) || 0)
+  const { at_hour: hour, at_minute: minute } = timeOf(form.time)
   return {
     target_repo: form.target_repo.trim(),
     language: form.language,

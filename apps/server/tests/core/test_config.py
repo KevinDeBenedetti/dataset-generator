@@ -165,6 +165,62 @@ class TestProductionHardening:
         with pytest.raises(RuntimeError, match=needle):
             cfg.ensure_production_config()
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://portfolio.example.com/api/collections/hf/sync",
+            "http://portfolio.portfolio.svc.cluster.local:3000/api/collections/hf/sync",
+            "http://portfolio.portfolio.svc/sync",
+            "http://portfolio:3000/sync",
+            "http://10.43.0.12/sync",
+            "http://127.0.0.1:8080/sync",
+        ],
+    )
+    def test_a_reindex_url_that_keeps_its_secret_safe_is_accepted(
+        self, monkeypatch, url
+    ):
+        cfg = _config(
+            monkeypatch, CORPUS_REINDEX_URL=url, CORPUS_REINDEX_SECRET="s3cret"
+        )
+        assert cfg.production_problems() == []
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://portfolio.example.com/api/collections/hf/sync",
+            "http://203.0.113.7/sync",
+            "http://8.8.8.8/sync",
+            "ftp://portfolio.example.com/sync",
+            "portfolio.example.com/sync",
+        ],
+    )
+    def test_a_reindex_url_that_would_leak_its_secret_is_refused(
+        self, monkeypatch, url
+    ):
+        cfg = _config(
+            monkeypatch, CORPUS_REINDEX_URL=url, CORPUS_REINDEX_SECRET="s3cret"
+        )
+        problems = cfg.production_problems()
+        assert any("CORPUS_REINDEX_URL must be https" in p for p in problems), problems
+        assert not any("s3cret" in p for p in problems)
+
+    @pytest.mark.parametrize(
+        "url, secret",
+        [("https://portfolio.example.com/sync", None), (None, "s3cret")],
+    )
+    def test_the_reindex_settings_go_together(self, monkeypatch, url, secret):
+        cfg = _config(monkeypatch, CORPUS_REINDEX_URL=url, CORPUS_REINDEX_SECRET=secret)
+        assert any("go together" in p for p in cfg.production_problems())
+
+    def test_an_http_reindex_url_is_fine_in_development(self, monkeypatch):
+        cfg = _config(
+            monkeypatch,
+            ENVIRONMENT="development",
+            CORPUS_REINDEX_URL="http://portfolio.example.com/sync",
+            CORPUS_REINDEX_SECRET="s3cret",
+        )
+        assert cfg.production_problems() == []
+
     def test_every_problem_is_listed_at_once(self, monkeypatch):
         cfg = _config(monkeypatch, DATABASE_URL=None, SECRETS_ENCRYPTION_KEYS=None)
         assert len(cfg.production_problems()) == 2

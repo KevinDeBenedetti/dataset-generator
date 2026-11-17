@@ -79,12 +79,27 @@ context) alone to measure retrieval.
 it with `qdrant-client`, embedding the query with the `openai` client on the
 same endpoint and model id as the build.
 
+A Qdrant that requires an API key refuses a request without it ("Must provide
+an API key"): pass `api_key=…` to `QdrantClient`. With the local stack, that is
+the `QDRANT_API_KEY` of your `.env`; the value Qdrant itself checks is the one
+its container holds, which this prints into a request without showing it:
+
+```sh
+curl -s -H "api-key: $(docker compose exec -T qdrant printenv QDRANT__SERVICE__API_KEY)" \
+  localhost:6353/aliases
+```
+
+It lists each collection's name with the Qdrant collection it currently points
+at (`<name>_<12 characters>`, one per build). `localhost:6353/collections`
+lists those, and the dashboard is at `http://localhost:6353/dashboard`.
+
 ::: warning An endpoint model is named by its id
 A collection built with `openai:embed-default` is searched with whatever your
 endpoint serves under `embed-default` at the time. If the alias moves to
 another model, or you switch to another endpoint, rebuild the collection.
 A build records the host of the endpoint that embedded it: when yours is no
-longer that one, the collection's page says so and offers to build it again.
+longer that one, the Collections list marks it **Rebuild needed**, and its
+page says why and offers to build it again.
 A model changed behind the same alias, on the same host, cannot be told.
 :::
 

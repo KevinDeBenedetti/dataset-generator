@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from server.schemas.jobs import JobRunRef
+from server.schemas.jobs import JobRunRef, ScheduleSkip
 from server.services.github_browse import valid_doc_path
 
 # A Hugging Face repo id, with or without its namespace (completed at
@@ -114,6 +114,9 @@ class RecipeScheduleOut(RecipeScheduleIn):
     )
     latest_run: Optional[JobRunRef] = Field(
         None, description="The most recent scheduled run"
+    )
+    skipped: Optional[ScheduleSkip] = Field(
+        None, description="Why the latest scheduled time started no run, if so"
     )
     updated_at: datetime
 

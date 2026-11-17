@@ -4,6 +4,7 @@ import {
   comparisonRows,
   defaultCollectionName,
   defaultColumns,
+  endpointMoved,
   isTrivialTest,
   modelLabel,
   modelRemoved,
@@ -17,6 +18,13 @@ describe('collection labels', () => {
     expect(modelLabel('BAAI/bge-small-en-v1.5')).toBe('bge-small-en-v1.5')
     expect(modelLabel('plain')).toBe('plain')
     expect(modelLabel('openai:embed-default')).toBe('embed-default')
+  })
+
+  it('tells a collection built on another endpoint than yours now', () => {
+    expect(endpointMoved({ status: 'ready', current_endpoint: 'llm.example.com' })).toBe(true)
+    expect(endpointMoved({ status: 'failed', current_endpoint: 'llm.example.com' })).toBe(true)
+    expect(endpointMoved({ status: 'building', current_endpoint: 'llm.example.com' })).toBe(false)
+    expect(endpointMoved({ status: 'ready', current_endpoint: null })).toBe(false)
   })
 
   it('tells a collection whose local model is gone', () => {

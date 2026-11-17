@@ -424,6 +424,17 @@ def _no_cached_hub_files():
     hub_repo.forget_downloads()
 
 
+@pytest.fixture(autouse=True)
+def _no_kept_duplicate_checks():
+    """A draft's duplicate check is kept per run id (services/draft_quality.py):
+    tests reuse run ids, so nothing is carried from one to the next."""
+    from server.services import draft_quality
+
+    draft_quality.forget_duplicates()
+    yield
+    draft_quality.forget_duplicates()
+
+
 @pytest.fixture
 def memory_hub(monkeypatch):
     """The Hub, in memory, for every repo the code under test opens

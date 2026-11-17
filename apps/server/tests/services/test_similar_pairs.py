@@ -1,12 +1,12 @@
-"""The duplicate check of a dataset or a draft (services/datasets.py
-``_similar_pairs``): pre-filtered, and still finding exactly what the plain
+"""The duplicate check of a dataset or a draft (services/similarity.py
+``similar_pairs``): pre-filtered, and still finding exactly what the plain
 comparison of every pair finds."""
 
 import random
 from difflib import SequenceMatcher
 
-from server.services import datasets
-from server.services.datasets import ANSWER_SIMILARITY_FLOOR, _similar_pairs
+from server.services import similarity
+from server.services.similarity import ANSWER_SIMILARITY_FLOOR, similar_pairs
 
 TOPICS = ["the build", "the release", "the worker", "a dataset", "the Hub token"]
 SHAPES = [
@@ -53,9 +53,9 @@ def _plain(pairs, threshold):
 def test_the_pre_filter_changes_nothing_that_is_found():
     pairs = _pairs(120)
     for threshold in (0.6, 0.8, 0.95):
-        found = list(_similar_pairs(pairs, threshold))
+        found = list(similar_pairs(pairs, threshold))
         assert found == list(_plain(pairs, threshold))
-    assert list(_similar_pairs(pairs, 0.8)), "the sample holds no duplicate at all"
+    assert list(similar_pairs(pairs, 0.8)), "the sample holds no duplicate at all"
 
 
 def test_most_pairs_never_reach_the_full_comparison(monkeypatch):
@@ -76,13 +76,13 @@ def test_most_pairs_never_reach_the_full_comparison(monkeypatch):
             full.append(self.first)
             return super().ratio()
 
-    monkeypatch.setattr(datasets, "SequenceMatcher", Counting)
+    monkeypatch.setattr(similarity, "SequenceMatcher", Counting)
 
-    assert [(i, j) for i, j, _ in _similar_pairs(pairs, 0.8)] == [(0, 3)]
+    assert [(i, j) for i, j, _ in similar_pairs(pairs, 0.8)] == [(0, 3)]
     # Six pairs of questions; only the look-alike is matched in full, then its answers.
     assert full == ["What is the purpose of the build?", "A."]
 
 
 def test_no_pairs_and_one_pair_have_nothing_to_compare():
-    assert list(_similar_pairs([], 0.8)) == []
-    assert list(_similar_pairs(_pairs(1), 0.8)) == []
+    assert list(similar_pairs([], 0.8)) == []
+    assert list(similar_pairs(_pairs(1), 0.8)) == []

@@ -8,7 +8,7 @@ import { Icon } from '@/components/app/icon'
 import { formatCount, shortSha, timeAgo } from '@/components/hub/format'
 import { useCollections } from '@/hooks'
 import { CreateCollectionForm } from './create-form'
-import { modelLabel, modelRemoved, percent } from './format'
+import { endpointMoved, modelLabel, modelRemoved, percent } from './format'
 
 export function StatusBadge({ collection }: { collection: CollectionOut }) {
   if (collection.status !== 'building' && modelRemoved(collection)) {
@@ -19,6 +19,17 @@ export function StatusBadge({ collection }: { collection: CollectionOut }) {
       >
         <Icon name="alert" className="ic-sm" />
         Model removed
+      </span>
+    )
+  }
+  if (endpointMoved(collection)) {
+    return (
+      <span
+        className="badge badge-warning"
+        title={`Built on ${collection.endpoint}; your endpoint is now ${collection.current_endpoint}`}
+      >
+        <Icon name="alert" className="ic-sm" />
+        Rebuild needed
       </span>
     )
   }

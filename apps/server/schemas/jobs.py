@@ -45,6 +45,13 @@ class JobRunRequest(BaseModel):
     )
 
 
+class ScheduleSkip(BaseModel):
+    """Why a schedule's latest tick queued no run."""
+
+    reason: str
+    at: datetime
+
+
 class JobScheduleIn(BaseModel):
     """A whole-account job's schedule: the options and model its runs copy,
     and when the worker starts one by itself."""
@@ -75,6 +82,9 @@ class JobScheduleOut(JobScheduleIn):
     )
     latest_run: Optional[JobRunRef] = Field(
         None, description="The most recent scheduled run"
+    )
+    skipped: Optional[ScheduleSkip] = Field(
+        None, description="Why the latest scheduled time started no run, if so"
     )
     updated_at: datetime
 

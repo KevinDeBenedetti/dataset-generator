@@ -6,7 +6,12 @@
 
 ## 🟡 To do
 
+
+
+
 - [ ] CHORE: Retire the local dataset tables (phase 3, 4/4): an Alembic migration drops `datasets`, `qa_pairs` and `dataset_runs`, with the Drafts pages, the local export to Hugging Face and the import into local datasets — after the grace period the owner chose on 2026-11-04 (existing local drafts keep Publish and Delete meanwhile) — BLOCKED 2026-11-04: waits for the release with phase 3 to be deployed long enough for users to publish or delete their local drafts; remove this marker to start it.
+
+
 
 
 
@@ -19,12 +24,10 @@
 ### 22. One LLM and one embedding model
 
 - [ ] 22.5 Production (infra repo): set the server's `OPENAI_LLM_MODEL` to a gateway alias that exists and reads images (the one set today is not one the gateway serves), delete `OPENAI_VLM_MODEL` (and `FASTEMBED_CACHE_PATH` with its volume, if set), then deploy. Success: the migration Job logs `5d6e7f8091a2`, the deployed **Models** page shows that LLM, and a PDF generation gives pairs.
-- [ ] 22.6 Each collection built with a local model (multilingual MiniLM, BGE, MiniLM L6), locally and in production: delete it and build it again with an endpoint model. Success: every collection on the **Collections** page names an `openai:` model and answers a search.
+- [ ] 22.6 (remaining) In production, each collection built with a local model (multilingual MiniLM, BGE, MiniLM L6): delete it and build it again with an endpoint model. Success: every collection on the deployed **Collections** page names an `openai:` model and answers a search.
 
 ### 23. Resume datasets and schedules
 
-- [ ] 23.2 Locally (after 21.1), recreate the worker, which still runs the code from before the resume job and an `.env` without the Reactive Resume variables (the 2026-11-10 failure "Unknown job 'resume-qa'"): `docker compose up -d --force-recreate worker` (it restarts on code changes from then on). Then on **Resume** pick a resume, save its dataset settings and **Generate a draft**; review it in **Drafts** and publish it. Success: the private dataset on Hugging Face holds `train.jsonl`, `review.jsonl`, `manifest.json` and a "Resume Q&A" card, no pair holds your phone number, and a second **Generate a draft** with the resume unchanged reports "nothing changed since the published version — no model call".
-- [ ] 23.3 A schedule: set **Every day** at a time a few minutes ahead (UTC), with the worker running. Success: at that time the card's latest run starts by itself and publishes (or reports nothing changed), and its next run reads tomorrow at that time.
 - [ ] 23.4 Production (infra repo): the worker reads the resume now, so give the worker deployment the same `REACTIVE_RESUME_URL` and `REACTIVE_RESUME_API_KEY` as the server (21.2), and let it reach the Reactive Resume service; then deploy. Success: the migration Job logs `6e7f8091a2b3`, and a **Generate a draft** on the deployed **Resume** page ends with a draft, not "Reactive Resume isn't set up".
 
 ### 24. Dataset quality
@@ -32,13 +35,7 @@
 - [ ] 24.2 On **Models**, pick your endpoint's embedding model and **Measure and use**. Success: the hint names it as yours with its measured thresholds, and how often each separates its examples (ideally 90% or more; a model far below that is a poor fit for the checks).
 - [ ] 24.3 Generate a resume draft with **Regenerate every section** and review it. Success: new pairs show a **grade**, any below 60% are held out with the grader's reason, about six `unanswerable` pairs are listed (none the resume answers), and no fact is flagged by the length rule.
 
-### 25. Collections remember their endpoint
 
-- [ ] 25.2 Locally, restart the stack so the migration runs, rebuild one collection, then save another endpoint in **Settings**. Success: the server log shows `8091a2b3c4d5`, and that collection's page says it was built on the first host and offers **Build it again**.
-
-### 26. Rebuilds without a blackout
-
-- [ ] 26.2 Locally, restart the stack, open a built collection and **Rebuild** it; search it while it builds. Success: the page keeps its Search and Retrieval test tabs with a "keep answering" line, a search answers during the build, and afterwards `curl -s localhost:6353/aliases` lists the collection's name as an alias.
 
 ### 27. Reindex the portfolio after a corpus publish
 
@@ -49,25 +46,35 @@
 - [ ] 28.1 On **GitHub**, pick a recipe and set **Regenerate** to **Every day** at a time a few minutes ahead (UTC), with the worker running. Success: the hint shows the next run; at that time a run starts by itself, publishes what passes (or reports "nothing changed on GitHub"), and the next run reads tomorrow at that time.
 - [ ] 28.2 On **GitHub**, set **Regenerate** on the **Knowledge corpus** card to **Every day** a few minutes ahead, its publish box ticked. Success: at that time a run starts by itself and publishes the corpus (and reports **Reindex: asked** once 🖐 27.1 is done); the card shows the next run.
 
+
 ## 🟢 Ideas / backlog
 
 - [ ] CHORE: Move apps/server/core/net.py to httpx2, the HTTP stack of openai 3.x, before openai 4 drops httpx compatibility.
 
 ## 🤖 Agent recommendations
 
-- [ ] FIX: Retry a scheduled run that found another in progress at the next sweep (apps/server/services/schedules.py `queue_due`) — its date moves on before the run is queued, so two recipes scheduled at the same time leave the second waiting a whole day (one `github-recipe` run at a time, services/jobs.py `queue_run`); keeping the date on a `RunConflictError` runs it minutes later instead.
-- [ ] FEAT: Say on a job card when its options differ from the scheduled ones (apps/next/components/jobs/job-card.tsx `JobSchedule`) — a schedule copies the options and model shown when it is set, so a later change on the card is silently not what runs; comparing them with the saved schedule's would offer to save them.
-- [ ] CHORE: Use the shared schedule picker on the Resume page (apps/next/components/resume/resume-dataset.tsx:31 and :300) — it keeps its own copy of the preset list and the time field that components/jobs/schedule-picker.tsx now holds for recipes and job cards.
-- [ ] CHORE: Move the duplicate check out of the local datasets module (apps/server/services/datasets.py `_similar_pairs`, imported privately by services/draft_quality.py:17) — the draft review depends on it, and the blocked "retire the local dataset tables" task deletes most of that file; a module of its own keeps the review working when it goes.
-- [ ] FEAT: Show a moved endpoint on the Collections list too (apps/next/components/collections/collections-page.tsx `StatusBadge`) — `current_endpoint` is already in every listed collection, but only its own page says it must be built again; a badge like **Model removed** would tell the owner without opening each one.
+- [ ] FIX: Give the "Use it" snippet a place for Qdrant's API key (apps/next/components/collections/format.ts `pythonSnippet`) — it builds `QdrantClient(url=…)` with no `api_key`, so pasted against a Qdrant that requires one (the local stack's, once `QDRANT_API_KEY` is set) it fails with "Must provide an API key"; an `api_key="…"` line with a comment fixes the copy-paste.
 
 ## 🔒 Security audit
 
-- [ ] FIX: [LOW] Refuse a `CORPUS_REINDEX_URL` that is not https outside development (apps/server/jobs/corpus.py `notify_reindex`, core/config.py) — the bearer secret is sent to the URL as configured, so an `http://` value sends it in clear over the network; a startup check like the other production settings would catch the mistake.
-- [ ] FIX: [LOW] Refuse to share a Qdrant collection prefix between deployments (apps/server/services/collections.py `drop_orphans`) — two instances with the same `QDRANT_COLLECTION_PREFIX` (a blank one is `dataset_` for both) on one Qdrant each see the other's collections as orphans and drop them hourly; recording the deployment in each collection's payload, or a marker collection per prefix, would let the sweep tell them apart.
-
 ## ✅ Done
 
+- [x] 2026-11-17 — CHORE: 🖐 23.3 A resume's daily schedule ran by itself — run `a7f58f43` started 20:05:01 UTC, succeeded with `claude-sonnet-5-5` and published to `kevindb/resume-portfolio` (nothing to review); its next run reads 2026-11-18 20:05. The schedule's latest run was not updated: being looked into.
+- [x] 2026-11-17 — CHORE: 🖐 29.1 The Postgres-backed suite with migration `a2b3c4d5e6f7` — `make test`: 1371 passed, 0 failed (after fixing a test that read pytest's log capture); the dev database is at `a2b3c4d5e6f7`.
+- [x] 2026-11-17 — DOCS: docs/collections.md says how to query a Qdrant that requires its API key, with the command that takes the key from the local container and lists each collection's alias — the command is the one that worked in 🖐 26.2; prek's whitespace hooks pass.
+- [x] 2026-11-17 — PERF: A draft's near-duplicates are computed once per run and threshold and kept in memory (apps/server/services/draft_quality.py `_duplicates`); the quality rules are still read at every check, and another user's run still answers unknown — 3 new tests, 23 pass with the jobs API suite.
+- [x] 2026-11-17 — FIX: A schedule keeps why its latest time started no run (`job_schedules.skipped`, migration `a2b3c4d5e6f7`) and the Resume page, the recipe bar and the job cards show it under the schedule until a run starts or it is saved again (apps/server/services/schedules.py `_skip`, components/jobs/schedule-picker.tsx) — 4 service tests, 75 pass; 88 vitest; the migration is 🖐 29.1.
+- [x] 2026-11-17 — CHORE: 🖐 23.2 A resume draft generated, reviewed and published locally — the owner confirmed the private dataset's files and card, no phone number, and "nothing changed" on the second run.
+- [x] 2026-11-17 — CHORE: 🖐 25.2 dropped: the browser check of the moved-endpoint notice — the owner has no key of their own for another endpoint to try it with now and will test it later; the service tests cover the notice and the list badge.
+- [x] 2026-11-17 — CHORE: 🖐 22.6 (local part) The only local collection names an endpoint model, `openai:openai/text-embedding-3-small`, rebuilt twice today (runs succeeded, 46 points) — read from the dev database; production remains.
+- [x] 2026-11-17 — CHORE: 🖐 26.2 A rebuild on the local stack went through the new path — run succeeded 15:06:52 UTC, 46 points, `dataset_c_2e649d11…` is now an alias of `…_da06ec410af6`, and the row records the endpoint `litellm.kevindb.dev`.
+- [x] 2026-11-17 — FEAT: The Collections list marks a collection built on another endpoint than its owner's now **Rebuild needed**, naming both hosts (apps/next/components/collections/collections-page.tsx, format.ts `endpointMoved`) — 1 vitest case, 86 pass; tsc, oxlint, oxfmt clean.
+- [x] 2026-11-17 — CHORE: The near-duplicate check has a module of its own, public (apps/server/services/similarity.py `similar_pairs`), used by the draft review and the local datasets: retiring the local tables no longer takes it along — 103 pass across the similarity, draft quality and dataset suites.
+- [x] 2026-11-17 — CHORE: The Resume page uses the shared schedule picker and time parsing (apps/next/components/resume, components/jobs/schedule-state.ts `timeOf`): an empty time now saves as 03:00, not midnight — 85 vitest pass; tsc, oxlint, oxfmt clean.
+- [x] 2026-11-17 — FEAT: A job card whose options or model differ from its schedule's says so and offers **Schedule these instead** (apps/next/components/jobs/job-card.tsx, schedule-state.ts `differsFromCard`) — 2 vitest cases, 85 pass; tsc, oxlint, oxfmt clean.
+- [x] 2026-11-17 — FIX: A scheduled run whose job already has one in progress is tried again every 5 minutes until its next regular time, instead of waiting a day (apps/server/services/schedules.py `queue_due`) — 2 new tests; 55 pass with the resume and recipe API suites; docs and the recipe bar's hint updated.
+- [x] 2026-11-17 — FIX: [LOW] The orphan sweep claims its Qdrant prefix for this deployment first (a `<prefix>claim` collection, the deployment's id kept in `platform_settings`): another deployment with the same prefix drops nothing and logs why (apps/server/services/collections.py, qdrant.py) — 2 new tests; 77 pass with the admin suite.
+- [x] 2026-11-17 — FIX: [LOW] Outside development the server refuses to start with a `CORPUS_REINDEX_URL` that would send its secret in clear to a public host (https, or http to an in-cluster Service or private address), or with only one of the two settings (apps/server/core/config.py) — 13 config tests; 99 pass with the jobs suite.
 - [x] 2026-11-17 — CHORE: 🖐 26.1 The Postgres-backed suite with migration `91a2b3c4d5e6` — `make test`: 1346 passed, 0 failed, 1 warning, coverage 94.02%.
 - [x] 2026-11-17 — FEAT: The whole-account GitHub Q&A and the knowledge corpus can be scheduled (`GET/PUT/DELETE /jobs/{id}/schedule`, a **Regenerate** picker on each job card, shared with the recipes'): a scheduled run publishes what passes, or the corpus (apps/server/api/jobs.py, components/jobs) — 6 new tests; the isolation walk passes; the cards are 🖐 28.2.
 - [x] 2026-11-17 — FEAT: The GitHub page's recipe bar has a **Regenerate** picker (preset, time, publish what passes), saved on every change (apps/next/components/github/recipe-bar.tsx, recipe-state.ts, hooks/use-recipes.ts) — 3 vitest cases, 83 pass; tsc, oxlint, oxfmt clean; the page is 🖐 28.1.

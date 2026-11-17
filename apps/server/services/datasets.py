@@ -11,8 +11,6 @@ layer stays a thin error-mapping wrapper.
 
 import logging
 from datetime import datetime, timezone
-from collections import Counter
-from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -21,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from server.core.database import get_scoped_db
 from server.models.dataset import Dataset, DatasetRun, QAPair
+from server.services.similarity import similar_pairs
 
 logger = logging.getLogger(__name__)
 
@@ -599,63 +598,6 @@ def get_dataset_sources_view(owner_id: str, dataset_name: str) -> Dict[str, Any]
 # --- similarity analyse / clean ----------------------------------------------
 
 
-# A near-identical question alone is not a duplicate: templated questions
-# ("What is the purpose of the X repository?") differ by one entity and score
-# 0.9+ while being about different things. Their answers give it away (~0.2–0.4
-# on real data), whereas a genuine repeat restates the same answer. Same idea
-# as the context floor dedup applies at generation time (services.dedup).
-ANSWER_SIMILARITY_FLOOR = 0.5
-
-
-def _may_reach(
-    a: str, a_chars: Counter, b: str, b_chars: Counter, floor: float
-) -> bool:
-    """Whether ``SequenceMatcher(None, a, b).ratio()`` can reach ``floor``.
-
-    Its two upper bounds, as difflib's ``real_quick_ratio`` and ``quick_ratio``
-    compute them — the lengths, then the characters the texts share — from
-    counts made once per text instead of once per comparison.
-    """
-    total = len(a) + len(b)
-    if not total:
-        return True  # two empty texts: the ratio is 1.0
-    if 2.0 * min(len(a), len(b)) / total < floor:
-        return False
-    return 2.0 * sum((a_chars & b_chars).values()) / total >= floor
-
-
-def _similar_pairs(pairs: List[Dict[str, Any]], threshold: float):
-    """Yield (i, j, ratio) for pairs whose questions reach the threshold and
-    whose answers reach :data:`ANSWER_SIMILARITY_FLOOR`.
-
-    Most pairs are ruled out by :func:`_may_reach` before the quadratic
-    matching: a 400-pair draft is 80,000 comparisons.
-    """
-    questions = [Counter(p["question"]) for p in pairs]
-    answers = [Counter(p["answer"]) for p in pairs]
-    for i, a in enumerate(pairs):
-        for j in range(i + 1, len(pairs)):
-            b = pairs[j]
-            if not _may_reach(
-                a["question"], questions[i], b["question"], questions[j], threshold
-            ):
-                continue
-            ratio = SequenceMatcher(None, a["question"], b["question"]).ratio()
-            if ratio < threshold:
-                continue
-            if not _may_reach(
-                a["answer"],
-                answers[i],
-                b["answer"],
-                answers[j],
-                ANSWER_SIMILARITY_FLOOR,
-            ):
-                continue
-            answer_ratio = SequenceMatcher(None, a["answer"], b["answer"]).ratio()
-            if answer_ratio >= ANSWER_SIMILARITY_FLOOR:
-                yield i, j, ratio
-
-
 def _pair_dicts(db: Session, dataset: Dataset) -> List[Dict[str, Any]]:
     """The dataset's pairs in the shape the similarity helpers work on."""
     return [
@@ -684,7 +626,7 @@ def analyze_similarities_view(
         pairs = _pair_dicts(db, dataset)
 
     similarities = []
-    for i, j, ratio in _similar_pairs(pairs, threshold):
+    for i, j, ratio in similar_pairs(pairs, threshold):
         q1, q2 = pairs[i]["question"], pairs[j]["question"]
         similarities.append(
             {
@@ -791,7 +733,7 @@ def clean_similarities_view(
 
         details = []
         removed_ids: set[str] = set()
-        for i, j, ratio in _similar_pairs(pairs, threshold):
+        for i, j, ratio in similar_pairs(pairs, threshold):
             a, b = pairs[i], pairs[j]
             if a["id"] in removed_ids or b["id"] in removed_ids:
                 continue

@@ -19,21 +19,8 @@ import {
   useRunResumeDataset,
   useSaveResumeDataset,
 } from '@/hooks'
-import {
-  type DatasetForm,
-  type Every,
-  initialForm,
-  isDirty,
-  runMetric,
-  toSettings,
-} from './dataset-state'
-
-const EVERY: { value: Every; label: string }[] = [
-  { value: '', label: 'Only when I generate it' },
-  { value: 'day', label: 'Every day' },
-  { value: 'week', label: 'Every Monday' },
-  { value: 'month', label: 'The 1st of every month' },
-]
+import { SchedulePicker } from '@/components/jobs/schedule-picker'
+import { type DatasetForm, initialForm, isDirty, runMetric, toSettings } from './dataset-state'
 
 const LANGUAGES: { value: ResumeDatasetIn['language']; label: string }[] = [
   { value: 'auto', label: 'The resume’s own' },
@@ -301,50 +288,18 @@ function DatasetCard({
           />
           <EmbeddingHint />
         </div>
-        <div className="field">
-          <label className="label" htmlFor="rs-every">
-            Regenerate
-          </label>
-          <div className="gh-inline">
-            <select
-              id="rs-every"
-              className="select"
-              value={form.every}
-              onChange={(e) => set({ every: e.target.value as Every })}
-            >
-              {EVERY.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
-                </option>
-              ))}
-            </select>
-            {form.every && (
-              <input
-                type="time"
-                className="input"
-                aria-label="Time (UTC)"
-                value={form.time}
-                onChange={(e) => set({ time: e.target.value || '03:00' })}
-              />
-            )}
-          </div>
-          {form.every && (
-            <div className="hint">
-              At {form.time} UTC. A run whose resume hasn&apos;t changed stops early, with no model
-              call.
-            </div>
-          )}
+        <div className="rs-dataset-wide">
+          <SchedulePicker
+            id="rs-every"
+            form={form}
+            publishLabel="Publish what passes the checks at once, and keep the doubtful pairs for review"
+            skipped={saved?.skipped}
+            onChange={set}
+          >
+            At {form.time} UTC. A run whose resume hasn&apos;t changed stops early, with no model
+            call.
+          </SchedulePicker>
         </div>
-        {form.every && (
-          <label className="gh-toggle rs-dataset-wide">
-            <input
-              type="checkbox"
-              checked={form.publish}
-              onChange={(e) => set({ publish: e.target.checked })}
-            />
-            Publish what passes the checks at once, and keep the doubtful pairs for review
-          </label>
-        )}
       </div>
 
       <div className="card-foot rs-dataset-foot">
