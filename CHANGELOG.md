@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.2...v0.16.0) (2026-11-17)
+
+
+### Features
+
+* **jobs:** refactor resume QA job and introduce incremental Q&A build ([4c4cbbb](https://github.com/KevinDeBenedetti/dataset-generator/commit/4c4cbbb3fdfc11f722213148c6b5f6a04db7b4f5))
+* **tests:** add comprehensive tests for hub_repo functionality ([ddd6bc1](https://github.com/KevinDeBenedetti/dataset-generator/commit/ddd6bc1df23c81cc6ecc9e4bff741bdb2e07cccc))
+* **tests:** add tests for dataset processing and error handling ([ca68c26](https://github.com/KevinDeBenedetti/dataset-generator/commit/ca68c26dd803c66a7f1938f7215134a0548721d7))
+
 ## [0.15.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.1...v0.15.2) (2026-11-15)
 
 
