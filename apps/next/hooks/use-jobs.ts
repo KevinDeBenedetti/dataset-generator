@@ -3,13 +3,16 @@ import {
   cancelJobRun,
   type DraftSelection,
   getDraftChecks,
+  deleteJobSchedule,
   getDrafts,
   getJobRun,
+  getJobSchedule,
   getJobs,
   publishJobRun,
+  saveJobSchedule,
   startJobRun,
 } from '@/api/sdk'
-import type { JobRunOut } from '@/api/types'
+import type { JobRunOut, JobScheduleIn, JobScheduleOut } from '@/api/types'
 
 export const JOBS_QUERY_KEY = ['jobs']
 export const DRAFTS_QUERY_KEY = ['drafts']
@@ -90,5 +93,25 @@ export function useCancelJobRun(runId: string) {
       queryClient.setQueryData([JOB_RUN_QUERY_KEY, run.id], run)
       queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
     },
+  })
+}
+
+const jobScheduleKey = (jobId: string) => [...JOBS_QUERY_KEY, jobId, 'schedule']
+
+/** When a whole-account job runs by itself; null when it has no schedule. */
+export function useJobSchedule(jobId: string) {
+  return useQuery({ queryKey: jobScheduleKey(jobId), queryFn: () => getJobSchedule(jobId) })
+}
+
+/** Saves the job's schedule, or removes it when `schedule` is null. */
+export function useSaveJobSchedule(jobId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (schedule: JobScheduleIn | null): Promise<JobScheduleOut | null> => {
+      if (schedule) return saveJobSchedule(jobId, schedule)
+      await deleteJobSchedule(jobId)
+      return null
+    },
+    onSuccess: (saved) => queryClient.setQueryData(jobScheduleKey(jobId), saved),
   })
 }

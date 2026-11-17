@@ -216,6 +216,17 @@ class Config:
         default_factory=lambda: _env("REACTIVE_RESUME_API_KEY", ""), repr=False
     )
 
+    # --- After a corpus publish (jobs/corpus.py notify_reindex) --------------
+    # The site that indexes the knowledge corpus: this URL is POSTed, with the
+    # secret as a bearer token, once an admin's corpus run has published. Both
+    # are the operator's, so only an admin's run calls it. Blank: nothing is.
+    corpus_reindex_url: str = field(
+        default_factory=lambda: _env("CORPUS_REINDEX_URL", "")
+    )
+    corpus_reindex_secret: str = field(
+        default_factory=lambda: _env("CORPUS_REINDEX_SECRET", ""), repr=False
+    )
+
     # --- Jobs ---------------------------------------------------------------
     # Workers (python -m server.worker, services/queue.py). EMBEDDED_WORKER runs
     # one inside the API process (`make dev-local`).

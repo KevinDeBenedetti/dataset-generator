@@ -12,6 +12,7 @@ Qdrant requires), and vectors are compared by cosine.
 
 import logging
 import threading
+import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, TypeVar
 
 import numpy as np
@@ -95,6 +96,61 @@ def collection_name(collection_id: str) -> str:
     """The Qdrant collection of a ``vector_collections`` row: its id, never a
     user-chosen name, behind the deployment's prefix."""
     return f"{config.qdrant_collection_prefix}c_{collection_id}"
+
+
+def build_name(name: str) -> str:
+    """A new collection for one build of ``name``: the build fills it, then
+    :func:`publish` makes ``name`` point at it."""
+    return f"{name}_{uuid.uuid4().hex[:12]}"
+
+
+def publish(name: str, built: str) -> None:
+    """Make ``name`` an alias of ``built``, then drop what it named before.
+
+    The switch is one atomic call in Qdrant: a search sees the previous
+    vectors, then the new ones, never nothing. The one exception is a
+    collection from before builds were aliased — a real collection called
+    ``name``, which an alias can't share a name with: it is deleted first.
+    """
+    from qdrant_client import models
+
+    def run(client: Any) -> None:
+        aliases = {a.alias_name for a in client.get_aliases().aliases}
+        operations: List[Any] = []
+        if name in aliases:
+            operations.append(
+                models.DeleteAliasOperation(
+                    delete_alias=models.DeleteAlias(alias_name=name)
+                )
+            )
+        elif client.collection_exists(name):
+            client.delete_collection(name)
+        operations.append(
+            models.CreateAliasOperation(
+                create_alias=models.CreateAlias(collection_name=built, alias_name=name)
+            )
+        )
+        client.update_collection_aliases(change_aliases_operations=operations)
+
+    _call("publishing a collection", run)
+    logger.info("Qdrant: %s now names %s", name, built)
+    for other in builds_of(name):
+        if other != built:
+            drop_build(other)
+
+
+def builds_of(name: str) -> List[str]:
+    """The collections built for ``name``: the one it names and any left over."""
+    prefix = f"{name}_"
+    return [n for n in names() if n.startswith(prefix)]
+
+
+def names() -> List[str]:
+    """Every collection in Qdrant, this deployment's and any other's."""
+    return _call(
+        "listing the collections",
+        lambda c: [col.name for col in c.get_collections().collections],
+    )
 
 
 def exists(name: str) -> bool:
@@ -188,12 +244,9 @@ def retrieve(name: str, ids: Sequence[int]) -> Dict[int, Dict[str, Any]]:
     return {int(p.id): dict(p.payload or {}) for p in points}
 
 
-def drop(name: str) -> bool:
-    """Delete a collection, best effort: True when one was dropped.
-
-    Never raises — it runs after the row is gone (a deleted collection or
-    account), which a Qdrant outage must not undo.
-    """
+def drop_build(name: str) -> bool:
+    """Delete one collection, best effort: True when it was dropped. Never
+    raises (see :func:`drop`)."""
     if not is_configured():
         return False
     try:
@@ -202,6 +255,26 @@ def drop(name: str) -> bool:
             client.delete_collection(name)
             logger.info("Qdrant: dropped %s", name)
             return True
-    except Exception as exc:  # noqa: BLE001 — best effort, see above
+    except Exception as exc:  # noqa: BLE001 — best effort
         logger.warning("Qdrant: could not drop %s: %s", name, exc)
     return False
+
+
+def drop(name: str) -> bool:
+    """Delete everything ``name`` has in Qdrant — the collection it names,
+    builds left over, a collection from before builds were aliased — best
+    effort: True when something was dropped.
+
+    Never raises — it runs after the row is gone (a deleted collection or
+    account), which a Qdrant outage must not undo.
+    """
+    if not is_configured():
+        return False
+    try:
+        targets = [*builds_of(name), name]
+    except Exception as exc:  # noqa: BLE001 — best effort, see above
+        logger.warning("Qdrant: could not drop %s: %s", name, exc)
+        return False
+    # ``name`` last: once its builds are gone it is no alias any more, and
+    # only a collection from before aliases still answers to it.
+    return any([drop_build(target) for target in targets])

@@ -7,7 +7,17 @@ import type { JobRunOut, RecipeIn, RecipeOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
 import { datasetHref } from '@/components/hub/format'
-import { useCancelJobRun, useCreateRecipe, useDeleteRecipe, useJobRun, useRunRecipe } from '@/hooks'
+import {
+  useCancelJobRun,
+  useCreateRecipe,
+  useDeleteRecipe,
+  useJobRun,
+  useRecipeSchedule,
+  useRunRecipe,
+  useSaveRecipeSchedule,
+} from '@/hooks'
+import { SchedulePicker } from '@/components/jobs/schedule-picker'
+import { type ScheduleForm, scheduleForm, toSchedule } from '@/components/jobs/schedule-state'
 import { HF_REPO_PATTERN, defaultTargetRepo, selectsSomething } from './recipe-state'
 
 /** Create a recipe: a name, and the Hugging Face repo it publishes to. */
@@ -163,6 +173,35 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
           ? 'The last generation was interrupted (its worker stopped). Generate again.'
           : `The last generation failed: ${run.error ?? 'unknown error'}`}
     </div>
+  )
+}
+
+/** When the recipe's dataset regenerates by itself. Saved on every change,
+ * like the recipe; "Only when I start it" removes the schedule. */
+function RecipeSchedule({ recipeId }: { recipeId: string }) {
+  const saved = useRecipeSchedule(recipeId)
+  const save = useSaveRecipeSchedule(recipeId)
+  const form = scheduleForm(saved.data)
+
+  if (saved.isPending) return null
+  return (
+    <SchedulePicker
+      id="recipe-every"
+      form={form}
+      disabled={save.isPending}
+      publishLabel="Publish what passes the checks at once, and keep the doubtful pairs for review"
+      onChange={(patch: Partial<ScheduleForm>) =>
+        save.mutate(toSchedule({ ...form, ...patch }), {
+          onError: (error) => toast.error(error.message),
+        })
+      }
+    >
+      At {form.time} UTC, from the recipe as it is then. A run that finds nothing changed on GitHub
+      makes no model call and publishes nothing. One recipe runs at a time: give your recipes
+      different times.
+      {saved.data?.next_run_at &&
+        ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
+    </SchedulePicker>
   )
 }
 
@@ -324,6 +363,8 @@ export function RecipeBar({
           </button>
         </div>
       </div>
+
+      <RecipeSchedule key={current.id} recipeId={current.id} />
 
       {run.data && <RunStatus run={run.data} recipe={working} />}
     </div>

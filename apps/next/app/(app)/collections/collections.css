@@ -263,8 +263,23 @@
   overflow: hidden;
 }
 
-.coll-misses .card-head {
+.coll-misses .card-head,
+.coll-compare .card-head {
   padding: 16px 18px 6px;
+}
+.coll-compare {
+  margin-top: 18px;
+}
+.coll-compare td {
+  vertical-align: top;
+  font-size: 13px;
+}
+.coll-compare .coll-num {
+  text-align: right;
+  white-space: nowrap;
+}
+.coll-compare-current td {
+  background: color-mix(in srgb, var(--viz-1) 7%, transparent);
 }
 .coll-table-wrap {
   overflow-x: auto;

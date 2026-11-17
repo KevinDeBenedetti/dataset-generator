@@ -39,6 +39,10 @@ class PromptManager:
     """
 
 
+class PageTranscriptionError(RuntimeError):
+    """The model call that transcribes a page failed (the reason is the message)."""
+
+
 class LLMService:
     """Text cleaning and page transcription.
 
@@ -76,9 +80,10 @@ class LLMService:
         """Transcribe an image (or rendered PDF page) to text with ``model``,
         the LLM (it must read images).
 
-        Returns the transcribed text, or an empty string if the call fails or
-        the page has no readable text. Raises ``ValueError`` if no model is
-        given.
+        Returns the transcribed text, an empty string when the page has no
+        readable text. Raises :class:`PageTranscriptionError` when the call
+        fails — a model that cannot read images, say — and ``ValueError`` if no
+        model is given.
         """
         if not model:
             raise ValueError("No LLM configured (set it on /models)")
@@ -95,4 +100,4 @@ class LLMService:
             return result.text
         except Exception as e:
             logging.error(f"Page transcription failed: {e}")
-            return ""
+            raise PageTranscriptionError(str(e)) from e

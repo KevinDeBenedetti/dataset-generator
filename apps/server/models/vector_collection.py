@@ -30,6 +30,9 @@ class VectorCollection(Base):
 
     ``status``: building → ready. A build that fails, is cancelled or loses its
     worker leaves "building" behind, and its run (``run_id``) says why.
+    A collection built once (``built_at``) keeps its vectors through a rebuild
+    and after a failed one: they are replaced only when the new build is
+    complete.
     """
 
     __tablename__ = "vector_collections"
@@ -61,6 +64,10 @@ class VectorCollection(Base):
     # endpoint model (an older collection may name a local one, no longer run).
     model: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="building")
+    # The commit a rebuild in flight is embedding (null otherwise): ``revision``
+    # stays the one the vectors in Qdrant were built from until it completes,
+    # so the collection keeps answering on its previous version meanwhile.
+    building_revision: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The job run of the latest build (job_runs.id): while the row says
     # "building", the run's status and error are the collection's.
     run_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -71,6 +78,10 @@ class VectorCollection(Base):
     # The columns kept in every point's payload, besides the embedded text.
     fields: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
     built_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # The host of the OpenAI-compatible endpoint that embedded the points (null
+    # for a build from before it was recorded): the model's id alone does not
+    # say which endpoint's model it was.
+    endpoint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The latest retrieval test (services/collections.py evaluate), or null.
     evaluation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_now)

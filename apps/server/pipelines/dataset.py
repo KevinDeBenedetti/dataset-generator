@@ -9,7 +9,7 @@ from server.services.credentials import Credentials
 from server.services.datasets import save_generation
 from server.core.cpu import cpu_bound
 from server.services.files import on_render_thread, open_pages
-from server.services.llm import LLMService
+from server.services.llm import LLMService, PageTranscriptionError
 from server.services.qa import QAService
 from server.services.quality_rules import get_quality_rules
 from server.services.web import fetch_page, html_to_text
@@ -17,6 +17,8 @@ from server.schemas.dataset import TargetLanguage
 
 # Question-similarity cut-off when the caller sends none — tuned for the
 # embedding comparison (see services/semantic.py), which is the default path.
+# How much of a failed transcription call's error an upload's refusal quotes.
+MAX_FAILURE_CHARS = 300
 DEFAULT_SIMILARITY_THRESHOLD = 0.85
 
 ProgressFn = Callable[[Dict[str, Any]], None]
@@ -128,27 +130,41 @@ class DatasetPipeline:
             # memory.
             t = time.perf_counter()
             texts: List[Tuple[str, str]] = []
+            failures: List[str] = []
             for index in range(source.page_count):
                 label, image_bytes, mime_type = await on_render_thread(
                     source.render, index
                 )
-                text = await self.llm_service.extract_text_from_image(
-                    image_bytes, mime_type=mime_type, model=model
-                )
+                try:
+                    text = await self.llm_service.extract_text_from_image(
+                        image_bytes, mime_type=mime_type, model=model
+                    )
+                except PageTranscriptionError as exc:
+                    failures.append(str(exc))
+                    text = ""
                 del image_bytes
                 if text:
                     texts.append((label, text))
         finally:
             await on_render_thread(source.close)
+        # Every page failed: not an empty file, a model that cannot do it. One
+        # model runs every step, so say which, and what the call answered.
+        if failures and len(failures) == source.page_count:
+            raise ValueError(
+                f"{model} could not transcribe {filename}: "
+                f"{failures[-1][:MAX_FAILURE_CHARS]}. The LLM must read images: "
+                "pick another one on the Models page."
+            )
         chars = sum(len(text) for _, text in texts)
+        failed = f"; {len(failures)} page(s) failed" if failures else ""
         run.record(
             "extract",
             "Transcribe pages",
-            "success" if chars else "warning",
+            "success" if chars and not failures else "warning",
             t,
-            f"Transcribed {len(texts)} page(s) with {model} → {chars:,} characters"
+            f"Transcribed {len(texts)} page(s) with {model} → {chars:,} characters{failed}"
             if chars
-            else "No readable text found in the file",
+            else f"No readable text found in the file{failed}",
         )
 
         return await self._mine_and_save(

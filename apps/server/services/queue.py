@@ -240,10 +240,17 @@ async def run_once(worker: Optional[str] = None) -> Optional[str]:
     return run_id
 
 
+# How often a worker drops the Qdrant collections no row names any more
+# (services/collections.py drop_orphans): left by a deletion during an outage.
+ORPHAN_SWEEP_SECONDS = 3600.0
+
+
 async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) -> None:
-    """The worker loop: sweep stale runs and queue the scheduled ones, claim,
+    """The worker loop: sweep stale runs, queue the scheduled ones and, now and
+    then, drop orphaned vector collections; claim,
     execute — until ``stop`` is set, then drain the runs in progress for
     ``WORKER_DRAIN_SECONDS``."""
+    from server.services.collections import drop_orphans  # jobs -> queue: lazy
     from server.services.schedules import queue_due  # jobs -> queue: lazy
 
     worker = worker_name()
@@ -251,6 +258,7 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
     running: set[asyncio.Task] = set()
     logger.info("worker %s started (%d slot(s))", worker, slots)
     last_sweep = 0.0
+    last_orphans = 0.0
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         if loop.time() - last_sweep > config.worker_heartbeat_seconds:
@@ -260,6 +268,12 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
             except Exception as exc:  # noqa: BLE001 — DB blip: retry next sweep
                 logger.warning("schedule sweep failed: %s", exc)
             last_sweep = loop.time()
+        if loop.time() - last_orphans > ORPHAN_SWEEP_SECONDS:
+            last_orphans = loop.time()
+            try:
+                await asyncio.to_thread(drop_orphans)
+            except Exception as exc:  # noqa: BLE001 — Qdrant down: next sweep
+                logger.warning("orphaned collections sweep failed: %s", exc)
         claimed = None
         if len(running) < slots:
             try:

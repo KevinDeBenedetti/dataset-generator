@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import httpx
 
+from server.core.config import config
 from server.services.credentials import Credentials
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
@@ -853,3 +854,38 @@ def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
         commit_description=description,
     )
     return f"https://huggingface.co/datasets/{repo_id}"
+
+
+# --- after the push ----------------------------------------------------------
+
+REINDEX_TIMEOUT_SECONDS = 30.0
+
+
+async def notify_reindex(
+    transport: Optional[httpx.AsyncBaseTransport] = None,
+) -> Optional[str]:
+    """Tell the site that indexes the corpus to read it again: one POST to
+    ``CORPUS_REINDEX_URL`` with ``CORPUS_REINDEX_SECRET`` as a bearer token.
+
+    None when it answered 2xx; otherwise what went wrong, for the run's
+    report — the corpus is published either way, so a site that is down
+    never fails the run. The URL is the operator's: it is called as it is, and
+    a redirect is not followed (the secret would follow it).
+    """
+    url, secret = config.corpus_reindex_url, config.corpus_reindex_secret
+    try:
+        async with httpx.AsyncClient(
+            timeout=REINDEX_TIMEOUT_SECONDS, transport=transport
+        ) as client:
+            response = await client.post(
+                url, headers={"Authorization": f"Bearer {secret}"}
+            )
+    except httpx.HTTPError as exc:
+        return f"The reindex call failed: {type(exc).__name__}: {exc}"
+    if response.is_success:
+        return None
+    return f"The reindex call answered {response.status_code}"
+
+
+def reindex_configured() -> bool:
+    return bool(config.corpus_reindex_url and config.corpus_reindex_secret)

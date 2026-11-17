@@ -283,7 +283,7 @@ class TestGenerateDatasetFromUrl:
 class TestGenerationDrafts:
     """With a target_repo, a generation is kept as a draft to review."""
 
-    def test_a_url_generation_becomes_a_draft(self, mock_url_pipeline):
+    def test_a_url_generation_becomes_a_draft(self, mock_url_pipeline, memory_hub):
         mock_url_pipeline.process_url.return_value = {
             "qa_pairs": [{"question": "What is it?", "answer": "A guide."}],
             "items": [{"id": "h1", "question": "What is it?", "answer": "A guide."}],
@@ -314,7 +314,7 @@ class TestGenerationDrafts:
         )
         assert kwargs["kind"] == "web" and kwargs["title"] == "Docs"
 
-    def test_no_pair_means_no_draft(self, mock_url_pipeline):
+    def test_no_pair_means_no_draft(self, mock_url_pipeline, memory_hub):
         mock_url_pipeline.process_url.return_value = {
             "qa_pairs": [],
             "items": [],
@@ -333,6 +333,65 @@ class TestGenerationDrafts:
         assert response.status_code == 201
         assert response.json()["draft_run_id"] is None
         keep.assert_not_called()
+
+    def test_a_bare_target_repo_is_completed_before_generating(
+        self, mock_url_pipeline, memory_hub
+    ):
+        mock_url_pipeline.process_url.return_value = {
+            "qa_pairs": [{"question": "What is it?", "answer": "A guide."}],
+            "items": [{"id": "h1", "question": "What is it?", "answer": "A guide."}],
+            "dataset_id": "web-ds",
+            "steps": [],
+        }
+        with patch(
+            "server.api.generate.create_generation_draft", return_value="run-8"
+        ) as keep:
+            response = client.post(
+                "/dataset/generate/url",
+                json={
+                    "url": "https://docs.example.com/guide",
+                    "dataset_name": "Docs",
+                    "target_repo": "docs-qa",
+                },
+            )
+        assert response.status_code == 201, response.text
+        # The token's account names the repo: the draft is stored on the full id.
+        assert keep.call_args.args[2] == "kevin/docs-qa"
+
+    @pytest.mark.parametrize("target", ["docs-qa", "kevin/docs-qa"])
+    def test_a_refused_token_stops_a_draft_before_the_model_runs(
+        self, mock_url_pipeline, memory_hub, target
+    ):
+        memory_hub.rejects_token = True
+        response = client.post(
+            "/dataset/generate/url",
+            json={
+                "url": "https://docs.example.com/guide",
+                "dataset_name": "Docs",
+                "target_repo": target,
+            },
+        )
+        assert response.status_code == 503
+        assert "rejected your token" in response.json()["detail"]
+        mock_url_pipeline.process_url.assert_not_called()
+
+    def test_a_draft_without_a_hub_token_stops_before_the_model_runs(
+        self, mock_url_pipeline
+    ):
+        app.dependency_overrides[get_credentials] = lambda: make_creds(
+            openai_api_key="test-openai-key", base_url_trusted=True
+        )
+        response = client.post(
+            "/dataset/generate/url",
+            json={
+                "url": "https://docs.example.com/guide",
+                "dataset_name": "Docs",
+                "target_repo": "kevin/docs-qa",
+            },
+        )
+        assert response.status_code == 503
+        assert "Hugging Face" in response.json()["detail"]
+        mock_url_pipeline.process_url.assert_not_called()
 
     def test_an_invalid_target_repo_is_refused(self, mock_url_pipeline):
         response = client.post(

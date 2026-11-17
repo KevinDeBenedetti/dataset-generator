@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from server.tests.creds import FULL
 from server.pipelines.dataset import DatasetPipeline
+from server.services.llm import PageTranscriptionError
 
 
 def _qa_stats(total=0, exact=0, similar=0, items=None):
@@ -142,6 +143,83 @@ class TestDatasetPipeline:
         ]
 
     @pytest.mark.asyncio
+    @patch("server.pipelines.dataset.open_pages")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    async def test_a_file_no_page_of_which_could_be_transcribed_is_an_error(
+        self,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_render_pages,
+        mock_qa_service,
+    ):
+        """Every call failed: the model can't do it. An empty result with a
+        warning step would hide what to change."""
+        pages = _FakePages(
+            [
+                ("doc.pdf p.1", b"img1", "image/png"),
+                ("doc.pdf p.2", b"img2", "image/png"),
+            ]
+        )
+        mock_render_pages.return_value = pages
+        mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
+            side_effect=PageTranscriptionError("this model does not support images")
+        )
+
+        with pytest.raises(ValueError) as refused:
+            await DatasetPipeline("owner-1", FULL).process_file(
+                content=b"pdf",
+                filename="doc.pdf",
+                content_type="application/pdf",
+                dataset_name="test_dataset",
+                target_language="fr",
+                model="openai:text-only",
+            )
+
+        message = str(refused.value)
+        assert "openai:text-only could not transcribe doc.pdf" in message
+        assert "does not support images" in message and "Models page" in message
+        mock_qa_agent_service_class.return_value.generate_qa.assert_not_called()
+        assert pages.events[-1] == "close"
+
+    @patch("server.pipelines.dataset.open_pages")
+    @patch("server.pipelines.dataset.LLMService")
+    @patch("server.pipelines.dataset.QAAgentService")
+    async def test_a_page_whose_call_failed_is_skipped_and_counted(
+        self,
+        mock_qa_agent_service_class,
+        mock_llm_service_class,
+        mock_render_pages,
+        mock_qa_service,
+    ):
+        mock_render_pages.return_value = _FakePages(
+            [
+                ("doc.pdf p.1", b"img1", "image/png"),
+                ("doc.pdf p.2", b"img2", "image/png"),
+            ]
+        )
+        mock_llm_service_class.return_value.extract_text_from_image = AsyncMock(
+            side_effect=[PageTranscriptionError("timeout"), "real text"]
+        )
+        mock_qa_agent_service_class.return_value.generate_qa = AsyncMock(
+            return_value=["qa1"]
+        )
+        mock_qa_service.process_qa_pairs.return_value = _qa_stats(total=1)
+
+        result = await DatasetPipeline("owner-1", FULL).process_file(
+            content=b"pdf",
+            filename="doc.pdf",
+            content_type="application/pdf",
+            dataset_name="test_dataset",
+            target_language="fr",
+            model="openai:m",
+        )
+
+        [extract] = [s for s in result["steps"] if s["key"] == "extract"]
+        assert extract["status"] == "warning"
+        assert "Transcribed 1 page(s)" in extract["detail"]
+        assert "1 page(s) failed" in extract["detail"]
+
     @patch("server.pipelines.dataset.open_pages")
     @patch("server.pipelines.dataset.LLMService")
     @patch("server.pipelines.dataset.QAAgentService")

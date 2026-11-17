@@ -295,3 +295,29 @@ async def test_a_failed_publication_leaves_the_draft_publishable(db, memory_hub,
     published = await publish_run(owner.id, CREDS, run_id, exclude=[], edits={})
     assert published["status"] == "published"
     assert [r["id"] for r in _rows(memory_hub)] == ["old", "a", "b"]
+
+
+async def test_drafts_do_not_use_up_the_daily_run_quota(
+    db, memory_hub, owner, monkeypatch
+):
+    """A draft is a run row, but no worker ran: a day of drafts must not block
+    the jobs that do need one."""
+    from server.core.config import config
+    from server.services.jobs import QuotaExceededError, _check_quotas
+
+    monkeypatch.setattr(config, "quota_runs_per_day", 2)
+    for _ in range(3):
+        _make_draft(owner)
+
+    with db() as session:
+        _check_quotas(session, owner.id)  # three drafts, and still room
+
+        from server.models.job_run import JobRun
+
+        for _ in range(2):
+            session.add(
+                JobRun(owner_id=owner.id, job_id="github-recipe", status="failed")
+            )
+        session.commit()
+        with pytest.raises(QuotaExceededError, match="Daily limit"):
+            _check_quotas(session, owner.id)

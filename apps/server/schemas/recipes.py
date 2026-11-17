@@ -1,7 +1,7 @@
 """Dataset recipes (``/recipes``, services/recipes.py)."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -87,6 +87,35 @@ class RecipeRunRequest(BaseModel):
     model_ref: Optional[str] = Field(
         None, max_length=200, description="Model for this run; null = the recipe's"
     )
+
+
+class RecipeScheduleIn(BaseModel):
+    """When a recipe's dataset regenerates by itself, and what a scheduled
+    run does with its result."""
+
+    every: Optional[Literal["day", "week", "month"]] = Field(
+        None,
+        description="Regenerate every day, week or month; null = only when you "
+        "start it",
+    )
+    at_hour: int = Field(3, ge=0, le=23, description="Hour of a scheduled run (UTC)")
+    at_minute: int = Field(0, ge=0, le=59, description="Minute of a scheduled run")
+    publish: bool = Field(
+        True,
+        description="A scheduled run publishes what passes the checks and keeps "
+        "the rest for review; off: it stops at a draft",
+    )
+
+
+class RecipeScheduleOut(RecipeScheduleIn):
+    recipe_id: str
+    next_run_at: Optional[datetime] = Field(
+        None, description="When the worker queues the next run"
+    )
+    latest_run: Optional[JobRunRef] = Field(
+        None, description="The most recent scheduled run"
+    )
+    updated_at: datetime
 
 
 class RecipesOut(BaseModel):

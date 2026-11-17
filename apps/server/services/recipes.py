@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 
 from server.core.config import config
 from server.models.dataset_recipe import DatasetRecipe
+from server.core.database import get_scoped_db
 from server.models.job_run import JobRun
+from server.models.job_schedule import JobSchedule
 
 # The job a recipe runs as (jobs/registry.py): off the Jobs page, started from
 # POST /recipes/{id}/run, its options carry the recipe it was run from.
@@ -129,11 +131,40 @@ def update_recipe(
 ) -> Dict[str, Any]:
     recipe = _owned(db, owner_id, recipe_id)
     _apply(recipe, data)
+    # A scheduled run uses the recipe as it is then, its model included: the
+    # schedule's own copy of the model follows the recipe's.
+    schedule = _schedule(db, owner_id, recipe_id)
+    if schedule is not None:
+        schedule.model_ref = recipe.model_ref
     _commit(db, data["name"])
     db.refresh(recipe)
     return _view(recipe)
 
 
 def delete_recipe(db: Session, owner_id: str, recipe_id: str) -> None:
+    """Delete the recipe, and its schedule with it: nothing is left to run."""
     db.delete(_owned(db, owner_id, recipe_id))
+    schedule = _schedule(db, owner_id, recipe_id)
+    if schedule is not None:
+        db.delete(schedule)
     db.commit()
+
+
+def _schedule(db: Session, owner_id: str, recipe_id: str) -> Optional[JobSchedule]:
+    """The recipe's schedule row, if it has one (services/schedules.py — read
+    here by its model: that module imports the job registry, which imports
+    this one)."""
+    return db.scalar(
+        select(JobSchedule).where(
+            JobSchedule.owner_id == owner_id,
+            JobSchedule.job_id == RECIPE_JOB_ID,
+            JobSchedule.scope == recipe_id,
+        )
+    )
+
+
+def load_recipe(owner_id: str, recipe_id: str) -> Dict[str, Any]:
+    """:func:`get_recipe` on a session of its own — what a scheduled run reads
+    when it starts. Blocking."""
+    with get_scoped_db() as db:
+        return get_recipe(db, owner_id, recipe_id)

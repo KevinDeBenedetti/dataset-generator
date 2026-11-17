@@ -6,7 +6,16 @@ import { toast } from 'sonner'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
-import { useCancelJobRun, useJobRun, usePublishJobRun, useStartJobRun } from '@/hooks'
+import {
+  useCancelJobRun,
+  useJobRun,
+  useJobSchedule,
+  usePublishJobRun,
+  useSaveJobSchedule,
+  useStartJobRun,
+} from '@/hooks'
+import { SchedulePicker } from './schedule-picker'
+import { type ScheduleForm, scheduleForm, toSchedule } from './schedule-state'
 import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
 
 // The subset of JSON schema the job option models produce (pydantic).
@@ -473,6 +482,48 @@ function RunPanel({ runId }: { runId: string }) {
   )
 }
 
+/** When the job runs by itself, with the options and the model the card
+ * shows at the moment the schedule is set or changed. */
+function JobSchedule({
+  job,
+  options,
+  modelRef,
+}: {
+  job: JobInfo
+  options: () => Record<string, unknown>
+  modelRef: string | null
+}) {
+  const saved = useJobSchedule(job.id)
+  const save = useSaveJobSchedule(job.id)
+  const form = scheduleForm(saved.data)
+
+  if (saved.isPending) return null
+  return (
+    <SchedulePicker
+      id={`every-${job.id}`}
+      form={form}
+      disabled={save.isPending}
+      publishLabel={
+        job.has_draft
+          ? 'Publish what passes the checks at once, and keep the doubtful pairs for review'
+          : 'Publish what it builds'
+      }
+      onChange={(patch: Partial<ScheduleForm>) => {
+        const timing = toSchedule({ ...form, ...patch })
+        save.mutate(timing && { ...timing, options: options(), model_ref: modelRef }, {
+          onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+        })
+      }}
+    >
+      At {form.time} UTC, with the options{job.uses_model ? ' and the model' : ''} above as they are
+      when you set this: change the schedule again to save new ones.
+      {job.has_draft && ' A run that finds nothing changed makes no model call.'}
+      {saved.data?.next_run_at &&
+        ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
+    </SchedulePicker>
+  )
+}
+
 /** One job of the catalogue (GET /jobs): its options, the button that queues a
  * run, and that run's state — with the review of its draft for a draft job. */
 export function JobCard({ job }: { job: JobInfo }) {
@@ -549,6 +600,11 @@ export function JobCard({ job }: { job: JobInfo }) {
             disabled={running}
           />
         ))}
+        <JobSchedule
+          job={job}
+          options={() => toOptions(properties, values)}
+          modelRef={job.uses_model ? modelRef || null : null}
+        />
       </div>
       <div
         className="card-foot"

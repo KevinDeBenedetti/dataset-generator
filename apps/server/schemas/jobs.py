@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -43,6 +43,40 @@ class JobRunRequest(BaseModel):
         description='Model reference, e.g. "openai:chat-default" (jobs using a '
         "model only; default: your LLM)",
     )
+
+
+class JobScheduleIn(BaseModel):
+    """A whole-account job's schedule: the options and model its runs copy,
+    and when the worker starts one by itself."""
+
+    options: Dict[str, Any] = Field(
+        default_factory=dict, description="Validated against the job's options_schema"
+    )
+    model_ref: Optional[str] = Field(
+        None, max_length=200, description="Model reference; null = your LLM"
+    )
+    every: Optional[Literal["day", "week", "month"]] = Field(
+        None, description="Run every day, week or month; null = only when you start it"
+    )
+    at_hour: int = Field(3, ge=0, le=23, description="Hour of a scheduled run (UTC)")
+    at_minute: int = Field(0, ge=0, le=59, description="Minute of a scheduled run")
+    publish: bool = Field(
+        True,
+        description="A scheduled run publishes: what passes the checks for a Q&A "
+        "job (the rest waits as a draft), the corpus for the knowledge corpus; "
+        "off: it stops at a draft, or builds without publishing",
+    )
+
+
+class JobScheduleOut(JobScheduleIn):
+    job: str
+    next_run_at: Optional[datetime] = Field(
+        None, description="When the worker queues the next run"
+    )
+    latest_run: Optional[JobRunRef] = Field(
+        None, description="The most recent scheduled run"
+    )
+    updated_at: datetime
 
 
 class JobResultOut(BaseModel):

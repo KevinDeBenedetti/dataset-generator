@@ -25,7 +25,7 @@ from server.services import collections, hub, qdrant
 from server.services import jobs as jobs_service
 from server.services import queue
 from server.services.jobs import RunConflictError, get_run
-from server.tests.creds import FULL
+from server.tests.creds import FULL, make_creds
 from server.tests.fake_embedder import DIM, FakeEmbedder
 
 OWNER = "owner-1"
@@ -245,6 +245,63 @@ def test_a_collection_is_built_and_searched_on_the_owners_credentials(
     collections.search(db, OWNER, created["id"], "capital", creds=FULL)
     assert embedder.models[0] == "openai:embed-default"
     assert embedder.creds == [FULL, FULL]  # the build, then the search
+
+
+def test_a_build_records_its_endpoint_and_a_changed_one_is_flagged(
+    db, vectors, fake_hub, queued, embedder
+):
+    """The model's id says nothing of the endpoint serving it: a collection
+    remembers the host it was built on, and tells its owner when theirs moved."""
+    built = _ready(db, embedder, fake_hub, queued)
+    # FULL has no base URL of its own: the OpenAI client's default host.
+    assert built["endpoint"] == "api.openai.com"
+
+    def view(creds):
+        return collections.get_collection(db, OWNER, built["id"], creds)
+
+    assert view(FULL)["current_endpoint"] is None
+    moved = make_creds(
+        openai_api_key="sk-other", openai_base_url="https://LLM.example.com:8443/v1"
+    )
+    assert view(moved)["current_endpoint"] == "llm.example.com:8443"
+    listed = collections.list_collections(db, OWNER, moved)["collections"]
+    assert [c["current_endpoint"] for c in listed] == ["llm.example.com:8443"]
+    # A URL's user and password are never recorded or shown.
+    with_userinfo = make_creds(
+        openai_api_key="sk-other", openai_base_url="https://user:pw@llm.example.com/v1"
+    )
+    assert view(with_userinfo)["current_endpoint"] == "llm.example.com"
+    # Nothing to compare with: no credentials at hand, or no key saved.
+    assert view(None)["current_endpoint"] is None
+    assert view(make_creds())["current_endpoint"] is None
+
+
+def test_a_collection_from_before_endpoints_were_recorded_is_not_flagged(
+    db, vectors, fake_hub, queued, embedder
+):
+    built = _ready(db, embedder, fake_hub, queued)
+    row = db.get(VectorCollection, built["id"])
+    row.endpoint = None
+    db.commit()
+    moved = make_creds(openai_api_key="sk-other", openai_base_url="https://x.test/v1")
+    assert (
+        collections.get_collection(db, OWNER, built["id"], moved)["current_endpoint"]
+        is None
+    )
+
+
+def test_a_rebuild_on_another_endpoint_records_the_new_one(
+    db, vectors, fake_hub, queued, embedder
+):
+    created = _define(db)
+    moved = make_creds(
+        openai_api_key="sk-other",
+        openai_base_url="https://llm.example.com/v1",
+        hf_token="hf_test_token",
+    )
+    asyncio.run(collections.build(moved, created["id"], lambda *step: None))
+    view = collections.get_collection(db, OWNER, created["id"], moved)
+    assert (view["endpoint"], view["current_endpoint"]) == ("llm.example.com", None)
 
 
 def test_what_a_collection_can_not_be_built_from_is_refused(
@@ -538,13 +595,90 @@ def test_a_rebuild_moves_to_the_latest_commit_and_replaces_the_vectors(
     fake_hub.latest = NEWER
 
     rebuilt = asyncio.run(collections.rebuild_collection(db, OWNER, FULL, ready["id"]))
-    assert rebuilt["status"] == "building" and rebuilt["revision"] == NEWER
+    # Still the commit of the vectors in Qdrant: the newer one is being built.
+    assert rebuilt["status"] == "building" and rebuilt["revision"] == SHA
+    assert rebuilt["building_revision"] == NEWER
     asyncio.run(_build_now(ready["id"]))
 
     db.expire_all()
     after = collections.get_collection(db, OWNER, ready["id"])
     assert after["status"] == "ready" and after["points_count"] == 2
+    assert (after["revision"], after["building_revision"]) == (NEWER, None)
     assert vectors.count(after["qdrant_collection"]).count == 2
+    # The previous build's collection is gone: one left, the one being named.
+    assert len(qdrant.builds_of(after["qdrant_collection"])) == 1
+
+
+def test_a_collection_keeps_answering_while_it_is_rebuilt(
+    db, vectors, embedder, fake_hub, queued
+):
+    """A rebuild fills a collection of its own: search and the test go on, on
+    the previous version, until it is complete."""
+    ready = _ready(db, embedder, fake_hub, queued)
+    fake_hub.latest = NEWER
+    asyncio.run(collections.rebuild_collection(db, OWNER, FULL, ready["id"]))
+    seen = []
+
+    def during(done, total, label):
+        if done and not seen:
+            db.expire_all()
+            view = collections.get_collection(db, OWNER, ready["id"])
+            hits = collections.search(db, OWNER, ready["id"], "capital", creds=FULL)
+            seen.append(
+                (view["status"], view["serving"], view["revision"], len(hits["hits"]))
+            )
+
+    asyncio.run(collections.build(FULL, ready["id"], during))
+
+    # Mid-build: still serving the four points of the first commit.
+    assert seen == [("building", True, SHA, 4)]
+    db.expire_all()
+    hits = collections.search(db, OWNER, ready["id"], "capital", creds=FULL)
+    assert len(hits["hits"]) == 2  # the newer commit's two rows
+
+
+def test_a_failed_rebuild_leaves_the_previous_version_answering(
+    db, vectors, embedder, fake_hub, queued
+):
+    ready = _ready(db, embedder, fake_hub, queued)
+    fake_hub.latest = NEWER
+    fake_hub.tables[NEWER] = _table([{"other": "no such column here"}])
+    asyncio.run(collections.rebuild_collection(db, OWNER, FULL, ready["id"]))
+
+    with pytest.raises(collections.CollectionBuildError, match="no column"):
+        asyncio.run(_build_now(ready["id"]))
+
+    db.expire_all()
+    view = collections.get_collection(db, OWNER, ready["id"])
+    assert view["serving"] is True and view["revision"] == SHA
+    found = collections.search(db, OWNER, ready["id"], "capital", creds=FULL)
+    assert len(found["hits"]) == 4
+    # Nothing of the failed build is left behind.
+    assert len(qdrant.builds_of(view["qdrant_collection"])) == 1
+
+
+def test_a_first_build_is_not_serving_until_it_is_done(db, vectors, fake_hub, queued):
+    building = _define(db)
+    assert building["serving"] is False and building["building_revision"] is None
+
+
+def test_a_collection_from_before_builds_were_aliased_is_replaced(
+    db, vectors, embedder, fake_hub, queued
+):
+    """Its vectors live in a real Qdrant collection called like the row: a
+    rebuild takes the name over, and nothing of the old one is left."""
+    ready = _ready(db, embedder, fake_hub, queued)
+    name = ready["qdrant_collection"]
+    qdrant.drop(name)
+    qdrant.recreate(name, 4)  # as an older version of the app left it
+    assert vectors.collection_exists(name) and qdrant.builds_of(name) == []
+
+    asyncio.run(collections.rebuild_collection(db, OWNER, FULL, ready["id"]))
+    asyncio.run(_build_now(ready["id"]))
+
+    assert name not in qdrant.names()  # an alias now, not a collection
+    assert vectors.count(name).count == 4
+    assert len(qdrant.builds_of(name)) == 1
 
 
 def test_a_rebuild_is_refused_while_building_and_restored_if_it_can_not_start(
@@ -622,7 +756,7 @@ def test_a_collection_that_is_not_ready_can_not_be_searched(
         collections.search(db, OWNER, building["id"], "capital")
 
     ready = _ready(db, embedder, fake_hub, queued, name="Second")
-    vectors.delete_collection(ready["qdrant_collection"])
+    qdrant.drop(ready["qdrant_collection"])
     with pytest.raises(collections.CollectionConflictError, match="build it again"):
         collections.search(db, OWNER, ready["id"], "capital")
 
@@ -708,3 +842,39 @@ def test_the_listing_offers_the_models_and_says_whether_qdrant_is_set_up(
     # No endpoint, nothing to build with.
     assert collections.list_collections(db, OWNER)["models"] == []
     assert listed["quota"] == config.quota_collections
+
+
+# --- orphaned vectors ---------------------------------------------------------------
+
+
+def test_the_sweep_drops_the_vectors_no_collection_names(
+    db, vectors, fake_hub, queued, embedder
+):
+    """A deletion during a Qdrant outage leaves its vectors behind: the
+    worker's sweep drops them, and leaves everything else alone."""
+    kept = _ready(db, embedder, fake_hub, queued)
+    prefix = config.qdrant_collection_prefix
+    orphan = f"{prefix}c_{'0' * 32}"
+    orphan_build = f"{prefix}c_{'2' * 32}_{'a' * 12}"
+    others = [
+        f"{prefix}not-ours",  # our prefix, but not a name this app makes
+        f"other_c_{'1' * 32}",  # another deployment's prefix
+        "portfolio",  # another app's
+    ]
+    for name in [orphan, orphan_build, *others]:
+        qdrant.recreate(name, 4)
+
+    assert sorted(collections.drop_orphans()) == sorted([orphan, orphan_build])
+
+    left = set(qdrant.names())
+    assert set(qdrant.builds_of(kept["qdrant_collection"])) <= left
+    assert vectors.count(kept["qdrant_collection"]).count == 4
+    assert not {orphan, orphan_build} & left
+    assert set(others) <= left
+    # Nothing left to drop: a second sweep is a no-op.
+    assert collections.drop_orphans() == []
+
+
+def test_the_sweep_needs_qdrant(monkeypatch):
+    monkeypatch.setattr(config, "qdrant_url", "")
+    assert collections.drop_orphans() == []

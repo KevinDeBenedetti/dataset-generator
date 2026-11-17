@@ -13,8 +13,15 @@ from server.api.deps import get_credentials
 from server.core.database import get_db
 from server.models.user import User
 from server.schemas.jobs import JobRunOut
-from server.schemas.recipes import RecipeIn, RecipeOut, RecipeRunRequest, RecipesOut
-from server.services import recipes
+from server.schemas.recipes import (
+    RecipeIn,
+    RecipeOut,
+    RecipeRunRequest,
+    RecipeScheduleIn,
+    RecipeScheduleOut,
+    RecipesOut,
+)
+from server.services import recipes, schedules
 from server.services.auth import get_current_user
 from server.services.credentials import Credentials
 from server.services.jobs import QuotaExceededError, RunConflictError, start_run
@@ -133,3 +140,106 @@ async def run_recipe(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return JobRunOut(**run)
+
+
+# --- its schedule ----------------------------------------------------------------
+
+
+def _schedule(saved: dict) -> dict:
+    return {
+        "recipe_id": saved["scope"],
+        "every": saved["every"],
+        "at_hour": saved["at_hour"],
+        "at_minute": saved["at_minute"],
+        "publish": saved["publish"],
+        "next_run_at": saved["next_run_at"],
+        "latest_run": saved["last_run"],
+        "updated_at": saved["updated_at"],
+    }
+
+
+def _no_schedule(recipe_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404, detail=f"Recipe '{recipe_id}' has no schedule yet"
+    )
+
+
+@router.get(
+    "/{recipe_id}/schedule",
+    response_model=RecipeScheduleOut,
+    summary="The recipe's schedule",
+)
+def get_recipe_schedule(
+    recipe_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """When the recipe's dataset regenerates by itself, with the next and the
+    latest scheduled run. 404 for an unknown recipe, and until one is saved."""
+    try:
+        recipes.get_recipe(db, user.id, recipe_id)
+        return _schedule(
+            schedules.get_schedule(db, user.id, recipes.RECIPE_JOB_ID, recipe_id)
+        )
+    except recipes.RecipeNotFoundError as e:
+        raise _not_found(e) from e
+    except schedules.ScheduleNotFoundError:
+        raise _no_schedule(recipe_id) from None
+
+
+@router.put(
+    "/{recipe_id}/schedule",
+    response_model=RecipeScheduleOut,
+    summary="Save the recipe's schedule",
+)
+async def put_recipe_schedule(
+    recipe_id: str,
+    body: RecipeScheduleIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Each scheduled run generates from the recipe as it is then — its
+    selection, its dataset, its model — incrementally, so a day nothing
+    changed on GitHub costs no model call. A preset set or moved runs first
+    at its next time. Only one recipe run goes at a time: give recipes
+    different times."""
+    try:
+        recipe = await run_in_threadpool(recipes.get_recipe, db, user.id, recipe_id)
+    except recipes.RecipeNotFoundError as e:
+        raise _not_found(e) from e
+    try:
+        saved = await run_in_threadpool(
+            schedules.upsert_schedule,
+            db,
+            user.id,
+            recipes.RECIPE_JOB_ID,
+            recipe_id,
+            # No copy of the recipe: the run reads it when it starts.
+            options={"recipe_id": recipe_id},
+            model_ref=recipe["model_ref"],
+            every=body.every,
+            at_hour=body.at_hour,
+            at_minute=body.at_minute,
+            publish=body.publish,
+        )
+    except schedules.ScheduleInputError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return _schedule(saved)
+
+
+@router.delete(
+    "/{recipe_id}/schedule",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove the recipe's schedule",
+)
+def delete_recipe_schedule(
+    recipe_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """The recipe stops regenerating by itself; it and its dataset stay."""
+    try:
+        schedules.delete_schedule(db, user.id, recipes.RECIPE_JOB_ID, recipe_id)
+    except schedules.ScheduleNotFoundError:
+        raise _no_schedule(recipe_id) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

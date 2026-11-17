@@ -1,6 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRecipe, deleteRecipe, getRecipes, runRecipe, updateRecipe } from '@/api/sdk'
-import type { JobRunOut, RecipeIn, RecipeOut, RecipeRunRequest, RecipesOut } from '@/api/types'
+import {
+  createRecipe,
+  deleteRecipe,
+  deleteRecipeSchedule,
+  getRecipeSchedule,
+  getRecipes,
+  runRecipe,
+  saveRecipeSchedule,
+  updateRecipe,
+} from '@/api/sdk'
+import type {
+  JobRunOut,
+  RecipeIn,
+  RecipeOut,
+  RecipeRunRequest,
+  RecipeScheduleIn,
+  RecipeScheduleOut,
+  RecipesOut,
+} from '@/api/types'
 import { JOB_RUN_QUERY_KEY } from './use-jobs'
 
 export const RECIPES_QUERY_KEY = ['recipes']
@@ -80,5 +97,25 @@ export function useRunRecipe() {
           : list,
       )
     },
+  })
+}
+
+const scheduleKey = (id: string) => [...RECIPES_QUERY_KEY, id, 'schedule']
+
+/** When the recipe regenerates by itself; null when it has no schedule. */
+export function useRecipeSchedule(id: string) {
+  return useQuery({ queryKey: scheduleKey(id), queryFn: () => getRecipeSchedule(id) })
+}
+
+/** Saves the schedule, or removes it when `schedule` is null. */
+export function useSaveRecipeSchedule(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (schedule: RecipeScheduleIn | null): Promise<RecipeScheduleOut | null> => {
+      if (schedule) return saveRecipeSchedule(id, schedule)
+      await deleteRecipeSchedule(id)
+      return null
+    },
+    onSuccess: (saved) => queryClient.setQueryData(scheduleKey(id), saved),
   })
 }
