@@ -6,7 +6,7 @@ import base64
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import httpx2
 import pytest
 
 from server.core import net
@@ -97,13 +97,12 @@ def _openai_provider(monkeypatch, text="Hello"):
 
 def _connection_error(url):
     """What the SDK raises when nothing answers: "Connection error.", from
-    httpx's own error."""
-    import httpx2
+    httpx2's own error."""
     import openai
 
     try:
-        raise httpx.ConnectError("[Errno 111] Connection refused")
-    except httpx.ConnectError as cause:
+        raise httpx2.ConnectError("[Errno 111] Connection refused")
+    except httpx2.ConnectError as cause:
         error = openai.APIConnectionError(request=httpx2.Request("POST", url))
         error.__cause__ = cause
         return error
@@ -428,8 +427,8 @@ def test_the_embedding_client_is_pinned_for_a_users_endpoint(monkeypatch):
     def fake_pinned(**kwargs):
         pinned.append(kwargs)
         # No TLS context to build, no proxy from the env: nothing is sent.
-        return httpx.Client(
-            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+        return httpx2.Client(
+            transport=httpx2.MockTransport(lambda request: httpx2.Response(500)),
             trust_env=False,
         )
 

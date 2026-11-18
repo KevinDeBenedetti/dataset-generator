@@ -2,7 +2,7 @@
 
 import socket
 
-import httpx
+import httpx2
 import pytest
 
 from server.core import net
@@ -104,7 +104,7 @@ async def test_http_only_when_opted_in(dns):
 
 
 async def _send(transport, url):
-    async with httpx.AsyncClient(transport=transport, follow_redirects=False) as c:
+    async with httpx2.AsyncClient(transport=transport, follow_redirects=False) as c:
         return await c.get(url)
 
 
@@ -115,9 +115,9 @@ async def test_the_connection_goes_to_the_checked_address(dns):
         seen["host"] = request.url.host
         seen["header"] = request.headers["host"]
         seen["sni"] = request.extensions.get("sni_hostname")
-        return httpx.Response(200, text="ok")
+        return httpx2.Response(200, text="ok")
 
-    transport = PinnedTransport(inner=httpx.MockTransport(handler))
+    transport = PinnedTransport(inner=httpx2.MockTransport(handler))
     response = await _send(transport, "https://api.example.com/v1/models")
 
     assert response.status_code == 200
@@ -131,12 +131,12 @@ async def test_the_connection_goes_to_the_checked_address(dns):
 async def test_dns_rebinding_is_stopped_at_connect_time(dns):
     """The name is public when first checked, private on the next lookup."""
     transport = PinnedTransport(
-        inner=httpx.MockTransport(lambda r: httpx.Response(200)),
+        inner=httpx2.MockTransport(lambda r: httpx2.Response(200)),
     )
     await _send(transport, "https://api.example.com/")
 
     dns["api.example.com"] = ["169.254.169.254"]
-    with pytest.raises(httpx.ConnectError, match="non-public"):
+    with pytest.raises(httpx2.ConnectError, match="non-public"):
         await _send(transport, "https://api.example.com/")
 
 
@@ -146,14 +146,14 @@ async def test_a_redirect_to_a_private_host_is_not_followed(dns):
 
     def handler(request):
         if request.url.host == PUBLIC:
-            return httpx.Response(
+            return httpx2.Response(
                 302, headers={"location": "https://internal-svc.example.com/"}
             )
         raise AssertionError("must not connect to the private host")
 
-    transport = PinnedTransport(inner=httpx.MockTransport(handler))
-    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        with pytest.raises(httpx.ConnectError, match="non-public"):
+    transport = PinnedTransport(inner=httpx2.MockTransport(handler))
+    async with httpx2.AsyncClient(transport=transport, follow_redirects=True) as client:
+        with pytest.raises(httpx2.ConnectError, match="non-public"):
             await client.get("https://api.example.com/")
 
 

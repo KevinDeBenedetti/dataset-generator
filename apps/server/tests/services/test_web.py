@@ -3,7 +3,7 @@
 import asyncio
 import socket
 
-import httpx
+import httpx2
 import pytest
 
 from server.core import net
@@ -43,12 +43,12 @@ def resolve(monkeypatch):
 
 
 def _client(handler):
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
 async def test_fetches_an_html_page(resolve):
     client = _client(
-        lambda req: httpx.Response(
+        lambda req: httpx2.Response(
             200,
             text="<p>Hello</p>",
             headers={"content-type": "text/html; charset=utf-8"},
@@ -80,7 +80,7 @@ async def test_redirect_hops_are_rechecked(resolve):
 
     def handler(req):
         if req.url.host == "docs.example.com":
-            return httpx.Response(302, headers={"location": "http://intranet/admin"})
+            return httpx2.Response(302, headers={"location": "http://intranet/admin"})
         pytest.fail("the private redirect target must not be requested")
 
     with pytest.raises(WebFetchError, match="non-public"):
@@ -90,8 +90,10 @@ async def test_redirect_hops_are_rechecked(resolve):
 async def test_follows_public_redirects(resolve):
     def handler(req):
         if req.url.path == "/old":
-            return httpx.Response(301, headers={"location": "/new"})
-        return httpx.Response(200, text="moved", headers={"content-type": "text/plain"})
+            return httpx2.Response(301, headers={"location": "/new"})
+        return httpx2.Response(
+            200, text="moved", headers={"content-type": "text/plain"}
+        )
 
     page = await fetch_page("https://docs.example.com/old", _client(handler))
     assert page.url == "https://docs.example.com/new" and page.body == "moved"
@@ -107,7 +109,7 @@ async def test_refuses_other_schemes(url):
 
 async def test_refuses_binary_content(resolve):
     client = _client(
-        lambda req: httpx.Response(
+        lambda req: httpx2.Response(
             200, content=b"%PDF", headers={"content-type": "application/pdf"}
         )
     )
@@ -118,7 +120,7 @@ async def test_refuses_binary_content(resolve):
 async def test_caps_the_body_size(resolve, monkeypatch):
     monkeypatch.setattr(web, "MAX_BYTES", 10)
     client = _client(
-        lambda req: httpx.Response(
+        lambda req: httpx2.Response(
             200, text="x" * 100, headers={"content-type": "text/plain"}
         )
     )
@@ -128,7 +130,7 @@ async def test_caps_the_body_size(resolve, monkeypatch):
 
 async def test_http_error_status(resolve):
     client = _client(
-        lambda req: httpx.Response(404, headers={"content-type": "text/html"})
+        lambda req: httpx2.Response(404, headers={"content-type": "text/html"})
     )
     with pytest.raises(WebFetchError, match="HTTP 404"):
         await fetch_page("https://docs.example.com/missing", client)
@@ -149,7 +151,7 @@ async def test_a_page_trickling_in_is_cut_off(resolve, monkeypatch):
             yield b"x"
 
     client = _client(
-        lambda req: httpx.Response(
+        lambda req: httpx2.Response(
             200, headers={"content-type": "text/html"}, content=trickle()
         )
     )

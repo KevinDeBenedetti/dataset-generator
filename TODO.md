@@ -9,6 +9,7 @@
 
 
 
+
 - [ ] CHORE: Retire the local dataset tables (phase 3, 4/4): an Alembic migration drops `datasets`, `qa_pairs` and `dataset_runs`, with the Drafts pages, the local export to Hugging Face and the import into local datasets — after the grace period the owner chose on 2026-11-04 (existing local drafts keep Publish and Delete meanwhile) — BLOCKED 2026-11-04: waits for the release with phase 3 to be deployed long enough for users to publish or delete their local drafts; remove this marker to start it.
 
 
@@ -46,19 +47,26 @@
 - [ ] 28.1 On **GitHub**, pick a recipe and set **Regenerate** to **Every day** at a time a few minutes ahead (UTC), with the worker running. Success: the hint shows the next run; at that time a run starts by itself, publishes what passes (or reports "nothing changed on GitHub"), and the next run reads tomorrow at that time.
 - [ ] 28.2 On **GitHub**, set **Regenerate** on the **Knowledge corpus** card to **Every day** a few minutes ahead, its publish box ticked. Success: at that time a run starts by itself and publishes the corpus (and reports **Reindex: asked** once 🖐 27.1 is done); the card shows the next run.
 
+### 30. The request guard on httpx2
+
+- [ ] 30.1 `make test`. Success: every test passes on Postgres (1371 passed last time).
+- [ ] 30.2 With the stack running (`make dev`), generate a draft from a public web page with your own saved key. Success: pairs appear — the page fetch and the model calls both went through the pinned httpx2 clients; a private address (`http://169.254.169.254/`) is still refused with "non-public".
+
 
 ## 🟢 Ideas / backlog
 
-- [ ] CHORE: Move apps/server/core/net.py to httpx2, the HTTP stack of openai 3.x, before openai 4 drops httpx compatibility.
-
 ## 🤖 Agent recommendations
 
-- [ ] FIX: Give the "Use it" snippet a place for Qdrant's API key (apps/next/components/collections/format.ts `pythonSnippet`) — it builds `QdrantClient(url=…)` with no `api_key`, so pasted against a Qdrant that requires one (the local stack's, once `QDRANT_API_KEY` is set) it fails with "Must provide an API key"; an `api_key="…"` line with a comment fixes the copy-paste.
+- [ ] FIX: A schedule's latest run can stay on the previous run — after the scheduled resume run of 2026-11-17 20:05 UTC, `job_schedules.last_run_id` still named the run before it, and the run kept a `draft` although it published (apps/server/services/schedules.py `queue_due`, apps/server/services/queue.py `_finish`). Reproduce with a test, then fix — the card would otherwise link to the wrong run.
+- [ ] CHORE: Move the server's remaining HTTP clients to httpx2 (services/github.py, reactive_resume.py, secret_validation.py, github_browse.py, jobs/corpus.py `notify_reindex`, jobs/github_snapshot.py) — one HTTP stack and one family of exceptions instead of two side by side; `httpx` then stays only as huggingface_hub's dependency.
+
 
 ## 🔒 Security audit
 
 ## ✅ Done
 
+- [x] 2026-11-18 — CHORE: The outbound-request guard is built on httpx2 (apps/server/core/net.py: both pinned transports and clients), so the OpenAI SDK gets clients of its own kind; the page fetcher (services/web.py) follows and `httpx2` is a runtime dependency — server suite passes on SQLite, ruff and ty clean; over the network: 🖐 30.1, 30.2.
+- [x] 2026-11-18 — FIX: The "Use it" Python snippet builds `QdrantClient(url=…, api_key=None)` with a comment saying when the server's `QDRANT_API_KEY` goes there (apps/next/components/collections/format.ts `pythonSnippet`) — 1 vitest case, 89 pass; tsc, oxlint, oxfmt clean.
 - [x] 2026-11-17 — CHORE: 🖐 23.3 A resume's daily schedule ran by itself — run `a7f58f43` started 20:05:01 UTC, succeeded with `claude-sonnet-5-5` and published to `kevindb/resume-portfolio` (nothing to review); its next run reads 2026-11-18 20:05. The schedule's latest run was not updated: being looked into.
 - [x] 2026-11-17 — CHORE: 🖐 29.1 The Postgres-backed suite with migration `a2b3c4d5e6f7` — `make test`: 1371 passed, 0 failed (after fixing a test that read pytest's log capture); the dev database is at `a2b3c4d5e6f7`.
 - [x] 2026-11-17 — DOCS: docs/collections.md says how to query a Qdrant that requires its API key, with the command that takes the key from the local container and lists each collection's alias — the command is the one that worked in 🖐 26.2; prek's whitespace hooks pass.

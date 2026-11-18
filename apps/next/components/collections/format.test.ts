@@ -98,6 +98,12 @@ describe('links and snippet', () => {
     expect(snippet).toContain('model="embed-default"')
     expect(snippet).toContain('"dataset_c_42", query=vector')
   })
+
+  it('leaves a place for the API key a Qdrant may require', () => {
+    const snippet = pythonSnippet(collection)
+    expect(snippet).toContain('QdrantClient(url="http://localhost:6353", api_key=None)')
+    expect(snippet).toContain('QDRANT_API_KEY')
+  })
 })
 
 const test = (hit: number, extra = {}) => ({
