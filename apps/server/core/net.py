@@ -14,7 +14,7 @@ that decides whether a destination is acceptable:
   that changes between check and connect (rebinding) cannot redirect it;
 * redirects are never followed by the transport — callers re-validate each hop.
 
-Use :class:`PinnedTransport` for any ``httpx`` client, including the one handed
+Use :class:`PinnedTransport` for any ``httpx2`` client, including the one handed
 to the OpenAI SDK.
 """
 
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional
 from urllib.parse import urlsplit
 
-import httpx
+import httpx2
 
 _BLOCKED_SUFFIXES = (
     ".localhost",
@@ -166,8 +166,8 @@ async def check_url(
     )
 
 
-class PinnedTransport(httpx.AsyncBaseTransport):
-    """An httpx transport that only talks to a validated public address.
+class PinnedTransport(httpx2.AsyncBaseTransport):
+    """An httpx2 transport that only talks to a validated public address.
 
     Per request: resolve + validate the host, then connect to *that address*
     (Host header and TLS server name stay the original host, so certificates
@@ -180,13 +180,13 @@ class PinnedTransport(httpx.AsyncBaseTransport):
         *,
         allow_http: bool = False,
         allowed_hosts: Optional[Iterable[str]] = None,
-        inner: Optional[httpx.AsyncBaseTransport] = None,
+        inner: Optional[httpx2.AsyncBaseTransport] = None,
     ) -> None:
         self._allow_http = allow_http
         self._allowed_hosts = list(allowed_hosts) if allowed_hosts is not None else None
-        self._inner = inner or httpx.AsyncHTTPTransport()
+        self._inner = inner or httpx2.AsyncHTTPTransport()
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         url = request.url
         try:
             target = await check_target(
@@ -197,8 +197,8 @@ class PinnedTransport(httpx.AsyncBaseTransport):
                 allowed_hosts=self._allowed_hosts,
             )
         except UnsafeURLError as exc:
-            # Surfaces through httpx as a transport error the callers already handle.
-            raise httpx.ConnectError(str(exc), request=request) from exc
+            # Surfaces through httpx2 as a transport error the callers already handle.
+            raise httpx2.ConnectError(str(exc), request=request) from exc
         request.url = url.copy_with(host=target.addresses[0])
         request.extensions = {**request.extensions, "sni_hostname": target.host}
         return await self._inner.handle_async_request(request)
@@ -213,9 +213,9 @@ def pinned_client(
     allow_http: bool = False,
     allowed_hosts: Optional[Iterable[str]] = None,
     headers: Optional[dict] = None,
-) -> httpx.AsyncClient:
-    """An ``httpx.AsyncClient`` behind :class:`PinnedTransport`, redirects off."""
-    return httpx.AsyncClient(
+) -> httpx2.AsyncClient:
+    """An ``httpx2.AsyncClient`` behind :class:`PinnedTransport`, redirects off."""
+    return httpx2.AsyncClient(
         transport=PinnedTransport(allow_http=allow_http, allowed_hosts=allowed_hosts),
         timeout=timeout,
         follow_redirects=False,
@@ -224,21 +224,21 @@ def pinned_client(
     )
 
 
-class SyncPinnedTransport(httpx.BaseTransport):
-    """:class:`PinnedTransport` for a synchronous ``httpx.Client``."""
+class SyncPinnedTransport(httpx2.BaseTransport):
+    """:class:`PinnedTransport` for a synchronous ``httpx2.Client``."""
 
     def __init__(
         self,
         *,
         allow_http: bool = False,
         allowed_hosts: Optional[Iterable[str]] = None,
-        inner: Optional[httpx.BaseTransport] = None,
+        inner: Optional[httpx2.BaseTransport] = None,
     ) -> None:
         self._allow_http = allow_http
         self._allowed_hosts = list(allowed_hosts) if allowed_hosts is not None else None
-        self._inner = inner or httpx.HTTPTransport()
+        self._inner = inner or httpx2.HTTPTransport()
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         url = request.url
         try:
             target = check_target_sync(
@@ -249,7 +249,7 @@ class SyncPinnedTransport(httpx.BaseTransport):
                 allowed_hosts=self._allowed_hosts,
             )
         except UnsafeURLError as exc:
-            raise httpx.ConnectError(str(exc), request=request) from exc
+            raise httpx2.ConnectError(str(exc), request=request) from exc
         request.url = url.copy_with(host=target.addresses[0])
         request.extensions = {**request.extensions, "sni_hostname": target.host}
         return self._inner.handle_request(request)
@@ -263,8 +263,8 @@ def pinned_sync_client(
     timeout: float = 30.0,
     allow_http: bool = False,
     allowed_hosts: Optional[Iterable[str]] = None,
-) -> httpx.Client:
-    return httpx.Client(
+) -> httpx2.Client:
+    return httpx2.Client(
         transport=SyncPinnedTransport(
             allow_http=allow_http, allowed_hosts=allowed_hosts
         ),

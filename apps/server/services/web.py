@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from typing import List, Optional
 from urllib.parse import urljoin
 
-import httpx
+import httpx2
 
 from server.core import net
 
@@ -50,7 +50,7 @@ async def _check_public(url: str) -> None:
         raise WebFetchError(str(exc)) from exc
 
 
-async def fetch_page(url: str, client: Optional[httpx.AsyncClient] = None) -> Page:
+async def fetch_page(url: str, client: Optional[httpx2.AsyncClient] = None) -> Page:
     """GET ``url`` (following up to :data:`MAX_REDIRECTS` checked redirects).
 
     Raises :class:`WebFetchError` for a refused/unreachable URL, a non-text
@@ -66,7 +66,7 @@ async def fetch_page(url: str, client: Optional[httpx.AsyncClient] = None) -> Pa
         ) from exc
 
 
-async def _fetch(url: str, client: Optional[httpx.AsyncClient]) -> Page:
+async def _fetch(url: str, client: Optional[httpx2.AsyncClient]) -> Page:
     own = client is None
     # Each hop is validated up front and again at connect time, pinned to the
     # address that passed (a DNS answer that changes in between is refused).
@@ -105,7 +105,7 @@ async def _fetch(url: str, client: Optional[httpx.AsyncClient]) -> Page:
                         resp.encoding or "utf-8", errors="replace"
                     )
                     return Page(url=current, body=text, content_type=content_type)
-            except httpx.HTTPError as exc:
+            except httpx2.HTTPError as exc:
                 raise WebFetchError(f"Could not fetch {current}: {exc}") from exc
         raise WebFetchError(f"Too many redirects (over {MAX_REDIRECTS})")
     finally:
