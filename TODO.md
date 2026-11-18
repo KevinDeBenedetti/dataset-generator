@@ -6,21 +6,11 @@
 
 ## 🟡 To do
 
-
-
-
+- [ ] FEAT: create a new branch feat/add-multilingue AND open a PR in github, add multi languages english and french use
 
 - [ ] CHORE: Retire the local dataset tables (phase 3, 4/4): an Alembic migration drops `datasets`, `qa_pairs` and `dataset_runs`, with the Drafts pages, the local export to Hugging Face and the import into local datasets — after the grace period the owner chose on 2026-11-04 (existing local drafts keep Publish and Delete meanwhile) — BLOCKED 2026-11-04: waits for the release with phase 3 to be deployed long enough for users to publish or delete their local drafts; remove this marker to start it.
 
-
-
-
-
 ## 🖐 Manual — do it yourself, in order
-
-### 21. Reactive Resume — the two server secrets
-
-- [ ] 21.2 Production (infra repo): give dataset-generator's server the same two — the URL as the in-cluster address the portfolio's configmap uses, the key in its secret (the portfolio's read key, or a new one) — and let the server reach the Reactive Resume service if a network policy stands in the way. Success: the deployed **Resume** page lists the resumes.
 
 ### 22. One LLM and one embedding model
 
@@ -65,6 +55,7 @@
 
 ## ✅ Done
 
+- [x] 2026-11-18 — CHORE: 🖐 21.2 Production server has `REACTIVE_RESUME_URL` (in-cluster address) and `REACTIVE_RESUME_API_KEY` — the deployed Resume page lists the resumes (owner's word).
 - [x] 2026-11-18 — CHORE: The outbound-request guard is built on httpx2 (apps/server/core/net.py: both pinned transports and clients), so the OpenAI SDK gets clients of its own kind; the page fetcher (services/web.py) follows and `httpx2` is a runtime dependency — server suite passes on SQLite, ruff and ty clean; over the network: 🖐 30.1, 30.2.
 - [x] 2026-11-18 — FIX: The "Use it" Python snippet builds `QdrantClient(url=…, api_key=None)` with a comment saying when the server's `QDRANT_API_KEY` goes there (apps/next/components/collections/format.ts `pythonSnippet`) — 1 vitest case, 89 pass; tsc, oxlint, oxfmt clean.
 - [x] 2026-11-17 — CHORE: 🖐 23.3 A resume's daily schedule ran by itself — run `a7f58f43` started 20:05:01 UTC, succeeded with `claude-sonnet-5-5` and published to `kevindb/resume-portfolio` (nothing to review); its next run reads 2026-11-18 20:05. The schedule's latest run was not updated: being looked into.
