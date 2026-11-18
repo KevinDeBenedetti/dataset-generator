@@ -4,11 +4,11 @@
 
 ### Issue tracker
 
-Issues and specs live as local Markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues on KevinDeBenedetti/dataset-generator, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five default triage roles, each written as its own name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) on an issue file's `Status:` line. See `docs/agents/triage-labels.md`.
+The five default triage roles, each a GitHub label of the same name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
