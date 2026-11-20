@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AlertTriangle, CheckCircle2, ChevronDown, FileText, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface GenerationTimelineProps {
 }
 
 export function GenerationTimeline({ steps, scrapedContent }: GenerationTimelineProps) {
+  const t = useTranslations('generate.timeline')
   const [showContent, setShowContent] = useState(false)
 
   if (!steps?.length) {
@@ -38,7 +40,7 @@ export function GenerationTimeline({ steps, scrapedContent }: GenerationTimeline
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Pipeline</CardTitle>
+        <CardTitle className="text-base">{t('title')}</CardTitle>
       </CardHeader>
 
       <CardContent>
@@ -83,7 +85,7 @@ export function GenerationTimeline({ steps, scrapedContent }: GenerationTimeline
               onClick={() => setShowContent((value) => !value)}
             >
               <FileText className="w-3.5 h-3.5" />
-              {showContent ? 'Hide' : 'View'} extracted content
+              {showContent ? t('hideContent') : t('viewContent')}
               <ChevronDown
                 className={cn('w-3.5 h-3.5 transition-transform', showContent && 'rotate-180')}
               />

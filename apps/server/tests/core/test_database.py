@@ -92,3 +92,37 @@ class TestGetScopedDb:
         with get_scoped_db() as session:
             assert session is not None
         # Session should be closed after context
+
+
+def test_a_nested_session_leaves_the_outer_one_usable(monkeypatch, test_engine):
+    """Code inside ``with get_scoped_db()`` calls helpers that open their own
+    session: closing theirs must not detach what the outer one still holds
+    (the schedule sweep lost its "latest run" that way)."""
+    from sqlalchemy.orm import sessionmaker
+
+    from server.core import database
+    from server.models.job_schedule import JobSchedule
+
+    monkeypatch.setattr(
+        database,
+        "SessionLocal",
+        sessionmaker(
+            autocommit=False, autoflush=False, bind=test_engine, expire_on_commit=False
+        ),
+    )
+
+    with database.get_scoped_db() as outer:
+        row = JobSchedule(owner_id="u1", job_id="resume-qa", scope="r1", options={})
+        outer.add(row)
+        outer.commit()
+        row_id = row.id
+
+        with database.get_scoped_db() as inner:
+            assert inner is not outer
+            assert inner.get(JobSchedule, row_id) is not None
+
+        row.last_run_id = "run-2"
+        outer.commit()
+
+    with database.get_scoped_db() as fresh:
+        assert fresh.get(JobSchedule, row_id).last_run_id == "run-2"

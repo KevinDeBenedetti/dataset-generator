@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import random
+import uuid
 import re
 import time
 from dataclasses import asdict, dataclass
@@ -496,6 +497,31 @@ def qdrant_names(db: Session, owner_id: str) -> List[str]:
 _OWN_NAME = re.compile(r"c_([0-9a-f]{32})(?:_[0-9a-f]{12})?")
 
 
+# The platform_settings row holding this deployment's id, and the Qdrant
+# collection under the prefix that says which deployment owns the prefix.
+DEPLOYMENT_KEY = "deployment_id"
+CLAIM_NAME = "claim"
+
+
+def deployment_id() -> str:
+    """This deployment's id: a random one, made the first time it is asked for
+    and kept in its database. Two deployments never share a database, so two
+    ids tell them apart. Blocking."""
+    from server.models.platform_settings import PlatformSetting
+
+    with get_scoped_db() as db:
+        row = db.get(PlatformSetting, DEPLOYMENT_KEY)
+        if row is not None:
+            return str(row.value)
+        db.add(PlatformSetting(key=DEPLOYMENT_KEY, value=uuid.uuid4().hex))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # another worker made it meanwhile: theirs stands
+        row = db.get(PlatformSetting, DEPLOYMENT_KEY)
+        return str(row.value) if row is not None else ""
+
+
 def drop_orphans() -> List[str]:
     """Drop this deployment's Qdrant collections that no row names any more;
     the names dropped.
@@ -507,10 +533,26 @@ def drop_orphans() -> List[str]:
     stay at most one sweep. Only names this module makes are considered — the
     deployment's prefix, ``c_`` and a row id — never another deployment's or
     another app's. Blocking. Without Qdrant set up, nothing to do.
+
+    The prefix is claimed first: the first deployment to sweep under it marks
+    it as its own (:data:`CLAIM_NAME`). A second deployment configured with the
+    same prefix would read the first one's collections as orphans — its own
+    database names none of them — so it sweeps nothing, and says why.
     """
     if not qdrant.is_configured():
         return []
     prefix = config.qdrant_collection_prefix
+    ours = deployment_id()
+    owner = qdrant.claim(f"{prefix}{CLAIM_NAME}", ours)
+    if owner != ours:
+        logger.error(
+            "Qdrant: the prefix %r belongs to another deployment (%s): no "
+            "orphaned collection is dropped. Give this one its own "
+            "QDRANT_COLLECTION_PREFIX.",
+            prefix,
+            owner,
+        )
+        return []
     found: Dict[str, List[str]] = {}
     for name in qdrant.names():
         if not name.startswith(prefix):

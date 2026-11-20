@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import './jobs.css'
 import { Icon } from '@/components/app/icon'
@@ -15,8 +15,9 @@ import {
   useStartJobRun,
 } from '@/hooks'
 import { SchedulePicker } from './schedule-picker'
-import { type ScheduleForm, scheduleForm, toSchedule } from './schedule-state'
+import { type ScheduleForm, differsFromCard, scheduleForm, toSchedule } from './schedule-state'
 import type { DraftPair, JobInfo, JobRunOut } from '@/api/types'
+import { richLink } from '@/lib/rich'
 
 // The subset of JSON schema the job option models produce (pydantic).
 interface OptionSchema {
@@ -105,6 +106,7 @@ function OptionField({
   onChange: (value: OptionValue) => void
   disabled: boolean
 }) {
+  const t = useTranslations('jobs')
   const label = schema.title ?? name
   const kind = kindOf(schema)
 
@@ -137,7 +139,7 @@ function OptionField({
           className="input"
           type="number"
           min={min}
-          placeholder="Server default"
+          placeholder={t('serverDefault')}
           value={value as string}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
@@ -180,7 +182,11 @@ function OptionField({
 }
 
 function Metrics({ run }: { run: JobRunOut }) {
-  const metrics = (run.result?.metrics ?? []) as [string, unknown][]
+  // The server translates them for display (an older client gets `metrics`).
+  const shown = run.result?.metrics_display?.length
+    ? run.result.metrics_display
+    : (run.result?.metrics ?? [])
+  const metrics = shown as [string, unknown][]
   if (metrics.length === 0) return null
   return (
     <div className="job-metrics">
@@ -194,13 +200,12 @@ function Metrics({ run }: { run: JobRunOut }) {
 }
 
 function Errors({ run }: { run: JobRunOut }) {
+  const t = useTranslations('jobs')
   const errors = run.result?.errors ?? []
   if (errors.length === 0) return null
   return (
     <details className="job-errors">
-      <summary className="hint">
-        {errors.length} non-fatal error(s) — those sources are retried next run
-      </summary>
+      <summary className="hint">{t('errors', { count: errors.length })}</summary>
       <ul className="job-error-list">
         {errors.map((e) => (
           <li key={e}>{e}</li>
@@ -221,6 +226,7 @@ function PairRow({
   onToggle: () => void
   disabled: boolean
 }) {
+  const t = useTranslations('jobs')
   return (
     <label className={`draft-row${checked ? '' : ' off'}`} aria-label={pair.question}>
       <input
@@ -237,7 +243,9 @@ function PairRow({
           {pair.repo && <span className="tag mono">{pair.repo}</span>}
           {pair.category && <span className="muted">{pair.category}</span>}
           {pair.grounding != null && (
-            <span className="muted">grounding {(pair.grounding * 100).toFixed(0)}%</span>
+            <span className="muted">
+              {t('grounding', { percent: (pair.grounding * 100).toFixed(0) })}
+            </span>
           )}
         </div>
       </div>
@@ -255,6 +263,7 @@ function toggled(set: Set<string>, id?: string | null): Set<string> {
 
 // Step 2–3: review what a run generated, then publish exactly that.
 function DraftReview({ run }: { run: JobRunOut }) {
+  const t = useTranslations('jobs')
   const preview = run.preview
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [promoted, setPromoted] = useState<Set<string>>(new Set())
@@ -269,7 +278,7 @@ function DraftReview({ run }: { run: JobRunOut }) {
     publish.mutate(
       { exclude: [...excluded], promote: [...promoted] },
       {
-        onSuccess: () => toast.success('Published to Hugging Face'),
+        onSuccess: () => toast.success(t('draft.published')),
         onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
       },
     )
@@ -277,28 +286,33 @@ function DraftReview({ run }: { run: JobRunOut }) {
   return (
     <div className="job-result">
       <div className="label" style={{ marginBottom: 4 }}>
-        Review the draft
+        {t('draft.title')}
       </div>
       <p className="hint" style={{ marginBottom: 10 }}>
-        {preview.kept} pair(s) carried over unchanged, {preview.new.length} new
         {preview.review.length > 0
-          ? `, ${preview.review.length} held out (answer far from its source — off by default)`
-          : ''}
-        . Untick what you don&apos;t want published.
+          ? t('draft.summaryHeld', {
+              kept: preview.kept,
+              added: preview.new.length,
+              held: preview.review.length,
+            })
+          : t('draft.summary', { kept: preview.kept, added: preview.new.length })}
       </p>
 
       {preview.new.length === 0 && preview.review.length === 0 && (
         <p className="muted" style={{ marginBottom: 10 }}>
-          Nothing changed since the published version — no new pair.
+          {t('draft.unchanged')}
         </p>
       )}
 
       {preview.new.length > 0 && (
         <div className="draft-section">
           <div className="draft-head">
-            <span className="label">New pairs</span>
+            <span className="label">{t('draft.newPairs')}</span>
             <span className="hint">
-              {preview.new.length - excluded.size}/{preview.new.length} selected
+              {t('draft.selected', {
+                selected: preview.new.length - excluded.size,
+                total: preview.new.length,
+              })}
             </span>
           </div>
           <div className="draft-list">
@@ -318,9 +332,9 @@ function DraftReview({ run }: { run: JobRunOut }) {
       {preview.review.length > 0 && (
         <div className="draft-section">
           <div className="draft-head">
-            <span className="label">To review</span>
+            <span className="label">{t('draft.toReview')}</span>
             <span className="hint">
-              {promoted.size}/{preview.review.length} included
+              {t('draft.included', { included: promoted.size, total: preview.review.length })}
             </span>
           </div>
           <div className="draft-list">
@@ -345,11 +359,11 @@ function DraftReview({ run }: { run: JobRunOut }) {
           onClick={onPublish}
         >
           <Icon name={busy ? 'loader' : 'upload'} className={busy ? 'animate-spin' : undefined} />
-          {busy ? 'Publishing…' : `Publish ${total} pairs to Hugging Face`}
+          {busy ? t('draft.publishing') : t('draft.publish', { count: total })}
         </button>
         {preview.repo_id && (
           <span className="hint mono" title="HF_QA_DATASET_REPO">
-            → {preview.repo_id} (private)
+            {t('draft.target', { repo: preview.repo_id })}
           </span>
         )}
       </div>
@@ -359,6 +373,8 @@ function DraftReview({ run }: { run: JobRunOut }) {
 
 // The state of the job's current (or latest) run.
 function CancelButton({ runId, requested }: { runId: string; requested: boolean }) {
+  const t = useTranslations('jobs')
+  const tc = useTranslations('common')
   const cancel = useCancelJobRun(runId)
   return (
     <button
@@ -367,12 +383,14 @@ function CancelButton({ runId, requested }: { runId: string; requested: boolean 
       disabled={requested || cancel.isPending}
       onClick={() => cancel.mutate()}
     >
-      {requested ? 'Stopping…' : 'Cancel'}
+      {requested ? t('run.stopping') : tc('cancel')}
     </button>
   )
 }
 
 function RunPanel({ runId }: { runId: string }) {
+  const t = useTranslations('jobs')
+  const locale = useLocale()
   const { data: run, error } = useJobRun(runId)
   if (error) {
     return (
@@ -385,7 +403,7 @@ function RunPanel({ runId }: { runId: string }) {
     return (
       <div className="job-result">
         <div className="hint" style={{ marginBottom: 6 }}>
-          Queued — waiting for a worker to pick it up.
+          {t('run.queued')}
         </div>
         <CancelButton runId={run.id} requested={!!run.cancel_requested} />
       </div>
@@ -395,7 +413,7 @@ function RunPanel({ runId }: { runId: string }) {
   if (run.status === 'publishing') {
     return (
       <div className="job-result">
-        <div className="hint">Publishing to Hugging Face…</div>
+        <div className="hint">{t('run.publishing')}</div>
       </div>
     )
   }
@@ -407,14 +425,14 @@ function RunPanel({ runId }: { runId: string }) {
       <div className="job-result">
         <div className="hint" style={{ marginBottom: 6 }}>
           {total > 0
-            ? `Generating… ${done}/${total} repos${label ? ` · ${label}` : ''}`
-            : label || 'Fetching your GitHub repositories…'}
+            ? `${t('run.generating', { done, total })}${label ? ` · ${label}` : ''}`
+            : label || t('run.fetching')}
         </div>
         <div className="job-progress">
           <div style={{ width: `${total > 0 ? pct : 5}%` }} />
         </div>
         <p className="hint" style={{ marginTop: 6 }}>
-          Runs on the server — you can leave this page and come back.
+          {t('run.background')}
         </p>
         <CancelButton runId={run.id} requested={!!run.cancel_requested} />
       </div>
@@ -426,10 +444,10 @@ function RunPanel({ runId }: { runId: string }) {
       <div className="job-result">
         <p className="hint job-error">
           {run.status === 'cancelled'
-            ? 'The last run was cancelled.'
+            ? t('run.cancelled')
             : run.status === 'interrupted'
-              ? 'The last run was interrupted (its worker stopped). Start it again.'
-              : `The last run failed: ${run.error}`}
+              ? t('run.interrupted')
+              : t('run.failed', { error: String(run.error) })}
         </p>
       </div>
     )
@@ -439,10 +457,12 @@ function RunPanel({ runId }: { runId: string }) {
     return (
       <div className="job-result">
         <div className="hint" style={{ marginBottom: 6 }}>
-          Published {run.published_at ? new Date(run.published_at).toLocaleString() : ''}.{' '}
+          {run.published_at
+            ? t('run.publishedAt', { date: new Date(run.published_at).toLocaleString(locale) })
+            : t('run.published')}{' '}
           {run.published_url && (
             <a href={run.published_url} target="_blank" rel="noopener noreferrer">
-              View on Hugging Face
+              {t('run.viewOnHub')}
               <Icon name="external" className="ic-sm" />
             </a>
           )}
@@ -468,10 +488,10 @@ function RunPanel({ runId }: { runId: string }) {
   return (
     <div className="job-result">
       <div className="hint" style={{ marginBottom: 6 }}>
-        {run.result?.dry_run ? 'Dry run complete — nothing published.' : 'Published.'}{' '}
+        {run.result?.dry_run ? t('run.dryRun') : t('run.published')}{' '}
         {run.published_url && (
           <a href={run.published_url} target="_blank" rel="noopener noreferrer">
-            View on Hugging Face
+            {t('run.viewOnHub')}
             <Icon name="external" className="ic-sm" />
           </a>
         )}
@@ -493,40 +513,60 @@ function JobSchedule({
   options: () => Record<string, unknown>
   modelRef: string | null
 }) {
+  const t = useTranslations('jobs')
+  const locale = useLocale()
   const saved = useJobSchedule(job.id)
   const save = useSaveJobSchedule(job.id)
   const form = scheduleForm(saved.data)
+  const store = (patch: Partial<ScheduleForm> = {}) => {
+    const timing = toSchedule({ ...form, ...patch })
+    save.mutate(timing && { ...timing, options: options(), model_ref: modelRef }, {
+      onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+    })
+  }
+  const stale = saved.data != null && differsFromCard(saved.data, { options: options(), modelRef })
 
   if (saved.isPending) return null
   return (
-    <SchedulePicker
-      id={`every-${job.id}`}
-      form={form}
-      disabled={save.isPending}
-      publishLabel={
-        job.has_draft
-          ? 'Publish what passes the checks at once, and keep the doubtful pairs for review'
-          : 'Publish what it builds'
-      }
-      onChange={(patch: Partial<ScheduleForm>) => {
-        const timing = toSchedule({ ...form, ...patch })
-        save.mutate(timing && { ...timing, options: options(), model_ref: modelRef }, {
-          onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
-        })
-      }}
-    >
-      At {form.time} UTC, with the options{job.uses_model ? ' and the model' : ''} above as they are
-      when you set this: change the schedule again to save new ones.
-      {job.has_draft && ' A run that finds nothing changed makes no model call.'}
-      {saved.data?.next_run_at &&
-        ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
-    </SchedulePicker>
+    <>
+      {stale && (
+        <div className="hint job-config-hint">
+          {job.uses_model ? t('schedule.staleModel') : t('schedule.stale')}{' '}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={save.isPending}
+            onClick={() => store()}
+          >
+            {t('schedule.replace')}
+          </button>
+        </div>
+      )}
+      <SchedulePicker
+        id={`every-${job.id}`}
+        form={form}
+        disabled={save.isPending}
+        publishLabel={job.has_draft ? t('schedule.publishDraft') : t('schedule.publishBuilt')}
+        skipped={saved.data?.skipped}
+        onChange={(patch: Partial<ScheduleForm>) => store(patch)}
+      >
+        {job.uses_model
+          ? t('schedule.hintModel', { time: form.time })
+          : t('schedule.hint', { time: form.time })}
+        {job.has_draft && ` ${t('schedule.noChange')}`}
+        {saved.data?.next_run_at &&
+          ` ${t('schedule.nextRun', {
+            date: new Date(saved.data.next_run_at).toLocaleString(locale),
+          })}`}
+      </SchedulePicker>
+    </>
   )
 }
 
 /** One job of the catalogue (GET /jobs): its options, the button that queues a
  * run, and that run's state — with the review of its draft for a draft job. */
 export function JobCard({ job }: { job: JobInfo }) {
+  const t = useTranslations('jobs')
   const properties = (job.options_schema.properties ?? {}) as Record<string, OptionSchema>
   const [values, setValues] = useState(() => initialValues(properties))
   const [modelRef, setModelRef] = useState('')
@@ -549,10 +589,10 @@ export function JobCard({ job }: { job: JobInfo }) {
     )
 
   const startLabel = job.has_draft
-    ? 'Generate draft'
+    ? t('start.draft')
     : values.dry_run === true
-      ? 'Run (dry run)'
-      : 'Run & publish'
+      ? t('start.dryRun')
+      : t('start.publish')
 
   return (
     <div className="card">
@@ -560,7 +600,7 @@ export function JobCard({ job }: { job: JobInfo }) {
         <div className="card-title">{job.title}</div>
         <span className={`badge badge-${job.configured ? 'success' : 'destructive'}`}>
           <span className="dot" />
-          {job.configured ? 'Configured' : 'Not configured'}
+          {job.configured ? t('configured') : t('notConfigured')}
         </span>
       </div>
       <div
@@ -570,15 +610,17 @@ export function JobCard({ job }: { job: JobInfo }) {
         <p className="hint">{job.description}</p>
         {(job.missing ?? []).length > 0 && (
           <p className="hint job-config-hint">
-            Not configured — add {(job.missing ?? []).join(', ')} in{' '}
-            <Link href="/settings">Settings</Link>.
+            {t.rich('missing', {
+              missing: (job.missing ?? []).join(', '),
+              link: richLink('/settings'),
+            })}
           </p>
         )}
 
         {job.uses_model && (
           <div className="field">
             <label htmlFor={`model-${job.id}`} className="label">
-              Model
+              {t('model')}
             </label>
             <ModelSelect
               id={`model-${job.id}`}
@@ -621,11 +663,9 @@ export function JobCard({ job }: { job: JobInfo }) {
               name={running ? 'loader' : 'play'}
               className={running ? 'animate-spin' : undefined}
             />
-            {running ? 'Running…' : startLabel}
+            {running ? t('running') : startLabel}
           </button>
-          {job.has_draft && !running && (
-            <span className="hint">Nothing is published until you review the draft.</span>
-          )}
+          {job.has_draft && !running && <span className="hint">{t('reviewFirst')}</span>}
         </div>
         {runId && <RunPanel runId={runId} />}
       </div>

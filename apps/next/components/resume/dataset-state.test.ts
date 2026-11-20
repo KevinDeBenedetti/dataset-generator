@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ResumeDatasetOut } from '../../api/types'
-import { initialForm, isDirty, runMetric, toSettings } from './dataset-state'
+import { initialForm, isDirty, runMetric, shownMetric, toSettings } from './dataset-state'
 
 const RESUME = { name: 'Engineer', slug: 'engineer' }
 
@@ -85,5 +85,31 @@ describe('runMetric', () => {
     expect(runMetric(METRICS, 'To review')).toBeNull()
     expect(runMetric([['Errors', ['a']]], 'Errors')).toBeNull()
     expect(runMetric(undefined, 'Dropped')).toBeNull()
+  })
+})
+
+describe('shownMetric', () => {
+  const RESULT = {
+    metrics: [
+      ['Dropped', 6],
+      ['Embedding checks', 'nothing new to compare'],
+    ],
+    metrics_display: [
+      ['Écartées', 6],
+      ['Contrôles par embedding', 'rien de nouveau à comparer'],
+    ],
+  }
+
+  it('finds a metric by its English label and shows its translated value', () => {
+    expect(shownMetric(RESULT, 'Embedding checks')).toBe('rien de nouveau à comparer')
+    expect(shownMetric(RESULT, 'Dropped')).toBe(6)
+  })
+
+  it('falls back to the stored value, then to null', () => {
+    expect(shownMetric({ metrics: RESULT.metrics }, 'Embedding checks')).toBe(
+      'nothing new to compare',
+    )
+    expect(shownMetric(RESULT, 'To review')).toBeNull()
+    expect(shownMetric(undefined, 'Dropped')).toBeNull()
   })
 })

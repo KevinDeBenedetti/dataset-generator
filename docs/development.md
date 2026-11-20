@@ -99,6 +99,35 @@ A few details keep generation deterministic:
   URL is baked into `client.gen.ts` from whatever input was used; `api/sdk.ts`
   supplies the real one at runtime from `NEXT_PUBLIC_API_BASE_URL`.
 
+## Interface languages
+
+The interface is in English and French ([next-intl](https://next-intl.dev/)).
+The language is the reader's choice, kept in the `dg-locale` cookie; without
+it, the first language their browser asks for that the interface has, else
+English. Addresses carry no language prefix.
+
+- Texts live in `apps/next/messages/en.json` and `fr.json`, one namespace per
+  area (`nav`, `shell`, `login`, `home`…). A component reads them with
+  `useTranslations('<namespace>')`.
+- Add a text to both files: a test fails when a key, or a `{placeholder}`, is
+  in one language only, and the type check refuses a key missing from
+  `en.json`.
+- A new language: its code in `LOCALES` (`apps/next/i18n/config.ts`), its
+  messages file and its name under `language` in every file.
+
+Every page is translated. Dates, counts, sizes, percentages and relative times
+follow the language too: the formatters of `apps/next/components/hub/format.ts`
+take it as their last argument (`useLocale()`).
+
+The API answers in the same language: it reads the `dg-locale` cookie (else
+`Accept-Language`) in `apps/server/core/i18n.py`. English stays in the code;
+`apps/server/core/locales/fr.json` holds the French of the job texts, platform
+switches, run metrics and the server's own messages (errors, skip reasons),
+matched when they are served. A message the server didn't write, such as an
+error from Hugging Face or GitHub, stays as it came. To translate a new
+server message, add its English template, with the same `{placeholders}`, and
+its French under `messages`: a test checks the placeholders match.
+
 ## Pull requests
 
 `.github/workflows/pr-description.yml` keeps the description of every pull

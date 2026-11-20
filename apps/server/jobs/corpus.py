@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-import httpx
+import httpx2
 
 from server.core.config import config
 from server.services.credentials import Credentials
@@ -453,7 +453,7 @@ async def _fetch_repo_files(
         path = entry["path"]
         try:
             content = await client.file_content(owner, repo, path)
-        except (GitHubAPIError, httpx.HTTPError):
+        except (GitHubAPIError, httpx2.HTTPError):
             return None
         return RawFile(
             repo=repo,
@@ -477,7 +477,7 @@ async def build_github_code_chunks(
         try:
             for f in await _fetch_repo_files(client, repo_owner, repo_name):
                 chunks.extend(chunk_file(f, repo_owner))
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             errors.append(f"{slug}: {exc}")
     return chunks, errors
 
@@ -604,7 +604,7 @@ async def build_github_docs_chunks(
                     chunks.append(
                         _doc_chunk(repo_owner, repo_name, branch, doc, section, i)
                     )
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             errors.append(f"{slug}: {exc}")
     return chunks, errors
 
@@ -862,7 +862,7 @@ REINDEX_TIMEOUT_SECONDS = 30.0
 
 
 async def notify_reindex(
-    transport: Optional[httpx.AsyncBaseTransport] = None,
+    transport: Optional[httpx2.AsyncBaseTransport] = None,
 ) -> Optional[str]:
     """Tell the site that indexes the corpus to read it again: one POST to
     ``CORPUS_REINDEX_URL`` with ``CORPUS_REINDEX_SECRET`` as a bearer token.
@@ -874,13 +874,13 @@ async def notify_reindex(
     """
     url, secret = config.corpus_reindex_url, config.corpus_reindex_secret
     try:
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             timeout=REINDEX_TIMEOUT_SECONDS, transport=transport
         ) as client:
             response = await client.post(
                 url, headers={"Authorization": f"Bearer {secret}"}
             )
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         return f"The reindex call failed: {type(exc).__name__}: {exc}"
     if response.is_success:
         return None

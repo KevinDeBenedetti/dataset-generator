@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import { type FormEvent, useState } from 'react'
 import { toast } from 'sonner'
 import '../jobs/jobs.css'
@@ -19,39 +20,30 @@ import {
   useRunResumeDataset,
   useSaveResumeDataset,
 } from '@/hooks'
+import { SchedulePicker } from '@/components/jobs/schedule-picker'
+import { rich, richLink } from '@/lib/rich'
 import {
   type DatasetForm,
-  type Every,
   initialForm,
   isDirty,
   runMetric,
+  shownMetric,
   toSettings,
 } from './dataset-state'
 
-const EVERY: { value: Every; label: string }[] = [
-  { value: '', label: 'Only when I generate it' },
-  { value: 'day', label: 'Every day' },
-  { value: 'week', label: 'Every Monday' },
-  { value: 'month', label: 'The 1st of every month' },
-]
-
-const LANGUAGES: { value: ResumeDatasetIn['language']; label: string }[] = [
-  { value: 'auto', label: 'The resume’s own' },
-  { value: 'en', label: 'English' },
-  { value: 'fr', label: 'French' },
-]
+// The language choices; their labels are the `resume.dataset.languages.*` messages.
+const LANGUAGES: NonNullable<ResumeDatasetIn['language']>[] = ['auto', 'en', 'fr']
 
 const ACTIVE = new Set(['queued', 'running', 'publishing'])
 
 /** The sections a run couldn't generate, and why (the model's error). */
 function RunErrors({ run }: { run: JobRunOut }) {
+  const t = useTranslations('resume')
   const errors = run.result?.errors ?? []
   if (errors.length === 0) return null
   return (
     <details className="job-errors" open>
-      <summary className="hint job-error">
-        {errors.length} section(s) not generated — they are tried again next run
-      </summary>
+      <summary className="hint job-error">{t('run.errors', { count: errors.length })}</summary>
       <ul className="job-error-list">
         {errors.map((e) => (
           <li key={e}>{e}</li>
@@ -64,28 +56,30 @@ function RunErrors({ run }: { run: JobRunOut }) {
 /** The embedding model the duplicate and grounding checks use: one per
  * account, picked and measured on the Models page, not per dataset. */
 function EmbeddingHint() {
+  const t = useTranslations('resume')
   const { data } = useModels()
   if (!data) return null
   const model = data.embedding_model?.replace(/^openai:/, '')
   if (!model) {
-    return (
-      <div className="hint">
-        No embedding model: the duplicate and grounding checks compare words.{' '}
-        <Link href="/models">Pick one on Models</Link>
-      </div>
-    )
+    return <div className="hint">{t.rich('embedding.none', { link: richLink('/models') })}</div>
   }
-  const whose = data.embedding_chosen ? 'yours' : 'the server’s'
-  const measured = data.embedding_calibration ? 'measured' : 'not measured'
   return (
     <div className="hint">
-      Embedding checks: <span className="mono">{model}</span> ({whose}, {measured}) ·{' '}
-      <Link href="/models">change it on Models</Link>
+      {t.rich('embedding.hint', {
+        model,
+        whose: data.embedding_chosen ? t('embedding.yours') : t('embedding.server'),
+        measured: data.embedding_calibration ? t('embedding.measured') : t('embedding.notMeasured'),
+        mono: rich.mono,
+        link: richLink('/models'),
+      })}
     </div>
   )
 }
 
 function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
+  const t = useTranslations('resume')
+  const tc = useTranslations('common')
+  const locale = useLocale()
   const cancel = useCancelJobRun(run.id)
   if (run.status === 'queued' || run.status === 'running') {
     const { done = 0, total = 0, label = '' } = run.progress ?? {}
@@ -94,10 +88,12 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
       <div className="gh-run">
         <div className="hint">
           {run.status === 'queued'
-            ? 'Queued — waiting for a worker.'
+            ? t('run.queued')
             : total > 0
-              ? `Generating… ${done}/${total} sections${label ? ` · ${label}` : ''}`
-              : label || 'Reading the resume…'}
+              ? label
+                ? t('run.generatingLabel', { done, total, label })
+                : t('run.generating', { done, total })
+              : label || t('reading')}
         </div>
         <div className="job-progress">
           <div style={{ width: `${pct}%` }} />
@@ -108,71 +104,64 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
           onClick={() => cancel.mutate()}
           disabled={cancel.isPending || !!run.cancel_requested}
         >
-          {run.cancel_requested ? 'Cancelling…' : 'Cancel'}
+          {run.cancel_requested ? t('run.cancelling') : tc('cancel')}
         </button>
       </div>
     )
   }
   if (run.status === 'publishing') {
-    return <div className="gh-run hint">Publishing to Hugging Face…</div>
+    return <div className="gh-run hint">{t('run.publishing')}</div>
   }
   const metrics = (run.result?.metrics ?? []) as [string, unknown][]
   const unchanged = metrics[0]?.[0] === 'Unchanged'
-  const when = run.finished_at ? new Date(run.finished_at).toLocaleString() : ''
-  const datasetLink = <Link href={datasetHref(target)}>Open the dataset</Link>
+  const when = run.finished_at ? new Date(run.finished_at).toLocaleString(locale) : ''
+  const link = richLink(datasetHref(target))
   if (run.status === 'succeeded' && run.preview) {
     const preview = run.preview
     const dropped = Number(runMetric(metrics, 'Dropped') ?? 0)
-    const checks = runMetric(metrics, 'Embedding checks')
+    const checks = shownMetric(run.result, 'Embedding checks')
     const embedding = runMetric(metrics, 'Embedding model')
     return (
       <div className="gh-run">
         {run.result?.url && (
           <div className="hint">
-            Published {when} · {datasetLink}
+            {when
+              ? t.rich('run.published', { date: when, link })
+              : t.rich('run.publishedUndated', { link })}
           </div>
         )}
         <div className="gh-run-counts">
-          <span>
-            <b>{preview.new.length}</b> new
-          </span>
-          <span>
-            <b>{preview.kept}</b> kept
-          </span>
+          <span>{t.rich('run.new', { count: preview.new.length, b: rich.b })}</span>
+          <span>{t.rich('run.kept', { count: preview.kept, b: rich.b })}</span>
           {preview.review.length > 0 && (
-            <span>
-              <b>{preview.review.length}</b> held out
-            </span>
+            <span>{t.rich('run.heldOut', { count: preview.review.length, b: rich.b })}</span>
           )}
           {(preview.removed ?? []).length > 0 && (
-            <span>
-              <b>{preview.removed?.length}</b> removed
-            </span>
+            <span>{t.rich('run.removed', { count: preview.removed?.length ?? 0, b: rich.b })}</span>
           )}
           {dropped > 0 && (
-            <span title="Failed the checks: trivial, duplicated, or graded wrong">
-              <b>{dropped}</b> dropped
+            <span title={t('run.droppedTitle')}>
+              {t.rich('run.dropped', { count: dropped, b: rich.b })}
             </span>
           )}
         </div>
         {checks != null && (
           <div className="hint">
-            Embedding checks
             {embedding && embedding !== 'none'
-              ? ` (${String(embedding).replace(/^openai:/, '')})`
-              : ''}
-            : {checks}
+              ? t('run.checksModel', {
+                  model: String(embedding).replace(/^openai:/, ''),
+                  result: checks,
+                })
+              : t('run.checks', { result: checks })}
           </div>
         )}
         <div className="gh-run-review">
           <span className="hint">
-            {run.result?.url
-              ? 'Some pairs were held out: review them to publish them too.'
-              : 'Draft ready: review it before it goes to Hugging Face.'}
+            {run.result?.url ? t('run.heldOutReview') : t('run.draftReady')}
           </span>
           <Link className="btn btn-primary btn-sm" href={`/drafts/runs/${run.id}`}>
             <Icon name="eye" />
-            Review
+            {t('run.review')}
           </Link>
         </div>
         <RunErrors run={run} />
@@ -180,11 +169,13 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
     )
   }
   if (run.status === 'published' || (run.status === 'succeeded' && run.result?.url)) {
+    const date = run.published_at ? new Date(run.published_at).toLocaleString(locale) : when
     return (
       <div className="gh-run">
         <div className="hint">
-          Published {run.published_at ? new Date(run.published_at).toLocaleString() : when} ·{' '}
-          {datasetLink}
+          {date
+            ? t.rich('run.published', { date, link })
+            : t.rich('run.publishedUndated', { link })}
         </div>
         <RunErrors run={run} />
       </div>
@@ -193,17 +184,17 @@ function LatestRun({ run, target }: { run: JobRunOut; target: string }) {
   if (run.status === 'succeeded' && unchanged) {
     return (
       <div className="gh-run hint">
-        {when}: nothing changed since the published version — no model call.
+        {when ? t('run.unchanged', { date: when }) : t('run.unchangedUndated')}
       </div>
     )
   }
   return (
     <div className="gh-run hint job-error">
       {run.status === 'cancelled'
-        ? 'The last generation was cancelled.'
+        ? t('run.cancelled')
         : run.status === 'interrupted'
-          ? 'The last generation was interrupted (its worker stopped). Generate again.'
-          : `The last generation failed: ${run.error ?? 'unknown error'}`}
+          ? t('run.interrupted')
+          : t('run.failed', { error: run.error ?? t('run.unknownError') })}
     </div>
   )
 }
@@ -217,6 +208,10 @@ function DatasetCard({
   saved: ResumeDatasetOut | null
   namespace?: string | null
 }) {
+  const t = useTranslations('resume')
+  const tc = useTranslations('common')
+  const tj = useTranslations('jobs')
+  const locale = useLocale()
   const [form, setForm] = useState<DatasetForm>(() => initialForm(resume, saved, namespace))
   const [fullRefresh, setFullRefresh] = useState(false)
   const save = useSaveResumeDataset(resume.id)
@@ -234,14 +229,14 @@ function DatasetCard({
     event.preventDefault()
     if (!targetValid) return
     save.mutate(settings, {
-      onSuccess: () => toast.success('Dataset settings saved'),
+      onSuccess: () => toast.success(t('dataset.saved')),
       onError: (error) => toast.error(error.message),
     })
   }
 
   const generate = () =>
     start.mutate(fullRefresh, {
-      onSuccess: () => toast.success('Generation queued: it stops at a draft to review'),
+      onSuccess: () => toast.success(t('dataset.queued')),
       onError: (error) => toast.error(error.message),
     })
 
@@ -249,19 +244,15 @@ function DatasetCard({
     <form className="card rs-dataset" onSubmit={submit}>
       <div className="card-head">
         <div>
-          <div className="card-title">Hugging Face dataset</div>
-          <p className="card-desc">
-            Q&amp;A pairs about you from this resume: exact facts from its fields (never the phone
-            number) and pairs generated per section, deduplicated and checked against the text.
-            Published to a private dataset.
-          </p>
+          <div className="card-title">{t('dataset.title')}</div>
+          <p className="card-desc">{t('dataset.description')}</p>
         </div>
       </div>
 
       <div className="card-body rs-dataset-grid">
         <div className="field">
           <label className="label" htmlFor="rs-target">
-            Publishes to
+            {t('dataset.publishesTo')}
           </label>
           <input
             id="rs-target"
@@ -270,11 +261,11 @@ function DatasetCard({
             aria-invalid={!targetValid}
             onChange={(e) => set({ target_repo: e.target.value })}
           />
-          {!targetValid && <div className="hint job-error">A dataset id: namespace/name</div>}
+          {!targetValid && <div className="hint job-error">{t('dataset.targetInvalid')}</div>}
         </div>
         <div className="field">
           <label className="label" htmlFor="rs-language">
-            Language
+            {t('dataset.language')}
           </label>
           <select
             id="rs-language"
@@ -282,16 +273,16 @@ function DatasetCard({
             value={form.language}
             onChange={(e) => set({ language: e.target.value as DatasetForm['language'] })}
           >
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
+            {LANGUAGES.map((language) => (
+              <option key={language} value={language}>
+                {t(`dataset.languages.${language}`)}
               </option>
             ))}
           </select>
         </div>
         <div className="field">
           <label className="label" htmlFor="rs-model">
-            Model
+            {t('dataset.model')}
           </label>
           <ModelSelect
             id="rs-model"
@@ -301,50 +292,17 @@ function DatasetCard({
           />
           <EmbeddingHint />
         </div>
-        <div className="field">
-          <label className="label" htmlFor="rs-every">
-            Regenerate
-          </label>
-          <div className="gh-inline">
-            <select
-              id="rs-every"
-              className="select"
-              value={form.every}
-              onChange={(e) => set({ every: e.target.value as Every })}
-            >
-              {EVERY.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
-                </option>
-              ))}
-            </select>
-            {form.every && (
-              <input
-                type="time"
-                className="input"
-                aria-label="Time (UTC)"
-                value={form.time}
-                onChange={(e) => set({ time: e.target.value || '03:00' })}
-              />
-            )}
-          </div>
-          {form.every && (
-            <div className="hint">
-              At {form.time} UTC. A run whose resume hasn&apos;t changed stops early, with no model
-              call.
-            </div>
-          )}
+        <div className="rs-dataset-wide">
+          <SchedulePicker
+            id="rs-every"
+            form={form}
+            publishLabel={tj('schedule.publishDraft')}
+            skipped={saved?.skipped}
+            onChange={set}
+          >
+            {t('dataset.scheduleHint', { time: form.time })}
+          </SchedulePicker>
         </div>
-        {form.every && (
-          <label className="gh-toggle rs-dataset-wide">
-            <input
-              type="checkbox"
-              checked={form.publish}
-              onChange={(e) => set({ publish: e.target.checked })}
-            />
-            Publish what passes the checks at once, and keep the doubtful pairs for review
-          </label>
-        )}
       </div>
 
       <div className="card-foot rs-dataset-foot">
@@ -354,17 +312,17 @@ function DatasetCard({
           disabled={!dirty || !targetValid || save.isPending}
         >
           <Icon name={save.isPending ? 'loader' : 'check'} />
-          {saved ? 'Save' : 'Save the settings'}
+          {saved ? tc('save') : t('dataset.saveSettings')}
         </button>
         <button
           type="button"
           className="btn btn-primary"
           disabled={!saved || dirty || active || start.isPending}
-          title={!saved || dirty ? 'Save the settings first' : undefined}
+          title={!saved || dirty ? t('dataset.saveFirst') : undefined}
           onClick={generate}
         >
           <Icon name={start.isPending ? 'loader' : 'play'} />
-          Generate a draft
+          {t('dataset.generate')}
         </button>
         <label className="gh-toggle">
           <input
@@ -372,7 +330,7 @@ function DatasetCard({
             checked={fullRefresh}
             onChange={(e) => setFullRefresh(e.target.checked)}
           />
-          Regenerate every section
+          {t('dataset.fullRefresh')}
         </label>
         {saved && (
           <button
@@ -381,12 +339,12 @@ function DatasetCard({
             disabled={forget.isPending || active}
             onClick={() =>
               forget.mutate(undefined, {
-                onSuccess: () => toast.success('Settings forgotten; the dataset stays'),
+                onSuccess: () => toast.success(t('dataset.forgotten')),
                 onError: (error) => toast.error(error.message),
               })
             }
           >
-            Forget the settings
+            {t('dataset.forget')}
           </button>
         )}
       </div>
@@ -395,7 +353,7 @@ function DatasetCard({
         <div className="card-body rs-dataset-status">
           {saved?.next_run_at && (
             <div className="hint">
-              Next scheduled run: {new Date(saved.next_run_at).toLocaleString()}
+              {t('dataset.nextRun', { date: new Date(saved.next_run_at).toLocaleString(locale) })}
             </div>
           )}
           {run.data && <LatestRun run={run.data} target={saved?.target_repo ?? ''} />}
@@ -408,6 +366,7 @@ function DatasetCard({
 /** A resume's Q&A dataset: where it publishes, in which language and on which
  * model, when it is regenerated by itself, and a draft generated now. */
 export function ResumeDataset({ resume }: { resume: ResumeOut }) {
+  const t = useTranslations('resume')
   const settings = useResumeDataset(resume.id)
   const hub = useHubDatasets()
   if (settings.error) {
@@ -416,7 +375,7 @@ export function ResumeDataset({ resume }: { resume: ResumeOut }) {
   if (settings.isPending || hub.isPending) {
     return (
       <p className="hint" aria-busy="true">
-        <Icon name="loader" className="animate-spin" /> Reading the dataset settings…
+        <Icon name="loader" className="animate-spin" /> {t('dataset.loading')}
       </p>
     )
   }

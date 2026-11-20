@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from server.api.errors import internal_error
 from server.core.database import get_db
+from server.core.i18n import request_locale
 from server.jobs.registry import JOB_ERRORS, JOBS
 from server.schemas.jobs import (
     JobScheduleIn,
@@ -44,9 +45,10 @@ logger = logging.getLogger(__name__)
 def get_jobs(
     user: User = Depends(get_current_user),
     creds: Credentials = Depends(get_credentials),
+    locale: str = Depends(request_locale),
 ) -> JobsResponse:
     """The dataset job catalogue, with each job's options, status and latest run."""
-    return JobsResponse(jobs=list_jobs(user.id, creds))
+    return JobsResponse(jobs=list_jobs(user.id, creds, locale))
 
 
 @router.post(
@@ -110,6 +112,7 @@ def _job_schedule(saved: dict) -> dict:
         "publish": saved["publish"],
         "next_run_at": saved["next_run_at"],
         "latest_run": saved["last_run"],
+        "skipped": saved["skipped"],
         "updated_at": saved["updated_at"],
     }
 

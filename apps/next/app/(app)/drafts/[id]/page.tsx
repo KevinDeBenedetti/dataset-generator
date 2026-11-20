@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 // The design's detail-page styles (.qa, .ver, .tabpane) live with the static
 // mockup; this is the real, data-backed page wearing the same skin.
 import './dataset.css'
@@ -64,16 +65,19 @@ function SourceCell({ source }: { source: DatasetSource }) {
 
 // One analysis = one recorded generation run: what was analysed, and what it
 // produced. Missing stats stay blank rather than reading as a zero.
-function analysisDetail(analysis: DatasetAnalysis): string {
-  const parts: string[] = [`Analysed ${analysis.label}`]
+function analysisDetail(
+  analysis: DatasetAnalysis,
+  t: ReturnType<typeof useTranslations<'drafts'>>,
+): string {
+  const parts: string[] = [t('detail.history.analysed', { label: analysis.label })]
   if (analysis.pages_analyzed != null) {
-    parts.push(`${analysis.pages_analyzed} page(s) read`)
+    parts.push(t('detail.history.pagesRead', { count: analysis.pages_analyzed }))
   }
   if (analysis.new_pairs != null) {
-    parts.push(`+${analysis.new_pairs} pairs`)
+    parts.push(t('detail.history.newPairs', { count: analysis.new_pairs }))
   }
   if (analysis.duplicates_skipped != null) {
-    parts.push(`${analysis.duplicates_skipped} duplicate(s) skipped`)
+    parts.push(t('detail.history.duplicatesSkipped', { count: analysis.duplicates_skipped }))
   }
   return parts.join(' · ')
 }
@@ -81,6 +85,9 @@ function analysisDetail(analysis: DatasetAnalysis): string {
 export default function DraftDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const t = useTranslations('drafts')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   // Datasets are keyed by their name (URL-encoded in the route).
   const datasetName = decodeURIComponent(params.id as string)
 
@@ -112,17 +119,21 @@ export default function DraftDetailPage() {
     try {
       const result = await hfExport.mutateAsync({ datasetName })
       // Published: from now on the dataset lives on the Hub, its page reads it there.
-      toast.success(`Published ${result.pairs_exported} pair(s) to ${result.repo_id}`, {
-        description: 'The dataset repo is private.',
+      const published = t('detail.published', {
+        count: result.pairs_exported,
+        repo: result.repo_id,
+      })
+      toast.success(published, {
+        description: t('detail.publishedDescription'),
         action: {
-          label: 'View dataset',
+          label: t('detail.viewDataset'),
           onClick: () => router.push(datasetHref(result.repo_id)),
         },
       })
     } catch (err) {
       // The server refuses to upload into an existing public repo (409) — that
       // message tells the user how to proceed, so surface it as-is.
-      toast.error(err instanceof Error ? err.message : 'Publishing to Hugging Face failed')
+      toast.error(err instanceof Error ? err.message : t('detail.publishFailed'))
     }
   }
 
@@ -136,7 +147,7 @@ export default function DraftDetailPage() {
         style={{ margin: '-4px 0 14px', paddingLeft: 6 }}
       >
         <Icon name="chevronLeft" />
-        Drafts
+        {t('detail.back')}
       </Link>
 
       <div className="page-head">
@@ -149,14 +160,19 @@ export default function DraftDetailPage() {
               <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {datasetName}
                 {latestVersion != null && <span className="tag">v{latestVersion}</span>}
-                <span className="badge badge-warning" title="Not on Hugging Face yet">
-                  Draft
+                <span className="badge badge-warning" title={t('detail.badgeTitle')}>
+                  {t('detail.badge')}
                 </span>
               </h1>
               <p className="page-sub" style={{ marginTop: 3 }}>
-                {qaResponse?.total_count ?? '—'} Q/A pairs · {sources.length} source(s) ·{' '}
-                {history.length} analysis run(s)
-                {dataset?.target_language ? ` · language ${dataset.target_language}` : ''}
+                {t('detail.summary', {
+                  pairs: qaResponse?.total_count ?? '—',
+                  sources: sources.length,
+                  runs: history.length,
+                })}
+                {dataset?.target_language
+                  ? ` · ${t('detail.language', { language: dataset.target_language })}`
+                  : ''}
               </p>
             </div>
           </div>
@@ -172,24 +188,24 @@ export default function DraftDetailPage() {
               name="refresh"
               className={sourcesQuery.isRefetching ? 'animate-spin' : undefined}
             />
-            Refresh
+            {tc('refresh')}
           </button>
           <button
             className="btn btn-outline"
             type="button"
             onClick={handleExportToHub}
             disabled={hfExport.isPending}
-            title="Publish to the Hugging Face Hub as a private dataset repo"
+            title={t('detail.publishTitle')}
           >
             <Icon name={hfExport.isPending ? 'loader' : 'upload'} />
-            {hfExport.isPending ? 'Publishing…' : 'Publish to Hugging Face'}
+            {hfExport.isPending ? t('detail.publishing') : t('detail.publish')}
           </button>
         </div>
       </div>
 
       {datasetsPending && !dataset && (
         <p className="muted" style={{ marginBottom: 14 }}>
-          Loading dataset…
+          {t('detail.loadingDataset')}
         </p>
       )}
       {dataset?.description && (
@@ -204,21 +220,22 @@ export default function DraftDetailPage() {
           className={`tab${tab === 'pairs' ? ' active' : ''}`}
           onClick={() => setTab('pairs')}
         >
-          Q/A pairs <span className="mono muted">{qaResponse?.total_count ?? 0}</span>
+          {t('detail.tabs.pairs')}{' '}
+          <span className="mono muted">{qaResponse?.total_count ?? 0}</span>
         </button>
         <button
           type="button"
           className={`tab${tab === 'sources' ? ' active' : ''}`}
           onClick={() => setTab('sources')}
         >
-          Sources <span className="mono muted">{sources.length}</span>
+          {t('detail.tabs.sources')} <span className="mono muted">{sources.length}</span>
         </button>
         <button
           type="button"
           className={`tab${tab === 'history' ? ' active' : ''}`}
           onClick={() => setTab('history')}
         >
-          History <span className="mono muted">{history.length}</span>
+          {t('detail.tabs.history')} <span className="mono muted">{history.length}</span>
         </button>
       </div>
 
@@ -227,7 +244,7 @@ export default function DraftDetailPage() {
           <div className="card">
             <div className="card-body">
               {qaLoading ? (
-                <p className="muted">Loading Q/A pairs…</p>
+                <p className="muted">{t('detail.loadingPairs')}</p>
               ) : (
                 <>
                   <QAList
@@ -255,17 +272,14 @@ export default function DraftDetailPage() {
           <div className="card">
             <div className="card-head">
               <div>
-                <div className="card-title">Sources</div>
-                <div className="card-desc">
-                  Every origin that produced Q/A pairs in this dataset — one row per crawled page,
-                  uploaded file or GitHub account.
-                </div>
+                <div className="card-title">{t('detail.sources.title')}</div>
+                <div className="card-desc">{t('detail.sources.description')}</div>
               </div>
             </div>
 
             {sourcesQuery.isPending && (
               <div className="card-body">
-                <p className="muted">Loading sources…</p>
+                <p className="muted">{t('detail.sources.loading')}</p>
               </div>
             )}
             {!sourcesQuery.isPending && sourcesQuery.error && (
@@ -273,24 +287,24 @@ export default function DraftDetailPage() {
                 <p className="hint" style={{ color: 'var(--destructive)' }}>
                   {sourcesQuery.error instanceof Error
                     ? sourcesQuery.error.message
-                    : 'Failed to load the dataset sources'}
+                    : t('detail.sources.loadFailed')}
                 </p>
               </div>
             )}
             {!sourcesQuery.isPending && !sourcesQuery.error && sources.length === 0 && (
               <div className="card-body">
-                <p className="muted">No source recorded.</p>
+                <p className="muted">{t('detail.sources.empty')}</p>
               </div>
             )}
             {sources.length > 0 && (
               <table className="table stack-table">
                 <thead>
                   <tr>
-                    <th>Source</th>
-                    <th>Type</th>
-                    <th>Q/A pairs</th>
-                    <th>First seen</th>
-                    <th>Last seen</th>
+                    <th>{t('detail.sources.columns.source')}</th>
+                    <th>{t('detail.sources.columns.type')}</th>
+                    <th>{t('detail.sources.columns.pairs')}</th>
+                    <th>{t('detail.sources.columns.firstSeen')}</th>
+                    <th>{t('detail.sources.columns.lastSeen')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -299,20 +313,20 @@ export default function DraftDetailPage() {
                       {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label --
                           false positive: static cell; the icon is aria-hidden (see
                           Icon) and the cell has visible accessible text (the label). */}
-                      <td data-label="Source">
+                      <td data-label={t('detail.sources.columns.source')}>
                         <SourceCell source={source} />
                       </td>
-                      <td data-label="Type">
+                      <td data-label={t('detail.sources.columns.type')}>
                         <span className="tag">{source.kind}</span>
                       </td>
-                      <td className="mono" data-label="Q/A pairs">
+                      <td className="mono" data-label={t('detail.sources.columns.pairs')}>
                         {source.qa_count}
                       </td>
-                      <td className="muted" data-label="First seen">
-                        {relativeTime(source.first_seen_at, now)}
+                      <td className="muted" data-label={t('detail.sources.columns.firstSeen')}>
+                        {relativeTime(source.first_seen_at, now, locale)}
                       </td>
-                      <td className="muted" data-label="Last seen">
-                        {relativeTime(source.last_seen_at, now)}
+                      <td className="muted" data-label={t('detail.sources.columns.lastSeen')}>
+                        {relativeTime(source.last_seen_at, now, locale)}
                       </td>
                     </tr>
                   ))}
@@ -328,19 +342,14 @@ export default function DraftDetailPage() {
           <div className="card">
             <div className="card-head">
               <div>
-                <div className="card-title">Analysis history</div>
-                <div className="card-desc">
-                  Every analysis recorded for this dataset, newest first — the seed that was read
-                  and what it contributed.
-                </div>
+                <div className="card-title">{t('detail.history.title')}</div>
+                <div className="card-desc">{t('detail.history.description')}</div>
               </div>
             </div>
             <div className="card-body" style={{ paddingTop: 20 }}>
-              {sourcesQuery.isPending && <p className="muted">Loading history…</p>}
+              {sourcesQuery.isPending && <p className="muted">{t('detail.history.loading')}</p>}
               {!sourcesQuery.isPending && history.length === 0 && (
-                <p className="muted">
-                  No analysis recorded yet. A run is recorded each time a generation is saved.
-                </p>
+                <p className="muted">{t('detail.history.empty')}</p>
               )}
               {history.map((analysis, index) => (
                 <div
@@ -359,18 +368,18 @@ export default function DraftDetailPage() {
                       {index === 0 && (
                         <span className="badge badge-success">
                           <span className="dot" />
-                          Latest
+                          {t('detail.history.latest')}
                         </span>
                       )}
                       <span className="muted" style={{ fontSize: 12 }}>
-                        {relativeTime(analysis.created_at, now)}
+                        {relativeTime(analysis.created_at, now, locale)}
                       </span>
                       <span className="muted" style={{ fontSize: 12 }}>
                         {formatDate(analysis.created_at)}
                       </span>
                     </div>
                     <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                      {analysisDetail(analysis)}
+                      {analysisDetail(analysis, t)}
                     </div>
                   </div>
                 </div>

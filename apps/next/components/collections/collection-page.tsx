@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { type FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { errorStatus } from '@/api/sdk'
 import type { CollectionEvaluation, CollectionOut } from '@/api/types'
@@ -25,9 +26,11 @@ import {
   useRebuildCollection,
   useSearchCollection,
 } from '@/hooks'
+import { rich, richLink } from '@/lib/rich'
 import { cn } from '@/lib/utils'
 import { BuildProgress, StatusBadge } from './collections-page'
 import {
+  type ComparisonCaveat,
   comparisonRows,
   DUPLICATE_SCORE,
   isEndpointModel,
@@ -40,13 +43,17 @@ import {
 
 type Tab = 'search' | 'test' | 'use'
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'search', label: 'Search', icon: 'search' },
-  { key: 'test', label: 'Retrieval test', icon: 'copyCheck' },
-  { key: 'use', label: 'Use it', icon: 'terminal' },
+// The label of a tab is the `collection.tabs.<key>` message.
+const TABS: { key: Tab; icon: string }[] = [
+  { key: 'search', icon: 'search' },
+  { key: 'test', icon: 'copyCheck' },
+  { key: 'use', icon: 'terminal' },
 ]
 
 function Header({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   const router = useRouter()
   const rebuild = useRebuildCollection(collection.id)
   const remove = useDeleteCollection()
@@ -58,7 +65,7 @@ function Header({ collection }: { collection: CollectionOut }) {
   const del = () =>
     remove.mutate(collection.id, {
       onSuccess: () => {
-        toast.success(`Deleted "${collection.name}"`)
+        toast.success(t('header.deleted', { name: collection.name }))
         router.push('/collections')
       },
       onError: (error) => toast.error(error.message),
@@ -89,23 +96,36 @@ function Header({ collection }: { collection: CollectionOut }) {
             <span title={collection.model}>{modelLabel(collection.model)}</span>
             {collection.points_count != null && (
               <span>
-                {formatCount(collection.points_count)} points
                 {collection.rows_total != null && collection.rows_total !== collection.points_count
-                  ? ` of ${formatCount(collection.rows_total)} rows`
-                  : ''}
+                  ? t('header.pointsOfRows', {
+                      count: collection.points_count,
+                      formatted: formatCount(collection.points_count, locale),
+                      rows: collection.rows_total,
+                      rowsFormatted: formatCount(collection.rows_total, locale),
+                    })
+                  : t('header.points', {
+                      count: collection.points_count,
+                      formatted: formatCount(collection.points_count, locale),
+                    })}
               </span>
             )}
-            {collection.vector_size != null && <span>{collection.vector_size} dimensions</span>}
+            {collection.vector_size != null && (
+              <span>{t('header.dimensions', { count: collection.vector_size })}</span>
+            )}
             {collection.built_at && (
-              <span title={formatDateTime(collection.built_at)}>
-                Built {timeAgo(collection.built_at, now)}
+              <span title={formatDateTime(collection.built_at, locale)}>
+                {t('header.built', { time: timeAgo(collection.built_at, now, locale) })}
               </span>
             )}
           </div>
           <div className="hub-chips">
-            <span className="tag">embeds: {collection.text_columns.join(' + ')}</span>
+            <span className="tag">
+              {t('header.embeds', { columns: collection.text_columns.join(' + ') })}
+            </span>
             {collection.query_column && (
-              <span className="tag">asks with: {collection.query_column}</span>
+              <span className="tag">
+                {t('header.asksWith', { column: collection.query_column })}
+              </span>
             )}
           </div>
         </div>
@@ -117,31 +137,31 @@ function Header({ collection }: { collection: CollectionOut }) {
           disabled={building || rebuild.isPending}
           onClick={() =>
             rebuild.mutate(null, {
-              onSuccess: () => toast.success('Rebuilding at the latest commit'),
+              onSuccess: () => toast.success(t('header.rebuilding')),
               onError: (error) => toast.error(error.message),
             })
           }
         >
           <Icon name={rebuild.isPending ? 'loader' : 'refresh'} />
-          Rebuild
+          {t('header.rebuild')}
         </button>
         {confirming ? (
           <span className="coll-confirm">
-            <span className="hint">Delete it and its vectors?</span>
+            <span className="hint">{t('header.confirmDelete')}</span>
             <button
               type="button"
               className="btn btn-destructive btn-sm"
               disabled={remove.isPending}
               onClick={del}
             >
-              Delete
+              {tc('delete')}
             </button>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => setConfirming(false)}
             >
-              Keep
+              {t('header.keep')}
             </button>
           </span>
         ) : (
@@ -149,11 +169,11 @@ function Header({ collection }: { collection: CollectionOut }) {
             type="button"
             className="btn btn-outline"
             disabled={building}
-            title={building ? 'Cancel the build first' : undefined}
+            title={building ? t('header.cancelFirst') : undefined}
             onClick={() => setConfirming(true)}
           >
             <Icon name="trash" />
-            Delete
+            {tc('delete')}
           </button>
         )}
       </div>
@@ -162,19 +182,17 @@ function Header({ collection }: { collection: CollectionOut }) {
 }
 
 function Building({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
   const cancel = useCancelJobRun(collection.run_id ?? '')
   return (
     <div className="card coll-state">
       <div className="coll-state-text">
-        <div className="card-title">Embedding the split</div>
+        <div className="card-title">{t('building.title')}</div>
         <p className="card-desc">
-          A worker reads the split from Hugging Face, embeds every row with{' '}
-          {modelLabel(collection.model)} and stores the vectors in Qdrant.{' '}
-          {isEndpointModel(collection.model)
-            ? 'The rows are sent to your endpoint to be embedded.'
-            : 'The first build with a model downloads it too.'}
+          {t('building.desc', { model: modelLabel(collection.model) })}{' '}
+          {isEndpointModel(collection.model) ? t('building.endpoint') : t('building.local')}
           {collection.serving &&
-            ` Search and the test keep answering on the version at ${shortSha(collection.revision)} until this one is complete.`}
+            ` ${t('building.serving', { sha: shortSha(collection.revision) })}`}
         </p>
         <BuildProgress collection={collection} />
       </div>
@@ -184,13 +202,14 @@ function Building({ collection }: { collection: CollectionOut }) {
         disabled={!collection.run_id || cancel.isPending}
         onClick={() => cancel.mutate(undefined, { onError: (error) => toast.error(error.message) })}
       >
-        {cancel.isPending ? 'Cancelling…' : 'Cancel the build'}
+        {cancel.isPending ? t('building.cancelling') : t('building.cancel')}
       </button>
     </div>
   )
 }
 
 function Failed({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
   const rebuild = useRebuildCollection(collection.id)
   return (
     <div className="card hub-empty">
@@ -198,11 +217,10 @@ function Failed({ collection }: { collection: CollectionOut }) {
         <Icon name="alert" className="ic-lg" />
       </span>
       <div>
-        <div className="card-title">The build didn&apos;t finish</div>
+        <div className="card-title">{t('failed.title')}</div>
         <p className="card-desc">
-          {collection.error ?? 'The build failed.'}
-          {collection.serving &&
-            ` The previous version, at ${shortSha(collection.revision)}, still answers.`}
+          {collection.error ?? t('failed.fallback')}
+          {collection.serving && ` ${t('failed.serving', { sha: shortSha(collection.revision) })}`}
         </p>
       </div>
       <button
@@ -216,7 +234,7 @@ function Failed({ collection }: { collection: CollectionOut }) {
         }
       >
         <Icon name="refresh" />
-        Build again
+        {t('failed.buildAgain')}
       </button>
     </div>
   )
@@ -224,6 +242,7 @@ function Failed({ collection }: { collection: CollectionOut }) {
 
 /** The dataset moved on since the build: say so, and offer the rebuild. */
 function NewerCommit({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
   const latest = useHubDataset(splitRepoId(collection.repo_id))
   const rebuild = useRebuildCollection(collection.id)
   const sha = latest.data?.sha
@@ -232,8 +251,11 @@ function NewerCommit({ collection }: { collection: CollectionOut }) {
     <div className="hub-notice">
       <Icon name="clock" />
       <span>
-        The dataset has a newer commit, <span className="mono">{shortSha(sha)}</span>: this
-        collection still holds <span className="mono">{shortSha(collection.revision)}</span>.
+        {t.rich('newerCommit.text', {
+          latest: shortSha(sha),
+          current: shortSha(collection.revision),
+          mono: rich.mono,
+        })}
       </span>
       <button
         type="button"
@@ -241,7 +263,7 @@ function NewerCommit({ collection }: { collection: CollectionOut }) {
         disabled={rebuild.isPending}
         onClick={() => rebuild.mutate(sha, { onError: (error) => toast.error(error.message) })}
       >
-        Rebuild at {shortSha(sha)}
+        {t('newerCommit.rebuildAt', { sha: shortSha(sha) })}
       </button>
     </div>
   )
@@ -250,16 +272,18 @@ function NewerCommit({ collection }: { collection: CollectionOut }) {
 /** The owner's endpoint is no longer the one that embedded the points: a
  * question would be embedded by another endpoint's model. */
 function MovedEndpoint({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
   const rebuild = useRebuildCollection(collection.id)
   if (!collection.current_endpoint || collection.status !== 'ready') return null
   return (
     <div className="hub-notice coll-warn-box">
       <Icon name="alert" />
       <span>
-        Built on <span className="mono">{collection.endpoint}</span>, but your endpoint is now{' '}
-        <span className="mono">{collection.current_endpoint}</span>: a search or a test would embed
-        its questions with another endpoint&apos;s model, and compare vectors that don&apos;t match.
-        Build it again on your endpoint.
+        {t.rich('movedEndpoint.text', {
+          endpoint: collection.endpoint ?? '',
+          current: collection.current_endpoint,
+          mono: rich.mono,
+        })}
       </span>
       <button
         type="button"
@@ -269,7 +293,7 @@ function MovedEndpoint({ collection }: { collection: CollectionOut }) {
           rebuild.mutate(collection.revision, { onError: (error) => toast.error(error.message) })
         }
       >
-        Build it again
+        {t('movedEndpoint.buildAgain')}
       </button>
     </div>
   )
@@ -278,17 +302,17 @@ function MovedEndpoint({ collection }: { collection: CollectionOut }) {
 /** Built with a local model, which the server no longer runs: nothing can
  * search, test or rebuild it as it is. */
 function RemovedModel({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
   return (
     <div className="card coll-state">
       <div className="coll-state-text">
-        <div className="card-title">This collection has to be made again</div>
+        <div className="card-title">{t('removedModel.title')}</div>
         <p className="card-desc">
-          It was built with <span className="mono">{modelLabel(collection.model)}</span>, a local
-          model this server no longer runs: a question can&apos;t be embedded for its vectors, so it
-          can&apos;t be searched or tested, and building it again would use the same model. Delete
-          it, then create it again from{' '}
-          <Link href={datasetHref(collection.repo_id)}>its dataset</Link> with one of your
-          endpoint&apos;s embedding models.
+          {t.rich('removedModel.text', {
+            model: modelLabel(collection.model),
+            mono: rich.mono,
+            link: richLink(datasetHref(collection.repo_id)),
+          })}
         </p>
       </div>
     </div>
@@ -297,9 +321,10 @@ function RemovedModel({ collection }: { collection: CollectionOut }) {
 
 /** A cosine as a thin bar: one magnitude, one hue (the viewer's chart color). */
 function ScoreMeter({ score }: { score: number }) {
+  const t = useTranslations('collection')
   const width = Math.max(0, Math.min(1, score)) * 100
   return (
-    <span className="coll-meter" title={`Cosine similarity ${score.toFixed(3)}`}>
+    <span className="coll-meter" title={t('score', { score: score.toFixed(3) })}>
       <span className="coll-meter-track">
         <span style={{ width: `${width}%` }} />
       </span>
@@ -309,6 +334,9 @@ function ScoreMeter({ score }: { score: number }) {
 }
 
 function SearchPanel({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   const search = useSearchCollection(collection.id)
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(10)
@@ -324,21 +352,21 @@ function SearchPanel({ collection }: { collection: CollectionOut }) {
       <form className="hub-toolbar" onSubmit={submit}>
         <input
           className="input hub-search"
-          placeholder="Ask something the dataset should answer…"
-          aria-label="Search query"
+          placeholder={t('search.placeholder')}
+          aria-label={t('search.queryLabel')}
           maxLength={2000}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
           className="select"
-          aria-label="Results"
+          aria-label={t('search.resultsLabel')}
           value={limit}
           onChange={(e) => setLimit(Number(e.target.value))}
         >
           {[5, 10, 20, 50].map((n) => (
             <option key={n} value={n}>
-              Top {n}
+              {t('top', { count: n })}
             </option>
           ))}
         </select>
@@ -348,7 +376,7 @@ function SearchPanel({ collection }: { collection: CollectionOut }) {
           disabled={!query.trim() || search.isPending}
         >
           <Icon name={search.isPending ? 'loader' : 'search'} />
-          Search
+          {tc('search')}
         </button>
       </form>
 
@@ -357,12 +385,16 @@ function SearchPanel({ collection }: { collection: CollectionOut }) {
       {found && (
         <>
           <p className="hint">
-            {found.hits.length} closest rows to “{found.query}” · {found.took_ms} ms, query embedded
-            with {modelLabel(collection.model)}
+            {t('search.summary', {
+              count: found.hits.length,
+              query: found.query,
+              ms: found.took_ms,
+              model: modelLabel(collection.model),
+            })}
           </p>
           {found.hits.length === 0 ? (
             <div className="card hub-empty">
-              <p className="card-desc">No point comes back for this query.</p>
+              <p className="card-desc">{t('search.empty')}</p>
             </div>
           ) : (
             <ol className="coll-hits">
@@ -372,7 +404,7 @@ function SearchPanel({ collection }: { collection: CollectionOut }) {
                     <span className="coll-rank">#{i + 1}</span>
                     <ScoreMeter score={hit.score} />
                     <Link href={rowHref(collection, hit.row_idx)} className="hint">
-                      Row {formatCount(hit.row_idx)}
+                      {t('row', { index: formatCount(hit.row_idx, locale) })}
                     </Link>
                   </div>
                   <p className="coll-hit-text">{hit.text}</p>
@@ -406,33 +438,39 @@ function Fields({ fields, skip }: { fields: Record<string, unknown>; skip: strin
 }
 
 function Metrics({ result }: { result: CollectionEvaluation }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
   return (
     <div className="stat-grid hub-stats">
       <div className="card stat">
-        <div className="stat-label">Found first</div>
-        <div className="stat-val">{percent(result.hit_at_1)}</div>
-        <div className="stat-delta">its own row is the top hit</div>
+        <div className="stat-label">{t('metrics.foundFirst')}</div>
+        <div className="stat-val">{percent(result.hit_at_1, locale)}</div>
+        <div className="stat-delta">{t('metrics.foundFirstHint')}</div>
       </div>
       <div className="card stat">
-        <div className="stat-label">In the top {result.k}</div>
-        <div className="stat-val">{percent(result.hit_at_k)}</div>
-        <div className="stat-delta">its own row comes back at all</div>
+        <div className="stat-label">{t('metrics.inTopK', { k: result.k })}</div>
+        <div className="stat-val">{percent(result.hit_at_k, locale)}</div>
+        <div className="stat-delta">{t('metrics.inTopKHint')}</div>
       </div>
       <div className="card stat">
-        <div className="stat-label">Mean reciprocal rank</div>
+        <div className="stat-label">{t('metrics.mrr')}</div>
         <div className="stat-val">{result.mrr.toFixed(2)}</div>
-        <div className="stat-delta">1 = always first, 0 = never in the top {result.k}</div>
+        <div className="stat-delta">{t('metrics.mrrHint', { k: result.k })}</div>
       </div>
       <div className="card stat">
-        <div className="stat-label">Rows tested</div>
-        <div className="stat-val">{formatCount(result.queries)}</div>
-        <div className="stat-delta">sampled, asking with {result.query_column}</div>
+        <div className="stat-label">{t('metrics.rowsTested')}</div>
+        <div className="stat-val">{formatCount(result.queries, locale)}</div>
+        <div className="stat-delta">
+          {t('metrics.rowsTestedHint', { column: result.query_column })}
+        </div>
       </div>
     </div>
   )
 }
 
 function TestPanel({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
   const evaluate = useEvaluateCollection(collection.id)
   const result = evaluate.data ?? collection.evaluation ?? null
   const [column, setColumn] = useState(collection.query_column ?? '')
@@ -450,14 +488,10 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
 
   return (
     <div className="coll-panel">
-      <p className="hint coll-lead">
-        Sampled rows ask with one of their columns, and a hit is their own row coming back. The
-        sample depends on the split and its commit only: collections of the same split, with other
-        models or columns, are tested on the same rows.
-      </p>
+      <p className="hint coll-lead">{t('test.lead')}</p>
       <form className="hub-toolbar" onSubmit={run}>
         <label className="label" htmlFor="coll-test-column">
-          Ask with
+          {t('test.askWith')}
         </label>
         <select
           id="coll-test-column"
@@ -465,7 +499,7 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
           value={column}
           onChange={(e) => setColumn(e.target.value)}
         >
-          {!collection.query_column && <option value="">Pick a column</option>}
+          {!collection.query_column && <option value="">{t('test.pickColumn')}</option>}
           {(collection.fields ?? []).map((field) => (
             <option key={field} value={field}>
               {field}
@@ -474,40 +508,37 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
         </select>
         <select
           className="select"
-          aria-label="Rows to test"
+          aria-label={t('test.sampleLabel')}
           value={sample}
           onChange={(e) => setSample(Number(e.target.value))}
         >
           {[50, 100, 200, 500].map((n) => (
             <option key={n} value={n}>
-              {n} rows
+              {t('test.sampleOption', { count: n })}
             </option>
           ))}
         </select>
         <select
           className="select"
-          aria-label="Top k"
+          aria-label={t('test.topKLabel')}
           value={k}
           onChange={(e) => setK(Number(e.target.value))}
         >
           {[1, 5, 10, 20, 50].map((n) => (
             <option key={n} value={n}>
-              Top {n}
+              {t('top', { count: n })}
             </option>
           ))}
         </select>
         <button type="submit" className="btn btn-primary" disabled={!column || evaluate.isPending}>
           <Icon name={evaluate.isPending ? 'loader' : 'play'} />
-          Run the test
+          {t('test.run')}
         </button>
       </form>
 
       {!result && !evaluate.isPending && (
         <div className="card hub-empty">
-          <p className="card-desc">
-            Not tested yet. With a Q/A split, embed the answers and ask with the questions: the test
-            then shows how often a question finds its own answer, and which rows get confused.
-          </p>
+          <p className="card-desc">{t('test.notTested')}</p>
         </div>
       )}
 
@@ -517,20 +548,23 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
             <div className="hub-notice coll-warn-box">
               <Icon name="alert" />
               <span>
-                <span className="mono">{result.query_column}</span> is embedded too, so every row
-                finds itself. Build a collection of the answers alone to test retrieval.
+                {t.rich('test.trivial', { column: result.query_column, mono: rich.mono })}
               </span>
             </div>
           )}
           <Metrics result={result} />
           <p className="hint">
-            Tested {timeAgo(result.evaluated_at, now)} on {formatCount(result.queries)} of{' '}
-            {formatCount(result.sample)} sampled rows, top {result.k}.
+            {t('test.tested', {
+              time: timeAgo(result.evaluated_at, now, locale),
+              queries: formatCount(result.queries, locale),
+              sample: formatCount(result.sample, locale),
+              k: result.k,
+            })}
           </p>
           {result.misses.length > 0 ? (
             <Misses collection={collection} result={result} />
           ) : (
-            <p className="hint">Every tested row found its own row first.</p>
+            <p className="hint">{t('test.allFound')}</p>
           )}
         </>
       )}
@@ -539,9 +573,28 @@ function TestPanel({ collection }: { collection: CollectionOut }) {
   )
 }
 
+/** Why a compared collection's figures can't be read next to this one's. */
+function CaveatText({ caveat }: { caveat: ComparisonCaveat }) {
+  const t = useTranslations('collection')
+  switch (caveat.key) {
+    case 'trivial':
+      return t('compare.caveat.trivial', { column: caveat.column })
+    case 'askedWith':
+      return t('compare.caveat.askedWith', { column: caveat.column })
+    case 'sampled':
+      return t('compare.caveat.sampled', { sample: caveat.sample })
+    case 'topK':
+      return t('compare.caveat.topK', { k: caveat.k })
+    default:
+      return t(`compare.caveat.${caveat.key}`)
+  }
+}
+
 /** The collections of the same split at the same commit, their latest tests
  * side by side: which model and which columns find the rows best. */
 function Comparison({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
   const all = useCollections()
   const rows = comparisonRows(collection, all.data?.collections ?? [])
   if (rows.length === 0) return null
@@ -549,24 +602,21 @@ function Comparison({ collection }: { collection: CollectionOut }) {
     <div className="card coll-compare">
       <div className="card-head">
         <div>
-          <div className="card-title">Collections of this split</div>
-          <p className="card-desc">
-            Every collection of this split at this commit is tested on the same sampled rows, so
-            their figures compare: which embedding model, on which columns, finds the rows best.
-          </p>
+          <div className="card-title">{t('compare.title')}</div>
+          <p className="card-desc">{t('compare.desc')}</p>
         </div>
       </div>
       <div className="coll-table-wrap">
         <table className="table stack-table">
           <thead>
             <tr>
-              <th>Collection</th>
-              <th>Model</th>
-              <th>Embeds</th>
-              <th className="coll-num">Found first</th>
-              <th className="coll-num">In the top k</th>
-              <th className="coll-num">MRR</th>
-              <th className="coll-num">Rows</th>
+              <th>{t('compare.collection')}</th>
+              <th>{t('compare.model')}</th>
+              <th>{t('compare.embeds')}</th>
+              <th className="coll-num">{t('compare.foundFirst')}</th>
+              <th className="coll-num">{t('compare.inTopK')}</th>
+              <th className="coll-num">{t('compare.mrr')}</th>
+              <th className="coll-num">{t('compare.rows')}</th>
             </tr>
           </thead>
           <tbody>
@@ -574,33 +624,37 @@ function Comparison({ collection }: { collection: CollectionOut }) {
               const test = other.evaluation
               return (
                 <tr key={other.id} className={cn(current && 'coll-compare-current')}>
-                  <td data-label="Collection">
+                  <td data-label={t('compare.collection')}>
                     {current ? (
                       <span>
-                        {other.name} <span className="badge">This one</span>
+                        {other.name} <span className="badge">{t('compare.thisOne')}</span>
                       </span>
                     ) : (
                       <Link href={`/collections/${other.id}`}>{other.name}</Link>
                     )}
-                    {caveat && <div className="hint coll-cell-text">{caveat}</div>}
+                    {caveat && (
+                      <div className="hint coll-cell-text">
+                        <CaveatText caveat={caveat} />
+                      </div>
+                    )}
                   </td>
-                  <td className="mono" data-label="Model">
+                  <td className="mono" data-label={t('compare.model')}>
                     {modelLabel(other.model)}
                   </td>
-                  <td className="mono" data-label="Embeds">
+                  <td className="mono" data-label={t('compare.embeds')}>
                     {other.text_columns.join(', ')}
                   </td>
-                  <td className="coll-num mono" data-label="Found first">
-                    {test ? percent(test.hit_at_1) : '—'}
+                  <td className="coll-num mono" data-label={t('compare.foundFirst')}>
+                    {test ? percent(test.hit_at_1, locale) : '—'}
                   </td>
-                  <td className="coll-num mono" data-label="In the top k">
-                    {test ? percent(test.hit_at_k) : '—'}
+                  <td className="coll-num mono" data-label={t('compare.inTopK')}>
+                    {test ? percent(test.hit_at_k, locale) : '—'}
                   </td>
-                  <td className="coll-num mono" data-label="MRR">
+                  <td className="coll-num mono" data-label={t('compare.mrr')}>
                     {test ? test.mrr.toFixed(2) : '—'}
                   </td>
-                  <td className="coll-num mono" data-label="Rows">
-                    {test ? formatCount(test.queries) : '—'}
+                  <td className="coll-num mono" data-label={t('compare.rows')}>
+                    {test ? formatCount(test.queries, locale) : '—'}
                   </td>
                 </tr>
               )
@@ -619,15 +673,17 @@ function Misses({
   collection: CollectionOut
   result: CollectionEvaluation
 }) {
+  const t = useTranslations('collection')
+  const locale = useLocale()
   return (
     <div className="card coll-misses">
       <div className="card-head">
         <div>
-          <div className="card-title">Rows not found first</div>
+          <div className="card-title">{t('misses.title')}</div>
           <p className="card-desc">
-            {result.misses.length === 20 ? 'The first 20: ' : ''}what each row asked, its own text,
-            and the row that came first instead. A near-identical top hit is often the same pair
-            twice.
+            {result.misses.length === 20
+              ? t('misses.descFirst', { count: result.misses.length })
+              : t('misses.desc')}
           </p>
         </div>
       </div>
@@ -635,41 +691,41 @@ function Misses({
         <table className="table stack-table">
           <thead>
             <tr>
-              <th>Asked</th>
-              <th>Its own row</th>
-              <th>Came first instead</th>
-              <th className="coll-num">Rank</th>
+              <th>{t('misses.asked')}</th>
+              <th>{t('misses.ownRow')}</th>
+              <th>{t('misses.cameFirst')}</th>
+              <th className="coll-num">{t('misses.rank')}</th>
             </tr>
           </thead>
           <tbody>
             {result.misses.map((miss) => (
               <tr key={miss.row_idx}>
-                <td data-label="Asked">{miss.query}</td>
-                <td data-label="Its own row">
+                <td data-label={t('misses.asked')}>{miss.query}</td>
+                <td data-label={t('misses.ownRow')}>
                   <Link href={rowHref(collection, miss.row_idx)} className="hint">
-                    Row {formatCount(miss.row_idx)}
+                    {t('row', { index: formatCount(miss.row_idx, locale) })}
                   </Link>
                   <div className="coll-cell-text">{miss.expected}</div>
                 </td>
-                <td data-label="Came first instead">
+                <td data-label={t('misses.cameFirst')}>
                   {miss.top_row_idx != null ? (
                     <>
                       <span className="coll-top-head">
                         <Link href={rowHref(collection, miss.top_row_idx)} className="hint">
-                          Row {formatCount(miss.top_row_idx)}
+                          {t('row', { index: formatCount(miss.top_row_idx, locale) })}
                         </Link>
                         {miss.top_score != null && <ScoreMeter score={miss.top_score} />}
                         {miss.top_score != null && miss.top_score >= DUPLICATE_SCORE && (
-                          <span className="badge badge-warning">Possible duplicate</span>
+                          <span className="badge badge-warning">{t('misses.duplicate')}</span>
                         )}
                       </span>
                       <div className="coll-cell-text">{miss.top_text}</div>
                     </>
                   ) : (
-                    <span className="hint">Nothing came back</span>
+                    <span className="hint">{t('misses.nothing')}</span>
                   )}
                 </td>
-                <td className="coll-num mono" data-label="Rank">
+                <td className="coll-num mono" data-label={t('misses.rank')}>
                   {miss.rank ?? `>${result.k}`}
                 </td>
               </tr>
@@ -682,29 +738,26 @@ function Misses({
 }
 
 function UsePanel({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collection')
+  const tc = useTranslations('common')
   const snippet = pythonSnippet(collection)
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(snippet)
-      toast.success('Copied')
+      toast.success(tc('copied'))
     } catch {
-      toast.error("Couldn't copy: select the code instead")
+      toast.error(t('use.copyFailed'))
     }
   }
   return (
     <div className="coll-panel">
-      <p className="hint coll-lead">
-        The vectors are a plain Qdrant collection: query it from your own code with the same model,
-        embedding the query the way the build embedded the rows. Each point&apos;s payload holds{' '}
-        <span className="mono">row_idx</span>, the embedded <span className="mono">text</span> and
-        its <span className="mono">fields</span>.
-      </p>
+      <p className="hint coll-lead">{t.rich('use.lead', { mono: rich.mono })}</p>
       <div className="card coll-snippet">
         <div className="coll-snippet-head">
           <span className="mono">{collection.qdrant_collection}</span>
           <button type="button" className="btn btn-ghost btn-sm" onClick={copy}>
             <Icon name="copy" />
-            Copy
+            {tc('copy')}
           </button>
         </div>
         <pre className="mono">{snippet}</pre>
@@ -714,6 +767,7 @@ function UsePanel({ collection }: { collection: CollectionOut }) {
 }
 
 export function CollectionPage({ id }: { id: string }) {
+  const t = useTranslations('collection')
   const collection = useCollection(id)
   const [tab, setTab] = useState<Tab>('search')
   const status = errorStatus(collection.error)
@@ -721,7 +775,7 @@ export function CollectionPage({ id }: { id: string }) {
   const back = (
     <Link href="/collections" className="btn btn-ghost btn-sm hub-back">
       <Icon name="chevronLeft" />
-      Collections
+      {t('back')}
     </Link>
   )
 
@@ -731,7 +785,7 @@ export function CollectionPage({ id }: { id: string }) {
         {back}
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Loading the collection…
+          {t('loading')}
         </div>
       </div>
     )
@@ -746,15 +800,13 @@ export function CollectionPage({ id }: { id: string }) {
             <Icon name="alert" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">
-              {status === 404 ? 'Collection not found' : "Couldn't load this collection"}
-            </div>
+            <div className="card-title">{status === 404 ? t('notFound') : t('loadFailed')}</div>
             <p className="card-desc">{collection.error.message}</p>
           </div>
           {status !== 404 && (
             <button type="button" className="btn btn-outline" onClick={() => collection.refetch()}>
               <Icon name="refresh" />
-              Try again
+              {t('tryAgain')}
             </button>
           )}
         </div>
@@ -775,17 +827,17 @@ export function CollectionPage({ id }: { id: string }) {
 
       {(c.status === 'ready' || c.serving) && !modelRemoved(c) && (
         <>
-          <nav className="tabs hub-tabs" aria-label="Collection sections">
-            {TABS.map((t) => (
+          <nav className="tabs hub-tabs" aria-label={t('sections')}>
+            {TABS.map((item) => (
               <button
-                key={t.key}
+                key={item.key}
                 type="button"
-                className={cn('tab', tab === t.key && 'active')}
-                aria-current={tab === t.key ? 'page' : undefined}
-                onClick={() => setTab(t.key)}
+                className={cn('tab', tab === item.key && 'active')}
+                aria-current={tab === item.key ? 'page' : undefined}
+                onClick={() => setTab(item.key)}
               >
-                <Icon name={t.icon} />
-                {t.label}
+                <Icon name={item.icon} />
+                {t(`tabs.${item.key}`)}
               </button>
             ))}
           </nav>

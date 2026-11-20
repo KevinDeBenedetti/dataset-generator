@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next'
+import createNextIntlPlugin from 'next-intl/plugin'
+
+// The interface's languages: i18n/request.ts picks the one of each request.
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 // Where the API lives, for the /api rewrite below (server-side only).
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://localhost:8000'
@@ -56,4 +60,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withNextIntl(nextConfig)

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from server.core.database import get_db
+from server.core.i18n import request_locale
 from server.models.user import User
 from server.schemas.admin import (
     AdminUser,
@@ -106,8 +107,8 @@ def usage(db: Session = Depends(get_db)) -> UsageResponse:
 
 
 @router.get("/platform", response_model=PlatformResponse)
-def get_platform() -> PlatformResponse:
-    return PlatformResponse(settings=platform.snapshot())
+def get_platform(locale: str = Depends(request_locale)) -> PlatformResponse:
+    return PlatformResponse(settings=platform.snapshot(locale))
 
 
 @router.put("/platform", response_model=PlatformResponse)
@@ -116,10 +117,13 @@ def put_platform(
     request: Request,
     actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
+    locale: str = Depends(request_locale),
 ) -> PlatformResponse:
     try:
         return PlatformResponse(
-            settings=platform.update(db, actor, body.settings, ip=_ip(request))
+            settings=platform.update(
+                db, actor, body.settings, ip=_ip(request), locale=locale
+            )
         )
     except ValueError as exc:
         db.rollback()

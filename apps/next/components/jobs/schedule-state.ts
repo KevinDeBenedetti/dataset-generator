@@ -39,15 +39,64 @@ export function scheduleForm(saved: SavedSchedule | null | undefined): ScheduleF
   }
 }
 
+/** "HH:MM" within a day as numbers, else the default, 03:00: an empty or
+ * mangled field must not read as midnight. */
+export function timeOf(time: string): { at_hour: number; at_minute: number } {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time)
+  return match
+    ? { at_hour: Number(match[1]), at_minute: Number(match[2]) }
+    : { at_hour: 3, at_minute: 0 }
+}
+
 /** What to save for the picker's state: null removes the schedule. */
 export function toSchedule(form: ScheduleForm): ScheduleTiming | null {
   if (!form.every) return null
-  // "HH:MM" within a day, or the default: an empty field must not read as midnight.
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(form.time)
+  return { every: form.every, ...timeOf(form.time), publish: form.publish }
+}
+
+/** One option's value, compared: no value and null alike, a list whatever
+ * its order. */
+function comparable(value: unknown): string {
+  if (value === undefined || value === null || value === '') return 'null'
+  if (Array.isArray(value)) return JSON.stringify(value.map(String).toSorted())
+  return JSON.stringify(value)
+}
+
+/** Whether a schedule would run with other options or another model than the
+ * card shows now. A key one side leaves out counts as its default (null). */
+export function differsFromCard(
+  saved: { options?: Record<string, unknown>; model_ref?: string | null },
+  card: { options: Record<string, unknown>; modelRef: string | null },
+): boolean {
+  const savedOptions = saved.options ?? {}
+  const keys = new Set([...Object.keys(savedOptions), ...Object.keys(card.options)])
+  for (const key of keys) {
+    if (comparable(savedOptions[key]) !== comparable(card.options[key])) return true
+  }
+  return comparable(saved.model_ref) !== comparable(card.modelRef)
+}
+
+/** Why a schedule's latest time started no run, as its server keeps it. */
+export interface ScheduleSkip {
+  reason: string
+  at: string
+}
+
+/** The `jobs` message a schedule shows when its latest time started no run. */
+export interface SkipNotice {
+  key: 'schedule.skipped'
+  /** When the run was due (ISO): its picker formats it in the reader's locale. */
+  at: string
+  /** The server's reason, without its final full stop: the message adds one. */
+  reason: string
+}
+
+/** The message a schedule shows when its latest time started no run, or null. */
+export function skipNotice(skipped: ScheduleSkip | null | undefined): SkipNotice | null {
+  if (!skipped?.reason) return null
   return {
-    every: form.every,
-    at_hour: match ? Number(match[1]) : 3,
-    at_minute: match ? Number(match[2]) : 0,
-    publish: form.publish,
+    key: 'schedule.skipped',
+    at: skipped.at,
+    reason: skipped.reason.replace(/[.\s]+$/, ''),
   }
 }

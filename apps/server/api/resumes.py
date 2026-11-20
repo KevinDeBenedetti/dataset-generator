@@ -92,6 +92,7 @@ def _dataset(schedule: Dict[str, Any]) -> Dict[str, Any]:
         "publish": schedule["publish"],
         "next_run_at": schedule["next_run_at"],
         "latest_run": schedule["last_run"],
+        "skipped": schedule["skipped"],
         "updated_at": schedule["updated_at"],
     }
 

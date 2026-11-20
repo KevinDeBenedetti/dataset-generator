@@ -154,6 +154,7 @@ def _schedule(saved: dict) -> dict:
         "publish": saved["publish"],
         "next_run_at": saved["next_run_at"],
         "latest_run": saved["last_run"],
+        "skipped": saved["skipped"],
         "updated_at": saved["updated_at"],
     }
 

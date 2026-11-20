@@ -2,11 +2,13 @@
 
 import { type FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import type { EmbeddingModelOut, HubView } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { formatBytes, splitRepoId } from '@/components/hub/format'
 import { useCreateCollection, useHubDataset, useHubDatasets, useHubRows } from '@/hooks'
+import type { Locale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
 import { defaultCollectionName, defaultColumns, isTrivialTest, modelLabel } from './format'
 
@@ -15,9 +17,9 @@ const MAX_TEXT_COLUMNS = 4
 
 const viewKey = (view: HubView) => `${view.config}\u0000${view.split}`
 
-function viewLabel(view: HubView): string {
+function viewLabel(view: HubView, locale: Locale): string {
   const name = view.config === 'default' ? view.split : `${view.config} / ${view.split}`
-  return view.num_bytes != null ? `${name} · ${formatBytes(view.num_bytes)}` : name
+  return view.num_bytes != null ? `${name} · ${formatBytes(view.num_bytes, locale)}` : name
 }
 
 export function CreateCollectionForm({
@@ -29,6 +31,9 @@ export function CreateCollectionForm({
   initialRepo: string | null
   onCancel: () => void
 }) {
+  const t = useTranslations('collections')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   const router = useRouter()
   const create = useCreateCollection()
   const datasets = useHubDatasets()
@@ -96,7 +101,7 @@ export function CreateCollectionForm({
       },
       {
         onSuccess: (collection) => {
-          toast.success(`Building "${collection.name}"`)
+          toast.success(t('form.building', { name: collection.name }))
           router.push(`/collections/${collection.id}`)
         },
         onError: (error) => toast.error(error.message),
@@ -112,18 +117,15 @@ export function CreateCollectionForm({
     <form className="card coll-form" onSubmit={submit}>
       <div className="card-head">
         <div>
-          <div className="card-title">New collection</div>
-          <p className="card-desc">
-            One split of a dataset, read from Hugging Face at its latest commit and embedded row by
-            row with an embedding model of your endpoint: the rows are sent to it.
-          </p>
+          <div className="card-title">{t('new')}</div>
+          <p className="card-desc">{t('form.description')}</p>
         </div>
       </div>
 
       <div className="grid-2 coll-form-grid">
         <div className="field">
           <label className="label" htmlFor="coll-repo">
-            Dataset
+            {t('form.dataset')}
           </label>
           <select
             id="coll-repo"
@@ -134,7 +136,9 @@ export function CreateCollectionForm({
               setPickedView(null)
             }}
           >
-            <option value="">{datasets.isPending ? 'Loading your datasets…' : 'Pick one'}</option>
+            <option value="">
+              {datasets.isPending ? t('form.loadingDatasets') : t('form.pickOne')}
+            </option>
             {repoIds.map((id) => (
               <option key={id} value={id}>
                 {id}
@@ -146,7 +150,7 @@ export function CreateCollectionForm({
 
         <div className="field">
           <label className="label" htmlFor="coll-split">
-            Split
+            {t('form.split')}
           </label>
           <select
             id="coll-split"
@@ -156,12 +160,13 @@ export function CreateCollectionForm({
             onChange={(e) => setPickedView(e.target.value)}
           >
             {!views.length && (
-              <option value="">{detail.isFetching ? 'Reading the dataset…' : '—'}</option>
+              <option value="">{detail.isFetching ? t('form.readingDataset') : '—'}</option>
             )}
             {views.map((v) => (
               <option key={viewKey(v)} value={viewKey(v)} disabled={!fits(v)}>
-                {viewLabel(v)}
-                {fits(v) ? '' : ' (too large)'}
+                {fits(v)
+                  ? viewLabel(v, locale)
+                  : t('form.tooLarge', { label: viewLabel(v, locale) })}
               </option>
             ))}
           </select>
@@ -171,15 +176,15 @@ export function CreateCollectionForm({
 
       {view && (
         <fieldset className="coll-fieldset">
-          <legend className="label">Text to embed</legend>
+          <legend className="label">{t('form.textToEmbed')}</legend>
           {rows.isPending ? (
             <div className="hint">
-              <Icon name="loader" className="animate-spin ic-sm" /> Reading the columns…
+              <Icon name="loader" className="animate-spin ic-sm" /> {t('form.readingColumns')}
             </div>
           ) : rows.error ? (
             <div className="hint coll-error">{rows.error.message}</div>
           ) : strings.length === 0 ? (
-            <div className="hint coll-error">This split has no text column to embed.</div>
+            <div className="hint coll-error">{t('form.noTextColumn')}</div>
           ) : (
             <div className="coll-chips">
               {strings.map((column) => {
@@ -199,9 +204,7 @@ export function CreateCollectionForm({
               })}
             </div>
           )}
-          <div className="hint">
-            Joined in this order, a blank line between them. Rows empty in all of them are skipped.
-          </div>
+          <div className="hint">{t('form.joinHint')}</div>
         </fieldset>
       )}
 
@@ -209,7 +212,7 @@ export function CreateCollectionForm({
         <div className="grid-2 coll-form-grid">
           <div className="field">
             <label className="label" htmlFor="coll-query">
-              Questions for the retrieval test
+              {t('form.queryColumn')}
             </label>
             <select
               id="coll-query"
@@ -217,7 +220,7 @@ export function CreateCollectionForm({
               value={columns.query ?? ''}
               onChange={(e) => setQuery(e.target.value || null)}
             >
-              <option value="">None</option>
+              <option value="">{tc('none')}</option>
               {strings.map((column) => (
                 <option key={column} value={column}>
                   {column}
@@ -225,15 +228,13 @@ export function CreateCollectionForm({
               ))}
             </select>
             <div className={cn('hint', trivial && 'coll-warn')}>
-              {trivial
-                ? 'This column is embedded too, so every row finds itself: embed the answer only to test retrieval.'
-                : 'Each tested row asks with this column; a hit is its own row coming back first.'}
+              {trivial ? t('form.trivialHint') : t('form.queryHint')}
             </div>
           </div>
 
           <div className="field">
             <label className="label" htmlFor="coll-model">
-              Embedding model
+              {t('form.model')}
             </label>
             <select
               id="coll-model"
@@ -250,10 +251,7 @@ export function CreateCollectionForm({
             {chosenModel ? (
               <div className="hint">{chosenModel.description}</div>
             ) : (
-              <div className="hint">
-                Your endpoint serves no embedding model: add your API key in Settings, on an
-                endpoint that serves OPENAI_EMBEDDING_MODEL.
-              </div>
+              <div className="hint">{t('form.noModel')}</div>
             )}
           </div>
         </div>
@@ -262,7 +260,7 @@ export function CreateCollectionForm({
       {view && strings.length > 0 && (
         <div className="field">
           <label className="label" htmlFor="coll-name">
-            Name
+            {t('form.name')}
           </label>
           <input
             id="coll-name"
@@ -277,10 +275,10 @@ export function CreateCollectionForm({
       <div className="coll-form-actions">
         <button type="submit" className="btn btn-primary" disabled={!valid || create.isPending}>
           <Icon name={create.isPending ? 'loader' : 'boxes'} />
-          Build collection
+          {t('form.submit')}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
+          {tc('cancel')}
         </button>
       </div>
     </form>

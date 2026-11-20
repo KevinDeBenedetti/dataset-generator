@@ -1,12 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import type { HubDatasetDetail } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { formatBytes, formatCount, shortSha } from './format'
+import { rich } from '@/lib/rich'
 
 /** Every file of the repo at the commit shown, and the table each one feeds. */
 export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
+  const t = useTranslations('viewer')
+  const tc = useTranslations('common')
+  const locale = useLocale()
   const usage = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const view of detail.views) {
@@ -28,10 +33,15 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">Files</div>
+          <div className="card-title">{t('files.title')}</div>
           <div className="card-desc">
-            {formatCount(files.length)} file(s), {formatBytes(total)}, at commit{' '}
-            <span className="mono">{shortSha(detail.sha)}</span>
+            {t.rich('files.summary', {
+              count: files.length,
+              formatted: formatCount(files.length, locale),
+              size: formatBytes(total, locale),
+              sha: shortSha(detail.sha),
+              mono: rich.mono,
+            })}
           </div>
         </div>
         <a
@@ -41,18 +51,18 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
           rel="noopener noreferrer"
         >
           <Icon name="external" />
-          Browse on Hugging Face
+          {t('files.browse')}
         </a>
       </div>
       <div className="hub-table-wrap">
         <table className="table stack-table">
           <thead>
             <tr>
-              <th>Path</th>
-              <th>Used by</th>
-              <th className="num">Size</th>
+              <th>{t('files.path')}</th>
+              <th>{t('files.usedBy')}</th>
+              <th className="num">{t('files.size')}</th>
               <th>
-                <span className="sr-only">Open</span>
+                <span className="sr-only">{tc('open')}</span>
               </th>
             </tr>
           </thead>
@@ -62,12 +72,12 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
               const used = usage.get(file.path)
               return (
                 <tr key={file.path}>
-                  <td className="mono hub-path" data-label="Path">
+                  <td className="mono hub-path" data-label={t('files.path')}>
                     {slash > 0 && <span className="muted">{file.path.slice(0, slash + 1)}</span>}
                     {file.path.slice(slash + 1)}
                     {file.lfs && <span className="tag hub-lfs">LFS</span>}
                   </td>
-                  <td data-label="Used by">
+                  <td data-label={t('files.usedBy')}>
                     {used ? (
                       <span className="hub-chips">
                         {used.map((label) => (
@@ -80,8 +90,8 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
                       <span className="muted">—</span>
                     )}
                   </td>
-                  <td className="num mono" data-label="Size">
-                    {formatBytes(file.size)}
+                  <td className="num mono" data-label={t('files.size')}>
+                    {formatBytes(file.size, locale)}
                   </td>
                   <td className="num">
                     <a
@@ -89,7 +99,7 @@ export function FilesPanel({ detail }: { detail: HubDatasetDetail }) {
                       href={`${detail.url}/blob/${detail.sha}/${file.path.split('/').map(encodeURIComponent).join('/')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`Open ${file.path} on Hugging Face`}
+                      aria-label={t('files.openFile', { path: file.path })}
                     >
                       <Icon name="external" />
                     </a>

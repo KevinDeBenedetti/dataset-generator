@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { AppSidebar } from '@/components/app/app-sidebar'
 import { AppTopbar } from '@/components/app/app-topbar'
@@ -11,6 +12,7 @@ const DRAWER_QUERY = '(max-width: 920px)'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const t = useTranslations('shell')
   const [navOpen, setNavOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
@@ -58,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           className="sb-backdrop"
-          aria-label="Close navigation"
+          aria-label={t('closeNavigation')}
           tabIndex={-1}
           onClick={() => setNavOpen(false)}
         />

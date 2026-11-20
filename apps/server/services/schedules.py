@@ -21,6 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from server.core.database import get_scoped_db
+from server.core.i18n import translate_message
 from server.jobs.registry import JOBS
 from server.models.job_run import JobRun
 from server.models.job_schedule import JobSchedule
@@ -30,6 +31,8 @@ from server.services.jobs import QuotaExceededError, RunConflictError, queue_run
 logger = logging.getLogger(__name__)
 
 EVERY = ("day", "week", "month")
+# How soon a schedule whose job has a run in progress is tried again.
+RETRY_BUSY = timedelta(minutes=5)
 
 
 class ScheduleNotFoundError(LookupError):
@@ -101,6 +104,7 @@ def _view(db: Session, row: JobSchedule) -> Dict[str, Any]:
         "publish": row.publish,
         "next_run_at": _aware(row.next_run_at) if row.next_run_at else None,
         "last_run": _latest_run(db, row),
+        "skipped": _skip_out(row.skipped),
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
@@ -172,6 +176,7 @@ def upsert_schedule(
     row.at_hour = at_hour
     row.at_minute = at_minute
     row.publish = bool(publish)
+    row.skipped = None  # saved again: what stopped the last tick may be fixed
     if every is None:
         row.next_run_at = None
     elif moved or row.next_run_at is None:
@@ -211,13 +216,34 @@ def _may_run(db: Session, row: JobSchedule) -> Optional[str]:
     return None
 
 
+# How much of a reason a schedule keeps (a model list can be long).
+MAX_SKIP_REASON_CHARS = 300
+
+
+def _skip_out(skipped: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A stored skip as served: its reason in the reader's language."""
+    if not skipped:
+        return None
+    return {**skipped, "reason": translate_message(skipped.get("reason"))}
+
+
+def _skip(db: Session, row: JobSchedule, reason: str, now: datetime) -> None:
+    """Record why this tick queued no run: logged, and kept on the schedule
+    for its page to show until a run is queued or the schedule saved again."""
+    logger.warning("schedule %s (%s) skipped: %s", row.id, row.job_id, reason)
+    row.skipped = {"reason": reason[:MAX_SKIP_REASON_CHARS], "at": now.isoformat()}
+    db.commit()
+
+
 def queue_due(now: Optional[datetime] = None) -> List[str]:
     """Queue a run of every schedule whose time has come; the ids queued.
 
     Blocking — the worker calls it from a thread. A schedule the worker can't
     run now (a run of its job in progress, the owner's quota reached, a model
     that isn't usable any more) is logged and tried again next time; its date
-    has already moved on, so a stuck schedule never floods the queue.
+    has already moved on, so a stuck schedule never floods the queue. The
+    exception is a run of its job in progress (two recipes at the same time):
+    that one is tried again every :data:`RETRY_BUSY`, until its next time.
     """
     from server.services.credentials import resolve_credentials
 
@@ -236,33 +262,49 @@ def queue_due(now: Optional[datetime] = None) -> List[str]:
         for row in due:
             every = row.every or "day"
             seen = row.next_run_at
+            regular = next_run(every, row.at_hour, row.at_minute, now)
             claimed = db.execute(
                 update(JobSchedule)
                 .where(JobSchedule.id == row.id, JobSchedule.next_run_at == seen)
-                .values(next_run_at=next_run(every, row.at_hour, row.at_minute, now))
+                .values(next_run_at=regular)
             ).rowcount
             db.commit()
             if not claimed:
                 continue  # another worker's tick
             reason = _may_run(db, row)
             if reason:
-                logger.warning(
-                    "schedule %s (%s) skipped: %s", row.id, row.job_id, reason
-                )
+                _skip(db, row, reason, now)
                 continue
             options = {**(row.options or {}), "publish": row.publish}
             try:
                 creds = resolve_credentials(row.owner_id)
                 run = queue_run(row.owner_id, creds, row.job_id, options, row.model_ref)
-            except (RunConflictError, QuotaExceededError, ValueError) as exc:
-                logger.warning("schedule %s (%s) skipped: %s", row.id, row.job_id, exc)
+            except RunConflictError as exc:
+                # Another run of the job is in progress — the same recipe's, or
+                # another recipe's at the same time. Its turn comes once that
+                # one is done: tried again shortly, not at the next tick.
+                row.next_run_at = min(now + RETRY_BUSY, regular)
+                db.commit()
+                logger.info(
+                    "schedule %s (%s) waits for a run in progress (%s): tried "
+                    "again at %s",
+                    row.id,
+                    row.job_id,
+                    exc,
+                    row.next_run_at.isoformat(),
+                )
+                continue
+            except (QuotaExceededError, ValueError) as exc:
+                _skip(db, row, str(exc), now)
                 continue
             except Exception:  # noqa: BLE001 — one schedule's failure stops no other
                 logger.exception(
                     "schedule %s (%s) could not be queued", row.id, row.job_id
                 )
+                _skip(db, row, "The run could not be queued (a server error)", now)
                 continue
             row.last_run_id = run["id"]
+            row.skipped = None
             db.commit()
             queued.append(run["id"])
             logger.info(

@@ -4,7 +4,7 @@ The pairs checked are the ones the review decides on: a recipe draft's new
 and held-out pairs, every pair of a file or web page draft. Two checks:
 
 * near-duplicates, by question and answer text (the Quality page's analysis,
-  ``services.datasets._similar_pairs``);
+  ``services.similarity.similar_pairs``);
 * the user's quality rules (``services.quality_rules.rejection_reason``),
   evaluated even when auto-reject is off: the review reports, it doesn't
   reject.
@@ -13,8 +13,9 @@ and held-out pairs, every pair of a file or web page draft. Two checks:
 from typing import Any, Dict, List
 
 from server.core.database import get_scoped_db
+from server.core.lru import WeightedLRU
 from server.models.job_run import JobRun
-from server.services.datasets import _similar_pairs
+from server.services.similarity import similar_pairs
 from server.services.drafts import GENERATION_JOB_ID
 from server.services.jobs import RunConflictError, _owned_row
 from server.services.quality_rules import get_quality_rules, rejection_reason
@@ -43,6 +44,41 @@ def review_pairs(row: JobRun) -> List[Dict[str, Any]]:
     return new + [p for p in dataset.get("review") or [] if isinstance(p, dict)]
 
 
+# (run id, threshold) -> the draft's near-duplicates. A draft's pairs never
+# change once it is stored, so the comparison of every pair with every other —
+# seconds for a few hundred pairs — is made once, not at every load of the
+# review page. Per process; read only after the run's owner is checked.
+_duplicates_cache = WeightedLRU(lambda: 64, lambda _: 1)
+
+
+def forget_duplicates() -> None:
+    """Drop every kept result (tests)."""
+    _duplicates_cache.clear()
+
+
+def _duplicates(
+    run_id: str, threshold: float, checked: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    key = (run_id, round(threshold, 4))
+    kept = _duplicates_cache.get(key)
+    if kept is not None:
+        return kept
+    texts = [
+        {"question": str(p.get("question", "")), "answer": str(p.get("answer", ""))}
+        for p in checked
+    ]
+    found = [
+        {
+            "first": checked[i]["id"],
+            "second": checked[j]["id"],
+            "similarity": round(ratio, 3),
+        }
+        for i, j, ratio in similar_pairs(texts, threshold)
+    ]
+    _duplicates_cache.put(key, found)
+    return found
+
+
 def check_draft(owner_id: str, run_id: str, threshold: float) -> Dict[str, Any]:
     """Near-duplicate pairs and rule failures of the owner's draft.
 
@@ -56,18 +92,7 @@ def check_draft(owner_id: str, run_id: str, threshold: float) -> Dict[str, Any]:
         pairs = [p for p in review_pairs(row) if p.get("id")]
 
     checked = pairs[:MAX_CHECKED]
-    texts = [
-        {"question": str(p.get("question", "")), "answer": str(p.get("answer", ""))}
-        for p in checked
-    ]
-    duplicates = [
-        {
-            "first": checked[i]["id"],
-            "second": checked[j]["id"],
-            "similarity": round(ratio, 3),
-        }
-        for i, j, ratio in _similar_pairs(texts, threshold)
-    ]
+    duplicates = _duplicates(run_id, threshold, checked)
 
     rules = {**get_quality_rules(owner_id), "auto_reject_enabled": True}
     flagged: Dict[str, str] = {}

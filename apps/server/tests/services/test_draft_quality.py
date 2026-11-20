@@ -138,3 +138,65 @@ def test_a_run_without_draft_or_of_someone_else(db, owner, test_db):
         draft_quality.check_draft(owner.id, "x1", 0.85)
     with pytest.raises(UnknownRunError):
         draft_quality.check_draft("someone-else", "x1", 0.85)
+
+
+def _two_alike():
+    return {
+        "pairs": [
+            _pair(
+                "a", "What is the install command?", "Run make install to set it up."
+            ),
+            _pair(
+                "b", "What is the install command ?", "Run make install to set it up!"
+            ),
+            _pair(
+                "c", "Something else entirely here?", "A different answer altogether."
+            ),
+        ]
+    }
+
+
+def test_the_duplicate_check_of_a_draft_is_made_once(db, owner, test_db, monkeypatch):
+    """A draft's pairs never change: its review page loads many times, the
+    comparison of every pair with every other runs once."""
+    _add(test_db, owner, "g2", "generation-draft", _two_alike())
+    calls = []
+    real = draft_quality.similar_pairs
+
+    def counting(texts, threshold):
+        calls.append(threshold)
+        return real(texts, threshold)
+
+    monkeypatch.setattr(draft_quality, "similar_pairs", counting)
+
+    first = draft_quality.check_draft(owner.id, "g2", 0.85)
+    again = draft_quality.check_draft(owner.id, "g2", 0.85)
+    assert again == first and calls == [0.85]
+    assert [(d["first"], d["second"]) for d in again["duplicates"]] == [("a", "b")]
+
+    # Another threshold is another question.
+    draft_quality.check_draft(owner.id, "g2", 0.99)
+    assert calls == [0.85, 0.99]
+
+
+def test_the_rules_are_read_again_at_every_check(db, owner, test_db, monkeypatch):
+    _add(test_db, owner, "g3", "generation-draft", _two_alike())
+    assert draft_quality.check_draft(owner.id, "g3", 0.85)["flagged"] == {}
+    # The owner tightens their rules: the kept duplicates don't freeze them.
+    monkeypatch.setattr(
+        draft_quality,
+        "get_quality_rules",
+        lambda owner_id: {"min_answer_words": 50, "min_confidence": 0.0},
+    )
+    assert set(draft_quality.check_draft(owner.id, "g3", 0.85)["flagged"]) == {
+        "a",
+        "b",
+        "c",
+    }
+
+
+def test_a_kept_check_is_still_the_owners_only(db, owner, test_db):
+    _add(test_db, owner, "g4", "generation-draft", _two_alike())
+    draft_quality.check_draft(owner.id, "g4", 0.85)
+    with pytest.raises(UnknownRunError):
+        draft_quality.check_draft("someone-else", "g4", 0.85)

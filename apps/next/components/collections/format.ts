@@ -1,5 +1,6 @@
 // Pure helpers of the Collections pages: labels, defaults, links, the snippet.
 
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/config'
 import { datasetHref } from '../hub/format'
 
 /** A collection model is one of the OpenAI-compatible endpoint's, named
@@ -18,17 +19,27 @@ export function modelRemoved(collection: { model: string }): boolean {
   return !isEndpointModel(collection.model)
 }
 
+/** A built collection whose owner's endpoint is no longer the one that
+ * embedded it: a question would be embedded into another vector space. */
+export function endpointMoved(collection: {
+  status: string
+  current_endpoint?: string | null
+}): boolean {
+  return collection.status !== 'building' && Boolean(collection.current_endpoint)
+}
+
 /** `BAAI/bge-small-en-v1.5` → `bge-small-en-v1.5`; `openai:embed-default` → `embed-default`. */
 export function modelLabel(name: string): string {
   const id = isEndpointModel(name) ? name.slice(ENDPOINT_PREFIX.length) : name
   return id.slice(id.lastIndexOf('/') + 1)
 }
 
-/** 0.754 → `75%`; 1 → `100%`; a share under 1% but above 0 → `<1%`. */
-export function percent(share: number | null | undefined): string {
+/** 0.754 → `75%`; 1 → `100%`; a share under 1% but above 0 → `<1%` (`75 %` in French). */
+export function percent(share: number | null | undefined, locale: Locale = DEFAULT_LOCALE): string {
   if (share == null || Number.isNaN(share)) return '—'
-  if (share > 0 && share < 0.01) return '<1%'
-  return `${Math.round(share * 100)}%`
+  const format = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 })
+  if (share > 0 && share < 0.01) return `<${format.format(0.01)}`
+  return format.format(share)
 }
 
 /** A suggested name: the dataset, its split when not "train", the model. */
@@ -90,11 +101,21 @@ export interface ComparedCollection {
   } | null
 }
 
+/** Why a collection's figures can't be read next to the current one's: the
+ * `key` of a `collection.compare.caveat` message, with its values. */
+export type ComparisonCaveat =
+  | { key: 'notTested' }
+  | { key: 'notBuilt' }
+  | { key: 'trivial'; column: string }
+  | { key: 'askedWith'; column: string }
+  | { key: 'sampled'; sample: number }
+  | { key: 'topK'; k: number }
+
 export interface ComparisonRow {
   collection: ComparedCollection
   current: boolean
   /** Why its figures can't be read next to the current collection's, if so. */
-  caveat: string | null
+  caveat: ComparisonCaveat | null
 }
 
 /** The collections to read side by side with `current`: those of the same
@@ -114,14 +135,16 @@ export function comparisonRows(
   const others = all.filter((c) => c.id !== current.id && same(c))
   if (others.length === 0) return []
   const reference = current.evaluation
-  const caveat = (c: ComparedCollection): string | null => {
+  const caveat = (c: ComparedCollection): ComparisonCaveat | null => {
     const test = c.evaluation
-    if (!test) return c.status === 'ready' ? 'Not tested yet' : 'Not built'
-    if (test.trivial) return `${test.query_column} is embedded too: every row finds itself`
+    if (!test) return { key: c.status === 'ready' ? 'notTested' : 'notBuilt' }
+    if (test.trivial) return { key: 'trivial', column: test.query_column }
     if (!reference || c.id === current.id) return null
-    if (test.query_column !== reference.query_column) return `Asked with ${test.query_column}`
-    if (test.sample !== reference.sample) return `Tested on ${test.sample} sampled rows`
-    if (test.k !== reference.k) return `Top ${test.k}`
+    if (test.query_column !== reference.query_column) {
+      return { key: 'askedWith', column: test.query_column }
+    }
+    if (test.sample !== reference.sample) return { key: 'sampled', sample: test.sample }
+    if (test.k !== reference.k) return { key: 'topK', k: test.k }
     return null
   }
   const score = (c: ComparedCollection) =>
@@ -164,7 +187,9 @@ export function pythonSnippet(collection: { model: string; qdrant_collection: st
     '# The OpenAI-compatible endpoint and key the collection was built with.',
     'llm = OpenAI(base_url="https://your-endpoint/v1", api_key="sk-…")',
     '# QDRANT_URL of the server; the local stack publishes it on localhost:6353.',
-    'client = QdrantClient(url="http://localhost:6353")',
+    "# api_key: the server's QDRANT_API_KEY when its Qdrant requires one (it then",
+    '# answers "Must provide an API key" without it); None otherwise.',
+    'client = QdrantClient(url="http://localhost:6353", api_key=None)',
     '',
     'vector = llm.embeddings.create(',
     `    model=${JSON.stringify(modelId(collection.model))}, input="your question"`,

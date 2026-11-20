@@ -45,6 +45,13 @@ class JobRunRequest(BaseModel):
     )
 
 
+class ScheduleSkip(BaseModel):
+    """Why a schedule's latest tick queued no run."""
+
+    reason: str
+    at: datetime
+
+
 class JobScheduleIn(BaseModel):
     """A whole-account job's schedule: the options and model its runs copy,
     and when the worker starts one by itself."""
@@ -76,6 +83,9 @@ class JobScheduleOut(JobScheduleIn):
     latest_run: Optional[JobRunRef] = Field(
         None, description="The most recent scheduled run"
     )
+    skipped: Optional[ScheduleSkip] = Field(
+        None, description="Why the latest scheduled time started no run, if so"
+    )
     updated_at: datetime
 
 
@@ -83,7 +93,13 @@ class JobResultOut(BaseModel):
     dry_run: bool
     url: Optional[str] = None
     metrics: List[Tuple[str, Any]] = Field(
-        default_factory=list, description="(label, value) pairs, in display order"
+        default_factory=list,
+        description="(label, value) pairs in English, in display order: what a "
+        "client looks a metric up by",
+    )
+    metrics_display: List[Tuple[str, Any]] = Field(
+        default_factory=list,
+        description="The same pairs in the reader's language, for display",
     )
     errors: List[str] = Field(default_factory=list, description="Non-fatal errors")
 

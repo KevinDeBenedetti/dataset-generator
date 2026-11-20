@@ -8604,7 +8604,23 @@
             },
             "type": "array",
             "title": "Metrics",
-            "description": "(label, value) pairs, in display order"
+            "description": "(label, value) pairs in English, in display order: what a client looks a metric up by"
+          },
+          "metrics_display": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {}
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Metrics Display",
+            "description": "The same pairs in the reader's language, for display"
           },
           "errors": {
             "items": {
@@ -8947,6 +8963,17 @@
               }
             ],
             "description": "The most recent scheduled run"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleSkip"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the latest scheduled time started no run, if so"
           },
           "updated_at": {
             "type": "string",
@@ -10241,6 +10268,17 @@
             ],
             "description": "The most recent scheduled run"
           },
+          "skipped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleSkip"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the latest scheduled time started no run, if so"
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
@@ -10616,6 +10654,17 @@
             ],
             "description": "The most recent run, scheduled or started by you"
           },
+          "skipped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleSkip"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the latest scheduled time started no run, if so"
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
@@ -10868,6 +10917,26 @@
           "resumes"
         ],
         "title": "ResumesOut"
+      },
+      "ScheduleSkip": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "at"
+        ],
+        "title": "ScheduleSkip",
+        "description": "Why a schedule's latest tick queued no run."
       },
       "SecretCheck": {
         "properties": {

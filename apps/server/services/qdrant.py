@@ -145,6 +145,35 @@ def builds_of(name: str) -> List[str]:
     return [n for n in names() if n.startswith(prefix)]
 
 
+def claim(name: str, owner: str) -> Optional[str]:
+    """Mark the collection ``name`` as ``owner``'s, unless another owner did.
+
+    The mark is a one-point collection whose payload says who made it: the
+    owner already there (``owner`` itself on a fresh claim) is returned.
+    """
+    from qdrant_client import models
+
+    def run(client: Any) -> Optional[str]:
+        if not client.collection_exists(name):
+            client.create_collection(
+                collection_name=name,
+                vectors_config=models.VectorParams(
+                    size=1, distance=models.Distance.COSINE
+                ),
+            )
+            client.upsert(
+                collection_name=name,
+                points=models.Batch(
+                    ids=[1], vectors=[[1.0]], payloads=[{"owner": owner}]
+                ),
+                wait=True,
+            )
+        points = client.retrieve(collection_name=name, ids=[1], with_payload=True)
+        return str((points[0].payload or {}).get("owner")) if points else None
+
+    return _call("claiming the collection prefix", run)
+
+
 def names() -> List[str]:
     """Every collection in Qdrant, this deployment's and any other's."""
     return _call(

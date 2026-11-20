@@ -875,6 +875,41 @@ def test_the_sweep_drops_the_vectors_no_collection_names(
     assert collections.drop_orphans() == []
 
 
+def test_a_prefix_another_deployment_claimed_is_never_swept(
+    db, vectors, fake_hub, queued, embedder, monkeypatch
+):
+    """Two deployments on one Qdrant with the same prefix: each database names
+    only its own collections, so each would drop the other's. The prefix
+    belongs to the first one that swept; the second drops nothing."""
+    prefix = config.qdrant_collection_prefix
+    theirs = f"{prefix}c_{'3' * 32}"  # no row of ours names it
+    qdrant.recreate(theirs, 4)
+    qdrant.claim(f"{prefix}{collections.CLAIM_NAME}", "another-deployment")
+    # Read off the logger itself: the app's logging setup, done by other tests
+    # in a full run, keeps records away from pytest's capture.
+    errors = []
+    monkeypatch.setattr(
+        collections.logger, "error", lambda msg, *args: errors.append(msg % args)
+    )
+
+    assert collections.drop_orphans() == []
+    assert theirs in qdrant.names()
+    assert len(errors) == 1 and "belongs to another deployment" in errors[0]
+
+
+def test_the_first_sweep_claims_the_prefix_for_this_deployment(
+    db, vectors, fake_hub, queued, embedder
+):
+    collections.drop_orphans()
+    ours = collections.deployment_id()
+    assert ours and collections.deployment_id() == ours  # made once, then kept
+    claim = f"{config.qdrant_collection_prefix}{collections.CLAIM_NAME}"
+    assert qdrant.claim(claim, "someone-else") == ours
+    # The claim itself is never taken for an orphan.
+    collections.drop_orphans()
+    assert claim in qdrant.names()
+
+
 def test_the_sweep_needs_qdrant(monkeypatch):
     monkeypatch.setattr(config, "qdrant_url", "")
     assert collections.drop_orphans() == []

@@ -41,8 +41,8 @@ asked** or why it failed.
 
 Each card has a **Regenerate** picker too: every day, every Monday or the 1st
 of every month, at a time of day (UTC). A scheduled run copies the options and
-the model the card shows when you set the schedule — change it again to save
-new ones. With its publish box ticked, a scheduled Q&A run publishes what
+the model the card shows when you set the schedule; when you change them on the
+card afterwards, it says so and offers **Schedule these instead**. With its publish box ticked, a scheduled Q&A run publishes what
 passes the checks and keeps the doubtful pairs as a draft, and a scheduled
 corpus run publishes whatever *Dry Run* says; unticked, the run stops where
 one you start by hand does.
@@ -67,9 +67,8 @@ builds on the published version, so a day nothing changed on GitHub makes no
 model call and publishes nothing. With **Publish what passes the checks** on,
 the pairs that pass are published at once and the doubtful ones wait as a
 draft; off, the run stops at a draft like one you start yourself. Only one
-recipe runs at a time, so give your recipes different times: a run that finds
-another in progress waits for its next time. Deleting a recipe removes its
-schedule.
+recipe runs at a time: a scheduled run that finds another in progress starts a
+few minutes after it is done. Deleting a recipe removes its schedule.
 
 ## Choosing what a repo contributes
 

@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
+from urllib.parse import urlsplit
 import hashlib
+import ipaddress
 import hmac
 import logging
 import os
@@ -27,6 +29,56 @@ def _env(name: str, default: str = "") -> str:
     if value is None or not value.strip():
         return default
     return value
+
+
+_PRIVATE_NETWORKS = tuple(
+    ipaddress.ip_network(net)
+    for net in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "100.64.0.0/10",  # carrier-grade NAT, the range VPN meshes use
+        "fc00::/7",
+    )
+)
+
+
+def _inside_the_network(host: str) -> bool:
+    """A host whose traffic never leaves the deployment's own network: a
+    cluster-internal name (``server``, ``*.svc``, ``*.svc.cluster.local``,
+    ``*.internal``, ``*.local``), loopback, or a private address."""
+    host = host.lower().rstrip(".")
+    if not host:
+        return False
+    if "." not in host or host.endswith(
+        (".svc", ".svc.cluster.local", ".cluster.local", ".internal", ".local")
+    ):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    # The networks a deployment's own traffic uses — not ``is_private``, which
+    # also covers documentation and other reserved ranges.
+    return address.is_loopback or any(address in net for net in _PRIVATE_NETWORKS)
+
+
+def _reindex_problems(url: str, secret: str) -> List[str]:
+    """What's unsafe in the corpus reindex settings (jobs/corpus.py): set both
+    or neither, and never the bearer secret in clear to a public host."""
+    if not url and not secret:
+        return []
+    if not (url and secret):
+        return ["CORPUS_REINDEX_URL and CORPUS_REINDEX_SECRET go together: set both"]
+    parts = urlsplit(url)
+    if parts.scheme == "https":
+        return []
+    if parts.scheme == "http" and _inside_the_network(parts.hostname or ""):
+        return []  # an in-cluster Service: the secret never leaves the network
+    return [
+        "CORPUS_REINDEX_URL must be https, or http to an address inside the "
+        f"network (a cluster Service): it carries CORPUS_REINDEX_SECRET (got '{url}')"
+    ]
 
 
 def _is_dev_env() -> bool:
@@ -396,6 +448,9 @@ class Config:
             problems.append(
                 f"FRONTEND_URL must be the public https URL (got '{self.frontend_url}')"
             )
+        problems += _reindex_problems(
+            self.corpus_reindex_url, self.corpus_reindex_secret
+        )
         return problems
 
     def ensure_production_config(self) -> None:

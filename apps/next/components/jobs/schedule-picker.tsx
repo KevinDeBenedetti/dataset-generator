@@ -1,13 +1,15 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import type { Every, ScheduleForm } from './schedule-state'
+import { useLocale, useTranslations } from 'next-intl'
+import { type Every, type ScheduleForm, type ScheduleSkip, skipNotice } from './schedule-state'
 
-const EVERY: { value: Every; label: string }[] = [
-  { value: '', label: 'Only when I start it' },
-  { value: 'day', label: 'Every day' },
-  { value: 'week', label: 'Every Monday' },
-  { value: 'month', label: 'The 1st of every month' },
+// The option labels are the `jobs.schedule.every.<key>` messages.
+const EVERY: { value: Every; key: 'off' | 'day' | 'week' | 'month' }[] = [
+  { value: '', key: 'off' },
+  { value: 'day', key: 'day' },
+  { value: 'week', key: 'week' },
+  { value: 'month', key: 'month' },
 ]
 
 /** When something runs by itself: a preset, a time of day (UTC) and whether
@@ -17,6 +19,7 @@ export function SchedulePicker({
   form,
   disabled,
   publishLabel,
+  skipped,
   children,
   onChange,
 }: {
@@ -24,15 +27,20 @@ export function SchedulePicker({
   form: ScheduleForm
   disabled?: boolean
   publishLabel: string
+  /** Why the latest scheduled time started no run, when it didn't. */
+  skipped?: ScheduleSkip | null
   /** The hint under the publish toggle, shown once a preset is set. */
   children?: ReactNode
   onChange: (patch: Partial<ScheduleForm>) => void
 }) {
+  const t = useTranslations('jobs')
+  const locale = useLocale()
+  const notice = skipNotice(skipped)
   return (
     <div className="gh-recipe-row gh-schedule">
       <div className="field">
         <label className="label" htmlFor={id}>
-          Regenerate
+          {t('schedule.regenerate')}
         </label>
         <div className="gh-inline">
           <select
@@ -44,7 +52,7 @@ export function SchedulePicker({
           >
             {EVERY.map((e) => (
               <option key={e.value} value={e.value}>
-                {e.label}
+                {t(`schedule.every.${e.key}`)}
               </option>
             ))}
           </select>
@@ -52,7 +60,7 @@ export function SchedulePicker({
             <input
               type="time"
               className="input"
-              aria-label="Time (UTC)"
+              aria-label={t('schedule.time')}
               value={form.time}
               disabled={disabled}
               onChange={(e) => onChange({ time: e.target.value || '03:00' })}
@@ -72,6 +80,14 @@ export function SchedulePicker({
             {publishLabel}
           </label>
           <span className="hint">{children}</span>
+          {notice && (
+            <span className="hint job-config-hint">
+              {t(notice.key, {
+                when: new Date(notice.at).toLocaleString(locale),
+                reason: notice.reason,
+              })}
+            </span>
+          )}
         </div>
       )}
     </div>

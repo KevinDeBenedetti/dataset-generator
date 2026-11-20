@@ -9,7 +9,13 @@ dependencies = [
     # The "standard" extra minus fastapi-cloud-cli (and its sentry-sdk), which
     # the image would ship without using.
     "fastapi[standard-no-fastapi-cloud-cli]>=0.162.0",
+    # Only for the errors huggingface_hub raises (services/hub.py): the Hub
+    # client is built on it. The app's own HTTP calls use httpx2 below.
     "httpx>=0.28.1",
+    # The HTTP stack of openai 3.x, and of every client the app builds: the
+    # outbound-request guard (core/net.py), GitHub, Reactive Resume, the key
+    # checks and the reindex call.
+    "httpx2>=2.13.1",
     # Capped below 4.0 until the provider (services/providers/openai.py) is
     # checked against the 4.x client.
     "openai>=3.46.0,<4.0.0",
@@ -64,12 +70,6 @@ dev = [
     "ruff>=0.17.0",
     "ty>=0.0.97",
     "prek>=0.5.10",
-    # starlette.testclient prefers httpx2 and warns (StarletteDeprecationWarning)
-    # when it falls back to httpx — a warning slated to become an error. Only
-    # TestClient needs it: the app's own HTTP calls (github, etc.)
-    # still use the httpx pinned in the runtime dependencies above, and the two
-    # install side by side under different module names.
-    "httpx2>=2.13.1",
 ]
 
 [tool.uv]

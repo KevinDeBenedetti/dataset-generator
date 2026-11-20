@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from server.core.config import config
 from server.core.database import get_scoped_db
+from server.core.i18n import DEFAULT_LOCALE, tr
 from server.models.platform_settings import PlatformSetting
 from server.models.user import User
 from server.services import audit
@@ -113,12 +114,13 @@ def get(key: str) -> Any:
     return stored[key] if key in stored else SWITCHES[key].default()
 
 
-def snapshot() -> List[Dict[str, Any]]:
+def snapshot(locale: str = DEFAULT_LOCALE) -> List[Dict[str, Any]]:
+    """Every switch with its value, its label in ``locale`` (core/i18n.py)."""
     stored = _stored()
     return [
         {
             "key": key,
-            "label": switch.label,
+            "label": tr(locale, f"platform.{key}", switch.label),
             "value": stored[key] if key in stored else switch.default(),
             "overridden": key in stored,
         }
@@ -126,7 +128,13 @@ def snapshot() -> List[Dict[str, Any]]:
     ]
 
 
-def update(db: Session, actor: User, changes: Dict[str, Any], ip: Optional[str] = None):
+def update(
+    db: Session,
+    actor: User,
+    changes: Dict[str, Any],
+    ip: Optional[str] = None,
+    locale: str = DEFAULT_LOCALE,
+):
     """Validate then store ``changes``; ``None`` resets a switch to its default.
     ValueError names the first invalid one."""
     validated: Dict[str, Any] = {}
@@ -153,7 +161,7 @@ def update(db: Session, actor: User, changes: Dict[str, Any], ip: Optional[str] 
         db, "platform.updated", actor=actor, ip=ip, detail={"changes": validated}
     )
     clear_cache()
-    return snapshot()
+    return snapshot(locale)
 
 
 # --- typed accessors used across the app ---------------------------------------

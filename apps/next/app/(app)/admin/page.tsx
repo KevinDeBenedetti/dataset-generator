@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useAdminUsage } from '@/hooks/use-admin'
 
 function Stat({ label, value }: { label: string; value: number | string }) {
@@ -15,8 +16,10 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 
 export default function AdminOverviewPage() {
   const { data, error } = useAdminUsage()
+  const t = useTranslations('admin.overview')
+  const tc = useTranslations('common')
   if (error) return <p className="hint">{error.message}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (!data) return <p className="muted">{tc('loading')}</p>
   const runs = Object.entries(data.runs_30d)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -27,21 +30,21 @@ export default function AdminOverviewPage() {
           gap: 12,
         }}
       >
-        <Stat label="Accounts" value={data.users.total} />
-        <Stat label="Active" value={data.users.active} />
-        <Stat label="Admins" value={data.users.admins} />
-        <Stat label="Signed in (30 days)" value={data.users.signed_in_30d} />
-        <Stat label="Datasets" value={data.datasets} />
-        <Stat label="Q&A pairs" value={data.pairs} />
-        <Stat label="Runs in progress" value={data.running} />
+        <Stat label={t('accounts')} value={data.users.total} />
+        <Stat label={t('active')} value={data.users.active} />
+        <Stat label={t('admins')} value={data.users.admins} />
+        <Stat label={t('signedIn')} value={data.users.signed_in_30d} />
+        <Stat label={t('datasets')} value={data.datasets} />
+        <Stat label={t('pairs')} value={data.pairs} />
+        <Stat label={t('running')} value={data.running} />
       </div>
       <div className="card">
         <div className="card-head">
-          <div className="card-title">Job runs, last 30 days</div>
+          <div className="card-title">{t('runsTitle')}</div>
         </div>
         <div className="card-body">
           {runs.length === 0 ? (
-            <span className="muted">No runs.</span>
+            <span className="muted">{t('noRuns')}</span>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {runs.map(([status, count]) => (

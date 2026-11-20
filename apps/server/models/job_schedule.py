@@ -70,6 +70,10 @@ class JobSchedule(Base):
         DateTime, nullable=True, index=True
     )
     last_run_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Why the latest tick queued no run — {"reason", "at"} — or null once a
+    # run is queued or the schedule is saved again. Otherwise only the
+    # worker's log would say that a schedule stopped running.
+    skipped: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=_now, onupdate=_now

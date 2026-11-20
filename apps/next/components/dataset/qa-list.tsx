@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { Accordion } from '@/components/ui/accordion'
 import { QAItem } from './qa-item'
 import type { QaItem } from '@/api/types'
@@ -10,11 +11,12 @@ interface QAListProps {
 }
 
 export function QAList({ qaData, returnedCount }: QAListProps) {
+  const t = useTranslations('generate.qa')
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">Questions & Answers</h3>
-        <span className="text-sm text-gray-500">{returnedCount} question-answer pair(s) found</span>
+        <h3 className="text-lg font-medium">{t('listTitle')}</h3>
+        <span className="text-sm text-gray-500">{t('found', { count: returnedCount })}</span>
       </div>
 
       {qaData && qaData.length > 0 ? (
@@ -24,9 +26,7 @@ export function QAList({ qaData, returnedCount }: QAListProps) {
           ))}
         </Accordion>
       ) : (
-        <div className="text-center py-8 text-gray-500">
-          No question-answer pairs found for this dataset.
-        </div>
+        <div className="text-center py-8 text-gray-500">{t('listEmpty')}</div>
       )}
     </div>
   )

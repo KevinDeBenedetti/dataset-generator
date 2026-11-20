@@ -1,19 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { usePlatform, useUpdatePlatform } from '@/hooks/use-admin'
 import type { PlatformSwitch } from '@/api/sdk'
 
 function SwitchRow({ item }: { item: PlatformSwitch }) {
   const save = useUpdatePlatform()
+  const t = useTranslations('admin.platform')
+  const tc = useTranslations('common')
   const isList = Array.isArray(item.value)
   const [text, setText] = useState(isList ? (item.value as string[]).join(', ') : '')
 
   const submit = (value: unknown) =>
     save.mutate(
       { [item.key]: value },
-      { onSuccess: () => toast.success('Saved'), onError: (e: Error) => toast.error(e.message) },
+      { onSuccess: () => toast.success(t('saved')), onError: (e: Error) => toast.error(e.message) },
     )
 
   return (
@@ -21,7 +24,7 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
       <label className="label" htmlFor={`switch-${item.key}`}>
         {item.label}{' '}
         <span className={`badge badge-${item.overridden ? 'info' : 'secondary'}`}>
-          {item.overridden ? 'set here' : 'env default'}
+          {item.overridden ? t('setHere') : t('envDefault')}
         </span>
       </label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -31,7 +34,7 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
               id={`switch-${item.key}`}
               className="input mono"
               value={text}
-              placeholder="comma-separated"
+              placeholder={t('commaSeparated')}
               onChange={(e) => setText(e.target.value)}
             />
             <button
@@ -47,7 +50,7 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
                 )
               }
             >
-              Save
+              {tc('save')}
             </button>
           </>
         ) : (
@@ -58,7 +61,7 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
             disabled={save.isPending}
             onClick={() => submit(!item.value)}
           >
-            {item.value ? 'On' : 'Off'}
+            {item.value ? t('on') : t('off')}
           </button>
         )}
         {item.overridden && (
@@ -68,7 +71,7 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
             disabled={save.isPending}
             onClick={() => submit(null)}
           >
-            Reset to env
+            {t('reset')}
           </button>
         )}
       </div>
@@ -78,15 +81,13 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
 
 export default function AdminPlatformPage() {
   const { data, error } = usePlatform()
+  const t = useTranslations('admin.platform')
   return (
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">Platform</div>
-          <div className="card-desc">
-            Switches stored in the database override the environment. Other replicas pick changes up
-            within a few seconds.
-          </div>
+          <div className="card-title">{t('title')}</div>
+          <div className="card-desc">{t('description')}</div>
         </div>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

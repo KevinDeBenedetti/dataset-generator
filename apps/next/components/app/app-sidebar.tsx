@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Icon } from '@/components/app/icon'
 import { ShellTools } from '@/components/app/app-topbar'
 import {
@@ -18,37 +19,49 @@ import pkg from '@/package.json'
 
 type NavItem = {
   icon: string
-  label: string
+  // A key of the `nav` messages.
+  label:
+    | 'overview'
+    | 'datasets'
+    | 'collections'
+    | 'drafts'
+    | 'github'
+    | 'resume'
+    | 'generate'
+    | 'qualityControl'
+    | 'verifyQa'
+    | 'prompts'
+    | 'models'
   href: string
   count?: string
   // Pages whose routes answer admins only (the server's own keys).
   adminOnly?: boolean
 }
 
-const NAV: { label: string; items: NavItem[] }[] = [
+const NAV: { label: 'platform' | 'quality' | 'configuration'; items: NavItem[] }[] = [
   {
-    label: 'Platform',
+    label: 'platform',
     items: [
-      { icon: 'dashboard', label: 'Overview', href: '/dashboard' },
-      { icon: 'database', label: 'Datasets', href: '/datasets' },
-      { icon: 'boxes', label: 'Collections', href: '/collections' },
-      { icon: 'fileText', label: 'Drafts', href: '/drafts' },
-      { icon: 'github', label: 'GitHub', href: '/github' },
-      { icon: 'user', label: 'Resume', href: '/resume', adminOnly: true },
-      { icon: 'sparkles', label: 'Generate', href: '/generate' },
+      { icon: 'dashboard', label: 'overview', href: '/dashboard' },
+      { icon: 'database', label: 'datasets', href: '/datasets' },
+      { icon: 'boxes', label: 'collections', href: '/collections' },
+      { icon: 'fileText', label: 'drafts', href: '/drafts' },
+      { icon: 'github', label: 'github', href: '/github' },
+      { icon: 'user', label: 'resume', href: '/resume', adminOnly: true },
+      { icon: 'sparkles', label: 'generate', href: '/generate' },
     ],
   },
   {
-    label: 'Quality',
+    label: 'quality',
     items: [
-      { icon: 'shield', label: 'Quality control', href: '/quality' },
-      { icon: 'copyCheck', label: 'Verify QA', href: '/agent-test' },
-      { icon: 'terminal', label: 'LLM Prompts', href: '/prompts' },
+      { icon: 'shield', label: 'qualityControl', href: '/quality' },
+      { icon: 'copyCheck', label: 'verifyQa', href: '/agent-test' },
+      { icon: 'terminal', label: 'prompts', href: '/prompts' },
     ],
   },
   {
-    label: 'Configuration',
-    items: [{ icon: 'cpu', label: 'Models', href: '/models' }],
+    label: 'configuration',
+    items: [{ icon: 'cpu', label: 'models', href: '/models' }],
   },
 ]
 
@@ -64,6 +77,7 @@ export function AppSidebar({
   ref?: React.Ref<HTMLElement>
 }) {
   const pathname = usePathname() ?? ''
+  const t = useTranslations()
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   // Published datasets live on Hugging Face, drafts in the app: each badge
@@ -84,7 +98,7 @@ export function AppSidebar({
   // Hugging Face connection status: no token reads as "Off" rather than being
   // hidden, since this is a status row, not a data listing.
   const hfConnected = !hfPending && !hfError
-  const hfStatusLabel = hfPending ? '…' : hfConnected ? 'Connected' : 'Off'
+  const hfStatusLabel = hfPending ? '…' : hfConnected ? t('shell.hubConnected') : t('shell.hubOff')
 
   const { data: user } = useCurrentUser()
   const logoutMutation = useLogout()
@@ -94,7 +108,7 @@ export function AppSidebar({
       id="app-sidebar"
       ref={ref}
       className={cn('sidebar', open && 'open')}
-      aria-label="Navigation"
+      aria-label={t('shell.navigation')}
     >
       <div className="sb-brand">
         <div className="sb-logo">
@@ -109,7 +123,7 @@ export function AppSidebar({
         <button
           type="button"
           className="icon-btn sb-close"
-          aria-label="Close navigation"
+          aria-label={t('shell.closeNavigation')}
           onClick={onClose}
         >
           <Icon name="x" />
@@ -118,7 +132,7 @@ export function AppSidebar({
       <nav className="sb-scroll">
         {NAV.map((group) => (
           <div className="sb-group" key={group.label}>
-            <div className="sb-label">{group.label}</div>
+            <div className="sb-label">{t(`nav.groups.${group.label}`)}</div>
             {group.items
               .filter((it) => !it.adminOnly || user?.role === 'admin')
               .map((it) => {
@@ -131,14 +145,14 @@ export function AppSidebar({
                     onClick={onClose}
                   >
                     <Icon name={it.icon} />
-                    <span>{it.label}</span>
+                    <span>{t(`nav.${it.label}`)}</span>
                     {count && <span className="count">{count}</span>}
                   </Link>
                 )
               })}
             {/* Real Hugging Face connection status, not a nav destination —
                 links out to the account's Hub profile once connected. */}
-            {group.label === 'Configuration' &&
+            {group.label === 'configuration' &&
               (hfConnected && hfData?.namespace ? (
                 <a
                   href={`https://huggingface.co/${hfData.namespace}`}
@@ -161,30 +175,30 @@ export function AppSidebar({
         ))}
         {user?.role === 'admin' && (
           <div className="sb-group">
-            <div className="sb-label">Admin</div>
+            <div className="sb-label">{t('nav.groups.admin')}</div>
             <Link
               href="/admin"
               className={cn('sb-link', isActive('/admin') && 'active')}
               onClick={onClose}
             >
               <Icon name="shield" />
-              <span>Backoffice</span>
+              <span>{t('nav.backoffice')}</span>
             </Link>
           </div>
         )}
         <div className="sb-group">
-          <div className="sb-label">Account</div>
+          <div className="sb-label">{t('nav.groups.account')}</div>
           <Link
             href="/settings"
             className={cn('sb-link', isActive('/settings') && 'active')}
             onClick={onClose}
           >
             <Icon name="settings" />
-            <span>Settings</span>
+            <span>{t('nav.settings')}</span>
           </Link>
           <button type="button" className="sb-link">
             <Icon name="fileText" />
-            <span>Legal notice</span>
+            <span>{t('nav.legalNotice')}</span>
           </button>
         </div>
       </nav>
@@ -197,8 +211,12 @@ export function AppSidebar({
           <DropdownMenuTrigger className="sb-user">
             <span className="avatar">{initialsFor(user?.email)}</span>
             <span className="meta">
-              <span className="nm">{user?.email ?? 'Loading…'}</span>
-              <span className="em">{user?.role ?? ''}</span>
+              <span className="nm">{user?.email ?? t('shell.loading')}</span>
+              <span className="em">
+                {user?.role === 'admin' || user?.role === 'user'
+                  ? t(`shell.roles.${user.role}`)
+                  : (user?.role ?? '')}
+              </span>
             </span>
             <Icon name="chevronDown" className="ic-sm" />
           </DropdownMenuTrigger>
@@ -206,7 +224,7 @@ export function AppSidebar({
             <DropdownMenuItem asChild>
               <Link href="/settings">
                 <Icon name="settings" className="ic-sm" />
-                Settings
+                {t('nav.settings')}
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -216,7 +234,7 @@ export function AppSidebar({
               onSelect={() => logoutMutation.mutate()}
             >
               <Icon name="logout" className="ic-sm" />
-              Sign out
+              {t('shell.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

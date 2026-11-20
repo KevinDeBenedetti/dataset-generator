@@ -91,8 +91,10 @@ worker (`QDRANT_API_KEY` too when the Qdrant requires one: set in `.env`, the
 local stack's Qdrant requires it, and its dashboard asks for it); without it the
 Collections page says so and builds nothing. `QDRANT_COLLECTION_PREFIX`
 (default `dataset_`) lets several deployments share one Qdrant, each with its
-own prefix: never two with the same one, since the worker drops the
-collections under its prefix that none of its rows names.
+own prefix. The worker drops the collections under its prefix that none of
+its rows names, once an hour; the first deployment to do so claims the prefix
+(a `<prefix>claim` collection), and another one configured with the same
+prefix then drops nothing and logs an error saying so.
 
 The [Resume](./resume.md) page reads Reactive Resume with two server secrets:
 `REACTIVE_RESUME_URL`, the instance's root (blank: rxresu.me), and
@@ -101,7 +103,10 @@ The [Resume](./resume.md) page reads Reactive Resume with two server secrets:
 After an admin's **Knowledge corpus** run has published, the server can tell
 the site that indexes the corpus to read it again: it POSTs
 `CORPUS_REINDEX_URL` with `CORPUS_REINDEX_SECRET` as a bearer token. Set both
-or neither. They are the operator's, so another user's run never calls the
+or neither. Outside development the URL must be https, or http to an address
+inside the network (a cluster Service such as `http://portfolio.portfolio.svc.cluster.local:3000/…`,
+or a private IP): a server that would send the secret in clear to a public host
+refuses to start. They are the operator's, so another user's run never calls the
 URL; a site that is down is reported in the run, which stays published.
 
 `make dev-local` runs the API outside Docker (on `127.0.0.1:8020`, the

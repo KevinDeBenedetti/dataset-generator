@@ -4,6 +4,7 @@ import {
   comparisonRows,
   defaultCollectionName,
   defaultColumns,
+  endpointMoved,
   isTrivialTest,
   modelLabel,
   modelRemoved,
@@ -17,6 +18,13 @@ describe('collection labels', () => {
     expect(modelLabel('BAAI/bge-small-en-v1.5')).toBe('bge-small-en-v1.5')
     expect(modelLabel('plain')).toBe('plain')
     expect(modelLabel('openai:embed-default')).toBe('embed-default')
+  })
+
+  it('tells a collection built on another endpoint than yours now', () => {
+    expect(endpointMoved({ status: 'ready', current_endpoint: 'llm.example.com' })).toBe(true)
+    expect(endpointMoved({ status: 'failed', current_endpoint: 'llm.example.com' })).toBe(true)
+    expect(endpointMoved({ status: 'building', current_endpoint: 'llm.example.com' })).toBe(false)
+    expect(endpointMoved({ status: 'ready', current_endpoint: null })).toBe(false)
   })
 
   it('tells a collection whose local model is gone', () => {
@@ -90,6 +98,12 @@ describe('links and snippet', () => {
     expect(snippet).toContain('model="embed-default"')
     expect(snippet).toContain('"dataset_c_42", query=vector')
   })
+
+  it('leaves a place for the API key a Qdrant may require', () => {
+    const snippet = pythonSnippet(collection)
+    expect(snippet).toContain('QdrantClient(url="http://localhost:6353", api_key=None)')
+    expect(snippet).toContain('QDRANT_API_KEY')
+  })
 })
 
 const test = (hit: number, extra = {}) => ({
@@ -154,12 +168,12 @@ describe('comparing the collections of one split', () => {
     )
     expect(caveats).toEqual({
       a: null,
-      column: 'Asked with title',
-      sample: 'Tested on 500 sampled rows',
-      k: 'Top 5',
-      trivial: 'question is embedded too: every row finds itself',
-      untested: 'Not tested yet',
-      building: 'Not built',
+      column: { key: 'askedWith', column: 'title' },
+      sample: { key: 'sampled', sample: 500 },
+      k: { key: 'topK', k: 5 },
+      trivial: { key: 'trivial', column: 'question' },
+      untested: { key: 'notTested' },
+      building: { key: 'notBuilt' },
     })
   })
 

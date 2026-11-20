@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from server.core.config import config
 
 from server.core.database import get_scoped_db
+from server.core.i18n import DEFAULT_LOCALE, metrics_display, tr, translate_message
 from server.jobs.registry import JOBS, JobSpec
 from server.models.job_run import JobRun
 from server.services.model_defaults import resolve_model
@@ -67,6 +68,18 @@ def _status(row: JobRun) -> str:
     return row.status
 
 
+def _result_out(result: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A stored result as served: its English ``metrics`` (what the client
+    looks a metric up by) and the same in the reader's language."""
+    if not result:
+        return result
+    return {
+        **result,
+        "metrics_display": metrics_display(result.get("metrics") or []),
+        "errors": [translate_message(error) for error in result.get("errors") or []],
+    }
+
+
 def _to_dict(row: JobRun, with_preview: bool = True) -> Dict[str, Any]:
     spec = JOBS.get(row.job_id)
     preview = None
@@ -82,8 +95,8 @@ def _to_dict(row: JobRun, with_preview: bool = True) -> Dict[str, Any]:
         "finished_at": row.finished_at,
         "progress": row.progress if row.status in ("queued", "running") else None,
         "cancel_requested": bool(row.cancel_requested),
-        "result": row.result,
-        "error": row.error,
+        "result": _result_out(row.result),
+        "error": translate_message(row.error),
         "has_draft": row.draft is not None,
         "preview": preview,
         "published_url": row.published_url,
@@ -109,9 +122,11 @@ def _owned_row(db, owner_id: str, run_id: str) -> JobRun:
     return row
 
 
-def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
+def list_jobs(
+    owner_id: str, creds: Credentials, locale: str = DEFAULT_LOCALE
+) -> List[Dict[str, Any]]:
     """Every job with its option schema, configuration status and the owner's
-    latest run."""
+    latest run, its texts in ``locale`` (core/i18n.py)."""
     default_model = resolve_model(user_id=owner_id)
     latest: Dict[str, Dict[str, Any]] = {}
     try:
@@ -131,25 +146,34 @@ def list_jobs(owner_id: str, creds: Credentials) -> List[Dict[str, Any]]:
         out.append(
             {
                 "id": spec.id,
-                "title": spec.title,
-                "description": spec.description,
+                "title": tr(locale, f"jobs.{spec.id}.title", spec.title),
+                "description": tr(
+                    locale, f"jobs.{spec.id}.description", spec.description
+                ),
                 "uses_model": spec.uses_model,
                 "default_model": default_model if spec.uses_model else None,
                 "has_draft": spec.publisher is not None,
                 "configured": not missing,
-                "missing": missing,
-                "options_schema": _form_schema(spec),
+                "missing": [tr(locale, f"missing.{label}", label) for label in missing],
+                "options_schema": _form_schema(spec, locale),
                 "latest_run": latest.get(spec.id),
             }
         )
     return out
 
 
-def _form_schema(spec: JobSpec) -> Dict[str, Any]:
+def _form_schema(spec: JobSpec, locale: str = DEFAULT_LOCALE) -> Dict[str, Any]:
     """The job's options as its card offers them: without ``publish``, which
-    only a schedule sets on its runs (jobs/registry.py SCHEDULED_PUBLISH)."""
+    only a schedule sets on its runs (jobs/registry.py SCHEDULED_PUBLISH), each
+    option's title and description in ``locale``."""
     schema = spec.options.model_json_schema()
-    schema.get("properties", {}).pop("publish", None)
+    properties = schema.get("properties", {})
+    properties.pop("publish", None)
+    for name, option in properties.items():
+        for field in ("title", "description"):
+            if field in option:
+                key = f"jobs.{spec.id}.options.{name}.{field}"
+                option[field] = tr(locale, key, option[field])
     return schema
 
 
