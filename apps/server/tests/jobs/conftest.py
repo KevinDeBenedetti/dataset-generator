@@ -3,7 +3,7 @@ import json
 from typing import Callable, Dict
 from unittest.mock import patch
 
-import httpx
+import httpx2
 import pytest
 
 from server.jobs.github_snapshot import (
@@ -22,31 +22,31 @@ class FakeGitHub:
     """Routes GitHub API paths to canned JSON/text responses."""
 
     def __init__(self) -> None:
-        self.routes: Dict[str, Callable[[httpx.Request], httpx.Response]] = {}
+        self.routes: Dict[str, Callable[[httpx2.Request], httpx2.Response]] = {}
         self.calls: list[str] = []
 
     def json(self, path: str, data, status: int = 200, headers=None) -> None:
-        self.routes[path] = lambda _req: httpx.Response(
+        self.routes[path] = lambda _req: httpx2.Response(
             status, content=json.dumps(data), headers=headers or {}
         )
 
     def text(self, path: str, text: str) -> None:
-        self.routes[path] = lambda _req: httpx.Response(200, text=text)
+        self.routes[path] = lambda _req: httpx2.Response(200, text=text)
 
-    def handler(self, request: httpx.Request) -> httpx.Response:
+    def handler(self, request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
         self.calls.append(path)
         route = self.routes.get(path)
-        return route(request) if route else httpx.Response(404, json={})
+        return route(request) if route else httpx2.Response(404, json={})
 
     def client(self) -> CorpusGitHubClient:
-        real = httpx.AsyncClient
-        transport = httpx.MockTransport(self.handler)
+        real = httpx2.AsyncClient
+        transport = httpx2.MockTransport(self.handler)
 
         def mocked(**kwargs):
             return real(transport=transport, trust_env=False, **kwargs)
 
-        with patch("server.services.github.httpx.AsyncClient", side_effect=mocked):
+        with patch("server.services.github.httpx2.AsyncClient", side_effect=mocked):
             return CorpusGitHubClient("tok")
 
 

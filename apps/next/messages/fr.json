@@ -1,0 +1,1581 @@
+{
+  "common": {
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "close": "Fermer",
+    "retry": "Réessayer",
+    "refresh": "Actualiser",
+    "loading": "Chargement…",
+    "search": "Rechercher",
+    "copy": "Copier",
+    "copied": "Copié",
+    "back": "Retour",
+    "open": "Ouvrir",
+    "edit": "Modifier",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "none": "Aucun",
+    "all": "Tous",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "download": "Télécharger",
+    "publish": "Publier",
+    "error": "Une erreur est survenue",
+    "unknownError": "Erreur inconnue"
+  },
+  "language": {
+    "label": "Langue",
+    "switchTo": "Changer de langue : {language}",
+    "en": "English",
+    "fr": "Français"
+  },
+  "theme": {
+    "label": "Thème",
+    "toggle": "Changer de thème"
+  },
+  "nav": {
+    "groups": {
+      "platform": "Plateforme",
+      "quality": "Qualité",
+      "configuration": "Configuration",
+      "admin": "Administration",
+      "account": "Compte"
+    },
+    "overview": "Vue d'ensemble",
+    "datasets": "Jeux de données",
+    "collections": "Collections",
+    "drafts": "Brouillons",
+    "github": "GitHub",
+    "resume": "CV",
+    "generate": "Générer",
+    "qualityControl": "Contrôle qualité",
+    "verifyQa": "Vérifier les Q/R",
+    "prompts": "Prompts LLM",
+    "models": "Modèles",
+    "backoffice": "Back-office",
+    "settings": "Paramètres",
+    "legalNotice": "Mentions légales"
+  },
+  "shell": {
+    "navigation": "Navigation",
+    "openNavigation": "Ouvrir la navigation",
+    "closeNavigation": "Fermer la navigation",
+    "hubConnected": "Connecté",
+    "hubOff": "Inactif",
+    "loading": "Chargement…",
+    "signOut": "Se déconnecter",
+    "documentation": "Documentation",
+    "notifications": "Notifications",
+    "searchPlaceholder": "Rechercher des jeux de données, sources, tâches…",
+    "newDataset": "Nouveau jeu de données",
+    "roles": {
+      "admin": "administrateur",
+      "user": "utilisateur"
+    }
+  },
+  "login": {
+    "back": "Retour à l'accueil",
+    "title": "Connexion",
+    "description": "Accédez à vos jeux de données",
+    "descriptionSignup": "Accédez à vos jeux de données — une première connexion crée votre compte.",
+    "loadingOptions": "Chargement des options de connexion…",
+    "optionsFailed": "Impossible de charger les options de connexion depuis {url}{reason}. Vérifiez que l'API est démarrée, puis réessayez.",
+    "retry": "Réessayer",
+    "continueWith": "Continuer avec {provider}",
+    "noMethod": "Aucune méthode de connexion n'est configurée.",
+    "or": "OU",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "failed": "Échec de la connexion",
+    "submit": "Se connecter",
+    "errors": {
+      "signup_closed": "La création de compte est fermée pour le moment.",
+      "domain_not_allowed": "Les comptes sont limités à certains domaines d'e-mail.",
+      "no_verified_email": "Votre compte chez ce fournisseur n'a aucune adresse e-mail vérifiée. Vérifiez-en une là-bas, puis réessayez.",
+      "link_required": "Un compte existe déjà avec cet e-mail. Connectez-vous autrement, puis associez ce fournisseur depuis les Paramètres.",
+      "identity_in_use": "Cette connexion est déjà associée à un autre compte.",
+      "account_disabled": "Ce compte est désactivé.",
+      "session_expired": "Votre session a expiré. Reconnectez-vous.",
+      "sso_failed": "La connexion n'a pas abouti. Veuillez réessayer.",
+      "no_subject": "Le fournisseur n'a pas identifié votre compte."
+    }
+  },
+  "home": {
+    "nav": {
+      "features": "Fonctionnalités",
+      "pipeline": "Pipeline",
+      "exports": "Exports",
+      "docs": "Docs",
+      "dashboardShort": "Tableau de bord",
+      "openDashboard": "Ouvrir le tableau de bord",
+      "openMenu": "Ouvrir le menu",
+      "closeMenu": "Fermer le menu"
+    },
+    "hero": {
+      "badge": "Pipeline fichier / GitHub → LLM → jeu de données, open source",
+      "title": "Des jeux de données Q/R propres,",
+      "titleMuted": "directement depuis vos fichiers et dépôts.",
+      "lead": "Exploitez des fichiers et des dépôts GitHub, générez avec un LLM des paires question-réponse ancrées dans leur contexte, repérez les doublons et exportez en JSONL ou CSV — le tout depuis une seule interface.",
+      "generate": "Générer un jeu de données",
+      "viewDashboard": "Voir le tableau de bord",
+      "languages": "langues — FR · EN · ES · DE",
+      "coverage": "de couverture de tests"
+    },
+    "terminal": {
+      "comment": "# Lancer le pipeline sur une source"
+    },
+    "features": {
+      "eyebrow": "// fonctionnalités",
+      "title": "Tout le pipeline, sans assembler de scripts.",
+      "lead": "Chaque étape est un module : ingestion, client LLM, gestion des données, export. Combinez-les depuis l'interface ou l'API REST.",
+      "items": {
+        "ingestion": {
+          "title": "Ingestion multi-sources",
+          "description": "Import de fichiers (PDF/image, lus par votre LLM) ou documentation publique d'un compte GitHub."
+        },
+        "generation": {
+          "title": "Génération de Q/R par LLM",
+          "description": "Prompts configurables, modèles au choix et paires question-réponse ancrées dans la source."
+        },
+        "duplicates": {
+          "title": "Détection des doublons",
+          "description": "La similarité sémantique écarte les redondances avant que les paires n'atteignent votre jeu de données."
+        },
+        "languages": {
+          "title": "Multilingue",
+          "description": "Génération en français, anglais, espagnol et allemand, avec des prompts localisés."
+        },
+        "quality": {
+          "title": "Contrôle qualité",
+          "description": "Validation et filtrage automatiques, scores de qualité et seuils configurables."
+        },
+        "api": {
+          "title": "API REST",
+          "description": "Un accès programmatique pour intégrer la génération à vos propres workflows."
+        }
+      }
+    },
+    "workflow": {
+      "eyebrow": "// pipeline",
+      "title": "Six étapes, de la page brute au jeu de données versionné.",
+      "steps": {
+        "ingestion": {
+          "title": "Ingestion",
+          "description": "Lire un fichier ou récupérer des docs GitHub."
+        },
+        "cleaning": {
+          "title": "Nettoyage",
+          "description": "Normaliser, extraire le contenu utile."
+        },
+        "generation": {
+          "title": "Génération",
+          "description": "Paires Q/R via LLM et prompts."
+        },
+        "quality": {
+          "title": "Qualité",
+          "description": "Validation et dédoublonnage."
+        },
+        "export": {
+          "title": "Export",
+          "description": "JSON, CSV, JSONL, copies de jeux de données."
+        },
+        "versioning": {
+          "title": "Versionnage",
+          "description": "Stockage et suivi des métadonnées."
+        }
+      }
+    },
+    "formats": {
+      "eyebrow": "// exports",
+      "title": "Envoyez vos données là où vous en avez besoin.",
+      "items": {
+        "hub": "Dépôts de jeux de données privés, versionnés",
+        "json": "Échange de données standard",
+        "csv": "Analyse tabulaire et relecture",
+        "api": "Formats personnalisés extensibles"
+      }
+    },
+    "cta": {
+      "title": "Créez votre premier jeu de données en quelques minutes.",
+      "lead": "Choisissez une source, lancez le pipeline, relisez les paires Q/R et exportez. Sans quitter l'interface.",
+      "start": "Commencer à générer",
+      "browse": "Parcourir les jeux de données"
+    },
+    "footer": {
+      "tagline": "Génération automatisée de jeux de données question-réponse à partir de fichiers et de dépôts, via des LLM. Détection des doublons et exports.",
+      "product": "Produit",
+      "resources": "Ressources",
+      "legal": "Légal",
+      "dashboard": "Tableau de bord",
+      "generate": "Générer",
+      "datasets": "Jeux de données",
+      "verifyQa": "Vérifier les Q/R",
+      "documentation": "Documentation",
+      "restApi": "API REST",
+      "changelog": "Journal des modifications",
+      "legalNotice": "Mentions légales",
+      "privacy": "Confidentialité",
+      "terms": "Conditions",
+      "copyright": "© 2026 DatasetGen. Sous licence open source."
+    }
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "subtitle": "Une vue d'ensemble de vos jeux de données et de l'activité récente.",
+    "stats": {
+      "hubDatasets": "Jeux de données sur Hugging Face",
+      "hubHint": "{namespace} · {count, plural, one {# privé} other {# privés}}",
+      "downloads": "Téléchargements",
+      "downloadsHint": "30 derniers jours",
+      "drafts": "Brouillons à relire",
+      "draftsHint": "générés, pas encore publiés"
+    },
+    "hub": {
+      "connect": "Connectez Hugging Face",
+      "noAnswer": "Hugging Face n'a pas répondu",
+      "connectHint": "Vos jeux de données sont lus directement depuis le Hub, avec votre propre jeton.",
+      "tryAgain": "Réessayez dans un instant.",
+      "addToken": "Ajoutez votre jeton dans les Paramètres"
+    },
+    "actions": {
+      "generate": "Générer",
+      "browse": "Parcourir les jeux de données"
+    },
+    "recent": {
+      "title": "Jeux de données mis à jour récemment",
+      "viewAll": "Tout voir",
+      "connect": "Connectez Hugging Face pour voir vos jeux de données ici.",
+      "empty": "Rien de publié pour l'instant. Générez des paires Q/R, relisez le brouillon, puis publiez-le.",
+      "generate": "Générer un jeu de données"
+    },
+    "drafts": {
+      "title": "En attente de relecture",
+      "all": "Tous les brouillons",
+      "empty": "Aucun brouillon en attente.",
+      "pairs": "{count, plural, one {# paire} other {# paires}}"
+    },
+    "activity": {
+      "title": "Brouillons générés",
+      "range": "{count} dernières semaines",
+      "thisWeek": "cette semaine",
+      "weeksAgo": "il y a {count} sem.",
+      "barTitle": "{label} : {value}"
+    },
+    "languages": {
+      "title": "Langues",
+      "likes": "{count} j'aime",
+      "unknown": "inconnue"
+    },
+    "time": {
+      "today": "aujourd'hui",
+      "days": "{count} j",
+      "weeks": "{count} sem.",
+      "months": "{count} mois",
+      "years": "{count, plural, one {# an} other {# ans}}"
+    }
+  },
+  "generate": {
+    "page": {
+      "title": "Générer un jeu de données",
+      "addDataTo": "Ajouter des données à {target}",
+      "draftReady": "Brouillon prêt : relisez les paires avant leur envoi vers Hugging Face.",
+      "reviewDraft": "Relire le brouillon",
+      "generatedDataset": "Jeu de données généré",
+      "footnote": "Les jeux de données issus de votre compte GitHub (paires Q/R, corpus de connaissances) sont générés sur la <github>page GitHub</github> ; les doublons au sein d'un jeu de données sont analysés et nettoyés dans <quality>Contrôle qualité</quality>."
+    },
+    "form": {
+      "draftReady": "Brouillon prêt : relisez-le avant son envoi vers Hugging Face",
+      "title": "Titre",
+      "titlePlaceholder": "Documentation produit",
+      "target": "Publication vers (jeu de données Hugging Face)",
+      "targetHint": "Les paires forment un brouillon que vous relisez avant leur ajout à ce jeu de données (créé en privé s'il n'existe pas).",
+      "sources": {
+        "file": "Fichier",
+        "url": "Page web"
+      },
+      "fileHint": "PDF ou image — chaque page est transcrite par le modèle, puis exploitée pour en tirer des paires Q/R.",
+      "urlHint": "Une seule page publique (sans exploration du site) — son texte est nettoyé, puis exploité pour en tirer des paires Q/R.",
+      "advanced": "Options avancées",
+      "model": "Modèle",
+      "targetLanguage": "Langue cible",
+      "selectLanguage": "Sélectionnez une langue",
+      "languages": {
+        "fr": "Français",
+        "en": "Anglais",
+        "es": "Espagnol",
+        "de": "Allemand"
+      },
+      "similarityThreshold": "Seuil de similarité",
+      "similarityThresholdLabel": "Seuil de similarité",
+      "submit": "Générer le brouillon"
+    },
+    "table": {
+      "caption": "{count, plural, one {# brouillon} other {# brouillons}}",
+      "name": "Nom",
+      "description": "Description",
+      "items": "Éléments",
+      "version": "Version",
+      "created": "Créé le"
+    },
+    "empty": {
+      "title": "Aucun brouillon en attente",
+      "hint": "Générez des paires Q/R pour commencer un brouillon"
+    },
+    "error": {
+      "title": "Erreur",
+      "fallback": "Une erreur est survenue"
+    },
+    "timeline": {
+      "title": "Pipeline",
+      "viewContent": "Afficher le contenu extrait",
+      "hideContent": "Masquer le contenu extrait"
+    },
+    "qa": {
+      "listTitle": "Questions et réponses",
+      "found": "{count, plural, one {# paire question-réponse trouvée} other {# paires question-réponse trouvées}}",
+      "listEmpty": "Aucune paire question-réponse trouvée pour ce jeu de données.",
+      "heading": "Q{index} : {question}",
+      "confidence": "Confiance : {percent} %",
+      "needsReview": "À vérifier · ancrage {percent} %",
+      "needsReviewHint": "La réponse s'éloigne du texte source — vérifiez-la avant de vous y fier",
+      "shortId": "ID : {id}...",
+      "question": "Question",
+      "answer": "Réponse",
+      "context": "Contexte",
+      "showMore": "Afficher plus",
+      "showLess": "Afficher moins",
+      "additionalInfo": "Informations complémentaires",
+      "source": "Source :",
+      "fullId": "ID complet :",
+      "metadata": "Métadonnées :"
+    },
+    "runs": {
+      "title": "Exécutions récentes",
+      "description": "Générations enregistrées — une ligne par exécution.",
+      "loading": "Chargement des exécutions…",
+      "loadFailed": "Impossible de charger les exécutions de génération",
+      "empty": "Aucune exécution de génération enregistrée pour l'instant.",
+      "dataset": "Jeu de données",
+      "version": "Version",
+      "pairs": "Paires",
+      "source": "Source",
+      "started": "Démarrée le"
+    },
+    "result": {
+      "empty": "Aucun résultat disponible",
+      "model": "Modèle : {model}",
+      "threshold": "Seuil : {value}",
+      "language": "Langue : {language}",
+      "pagesCrawled": "Pages explorées : {count}",
+      "saved": "Enregistré : {run} ({count} paires)",
+      "totalQuestions": "<strong>Nombre total de questions :</strong> {count}",
+      "processingTime": "<strong>Temps de traitement :</strong> {seconds} s",
+      "pairsTitle": "Paires Q/R",
+      "question": "Q : {text}",
+      "answer": "R : {text}"
+    }
+  },
+  "datasets": {
+    "title": "Jeux de données",
+    "private": "Privé",
+    "public": "Public",
+    "gated": "Accès restreint",
+    "tryAgain": "Réessayer",
+    "latestVersion": "Dernière version",
+    "connect": {
+      "title": "Connecter Hugging Face",
+      "description": "Les jeux de données sont lus directement depuis le Hub Hugging Face, avec votre propre jeton d'accès.",
+      "openSettings": "Ouvrir les paramètres"
+    },
+    "list": {
+      "subtitle": "Chaque jeu de données est lu depuis Hugging Face, la source de vérité. Les données générées attendent dans les <drafts>Brouillons</drafts> jusqu'à ce que vous les ayez relues et publiées.",
+      "namespace": "Espace de noms",
+      "generate": "Générer",
+      "loadFailed": "Impossible de lister vos jeux de données",
+      "stats": {
+        "datasets": "Jeux de données",
+        "private": "Privés",
+        "downloads": "Téléchargements, 30 derniers jours",
+        "storage": "Stockage"
+      },
+      "searchPlaceholder": "Rechercher dans les jeux de données de {namespace}",
+      "visibility": "Visibilité",
+      "sortBy": "Trier par",
+      "sorts": {
+        "updated": "Mis à jour récemment",
+        "name": "Nom",
+        "downloads": "Les plus téléchargés",
+        "likes": "Les plus aimés",
+        "size": "Les plus volumineux"
+      },
+      "emptyTitle": "Aucun jeu de données dans {namespace} pour l'instant",
+      "emptyDescription": "Générez-en un à partir d'un fichier, d'une page web ou de GitHub, relisez-le dans les Brouillons, puis publiez-le sur Hugging Face : il apparaîtra ici.",
+      "drafts": "Brouillons",
+      "noMatch": "Aucun jeu de données ne correspond à ces filtres.",
+      "downloadsTitle": "Téléchargements, 30 derniers jours",
+      "likesTitle": "Mentions J'aime"
+    },
+    "page": {
+      "back": "Jeux de données",
+      "sections": "Sections du jeu de données",
+      "tabs": {
+        "data": "Données",
+        "card": "Fiche",
+        "stats": "Statistiques",
+        "files": "Fichiers",
+        "history": "Historique"
+      },
+      "version": "Version",
+      "branches": "Branches",
+      "tags": "Tags",
+      "commits": "Commits",
+      "commitFallback": "commit",
+      "snippetCopied": "Extrait Python copié",
+      "snippetPrivateHint": "Jeu de données privé : connectez-vous d'abord avec `hf auth login`.",
+      "clipboardRefused": "Le navigateur a refusé l'accès au presse-papiers",
+      "updated": "Mis à jour {time}",
+      "files": "{count} fichiers",
+      "downloads": "{count} téléchargements (30 jours)",
+      "likes": "{count} mentions J'aime",
+      "license": "licence : {license}",
+      "addData": "Ajouter des données",
+      "buildCollection": "Créer une collection",
+      "useInPython": "Utiliser en Python",
+      "reading": "Lecture de {repo} depuis Hugging Face…",
+      "notFound": "Jeu de données introuvable",
+      "loadFailed": "Impossible de charger ce jeu de données",
+      "earlierVersion": "Vous consultez une version antérieure, commit <mono>{sha}</mono>.",
+      "backToLatest": "Revenir à la dernière"
+    },
+    "history": {
+      "compareTitle": "Modifications de <mono>{base}</mono> à <mono>{head}</mono>",
+      "split": "Split {split}",
+      "defaultSplit": "Split par défaut",
+      "matchedById": "lignes appariées par id",
+      "matchedByContent": "lignes appariées par contenu",
+      "closeComparison": "Fermer la comparaison",
+      "readingBoth": "Lecture des deux versions…",
+      "addedCount": "<b>+{count}</b> ajoutées",
+      "removedCount": "<b>−{count}</b> supprimées",
+      "changedCount": "<b>~{count}</b> modifiées",
+      "unchangedCount": "{unchanged} inchangées · {base} → {head} lignes",
+      "identical": "Les lignes de ce split sont identiques dans les deux versions.",
+      "added": "Ajoutées",
+      "changed": "Modifiées",
+      "removed": "Supprimées",
+      "firstShown": "{count} premières affichées",
+      "versions": "Versions",
+      "versionsDescription": "Chaque commit du dépôt est une version du jeu de données, de la plus récente à la plus ancienne.",
+      "mostRecent": "Les {shown} plus récentes sur {total}.",
+      "loading": "Chargement de l'historique…",
+      "untitledCommit": "Commit sans titre",
+      "latest": "Dernière",
+      "viewing": "Affichée",
+      "browse": "Parcourir",
+      "changes": "Modifications"
+    },
+    "card": {
+      "empty": "Ce jeu de données n'a pas de fiche (README.md). Une fiche décrit les données, leurs sources et leur licence ; le Hub l'affiche sur la page du jeu de données.",
+      "metadata": "Métadonnées de la fiche",
+      "metadataHint": "{count} champ(s), issus de l'en-tête du README"
+    },
+    "markdown": {
+      "image": "image"
+    }
+  },
+  "viewer": {
+    "dataViewer": {
+      "config": "Configuration",
+      "split": "Split",
+      "extra": "supplémentaire",
+      "ops": {
+        "eq": "est",
+        "ne": "n'est pas",
+        "contains": "contient",
+        "null": "est vide",
+        "not_null": "n'est pas vide"
+      },
+      "noFilterableColumn": "Aucune colonne de ce split ne peut être filtrée.",
+      "column": "Colonne",
+      "condition": "Condition",
+      "value": "Valeur",
+      "choose": "Choisir…",
+      "apply": "Appliquer",
+      "rowCount": "{count, plural, one {{formatted} ligne} other {{formatted} lignes}}",
+      "empty": "vide",
+      "valueCount": "{count, plural, one {{formatted} valeur} other {{formatted} valeurs}}",
+      "rangeChars": "{min}–{max} car.",
+      "rangeItems": "{min}–{max} éléments",
+      "sortBy": "Trier par {column}",
+      "openRow": "Ouvrir la ligne {index}",
+      "noRows": "Aucune ligne",
+      "noRowsFiltered": "Aucune ligne (filtre appliqué sur {total})",
+      "rowsRange": "Lignes {from}–{to} sur {matched}",
+      "rowsRangeFiltered": "Lignes {from}–{to} sur {matched} (filtre appliqué sur {total})",
+      "rowsPerPage": "Lignes par page",
+      "perPage": "{size} / page",
+      "firstPage": "Première page",
+      "lastPage": "Dernière page",
+      "noDataTitle": "Aucun fichier de données à afficher",
+      "noDataDesc": "Cette révision ne contient aucun fichier JSONL, JSON, CSV ou Parquet lisible par la visionneuse. L'onglet Fichiers liste le contenu du dépôt.",
+      "searchPlaceholder": "Rechercher dans tous les champs de texte…",
+      "filter": "Filtrer",
+      "layout": "Affichage",
+      "layoutQa": "Q/R",
+      "layoutTable": "Tableau",
+      "removeFilter": "Retirer le filtre {filter}",
+      "removeSorting": "Retirer le tri",
+      "sortedBy": "trié par {column} {arrow}",
+      "clearFilters": "Effacer les filtres",
+      "loading": "Chargement de {split} depuis Hugging Face…",
+      "loadingSized": "Chargement de {split} ({size}) depuis Hugging Face…",
+      "errors": {
+        "tooLarge": "Trop volumineux pour la visionneuse intégrée",
+        "notTabular": "Ce split ne peut pas être lu comme un tableau",
+        "badFilter": "Ce filtre ne s'applique pas",
+        "loadFailed": "Impossible de charger les lignes"
+      },
+      "openOnHub": "Ouvrir sur Hugging Face",
+      "tryAgain": "Réessayer",
+      "noMatchTitle": "Aucune ligne ne correspond",
+      "emptySplit": "Ce split est vide.",
+      "noMatchDesc": "Aucune des {total} lignes ne correspond à la recherche et aux filtres.",
+      "clearSearchAndFilters": "Effacer la recherche et les filtres"
+    },
+    "rowDrawer": {
+      "title": "Ligne {index}",
+      "hint": "Split {split} · ←/→ pour naviguer, Échap pour fermer",
+      "hintLoading": "Split {split} · ←/→ pour naviguer, Échap pour fermer · chargement de la ligne complète…",
+      "previousRow": "Ligne précédente",
+      "nextRow": "Ligne suivante",
+      "copyAsJson": "Copier en JSON",
+      "copied": "Ligne {index} copiée en JSON",
+      "clipboardRefused": "Le navigateur a refusé l'accès au presse-papiers",
+      "question": "Question",
+      "answer": "Réponse",
+      "context": "Contexte",
+      "empty": "vide"
+    },
+    "charts": {
+      "binLabel": "{range} : {count} ({share})",
+      "range": "Plage",
+      "rangeUnit": "Plage ({unit})",
+      "rows": "Lignes",
+      "share": "Part"
+    },
+    "stats": {
+      "min": "min",
+      "median": "médiane",
+      "mean": "moyenne",
+      "max": "max",
+      "chart": "Graphique",
+      "table": "Tableau",
+      "emptyCount": "Vides : {count} ({share})",
+      "itemsOf": "Éléments de {column}",
+      "valuesOf": "Valeurs de {column}",
+      "showRows": "Afficher ces lignes",
+      "distinctItems": "{count, plural, one {{formatted} élément distinct} other {{formatted} éléments distincts}}",
+      "distinctValues": "{count, plural, one {{formatted} valeur distincte} other {{formatted} valeurs distinctes}}",
+      "othersItems": "{count, plural, one {{formatted} élément parmi les autres} other {{formatted} éléments parmi les autres}}",
+      "othersRows": "{count, plural, one {{formatted} ligne parmi les autres} other {{formatted} lignes parmi les autres}}",
+      "itemsPerValue": "Éléments par valeur",
+      "charsPerValue": "Caractères par valeur",
+      "unitItems": "éléments",
+      "unitChars": "car.",
+      "values": "Valeurs",
+      "noDistribution": "Pas de distribution pour les valeurs de type {kind}.",
+      "noDataFile": "Cette révision ne contient aucun fichier de données à analyser.",
+      "profiling": "Analyse du split {split}…",
+      "tooLarge": "Trop volumineux pour être analysé dans l'application",
+      "computeFailed": "Impossible de calculer les statistiques",
+      "rows": "Lignes",
+      "columns": "Colonnes",
+      "emptyCells": "Cellules vides",
+      "ofAllCells": "{share} de toutes les cellules",
+      "repeated": "Doublons de « {column} »",
+      "caseIgnored": "casse et espaces ignorés",
+      "split": "Split",
+      "profileNote": "Profil du split <b>{split}</b>. Cliquez sur une valeur pour voir ses lignes.",
+      "profileNoteMulti": "Profil du split <b>{split}</b> (changez de split dans l'onglet Données). Cliquez sur une valeur pour voir ses lignes."
+    },
+    "files": {
+      "title": "Fichiers",
+      "summary": "{count, plural, one {{formatted} fichier} other {{formatted} fichiers}}, {size}, au commit <mono>{sha}</mono>",
+      "browse": "Parcourir sur Hugging Face",
+      "path": "Chemin",
+      "usedBy": "Utilisé par",
+      "size": "Taille",
+      "openFile": "Ouvrir {path} sur Hugging Face"
+    }
+  },
+  "drafts": {
+    "title": "Brouillons",
+    "subtitle": "Paires Q/R générées en attente de relecture. Relisez un brouillon, puis publiez-le sur Hugging Face : les jeux de données publiés sont listés dans <datasets>Jeux de données</datasets>.",
+    "toReview": {
+      "title": "À relire",
+      "empty": "Rien en attente. Générez à partir d'un fichier ou d'une page web, ou lancez une recette GitHub.",
+      "new": "{count} nouvelle(s)",
+      "review": "Relire"
+    },
+    "local": {
+      "title": "Brouillons locaux",
+      "description": "Générés avant que les brouillons ne soient relus de cette façon : publiez chacun d'eux sur Hugging Face, ou supprimez-le. Ils disparaîtront dans une prochaine version.",
+      "loadError": "Erreur lors du chargement des brouillons"
+    },
+    "detail": {
+      "back": "Brouillons",
+      "badge": "Brouillon",
+      "badgeTitle": "Pas encore sur Hugging Face",
+      "summary": "{pairs} paires Q/R · {sources} source(s) · {runs} exécution(s) d'analyse",
+      "language": "langue {language}",
+      "publish": "Publier sur Hugging Face",
+      "publishing": "Publication…",
+      "publishTitle": "Publier sur le Hub Hugging Face en tant que dépôt de jeu de données privé",
+      "published": "{count} paire(s) publiée(s) dans {repo}",
+      "publishedDescription": "Le dépôt du jeu de données est privé.",
+      "viewDataset": "Voir le jeu de données",
+      "publishFailed": "La publication sur Hugging Face a échoué",
+      "loadingDataset": "Chargement du jeu de données…",
+      "loadingPairs": "Chargement des paires Q/R…",
+      "tabs": {
+        "pairs": "Paires Q/R",
+        "sources": "Sources",
+        "history": "Historique"
+      },
+      "sources": {
+        "title": "Sources",
+        "description": "Toutes les origines ayant produit des paires Q/R dans ce jeu de données — une ligne par page explorée, fichier importé ou compte GitHub.",
+        "loading": "Chargement des sources…",
+        "loadFailed": "Impossible de charger les sources du jeu de données",
+        "empty": "Aucune source enregistrée.",
+        "columns": {
+          "source": "Source",
+          "type": "Type",
+          "pairs": "Paires Q/R",
+          "firstSeen": "Première apparition",
+          "lastSeen": "Dernière apparition"
+        }
+      },
+      "history": {
+        "title": "Historique des analyses",
+        "description": "Toutes les analyses enregistrées pour ce jeu de données, de la plus récente à la plus ancienne — la source lue et ce qu'elle a apporté.",
+        "loading": "Chargement de l'historique…",
+        "empty": "Aucune analyse enregistrée pour l'instant. Une exécution est enregistrée à chaque sauvegarde d'une génération.",
+        "latest": "Dernière",
+        "analysed": "Analyse de {label}",
+        "pagesRead": "{count} page(s) lue(s)",
+        "newPairs": "+{count} paires",
+        "duplicatesSkipped": "{count} doublon(s) ignoré(s)"
+      }
+    }
+  },
+  "github": {
+    "subtitle": "Vos données GitHub publiques et les jeux de données qui en sont tirés : à partir de tout votre compte, ou d'une recette qui choisit des dépôts, des README et des fichiers de documentation. Une génération de Q/R s'arrête à un brouillon que vous relisez avant sa publication sur Hugging Face.",
+    "readingAccount": "Lecture de votre compte GitHub…",
+    "fromRecipe": "À partir d'une recette",
+    "startRecipe": {
+      "title": "Créer une recette",
+      "description": "Une recette choisit les dépôts, les README et les fichiers de documentation à partir desquels un jeu de données est généré, et nomme le jeu de données Hugging Face dans lequel elle publie."
+    },
+    "listingRepos": "Chargement de la liste de vos dépôts…",
+    "account": {
+      "publicRepos": "{count, plural, one {{formatted} dépôt public} other {{formatted} dépôts publics}}",
+      "followers": "{count, plural, one {{formatted} abonné} other {{formatted} abonnés}}",
+      "requestsLeft": "Requêtes GitHub restantes",
+      "resetsNow": "réinitialisation imminente",
+      "resetsIn": "réinitialisation dans {minutes} min",
+      "addToken": "<link>Ajoutez un jeton GitHub</link> pour passer à 5 000 par heure."
+    },
+    "problem": {
+      "connectTitle": "Connectez votre compte GitHub",
+      "rateLimitTitle": "Limite de requêtes GitHub atteinte",
+      "readFailedTitle": "Impossible de lire GitHub",
+      "connectDescription": "Enregistrez votre nom d'utilisateur GitHub dans les Paramètres : cette page lit ses dépôts publics, ses README et sa documentation.",
+      "openSettings": "Ouvrir les Paramètres"
+    },
+    "jobs": {
+      "title": "À partir de tout votre compte",
+      "description": "Construits à partir de tous les dépôts publics de votre compte, et publiés dans les dépôts de jeux de données enregistrés dans les Paramètres.",
+      "loadFailed": "Impossible de charger les tâches",
+      "loading": "Chargement des tâches…"
+    },
+    "recipe": {
+      "created": "Recette « {name} » créée",
+      "name": "Nom de la recette",
+      "namePlaceholder": "Q/R du portfolio",
+      "dataset": "Jeu de données Hugging Face",
+      "datasetHint": "Créé en privé à la première publication.",
+      "create": "Créer la recette",
+      "newTitle": "Nouvelle recette",
+      "label": "Recette",
+      "new": "Nouvelle",
+      "publishesTo": "Publie dans",
+      "model": "Modèle",
+      "profileFacts": "Informations de profil (qui vous êtes, votre stack, vos projets)",
+      "reposSelected": "{count, plural, one {# dépôt sélectionné} other {# dépôts sélectionnés}}",
+      "saving": "Enregistrement…",
+      "unsaved": "Modifications non enregistrées",
+      "saved": "Enregistré",
+      "generate": "Générer un brouillon",
+      "nothingSelected": "Sélectionnez d'abord un dépôt ou les informations de profil",
+      "generationQueued": "Génération mise en file d'attente : elle s'exécute sur le serveur.",
+      "confirmDelete": "Supprimer la recette « {name} » ? Son jeu de données Hugging Face est conservé."
+    },
+    "run": {
+      "queued": "En file d'attente — en attente d'un worker.",
+      "generating": "Génération… {done}/{total} dépôts",
+      "generatingLabel": "Génération… {done}/{total} dépôts · {label}",
+      "reading": "Lecture de GitHub…",
+      "cancelling": "Annulation…",
+      "publishing": "Publication sur Hugging Face…",
+      "published": "Publié le {date} · <link>Ouvrir le jeu de données</link>",
+      "publishedUndated": "Publié · <link>Ouvrir le jeu de données</link>",
+      "new": "<b>{count}</b> nouvelles",
+      "kept": "<b>{count}</b> conservées",
+      "heldOut": "<b>{count}</b> mises de côté",
+      "removed": "<b>{count}</b> supprimées",
+      "draftReady": "Brouillon prêt : relisez-le avant qu'il ne parte sur Hugging Face.",
+      "reviewDraft": "Relire le brouillon",
+      "cancelled": "La dernière génération a été annulée.",
+      "interrupted": "La dernière génération a été interrompue (son worker s'est arrêté). Relancez la génération.",
+      "failed": "La dernière génération a échoué : {error}",
+      "unknownError": "erreur inconnue"
+    },
+    "schedule": {
+      "publishLabel": "Publier immédiatement ce qui passe les contrôles, et garder les paires douteuses à relire",
+      "description": "À {time} UTC, à partir de la recette telle qu'elle est à ce moment-là. Une exécution qui ne trouve aucun changement sur GitHub n'appelle pas le modèle et ne publie rien. Une seule recette s'exécute à la fois : une autre prévue au même moment démarre une fois la première terminée.",
+      "nextRun": "Prochaine exécution : {date}."
+    },
+    "repos": {
+      "searchPlaceholder": "Rechercher dans les dépôts, descriptions, sujets",
+      "language": "Langage",
+      "allLanguages": "Tous les langages",
+      "selectedOnly": "Sélectionnés uniquement",
+      "showHidden": "Afficher les forks et les dépôts archivés ({count})",
+      "shownOf": "{shown} sur {total}",
+      "noMatch": "Aucun dépôt ne correspond.",
+      "useInRecipe": "Utiliser {repo} dans la recette",
+      "fork": "fork",
+      "archived": "archivé",
+      "selection": {
+        "defaultDocs": "docs par défaut",
+        "noDocs": "sans docs",
+        "docs": "{count, plural, one {# doc} other {# docs}}",
+        "withReadme": "README · {docs}"
+      }
+    },
+    "panel": {
+      "openOnGitHub": "Ouvrir sur GitHub",
+      "useRepo": "Utiliser ce dépôt",
+      "readmeAndMetadata": "README et métadonnées",
+      "notEligible": "Les forks et les dépôts archivés sont exclus.",
+      "sections": "Sections du dépôt",
+      "tabs": {
+        "overview": "Ce que voit le modèle",
+        "readme": "README",
+        "docs": "Docs",
+        "docsCount": "Docs ({count})"
+      },
+      "reading": "Lecture de {repo} sur GitHub…",
+      "modelInput": "L'appel de présentation reçoit exactement ce texte ({count} caractères) ; son empreinte détermine si la prochaine exécution le régénère.",
+      "readmeCut": "Coupé à {count} caractères : le modèle n'en lit pas davantage.",
+      "noReadme": "Aucun README."
+    },
+    "docs": {
+      "reading": "Lecture de {path}…",
+      "truncated": "Le modèle lit les {count} premiers caractères.",
+      "whole": "Le modèle le lit en entier.",
+      "none": "Ce dépôt n'a aucun fichier Markdown ou texte sous docs/.",
+      "modeLegend": "Fichiers de documentation à utiliser",
+      "modes": {
+        "default": "Sélection par défaut",
+        "custom": "Choisir les fichiers"
+      },
+      "limits": "La sélection par défaut correspond aux {files} premiers fichiers lisibles. Les fichiers de plus de {size} sont ignorés ; chacun est coupé à {chars} caractères.",
+      "use": "Utiliser {path}",
+      "tooLarge": "trop volumineux"
+    }
+  },
+  "jobs": {
+    "serverDefault": "Valeur par défaut du serveur",
+    "model": "Modèle",
+    "configured": "Configuré",
+    "notConfigured": "Non configuré",
+    "missing": "Non configuré — ajoutez {missing} dans les <link>Paramètres</link>.",
+    "start": {
+      "draft": "Générer un brouillon",
+      "dryRun": "Lancer (à blanc)",
+      "publish": "Lancer et publier"
+    },
+    "running": "En cours…",
+    "reviewFirst": "Rien n'est publié tant que vous n'avez pas relu le brouillon.",
+    "errors": "{count, plural, one {# erreur non bloquante} other {# erreurs non bloquantes}} — ces sources seront retentées à la prochaine exécution",
+    "grounding": "ancrage {percent} %",
+    "draft": {
+      "published": "Publié sur Hugging Face",
+      "title": "Relire le brouillon",
+      "summary": "{kept, plural, one {# paire reprise} other {# paires reprises}} sans changement, {added, plural, one {# nouvelle} other {# nouvelles}}. Décochez ce que vous ne voulez pas publier.",
+      "summaryHeld": "{kept, plural, one {# paire reprise} other {# paires reprises}} sans changement, {added, plural, one {# nouvelle} other {# nouvelles}}, {held, plural, one {# mise} other {# mises}} de côté (réponse éloignée de sa source — décochée par défaut). Décochez ce que vous ne voulez pas publier.",
+      "unchanged": "Rien n'a changé depuis la version publiée — aucune nouvelle paire.",
+      "newPairs": "Nouvelles paires",
+      "selected": "{selected}/{total} sélectionnées",
+      "toReview": "À relire",
+      "included": "{included}/{total} incluses",
+      "publishing": "Publication…",
+      "publish": "Publier {count, plural, one {# paire} other {# paires}} sur Hugging Face",
+      "target": "→ {repo} (privé)"
+    },
+    "run": {
+      "stopping": "Arrêt…",
+      "queued": "En file d'attente — un worker va la prendre en charge.",
+      "publishing": "Publication sur Hugging Face…",
+      "generating": "Génération… {done}/{total} dépôts",
+      "fetching": "Récupération de vos dépôts GitHub…",
+      "background": "L'exécution se déroule sur le serveur — vous pouvez quitter cette page et y revenir.",
+      "cancelled": "La dernière exécution a été annulée.",
+      "interrupted": "La dernière exécution a été interrompue (son worker s'est arrêté). Relancez-la.",
+      "failed": "La dernière exécution a échoué : {error}",
+      "publishedAt": "Publié le {date}.",
+      "published": "Publié.",
+      "dryRun": "Exécution à blanc terminée — rien n'a été publié.",
+      "viewOnHub": "Voir sur Hugging Face"
+    },
+    "schedule": {
+      "stale": "La planification s'exécute avec d'autres options que celles-ci.",
+      "staleModel": "La planification s'exécute avec d'autres options ou un autre modèle que ceux-ci.",
+      "replace": "Planifier ceux-ci à la place",
+      "publishDraft": "Publier aussitôt ce qui passe les contrôles, et garder les paires douteuses à relire",
+      "publishBuilt": "Publier ce qu'elle produit",
+      "hint": "À {time} UTC, avec les options enregistrées avec la planification.",
+      "hintModel": "À {time} UTC, avec les options et le modèle enregistrés avec la planification.",
+      "noChange": "Une exécution qui ne constate aucun changement n'appelle pas le modèle.",
+      "nextRun": "Prochaine exécution : {date}.",
+      "regenerate": "Régénérer",
+      "every": {
+        "off": "Seulement quand je la lance",
+        "day": "Tous les jours",
+        "week": "Tous les lundis",
+        "month": "Le 1er de chaque mois"
+      },
+      "time": "Heure (UTC)",
+      "skipped": "L'exécution planifiée pour {when} n'a pas démarré : {reason}. Corrigez le problème, puis enregistrez de nouveau la planification."
+    }
+  },
+  "review": {
+    "loading": "Chargement du brouillon…",
+    "title": "Relecture : {name}",
+    "fallbackName": "Brouillon",
+    "back": {
+      "github": "GitHub",
+      "resume": "CV",
+      "drafts": "Brouillons"
+    },
+    "publishesTo": "Publication vers <mono>{target}</mono>",
+    "generatedWith": "généré avec {model}",
+    "waiting": {
+      "queued": "En file d'attente — en attente d'un worker.",
+      "generating": "Génération… {done}/{total} dépôts",
+      "reading": "Lecture de GitHub…",
+      "ready": "Le brouillon s'affichera ici dès qu'il sera prêt."
+    },
+    "publishing": "Publication…",
+    "published": "Publié",
+    "openDataset": "Ouvrir le jeu de données",
+    "failed": "La génération a échoué : {error}",
+    "unknownError": "erreur inconnue",
+    "noDraft": "Cette exécution n'a aucun brouillon à relire ({status}).",
+    "publishedToast": "{count, plural, one {# paire publiée} other {# paires publiées}} vers {repo}",
+    "publish": "Publier sur Hugging Face",
+    "scores": {
+      "confidence": "confiance",
+      "grounding": "ancrage",
+      "grade": "note"
+    },
+    "pair": {
+      "leaveOut": "Écarter cette paire",
+      "include": "Inclure cette paire",
+      "graderReason": "Le motif de l'évaluateur",
+      "failsRules": "enfreint vos règles : {reason}",
+      "edited": "Modifiée",
+      "undoEdit": "Annuler la modification",
+      "question": "Question",
+      "answer": "Réponse",
+      "keep": "Garder cette version"
+    },
+    "sections": {
+      "new": "Nouvelles",
+      "review": "Mises de côté",
+      "removed": "Supprimées"
+    },
+    "stats": {
+      "total": "Seront publiées",
+      "kept": "{count} conservées sans changement",
+      "new": "Nouvelles paires",
+      "promoted": "Mises de côté, reprises",
+      "promotedHint": "réponse éloignée de sa source",
+      "removed": "Supprimées du jeu de données",
+      "removedHint": "sources désélectionnées ou disparues"
+    },
+    "problems": {
+      "title": "{count, plural, one {# problème} other {# problèmes}} pendant la génération",
+      "hint": "les sources concernées ont été ignorées"
+    },
+    "duplicates": {
+      "title": "{count, plural, one {# doublon possible} other {# doublons possibles}}",
+      "hint": "même question, réponses proches",
+      "leftOut": "Écartée",
+      "leaveOut": "Écarter la seconde"
+    },
+    "filters": {
+      "pairs": "Paires",
+      "search": "Rechercher dans les questions et les réponses",
+      "category": "Catégorie",
+      "allCategories": "Toutes les catégories",
+      "repo": "Dépôt",
+      "allRepos": "Tous les dépôts",
+      "lowGrounding": "Ancrage faible",
+      "failsRules": "Enfreint vos règles"
+    },
+    "removedHint": "Ces paires figurent dans le jeu de données publié mais pas dans ce brouillon : la publication les supprime.",
+    "empty": "Rien ici.",
+    "bar": {
+      "pairs": "{count, plural, one {{formatted} paire} other {{formatted} paires}}",
+      "edited": "{count, plural, one {# modifiée} other {# modifiées}}",
+      "repo": "dépôt privé <mono>{target}</mono>"
+    }
+  },
+  "resume": {
+    "title": "CV",
+    "subtitle": "Vos CV sur Reactive Resume, lus avec la clé d'API du serveur. Choisissez-en un pour le lire sous forme de texte : ses sections et ses descriptions, sans celles qui sont masquées.",
+    "reading": "Lecture du CV…",
+    "problem": {
+      "connectTitle": "Connecter Reactive Resume",
+      "adminsTitle": "Réservé aux administrateurs",
+      "readFailedTitle": "Impossible de lire Reactive Resume",
+      "connectDescription": "Définissez REACTIVE_RESUME_API_KEY sur le serveur, et REACTIVE_RESUME_URL pour une instance auto-hébergée (vide : rxresu.me), puis rechargez cette page.",
+      "adminsDescription": "Les CV sont lus avec la clé Reactive Resume du serveur : seul un administrateur les voit."
+    },
+    "list": {
+      "loading": "Récupération de la liste de vos CV…",
+      "count": "{count} sur {instance}",
+      "public": "public",
+      "locked": "verrouillé",
+      "updated": "mis à jour {ago}",
+      "emptyTitle": "Aucun CV pour l'instant",
+      "emptyDescription": "Le compte de la clé d'API sur {instance} ne contient aucun CV."
+    },
+    "view": {
+      "fallbackName": "CV",
+      "summary": "Résumé",
+      "nothingVisible": "Rien de visible dans ce CV pour l'instant."
+    },
+    "dataset": {
+      "loading": "Lecture des paramètres du jeu de données…",
+      "title": "Jeu de données Hugging Face",
+      "description": "Des paires Q/R sur vous, tirées de ce CV : des faits exacts issus de ses champs (jamais le numéro de téléphone) et des paires générées par section, dédoublonnées et vérifiées par rapport au texte. Publiées dans un jeu de données privé.",
+      "publishesTo": "Publie dans",
+      "targetInvalid": "Un identifiant de jeu de données : espace-de-noms/nom",
+      "language": "Langue",
+      "languages": {
+        "auto": "Celle du CV",
+        "en": "Anglais",
+        "fr": "Français"
+      },
+      "model": "Modèle",
+      "scheduleHint": "À {time} UTC. Une exécution dont le CV n'a pas changé s'arrête tôt, sans appel au modèle.",
+      "saveSettings": "Enregistrer les paramètres",
+      "saveFirst": "Enregistrez d'abord les paramètres",
+      "generate": "Générer un brouillon",
+      "fullRefresh": "Régénérer toutes les sections",
+      "forget": "Oublier les paramètres",
+      "saved": "Paramètres du jeu de données enregistrés",
+      "queued": "Génération mise en file d'attente : elle s'arrête à un brouillon à relire",
+      "forgotten": "Paramètres oubliés ; le jeu de données est conservé",
+      "nextRun": "Prochaine exécution planifiée : {date}"
+    },
+    "embedding": {
+      "none": "Aucun modèle d'embedding : les contrôles de doublons et d'ancrage comparent les mots. <link>Choisissez-en un dans Modèles</link>",
+      "hint": "Contrôles par embedding : <mono>{model}</mono> ({whose}, {measured}) · <link>changez-le dans Modèles</link>",
+      "yours": "le vôtre",
+      "server": "celui du serveur",
+      "measured": "mesuré",
+      "notMeasured": "non mesuré"
+    },
+    "run": {
+      "errors": "{count, plural, one {# section non générée — elle sera retentée à la prochaine exécution} other {# sections non générées — elles seront retentées à la prochaine exécution}}",
+      "queued": "En file d'attente — en attente d'un worker.",
+      "generating": "Génération… {done}/{total} sections",
+      "generatingLabel": "Génération… {done}/{total} sections · {label}",
+      "cancelling": "Annulation…",
+      "publishing": "Publication sur Hugging Face…",
+      "published": "Publié le {date} · <link>Ouvrir le jeu de données</link>",
+      "publishedUndated": "Publié · <link>Ouvrir le jeu de données</link>",
+      "new": "<b>{count}</b> nouvelles",
+      "kept": "<b>{count}</b> conservées",
+      "heldOut": "<b>{count}</b> mises de côté",
+      "removed": "<b>{count}</b> supprimées",
+      "dropped": "<b>{count}</b> écartées",
+      "droppedTitle": "Ont échoué aux contrôles : triviales, en double ou jugées fausses",
+      "checks": "Contrôles par embedding : {result}",
+      "checksModel": "Contrôles par embedding ({model}) : {result}",
+      "heldOutReview": "Certaines paires ont été mises de côté : relisez-les pour les publier aussi.",
+      "draftReady": "Brouillon prêt : relisez-le avant qu'il ne parte sur Hugging Face.",
+      "review": "Relire",
+      "unchanged": "{date} : rien n'a changé depuis la version publiée — aucun appel au modèle.",
+      "unchangedUndated": "Rien n'a changé depuis la version publiée — aucun appel au modèle.",
+      "cancelled": "La dernière génération a été annulée.",
+      "interrupted": "La dernière génération a été interrompue (son worker s'est arrêté). Relancez la génération.",
+      "failed": "La dernière génération a échoué : {error}",
+      "unknownError": "erreur inconnue"
+    }
+  },
+  "collections": {
+    "title": "Collections",
+    "subtitle": "Des splits de vos jeux de données Hugging Face, vectorisés dans Qdrant avec le modèle d'embedding de votre endpoint. Construisez-en une, puis lancez-y des recherches et testez si ses questions retrouvent bien leurs réponses.",
+    "new": "Nouvelle collection",
+    "quotaReached": "Vous avez {quota, plural, one {# collection} other {# collections}}, la limite",
+    "loading": "Chargement de vos collections…",
+    "loadFailed": "Impossible de charger vos collections",
+    "tryAgain": "Réessayer",
+    "status": {
+      "modelRemoved": "Modèle retiré",
+      "modelRemovedTitle": "Construite avec un modèle local que le serveur n'exécute plus",
+      "rebuildNeeded": "À reconstruire",
+      "rebuildNeededTitle": "Construite sur {endpoint} ; votre endpoint est désormais {current}",
+      "ready": "Prête",
+      "failed": "Échec",
+      "building": "En construction"
+    },
+    "progress": {
+      "embedding": "Calcul des embeddings des lignes",
+      "waiting": "En attente d'un worker…"
+    },
+    "row": {
+      "updated": "Mise à jour {time}",
+      "points": "{count, plural, one {<b>{formatted}</b> point} other {<b>{formatted}</b> points}}",
+      "foundFirst": "<b>{percent}</b> trouvées en premier",
+      "testTitle": "Test de recherche sur {queries, plural, one {# ligne} other {# lignes}}, k = {k}"
+    },
+    "noQdrant": {
+      "title": "Qdrant n'est pas configuré",
+      "description": "Les collections sont stockées dans Qdrant. La stack locale en lance un (<code>make dev</code>) ; ailleurs, définissez <code>QDRANT_URL</code> (et <code>QDRANT_API_KEY</code> s'il en exige une) sur le serveur et son worker."
+    },
+    "empty": {
+      "title": "Aucune collection pour l'instant",
+      "description": "Choisissez un jeu de données et un split : un worker calcule l'embedding de chaque ligne, puis vous pouvez y lancer des recherches, la tester et l'interroger depuis votre propre code. Partez de la page d'un jeu de données avec <b>Créer une collection</b>, ou d'ici."
+    },
+    "footer": "Une collection lit son jeu de données à un commit donné : <link>publiez</link> de nouvelles paires, puis reconstruisez-la depuis sa page.",
+    "quota": "{count} sur {quota} collections.",
+    "form": {
+      "description": "Un split d'un jeu de données, lu depuis Hugging Face à son dernier commit et vectorisé ligne par ligne avec un modèle d'embedding de votre endpoint : les lignes lui sont envoyées.",
+      "dataset": "Jeu de données",
+      "loadingDatasets": "Chargement de vos jeux de données…",
+      "pickOne": "Choisissez-en un",
+      "split": "Split",
+      "readingDataset": "Lecture du jeu de données…",
+      "tooLarge": "{label} (trop volumineux)",
+      "textToEmbed": "Texte à vectoriser",
+      "readingColumns": "Lecture des colonnes…",
+      "noTextColumn": "Ce split n'a aucune colonne de texte à vectoriser.",
+      "joinHint": "Assemblées dans cet ordre, séparées par une ligne vide. Les lignes vides dans toutes ces colonnes sont ignorées.",
+      "queryColumn": "Questions pour le test de recherche",
+      "trivialHint": "Cette colonne est vectorisée elle aussi, donc chaque ligne se retrouve elle-même : ne vectorisez que la réponse pour tester la recherche.",
+      "queryHint": "Chaque ligne testée interroge avec cette colonne ; un succès, c'est sa propre ligne qui revient en premier.",
+      "model": "Modèle d'embedding",
+      "noModel": "Votre endpoint ne sert aucun modèle d'embedding : ajoutez votre clé d'API dans les Paramètres, sur un endpoint qui sert OPENAI_EMBEDDING_MODEL.",
+      "name": "Nom",
+      "submit": "Construire la collection",
+      "building": "Construction de « {name} »"
+    }
+  },
+  "collection": {
+    "back": "Collections",
+    "loading": "Chargement de la collection…",
+    "notFound": "Collection introuvable",
+    "loadFailed": "Impossible de charger cette collection",
+    "tryAgain": "Réessayer",
+    "sections": "Sections de la collection",
+    "row": "Ligne {index}",
+    "top": "Top {count}",
+    "tabs": {
+      "search": "Recherche",
+      "test": "Test de recherche",
+      "use": "Utilisation"
+    },
+    "header": {
+      "points": "{count, plural, one {{formatted} point} other {{formatted} points}}",
+      "pointsOfRows": "{count, plural, one {{formatted} point} other {{formatted} points}} sur {rows, plural, one {{rowsFormatted} ligne} other {{rowsFormatted} lignes}}",
+      "dimensions": "{count, plural, one {# dimension} other {# dimensions}}",
+      "built": "Construite {time}",
+      "embeds": "vectorise : {columns}",
+      "asksWith": "interroge avec : {column}",
+      "rebuild": "Reconstruire",
+      "rebuilding": "Reconstruction au dernier commit",
+      "deleted": "« {name} » supprimée",
+      "confirmDelete": "La supprimer, ainsi que ses vecteurs ?",
+      "keep": "Conserver",
+      "cancelFirst": "Annulez d'abord la construction"
+    },
+    "building": {
+      "title": "Vectorisation du split",
+      "desc": "Un worker lit le split depuis Hugging Face, calcule l'embedding de chaque ligne avec {model} et stocke les vecteurs dans Qdrant.",
+      "endpoint": "Les lignes sont envoyées à votre endpoint pour y être vectorisées.",
+      "local": "La première construction avec un modèle le télécharge également.",
+      "serving": "La recherche et le test continuent de répondre sur la version du commit {sha} tant que celle-ci n'est pas terminée.",
+      "cancelling": "Annulation…",
+      "cancel": "Annuler la construction"
+    },
+    "failed": {
+      "title": "La construction n'a pas abouti",
+      "fallback": "La construction a échoué.",
+      "serving": "La version précédente, au commit {sha}, répond toujours.",
+      "buildAgain": "Reconstruire"
+    },
+    "newerCommit": {
+      "text": "Le jeu de données a un commit plus récent, <mono>{latest}</mono> : cette collection contient encore <mono>{current}</mono>.",
+      "rebuildAt": "Reconstruire au commit {sha}"
+    },
+    "movedEndpoint": {
+      "text": "Construite sur <mono>{endpoint}</mono>, mais votre endpoint est désormais <mono>{current}</mono> : une recherche ou un test vectoriserait ses questions avec le modèle d'un autre endpoint et comparerait des vecteurs incompatibles. Reconstruisez-la sur votre endpoint.",
+      "buildAgain": "La reconstruire"
+    },
+    "removedModel": {
+      "title": "Cette collection doit être recréée",
+      "text": "Elle a été construite avec <mono>{model}</mono>, un modèle local que ce serveur n'exécute plus : aucune question ne peut être vectorisée pour ses vecteurs. Elle ne peut donc être ni interrogée ni testée, et la reconstruire utiliserait le même modèle. Supprimez-la, puis recréez-la à partir de <link>son jeu de données</link> avec l'un des modèles d'embedding de votre endpoint."
+    },
+    "score": "Similarité cosinus {score}",
+    "search": {
+      "placeholder": "Posez une question à laquelle le jeu de données devrait répondre…",
+      "queryLabel": "Requête de recherche",
+      "resultsLabel": "Résultats",
+      "summary": "{count, plural, one {# ligne la plus proche} other {# lignes les plus proches}} de « {query} » · {ms} ms, requête vectorisée avec {model}",
+      "empty": "Aucun point ne ressort pour cette requête."
+    },
+    "metrics": {
+      "foundFirst": "Trouvée en premier",
+      "foundFirstHint": "sa propre ligne est le premier résultat",
+      "inTopK": "Dans le top {k}",
+      "inTopKHint": "sa propre ligne figure parmi les résultats",
+      "mrr": "Rang réciproque moyen",
+      "mrrHint": "1 = toujours première, 0 = jamais dans le top {k}",
+      "rowsTested": "Lignes testées",
+      "rowsTestedHint": "échantillonnées, interrogées avec {column}"
+    },
+    "test": {
+      "lead": "Des lignes échantillonnées interrogent la collection avec l'une de leurs colonnes ; une ligne est trouvée lorsqu'elle ressort elle-même. L'échantillon ne dépend que du split et de son commit : les collections d'un même split, avec d'autres modèles ou d'autres colonnes, sont testées sur les mêmes lignes.",
+      "askWith": "Interroger avec",
+      "pickColumn": "Choisissez une colonne",
+      "sampleLabel": "Lignes à tester",
+      "sampleOption": "{count, plural, one {# ligne} other {# lignes}}",
+      "topKLabel": "Top k",
+      "run": "Lancer le test",
+      "notTested": "Pas encore testée. Avec un split de questions-réponses, vectorisez les réponses et interrogez avec les questions : le test montre alors à quelle fréquence une question retrouve sa propre réponse, et quelles lignes sont confondues.",
+      "trivial": "<mono>{column}</mono> est vectorisée elle aussi, donc chaque ligne se retrouve elle-même. Construisez une collection des réponses seules pour tester la recherche.",
+      "tested": "Testée {time} sur {queries} des {sample} lignes échantillonnées, top {k}.",
+      "allFound": "Chaque ligne testée a retrouvé sa propre ligne en premier."
+    },
+    "compare": {
+      "title": "Collections de ce split",
+      "desc": "Toutes les collections de ce split à ce commit sont testées sur les mêmes lignes échantillonnées ; leurs chiffres sont donc comparables : quel modèle d'embedding, sur quelles colonnes, retrouve le mieux les lignes.",
+      "collection": "Collection",
+      "model": "Modèle",
+      "embeds": "Vectorise",
+      "foundFirst": "Trouvée en premier",
+      "inTopK": "Dans le top k",
+      "mrr": "MRR",
+      "rows": "Lignes",
+      "thisOne": "Celle-ci",
+      "caveat": {
+        "notTested": "Pas encore testée",
+        "notBuilt": "Non construite",
+        "trivial": "{column} est vectorisée elle aussi : chaque ligne se retrouve elle-même",
+        "askedWith": "Interrogée avec {column}",
+        "sampled": "Testée sur {sample, plural, one {# ligne échantillonnée} other {# lignes échantillonnées}}",
+        "topK": "Top {k}"
+      }
+    },
+    "misses": {
+      "title": "Lignes non trouvées en premier",
+      "desc": "Ce que chaque ligne a demandé, son propre texte, et la ligne arrivée en premier à sa place. Un premier résultat quasi identique est souvent la même paire en double.",
+      "descFirst": "Les {count} premières : ce que chaque ligne a demandé, son propre texte, et la ligne arrivée en premier à sa place. Un premier résultat quasi identique est souvent la même paire en double.",
+      "asked": "Question posée",
+      "ownRow": "Sa propre ligne",
+      "cameFirst": "Arrivée en premier à sa place",
+      "rank": "Rang",
+      "duplicate": "Doublon possible",
+      "nothing": "Aucun résultat"
+    },
+    "use": {
+      "lead": "Les vecteurs forment une collection Qdrant ordinaire : interrogez-la depuis votre propre code avec le même modèle, en vectorisant la requête comme la construction a vectorisé les lignes. Le payload de chaque point contient <mono>row_idx</mono>, le texte vectorisé <mono>text</mono> et ses champs <mono>fields</mono>.",
+      "copyFailed": "Copie impossible : sélectionnez le code à la place"
+    }
+  },
+  "models": {
+    "title": "Modèles",
+    "subtitle": "Votre LLM et le modèle d'embedding, sur un endpoint compatible OpenAI (OpenAI, ou une passerelle comme LiteLLM). Une génération peut toujours choisir un autre modèle.",
+    "loading": "Chargement des modèles…",
+    "loadFailed": "Impossible de charger les modèles",
+    "defaults": {
+      "title": "Vos modèles",
+      "description": "Utilisés dès qu'une requête ne précise pas de modèle.",
+      "llm": "LLM",
+      "llmHint": "Toutes les étapes : nettoyage, Q/R, notation, les tâches, et la transcription des pages PDF et des images — il doit donc savoir lire les images.",
+      "saved": "LLM enregistré"
+    },
+    "embedding": {
+      "label": "Modèle d'embedding",
+      "measure": "Mesurer et utiliser",
+      "measureTitle": "Mesurer ses seuils sur le jeu de test intégré, puis l'utiliser",
+      "measuredToast": "Mesuré : doublons à partir de {dedup} %, ancrage inférieur à {grounding} % mis de côté",
+      "saved": "Modèle d'embedding enregistré",
+      "thresholdsYours": "{model} (le vôtre) : une reformulation à partir de {dedup} % est écartée, une réponse sous {grounding} % de sa source est mise de côté pour relecture, une section sous {uncovered} % fait l'objet de questions.",
+      "thresholdsServer": "{model} (celui du serveur) : une reformulation à partir de {dedup} % est écartée, une réponse sous {grounding} % de sa source est mise de côté pour relecture, une section sous {uncovered} % fait l'objet de questions.",
+      "measured": "Mesurés sur le jeu de test intégré : ils distinguent les reformulations dans {dedup} % des cas, les réponses fidèles dans {grounding} % et les sections couvertes dans {uncovered} %.",
+      "notMeasured": "Seuils par défaut : pas encore mesurés pour ce modèle.",
+      "none": "Aucun sur votre endpoint : les contrôles de doublons et d'ancrage comparent les mots, et aucune collection ne peut être construite.",
+      "backToServer": "Revenir au modèle du serveur"
+    },
+    "provider": {
+      "references": "Les références commencent par <code>{name}:</code>",
+      "configured": "Configuré",
+      "notConfigured": "Non configuré",
+      "missing": "Ajoutez {missing} dans les <link>Paramètres</link> pour l'activer.",
+      "endpointLent": "Les appels vont vers <code>{endpoint}</code> avec la clé du serveur : vous n'avez pas enregistré la vôtre. Enregistrez-la dans les Paramètres pour utiliser votre propre endpoint.",
+      "endpointOwn": "Les appels vont vers <code>{endpoint}</code> avec votre propre clé.",
+      "noModels": "Aucun modèle configuré.",
+      "embeddings": "Embeddings",
+      "embeddingTitle": "Modèle d'embedding",
+      "testLabel": "Modèle {provider} à tester",
+      "test": "Tester",
+      "testReply": "« {text} »"
+    },
+    "select": {
+      "ariaLabel": "Modèle",
+      "yourLlm": "Votre LLM",
+      "yourLlmNamed": "Votre LLM ({model})",
+      "pick": "Choisissez un modèle…",
+      "notConfigured": "{provider} (non configuré)"
+    }
+  },
+  "prompts": {
+    "title": "Prompts LLM",
+    "subtitle": "Les prompts que l'application envoie réellement aux modèles — nettoyage, transcription et génération de Q/R. Ils se trouvent dans le code du serveur et changent à chaque déploiement.",
+    "loading": "Chargement des prompts…",
+    "loadFailed": "Impossible de charger les prompts",
+    "active": "actif",
+    "legacy": "ancien",
+    "defaultModel": "modèle par défaut",
+    "promptLabel": "Prompt ({role})",
+    "readOnlyHint": "Lecture seule : les prompts sont versionnés avec le code (apps/server/services). Modifiez-les là-bas puis redéployez.",
+    "variables": "Variables détectées",
+    "parameters": {
+      "title": "Paramètres par défaut",
+      "description": "Issus de la configuration du serveur (.env)",
+      "test": "Tester sur /agent-test",
+      "model": "Modèle",
+      "default": "par défaut",
+      "sentAs": "Envoyé comme",
+      "roleMessage": "message {role}"
+    }
+  },
+  "quality": {
+    "title": "Contrôle qualité",
+    "subtitle": "Doublons détectés, distribution des scores et paires sous le seuil — par jeu de données.",
+    "noDatasets": "Aucun jeu de données disponible pour l'instant. Générez-en un d'abord.",
+    "dataset": {
+      "label": "Jeu de données",
+      "placeholder": "Sélectionnez un jeu de données…",
+      "hubGroup": "Hugging Face (à importer pour analyser)"
+    },
+    "analysis": {
+      "running": "Analyse…",
+      "rerun": "Relancer l'analyse"
+    },
+    "import": {
+      "pending": "Import depuis Hugging Face…",
+      "failed": "Échec de l'import du jeu de données Hugging Face"
+    },
+    "stats": {
+      "average": "Score moyen",
+      "scored": "{scored} sur {total} avec un score",
+      "duplicates": "Doublons",
+      "toArbitrate": "{count} à arbitrer",
+      "below": "Sous le seuil de {threshold}",
+      "shareOfDataset": "{percent} % du jeu de données",
+      "share": "{percent} %",
+      "noScores": "Aucun score",
+      "validated": "Validées"
+    },
+    "distribution": {
+      "title": "Distribution des scores",
+      "loading": "Chargement des scores…",
+      "unscored": "Sur {count, plural, one {# paire} other {# paires}}, aucune n'a de score de confiance — les jeux de données importés depuis Hugging Face n'en comportent généralement pas. Évaluez-les avec le LLM pour obtenir une distribution.",
+      "empty": "Aucune paire Q/R de ce jeu de données n'a encore de score."
+    },
+    "scoring": {
+      "running": "Évaluation…",
+      "run": "Évaluer {count, plural, one {# paire sans score} other {# paires sans score}} avec le LLM",
+      "failed": "Échec de l'évaluation",
+      "done": "{scored} sur {requested, plural, one {# paire évaluée} other {# paires évaluées}} avec {model}.",
+      "partial": "{scored} sur {requested, plural, one {# paire évaluée} other {# paires évaluées}} avec {model} — {failed} sans score, relancez l'évaluation pour réessayer."
+    },
+    "rules": {
+      "title": "Règles de qualité",
+      "duplicateThreshold": "Seuil de doublon",
+      "duplicateThresholdHint": "Similarité textuelle utilisée par l'analyse et le nettoyage",
+      "rejectionThreshold": "Seuil de rejet qualité",
+      "rejectionThresholdHint": "Confiance minimale pour rester « validée »",
+      "minAnswerLength": "Longueur min. des réponses",
+      "minAnswerLengthHint": "En mots (0 = aucun minimum)",
+      "minAnswerLengthAria": "Longueur minimale des réponses, en mots",
+      "autoReject": "Rejet automatique",
+      "autoRejectHint": "Appliqué à la génération",
+      "autoRejectAria": "Rejet automatique à la génération",
+      "saving": "Enregistrement…",
+      "save": "Enregistrer les règles",
+      "saveFailed": "Échec de l'enregistrement des règles de qualité"
+    },
+    "clean": {
+      "running": "Nettoyage…",
+      "run": "Nettoyer les doublons maintenant",
+      "done": "{removed} sur {total, plural, one {# enregistrement supprimé} other {# enregistrements supprimés}}.",
+      "failed": "Échec du nettoyage des doublons"
+    },
+    "confirm": {
+      "resolve": "Supprimer « {question} » et garder l'autre ? Cette action est irréversible.",
+      "clean": "Supprimer l'élément le moins fiable de chaque paire dont la similarité atteint ou dépasse {threshold} ? Cette action est irréversible."
+    },
+    "duplicates": {
+      "title": "Doublons à arbitrer",
+      "description": "Paires sémantiquement proches détectées dans {dataset}.",
+      "selectDataset": "Sélectionnez un jeu de données pour détecter les doublons.",
+      "tabs": {
+        "pending": "À traiter",
+        "resolved": "Résolus"
+      },
+      "analyzing": "Analyse des similarités…",
+      "resolveFailed": "Échec de la résolution du doublon",
+      "analyzeFailed": "Échec de l'analyse des similarités",
+      "emptyPending": "Aucun doublon au-dessus du seuil.",
+      "emptyResolved": "Rien de conservé pour l'instant.",
+      "item": "Doublon n° {index}",
+      "similarity": "similarité {percent} %",
+      "similar": "similaires",
+      "keepBoth": "Garder les deux",
+      "keepLeft": "Garder celle de gauche",
+      "keepRight": "Garder celle de droite",
+      "showFewer": "Afficher moins",
+      "showRemaining": "Voir encore {count, plural, one {# doublon} other {# doublons}}"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Votre compte et les clés avec lesquelles vos requêtes s'exécutent. Les modèles de génération se règlent sur la page Modèles.",
+    "profile": {
+      "title": "Profil",
+      "admin": "Administrateur · connexion via {provider}",
+      "user": "Utilisateur · connexion via {provider}"
+    },
+    "keys": {
+      "title": "Vos clés",
+      "description": "Chaque appel à un modèle et chaque envoi vers Hugging Face s'exécute avec <strong>vos propres</strong> clés. Elles sont stockées chiffrées, envoyées uniquement à leur fournisseur, et personne — pas même les administrateurs — ne peut les relire."
+    },
+    "models": {
+      "title": "Modèles",
+      "description": "Votre LLM, le modèle de chaque étape et le modèle d'embedding de votre endpoint.",
+      "open": "Ouvrir Modèles"
+    },
+    "integrations": {
+      "groups": {
+        "endpoint": {
+          "title": "Endpoint compatible OpenAI",
+          "description": "Votre propre clé, chez OpenAI ou sur une passerelle telle que LiteLLM, paie votre LLM (chaque étape de génération) et le modèle d'embedding. Les administrateurs sans clé personnelle peuvent utiliser l'endpoint du serveur, lorsque celui-ci le propose."
+        },
+        "huggingFace": {
+          "title": "Hugging Face",
+          "description": "Là où vos tâches et vos exports de jeux de données sont publiés (toujours dans des dépôts privés)."
+        },
+        "github": {
+          "title": "GitHub",
+          "description": "Les dépôts publics sont lus pour construire vos jeux de données."
+        }
+      },
+      "secrets": {
+        "openai_api_key": {
+          "label": "Clé d'API",
+          "help": "Depuis platform.openai.com/api-keys, ou une clé virtuelle de votre passerelle."
+        },
+        "hf_token": {
+          "label": "Jeton d'accès",
+          "help": "Un jeton avec accès en écriture, depuis huggingface.co/settings/tokens."
+        },
+        "github_token": {
+          "label": "Jeton d'accès personnel (facultatif)",
+          "help": "Sans jeton, GitHub autorise 60 requêtes par heure — trop peu pour un export de code."
+        }
+      },
+      "settings": {
+        "openai_base_url": {
+          "label": "URL de base (facultatif)",
+          "help": "L'URL de votre passerelle, si votre administrateur l'autorise. Laissez vide pour OpenAI. Votre clé n'est envoyée qu'à cette adresse."
+        },
+        "hf_namespace": {
+          "label": "Espace de noms (facultatif)",
+          "placeholder": "votre-utilisateur-ou-organisation",
+          "help": "Par défaut, le compte auquel appartient le jeton."
+        },
+        "hf_qa_repo": {
+          "label": "Dépôt du jeu de données Q&R",
+          "help": "Là où publie la tâche de Q&R personnelles GitHub."
+        },
+        "hf_corpus_repo": {
+          "label": "Dépôt du jeu de données corpus",
+          "help": "Là où publie la tâche du corpus de connaissances."
+        },
+        "github_username": {
+          "label": "Nom d'utilisateur",
+          "help": "Le compte dont les tâches lisent les dépôts publics."
+        }
+      },
+      "secretSaved": "{label} : valeur enregistrée",
+      "secretSavedChecked": "{label} : valeur enregistrée — {message}",
+      "secretRemoved": "{label} : valeur supprimée",
+      "statusSaved": "Enregistré",
+      "statusSavedHint": "Enregistré · …{hint}",
+      "statusNotSet": "Non défini",
+      "replacePlaceholder": "Collez une nouvelle valeur pour la remplacer",
+      "test": "Tester",
+      "remove": "Retirer",
+      "storedEncrypted": "La valeur est stockée chiffrée et n'est plus jamais affichée.",
+      "saveAnyway": "Enregistrer quand même",
+      "settingsSaved": "Paramètres enregistrés",
+      "saveSettings": "Enregistrer les paramètres"
+    },
+    "accounts": {
+      "title": "Méthodes de connexion",
+      "description": "Les comptes avec lesquels vous pouvez vous connecter. Vous en conservez toujours au moins un.",
+      "lockedAdmin": "Votre e-mail est une adresse d'administrateur de la plateforme.",
+      "linked": "Compte {provider} associé",
+      "unlinked": "Compte {provider} dissocié",
+      "lastUsed": "dernière utilisation le {date}",
+      "onlyWay": "Votre seul moyen de vous connecter",
+      "unlink": "Dissocier",
+      "passwordEnabled": "La connexion par e-mail et mot de passe est activée pour ce compte.",
+      "link": "Associer {provider}",
+      "signOutEverywhere": "Se déconnecter partout",
+      "errors": {
+        "identity_in_use": "Ce compte est déjà associé à un autre compte DatasetGen.",
+        "sso_failed": "L'association n'a pas abouti. Veuillez réessayer.",
+        "session_expired": "Votre session a expiré. Reconnectez-vous, puis réessayez."
+      }
+    },
+    "data": {
+      "title": "Vos données",
+      "description": "Téléchargez tout ce qui vous appartient (jeux de données, paramètres — jamais vos clés), ou supprimez votre compte. Les dépôts Hugging Face que vous avez publiés restent les vôtres et ne sont pas modifiés. La suppression exige de vous être connecté au cours des 10 dernières minutes.",
+      "export": "Exporter mes données",
+      "delete": "Supprimer mon compte",
+      "confirmDelete": "Supprimer votre compte, vos jeux de données, vos exécutions et vos clés enregistrées ? Cette action est irréversible.",
+      "signInAgain": "Se reconnecter"
+    }
+  },
+  "verify": {
+    "title": "Vérifier l'agent Q/R",
+    "subtitle": "Exécute l'agent Q/R sur le texte ci-dessous et affiche la réponse brute du modèle ainsi que les paires extraites — sans le pipeline de collecte et de nettoyage.",
+    "placeholder": "Collez le texte source…",
+    "targetLanguage": "Langue cible",
+    "languages": {
+      "fr": "Français",
+      "en": "Anglais",
+      "es": "Espagnol",
+      "de": "Allemand"
+    },
+    "run": "Lancer l'agent",
+    "result": {
+      "ok": "Agent OK",
+      "noPairs": "Aucune paire Q/R extraite",
+      "model": "Modèle : {model}",
+      "language": "Langue : {language}",
+      "pairs": "Paires : {count}",
+      "raw": "Brut : {count} caractères",
+      "error": "Erreur : {error}",
+      "rawResponse": "Réponse brute du modèle",
+      "emptyResponse": "(réponse vide)",
+      "parsed": "Paires Q/R extraites ({count})",
+      "question": "Q : {question}",
+      "answer": "R : {answer}",
+      "context": "Contexte : {context}"
+    }
+  },
+  "admin": {
+    "title": "Administration",
+    "subtitle": "Comptes, usage et réglages de la plateforme. Le contenu des jeux de données et les clés ne sont jamais affichés ici.",
+    "tabs": {
+      "overview": "Vue d'ensemble",
+      "users": "Utilisateurs",
+      "audit": "Journal d'audit",
+      "platform": "Plateforme"
+    },
+    "guard": "Cette page est réservée aux administrateurs.",
+    "overview": {
+      "accounts": "Comptes",
+      "active": "Actifs",
+      "admins": "Administrateurs",
+      "signedIn": "Connectés (30 jours)",
+      "datasets": "Jeux de données",
+      "pairs": "Paires Q/R",
+      "running": "Exécutions en cours",
+      "runsTitle": "Exécutions de tâches, 30 derniers jours",
+      "noRuns": "Aucune exécution."
+    },
+    "audit": {
+      "title": "Journal d'audit",
+      "description": "Événements de sécurité. Les comptes supprimés apparaissent sous la forme d'une courte empreinte de leur e-mail.",
+      "filter": "Filtre : par ex. user.signup",
+      "when": "Quand",
+      "action": "Action",
+      "by": "Par",
+      "on": "Sur",
+      "detail": "Détail",
+      "newer": "Plus récents",
+      "older": "Plus anciens"
+    },
+    "platform": {
+      "title": "Plateforme",
+      "description": "Les réglages enregistrés en base remplacent l'environnement. Les autres réplicas prennent les changements en compte en quelques secondes.",
+      "saved": "Enregistré",
+      "setHere": "défini ici",
+      "envDefault": "valeur de l'environnement",
+      "commaSeparated": "séparés par des virgules",
+      "on": "Activé",
+      "off": "Désactivé",
+      "reset": "Revenir à l'environnement"
+    },
+    "users": {
+      "title": "Utilisateurs",
+      "description": "Jeux de données / paires / exécutions : des nombres uniquement. Les comptes verrouillés sont listés dans ADMIN_EMAILS.",
+      "search": "Rechercher par e-mail",
+      "account": "Compte",
+      "role": "Rôle",
+      "data": "Données",
+      "keys": "Clés enregistrées",
+      "dates": "Création · dernière connexion",
+      "actions": "Actions",
+      "password": "mot de passe",
+      "locked": "verrouillé",
+      "disabled": "désactivé",
+      "roles": {
+        "admin": "administrateur",
+        "user": "utilisateur"
+      },
+      "makeUser": "Passer utilisateur",
+      "makeAdmin": "Passer administrateur",
+      "disable": "Désactiver",
+      "enable": "Activer",
+      "confirmDelete": "Supprimer {email} et tout ce qui lui appartient ? Ses dépôts Hugging Face ne sont pas touchés.",
+      "deleted": "{email} supprimé",
+      "range": "{first}–{last} sur {total}"
+    }
+  }
+}

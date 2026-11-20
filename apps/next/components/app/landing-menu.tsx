@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Menu, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { LanguageSwitch } from '@/components/app/language-switch'
 import { ThemeToggle } from '@/components/app/theme-toggle'
 
 export type LandingLink = { href: string; label: string; external?: boolean }
 
-/** The homepage's section links and theme switch on phones: a button that drops
+/** The homepage's section links, language and theme switches on phones: a button that drops
  *  them below the bar. Picking a link, Escape or a tap outside closes it. */
 export function LandingMenu({ links }: { links: LandingLink[] }) {
+  const t = useTranslations()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -33,7 +36,7 @@ export function LandingMenu({ links }: { links: LandingLink[] }) {
     <div ref={rootRef} className="md:hidden">
       <button
         type="button"
-        aria-label={open ? 'Close the menu' : 'Open the menu'}
+        aria-label={open ? t('home.nav.closeMenu') : t('home.nav.openMenu')}
         aria-expanded={open}
         aria-controls="landing-menu"
         onClick={() => setOpen((v) => !v)}
@@ -58,7 +61,11 @@ export function LandingMenu({ links }: { links: LandingLink[] }) {
             </Link>
           ))}
           <div className="flex items-center justify-between px-2 py-1 text-[15px] text-muted-foreground">
-            Theme
+            {t('language.label')}
+            <LanguageSwitch className="h-10" />
+          </div>
+          <div className="flex items-center justify-between px-2 py-1 text-[15px] text-muted-foreground">
+            {t('theme.label')}
             <ThemeToggle className="size-10" />
           </div>
         </div>

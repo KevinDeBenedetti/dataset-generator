@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import type { HubRepoRef } from '@/api/sdk'
 import type { HubCommit, HubDatasetDetail } from '@/api/types'
 import { Icon } from '@/components/app/icon'
@@ -9,8 +10,12 @@ import { cn } from '@/lib/utils'
 import { compactJson, formatCount, formatDateTime, shortSha, timeAgo } from './format'
 import { resolveView } from './data-viewer'
 import type { HubViewState } from './url-state'
+import { rich } from '@/lib/rich'
 
 type Update = (patch: Partial<HubViewState>) => void
+
+// The <b> of the counts in a comparison (`t.rich`).
+const bold = (chunks: React.ReactNode) => <b>{chunks}</b>
 
 // The most telling fields of a row, for a one-line preview in a diff.
 function preview(row: Record<string, unknown>): string {
@@ -33,6 +38,8 @@ function ChangedRows({
   count: number
   rows: { key: string; text: string; before?: string }[]
 }) {
+  const t = useTranslations('datasets')
+  const locale = useLocale()
   if (count === 0) return null
   return (
     <details className={cn('card hub-diff', `hub-diff-${tone}`)} open={tone !== 'removed'}>
@@ -42,8 +49,8 @@ function ChangedRows({
         </span>
         {title}
         <span className="muted">
-          {formatCount(count)}
-          {count > rows.length ? `, first ${rows.length} shown` : ''}
+          {formatCount(count, locale)}
+          {count > rows.length ? `, ${t('history.firstShown', { count: rows.length })}` : ''}
         </span>
       </summary>
       <ul>
@@ -69,6 +76,8 @@ function Compare({
   state: HubViewState
   update: Update
 }) {
+  const t = useTranslations('datasets')
+  const locale = useLocale()
   const current = resolveView(detail.views, state.config, state.split)
   const compare = useHubCompare(
     repo,
@@ -88,19 +97,23 @@ function Compare({
       <div className="card-head">
         <div>
           <div className="card-title">
-            Changes from <span className="mono">{shortSha(state.base)}</span> to{' '}
-            <span className="mono">{shortSha(state.head ?? detail.sha)}</span>
+            {t.rich('history.compareTitle', {
+              base: shortSha(state.base),
+              head: shortSha(state.head ?? detail.sha),
+              mono: rich.mono,
+            })}
           </div>
           <div className="card-desc">
-            {current ? `${current.split} split` : 'Default split'}
-            {data && (data.key === 'id' ? ', rows matched by id' : ', rows matched by content')}
+            {current ? t('history.split', { split: current.split }) : t('history.defaultSplit')}
+            {data &&
+              `, ${data.key === 'id' ? t('history.matchedById') : t('history.matchedByContent')}`}
           </div>
         </div>
         <button
           type="button"
           className="icon-btn"
           onClick={() => update({ base: null, head: null })}
-          aria-label="Close the comparison"
+          aria-label={t('history.closeComparison')}
         >
           <Icon name="x" />
         </button>
@@ -108,7 +121,7 @@ function Compare({
       <div className="card-body">
         {compare.isPending && (
           <p className="muted">
-            <Icon name="loader" className="animate-spin" /> Reading both versions…
+            <Icon name="loader" className="animate-spin" /> {t('history.readingBoth')}
           </p>
         )}
         {compare.error && <p className="hub-error">{compare.error.message}</p>}
@@ -116,24 +129,33 @@ function Compare({
           <>
             <div className="hub-diff-counts">
               <span>
-                <b>+{formatCount(data.added)}</b> added
+                {t.rich('history.addedCount', { count: formatCount(data.added, locale), b: bold })}
               </span>
               <span>
-                <b>−{formatCount(data.removed)}</b> removed
+                {t.rich('history.removedCount', {
+                  count: formatCount(data.removed, locale),
+                  b: bold,
+                })}
               </span>
               <span>
-                <b>~{formatCount(data.changed)}</b> changed
+                {t.rich('history.changedCount', {
+                  count: formatCount(data.changed, locale),
+                  b: bold,
+                })}
               </span>
               <span className="muted">
-                {formatCount(data.unchanged)} unchanged · {formatCount(data.base_rows)} →{' '}
-                {formatCount(data.head_rows)} rows
+                {t('history.unchangedCount', {
+                  unchanged: formatCount(data.unchanged, locale),
+                  base: formatCount(data.base_rows, locale),
+                  head: formatCount(data.head_rows, locale),
+                })}
               </span>
             </div>
             {data.added + data.removed + data.changed === 0 && (
-              <p className="muted">The rows of this split are identical in both versions.</p>
+              <p className="muted">{t('history.identical')}</p>
             )}
             <ChangedRows
-              title="Added"
+              title={t('history.added')}
               sign="+"
               tone="added"
               count={data.added}
@@ -143,7 +165,7 @@ function Compare({
               }))}
             />
             <ChangedRows
-              title="Changed"
+              title={t('history.changed')}
               sign="~"
               tone="changed"
               count={data.changed}
@@ -154,7 +176,7 @@ function Compare({
               }))}
             />
             <ChangedRows
-              title="Removed"
+              title={t('history.removed')}
               sign="−"
               tone="removed"
               count={data.removed}
@@ -181,6 +203,8 @@ export function HistoryPanel({
   state: HubViewState
   update: Update
 }) {
+  const t = useTranslations('datasets')
+  const locale = useLocale()
   const commits = useHubCommits(repo)
   const [now] = useState(() => Date.now())
   const list: HubCommit[] = commits.data?.commits ?? []
@@ -192,17 +216,20 @@ export function HistoryPanel({
       <div className="card">
         <div className="card-head">
           <div>
-            <div className="card-title">Versions</div>
+            <div className="card-title">{t('history.versions')}</div>
             <div className="card-desc">
-              Every commit to the repo is a version of the dataset, newest first.
+              {t('history.versionsDescription')}
               {commits.data && commits.data.total > list.length
-                ? ` The ${list.length} most recent of ${formatCount(commits.data.total)}.`
+                ? ` ${t('history.mostRecent', {
+                    shown: list.length,
+                    total: formatCount(commits.data.total, locale),
+                  })}`
                 : ''}
             </div>
           </div>
         </div>
         <div className="card-body">
-          {commits.isPending && <p className="muted">Loading the history…</p>}
+          {commits.isPending && <p className="muted">{t('history.loading')}</p>}
           {commits.error && <p className="hub-error">{commits.error.message}</p>}
           <ol className="hub-timeline">
             {list.map((commit, index) => {
@@ -215,14 +242,14 @@ export function HistoryPanel({
                   </span>
                   <div className="hub-commit-body">
                     <div className="hub-commit-title">
-                      <b>{commit.title || 'Untitled commit'}</b>
+                      <b>{commit.title || t('history.untitledCommit')}</b>
                       {commit.id === latest && (
                         <span className="badge badge-success">
                           <span className="dot" />
-                          Latest
+                          {t('history.latest')}
                         </span>
                       )}
-                      {viewing && <span className="badge badge-info">Viewing</span>}
+                      {viewing && <span className="badge badge-info">{t('history.viewing')}</span>}
                     </div>
                     <div className="hint">
                       <a
@@ -235,8 +262,8 @@ export function HistoryPanel({
                       </a>
                       {commit.authors.length > 0 && ` · ${commit.authors.join(', ')}`}
                       {' · '}
-                      <span title={formatDateTime(commit.created_at)}>
-                        {timeAgo(commit.created_at, now)}
+                      <span title={formatDateTime(commit.created_at, locale)}>
+                        {timeAgo(commit.created_at, now, locale)}
                       </span>
                     </div>
                   </div>
@@ -256,7 +283,7 @@ export function HistoryPanel({
                         }
                       >
                         <Icon name="eye" />
-                        Browse
+                        {t('history.browse')}
                       </button>
                     )}
                     {previous && (
@@ -266,7 +293,7 @@ export function HistoryPanel({
                         onClick={() => update({ base: previous.id, head: commit.id })}
                       >
                         <Icon name="merge" />
-                        Changes
+                        {t('history.changes')}
                       </button>
                     )}
                   </div>

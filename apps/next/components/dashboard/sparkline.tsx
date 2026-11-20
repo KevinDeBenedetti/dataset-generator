@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 
 /**
@@ -13,6 +14,7 @@ export function Sparkline({
   labels?: string[]
   className?: string
 }) {
+  const t = useTranslations('dashboard')
   const max = Math.max(1, ...values)
 
   return (
@@ -25,7 +27,9 @@ export function Sparkline({
           // oxlint-disable-next-line react/no-array-index-key
           key={index}
           className="flex flex-1 flex-col justify-end overflow-hidden rounded-sm bg-primary/10"
-          title={labels?.[index] ? `${labels[index]}: ${value}` : `${value}`}
+          title={
+            labels?.[index] ? t('activity.barTitle', { label: labels[index], value }) : `${value}`
+          }
         >
           <div
             className="rounded-sm bg-primary/70 transition-colors hover:bg-primary"

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { Icon } from '@/components/app/icon'
 import { JobCard } from '@/components/jobs/job-card'
 import { useJobs } from '@/hooks'
@@ -7,21 +8,19 @@ import { useJobs } from '@/hooks'
 /** The datasets built from the whole account (GET /jobs): the Q&A dataset and
  * the knowledge corpus, each run when you start it. */
 export function AccountJobs() {
+  const t = useTranslations('github')
   const jobs = useJobs()
   return (
     <section className="gh-jobs" aria-labelledby="gh-jobs-title">
       <div className="gh-section-head">
         <h2 id="gh-jobs-title" className="card-title">
-          From your whole account
+          {t('jobs.title')}
         </h2>
-        <p className="hint">
-          Built from every public repo of your account, and published to the dataset repos saved in
-          Settings.
-        </p>
+        <p className="hint">{t('jobs.description')}</p>
       </div>
       {jobs.error ? (
         <p className="hint job-error">
-          {jobs.error instanceof Error ? jobs.error.message : 'Failed to load the jobs'}
+          {jobs.error instanceof Error ? jobs.error.message : t('jobs.loadFailed')}
         </p>
       ) : jobs.data ? (
         <div className="grid-2 gh-jobs-grid">
@@ -32,7 +31,7 @@ export function AccountJobs() {
       ) : (
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Loading the jobs…
+          {t('jobs.loading')}
         </div>
       )}
     </section>

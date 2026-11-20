@@ -65,18 +65,22 @@ describe('a schedule compared with its card', () => {
 })
 
 describe('a schedule whose latest time started no run', () => {
-  it('says when and why, and what to do', () => {
-    const notice = skipNotice(
-      { reason: "Unknown model 'openai:x'. Available: openai:y.", at: '2026-11-17T18:00:00Z' },
-      () => 'yesterday at 18:00',
-    )
-    expect(notice).toBe(
-      "The run scheduled for yesterday at 18:00 did not start: Unknown model 'openai:x'. Available: openai:y. Fix it, then save the schedule again.",
-    )
+  it('says when and why, as a message that ends the reason itself', () => {
+    const notice = skipNotice({
+      reason: "Unknown model 'openai:x'. Available: openai:y.\n",
+      at: '2026-11-17T18:00:00Z',
+    })
+    expect(notice).toEqual({
+      key: 'schedule.skipped',
+      at: '2026-11-17T18:00:00Z',
+      // No final full stop: the message puts its own after the reason.
+      reason: "Unknown model 'openai:x'. Available: openai:y",
+    })
   })
 
   it('says nothing when the latest time ran, or was never due', () => {
     expect(skipNotice(null)).toBeNull()
     expect(skipNotice(undefined)).toBeNull()
+    expect(skipNotice({ reason: '', at: '2026-11-17T18:00:00Z' })).toBeNull()
   })
 })

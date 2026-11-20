@@ -53,7 +53,6 @@ def _bind_sessions(monkeypatch, engine) -> None:
         autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
     )
     monkeypatch.setattr(database, "SessionLocal", factory)
-    monkeypatch.setattr(database, "Session", factory)
 
 
 @pytest.fixture(autouse=True)
@@ -271,6 +270,14 @@ def _build_test_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # As main.py: the reader's language, from the dg-locale cookie.
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    from server.api.errors import translated_http_exception
+    from server.core.i18n import bind_locale
+
+    test_app.middleware("http")(bind_locale)
+    test_app.add_exception_handler(StarletteHTTPException, translated_http_exception)
 
     test_app.include_router(auth.router)
     test_app.include_router(generate.router)

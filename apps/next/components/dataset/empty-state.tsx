@@ -1,8 +1,11 @@
+import { useTranslations } from 'next-intl'
+
 export function EmptyState() {
+  const t = useTranslations('generate.empty')
   return (
     <div className="text-center p-8 text-gray-500">
-      <p className="text-lg">No draft waiting</p>
-      <p className="text-sm mt-2">Generate Q/A pairs to start a draft</p>
+      <p className="text-lg">{t('title')}</p>
+      <p className="text-sm mt-2">{t('hint')}</p>
     </div>
   )
 }

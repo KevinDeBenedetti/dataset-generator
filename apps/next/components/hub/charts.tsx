@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
+import type { Locale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
 import { formatCount, formatPercent, formatValue } from './format'
 
@@ -16,9 +18,9 @@ export interface Bin {
   count: number
 }
 
-function binLabel(bin: Bin, integer: boolean): string {
-  if (integer && bin.end - bin.start <= 1) return formatValue(bin.start)
-  return `${formatValue(bin.start)} – ${formatValue(bin.end)}`
+function binLabel(bin: Bin, integer: boolean, locale: Locale): string {
+  if (integer && bin.end - bin.start <= 1) return formatValue(bin.start, locale)
+  return `${formatValue(bin.start, locale)} – ${formatValue(bin.end, locale)}`
 }
 
 export function Histogram({
@@ -34,6 +36,8 @@ export function Histogram({
   unit?: string
   integer?: boolean
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const [active, setActive] = useState<number | null>(null)
   if (bins.length === 0) return null
   const max = Math.max(1, ...bins.map((b) => b.count))
@@ -51,7 +55,11 @@ export function Histogram({
             type="button"
             key={`${bin.start}-${bin.end}`}
             className={cn('viz-col', active === index && 'active')}
-            aria-label={`${binLabel(bin, integer)}${unit ? ` ${unit}` : ''}: ${formatCount(bin.count)} (${formatPercent(bin.count, total)})`}
+            aria-label={t('charts.binLabel', {
+              range: `${binLabel(bin, integer, locale)}${unit ? ` ${unit}` : ''}`,
+              count: formatCount(bin.count, locale),
+              share: formatPercent(bin.count, total, locale),
+            })}
             onPointerEnter={() => setActive(index)}
             onPointerLeave={() => setActive(null)}
             onFocus={() => setActive(index)}
@@ -67,19 +75,19 @@ export function Histogram({
         ))}
         {activeBin && active != null && (
           <output className="viz-tip" style={{ left: `${((active + 0.5) / bins.length) * 100}%` }}>
-            <strong>{formatCount(activeBin.count)}</strong>
-            <span>{formatPercent(activeBin.count, total)}</span>
+            <strong>{formatCount(activeBin.count, locale)}</strong>
+            <span>{formatPercent(activeBin.count, total, locale)}</span>
             <span className="viz-tip-label">
-              {binLabel(activeBin, integer)}
+              {binLabel(activeBin, integer, locale)}
               {unit ? ` ${unit}` : ''}
             </span>
           </output>
         )}
       </div>
       <div className="viz-axis" aria-hidden="true">
-        <span>{formatValue(first.start)}</span>
+        <span>{formatValue(first.start, locale)}</span>
         <span>
-          {formatValue(last.end)}
+          {formatValue(last.end, locale)}
           {unit ? ` ${unit}` : ''}
         </span>
       </div>
@@ -97,22 +105,24 @@ export function HistogramTable({
   unit?: string
   integer?: boolean
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const total = bins.reduce((sum, b) => sum + b.count, 0)
   return (
     <table className="table viz-table">
       <thead>
         <tr>
-          <th>Range{unit ? ` (${unit})` : ''}</th>
-          <th className="num">Rows</th>
-          <th className="num">Share</th>
+          <th>{unit ? t('charts.rangeUnit', { unit }) : t('charts.range')}</th>
+          <th className="num">{t('charts.rows')}</th>
+          <th className="num">{t('charts.share')}</th>
         </tr>
       </thead>
       <tbody>
         {bins.map((bin) => (
           <tr key={`${bin.start}-${bin.end}`}>
-            <td className="mono">{binLabel(bin, integer)}</td>
-            <td className="num mono">{formatCount(bin.count)}</td>
-            <td className="num mono">{formatPercent(bin.count, total)}</td>
+            <td className="mono">{binLabel(bin, integer, locale)}</td>
+            <td className="num mono">{formatCount(bin.count, locale)}</td>
+            <td className="num mono">{formatPercent(bin.count, total, locale)}</td>
           </tr>
         ))}
       </tbody>
@@ -143,6 +153,7 @@ export function BarList({
   onSelect?: (key: string) => void
   selectHint?: string
 }) {
+  const locale = useLocale()
   const max = Math.max(1, ...items.map((item) => item.count))
   return (
     <ul className="viz-bars" aria-label={label}>
@@ -160,8 +171,8 @@ export function BarList({
                 />
               )}
             </span>
-            <span className="viz-bar-value">{formatCount(item.count)}</span>
-            <span className="viz-bar-share">{formatPercent(item.count, total)}</span>
+            <span className="viz-bar-value">{formatCount(item.count, locale)}</span>
+            <span className="viz-bar-share">{formatPercent(item.count, total, locale)}</span>
           </>
         )
         return (

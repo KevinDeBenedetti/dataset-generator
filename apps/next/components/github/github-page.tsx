@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import type { RecipeIn } from '@/api/types'
 import { Icon } from '@/components/app/icon'
@@ -23,6 +24,7 @@ import { RepoPanel } from './repo-panel'
 const SAVE_DELAY_MS = 500
 
 export function GitHubPage() {
+  const t = useTranslations('github')
   const profile = useGitHubProfile()
   const repos = useGitHubRepos()
   const recipes = useRecipes()
@@ -78,11 +80,7 @@ export function GitHubPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">GitHub</h1>
-          <p className="page-sub">
-            Your public GitHub data and the datasets made from it: from your whole account, or from
-            a recipe that picks repos, READMEs and docs. A Q&amp;A generation stops at a draft you
-            review before it is published to Hugging Face.
-          </p>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
       </div>
 
@@ -93,7 +91,7 @@ export function GitHubPage() {
       ) : (
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Reading your GitHub account…
+          {t('readingAccount')}
         </div>
       )}
 
@@ -102,7 +100,7 @@ export function GitHubPage() {
           <AccountJobs />
 
           <div className="gh-section-head">
-            <h2 className="card-title">From a recipe</h2>
+            <h2 className="card-title">{t('fromRecipe')}</h2>
           </div>
           {recipes.isPending ? null : current && working ? (
             <RecipeBar
@@ -117,11 +115,8 @@ export function GitHubPage() {
             />
           ) : (
             <div className="card gh-recipe">
-              <div className="card-title">Start a recipe</div>
-              <p className="card-desc">
-                A recipe picks the repos, READMEs and docs files a dataset is generated from, and
-                names the Hugging Face dataset it publishes to.
-              </p>
+              <div className="card-title">{t('startRecipe.title')}</div>
+              <p className="card-desc">{t('startRecipe.description')}</p>
               <NewRecipeForm
                 namespace={hub.data?.namespace ?? null}
                 onCreated={(recipe) => select(recipe.id)}
@@ -133,7 +128,7 @@ export function GitHubPage() {
           {repos.isPending && (
             <div className="card hub-loading" aria-busy="true">
               <Icon name="loader" className="animate-spin" />
-              Listing your repos…
+              {t('listingRepos')}
             </div>
           )}
           {repos.data && (

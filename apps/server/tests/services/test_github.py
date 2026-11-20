@@ -23,14 +23,14 @@ def _client_with(dispatch):
     return client
 
 
-@patch("server.services.github.httpx.AsyncClient")
+@patch("server.services.github.httpx2.AsyncClient")
 async def test_token_sets_the_authorization_header(mock_client_class):
     GitHubService("tok")
     headers = mock_client_class.call_args.kwargs["headers"]
     assert headers["Authorization"] == "Bearer tok"
 
 
-@patch("server.services.github.httpx.AsyncClient")
+@patch("server.services.github.httpx2.AsyncClient")
 async def test_list_public_repos_paginates_and_caps(mock_client_class):
     pages = {1: [{"name": f"r{i}"} for i in range(100)], 2: [{"name": "last"}]}
 
@@ -47,14 +47,14 @@ async def test_list_public_repos_paginates_and_caps(mock_client_class):
 
 
 @pytest.mark.parametrize("status, match", [(404, "not found"), (403, "rate limit")])
-@patch("server.services.github.httpx.AsyncClient")
+@patch("server.services.github.httpx2.AsyncClient")
 async def test_list_public_repos_errors(mock_client_class, status, match):
     mock_client_class.return_value = _client_with(lambda *a, **k: _resp(status=status))
     with pytest.raises(ValueError, match=match):
         await GitHubService().list_public_repos("ghost")
 
 
-@patch("server.services.github.httpx.AsyncClient")
+@patch("server.services.github.httpx2.AsyncClient")
 async def test_get_readme(mock_client_class):
     def dispatch(path, **kwargs):
         if path == "/repos/o/has/readme":

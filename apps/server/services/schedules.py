@@ -21,6 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from server.core.database import get_scoped_db
+from server.core.i18n import translate_message
 from server.jobs.registry import JOBS
 from server.models.job_run import JobRun
 from server.models.job_schedule import JobSchedule
@@ -103,7 +104,7 @@ def _view(db: Session, row: JobSchedule) -> Dict[str, Any]:
         "publish": row.publish,
         "next_run_at": _aware(row.next_run_at) if row.next_run_at else None,
         "last_run": _latest_run(db, row),
-        "skipped": dict(row.skipped) if row.skipped else None,
+        "skipped": _skip_out(row.skipped),
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
@@ -217,6 +218,13 @@ def _may_run(db: Session, row: JobSchedule) -> Optional[str]:
 
 # How much of a reason a schedule keeps (a model list can be long).
 MAX_SKIP_REASON_CHARS = 300
+
+
+def _skip_out(skipped: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A stored skip as served: its reason in the reader's language."""
+    if not skipped:
+        return None
+    return {**skipped, "reason": translate_message(skipped.get("reason"))}
 
 
 def _skip(db: Session, row: JobSchedule, reason: str, now: datetime) -> None:

@@ -2,23 +2,26 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { CollectionOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { formatCount, shortSha, timeAgo } from '@/components/hub/format'
 import { useCollections } from '@/hooks'
+import { rich, richLink } from '@/lib/rich'
 import { CreateCollectionForm } from './create-form'
 import { endpointMoved, modelLabel, modelRemoved, percent } from './format'
 
+// A tag renderer for `t.rich(...)`, defined at module level so it is stable.
+const datasetsLink = richLink('/datasets')
+
 export function StatusBadge({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collections')
   if (collection.status !== 'building' && modelRemoved(collection)) {
     return (
-      <span
-        className="badge badge-warning"
-        title="Built with a local model the server no longer runs"
-      >
+      <span className="badge badge-warning" title={t('status.modelRemovedTitle')}>
         <Icon name="alert" className="ic-sm" />
-        Model removed
+        {t('status.modelRemoved')}
       </span>
     )
   }
@@ -26,10 +29,13 @@ export function StatusBadge({ collection }: { collection: CollectionOut }) {
     return (
       <span
         className="badge badge-warning"
-        title={`Built on ${collection.endpoint}; your endpoint is now ${collection.current_endpoint}`}
+        title={t('status.rebuildNeededTitle', {
+          endpoint: String(collection.endpoint),
+          current: String(collection.current_endpoint),
+        })}
       >
         <Icon name="alert" className="ic-sm" />
-        Rebuild needed
+        {t('status.rebuildNeeded')}
       </span>
     )
   }
@@ -37,7 +43,7 @@ export function StatusBadge({ collection }: { collection: CollectionOut }) {
     return (
       <span className="badge badge-success">
         <Icon name="check" className="ic-sm" />
-        Ready
+        {t('status.ready')}
       </span>
     )
   }
@@ -45,20 +51,22 @@ export function StatusBadge({ collection }: { collection: CollectionOut }) {
     return (
       <span className="badge badge-destructive">
         <Icon name="alert" className="ic-sm" />
-        Failed
+        {t('status.failed')}
       </span>
     )
   }
   return (
     <span className="badge badge-info">
       <Icon name="loader" className="ic-sm animate-spin" />
-      Building
+      {t('status.building')}
     </span>
   )
 }
 
 /** The build's progress bar and step, while a worker embeds the split. */
 export function BuildProgress({ collection }: { collection: CollectionOut }) {
+  const t = useTranslations('collections')
+  const locale = useLocale()
   const { done = 0, total = 0, label = '' } = collection.progress ?? {}
   const share = total > 0 ? done / total : 0
   return (
@@ -69,14 +77,19 @@ export function BuildProgress({ collection }: { collection: CollectionOut }) {
       </div>
       <span className="hint" aria-live="polite">
         {total > 0
-          ? `${label || 'Embedding rows'} · ${formatCount(done)} / ${formatCount(total)}`
-          : label || 'Waiting for a worker…'}
+          ? [
+              label || t('progress.embedding'),
+              `${formatCount(done, locale)} / ${formatCount(total, locale)}`,
+            ].join(' · ')
+          : label || t('progress.waiting')}
       </span>
     </div>
   )
 }
 
 function CollectionRow({ collection, now }: { collection: CollectionOut; now: number }) {
+  const t = useTranslations('collections')
+  const locale = useLocale()
   const test = collection.evaluation
   return (
     <li className="coll-item">
@@ -99,7 +112,7 @@ function CollectionRow({ collection, now }: { collection: CollectionOut; now: nu
               {shortSha(collection.revision)}
             </span>
             <span>{modelLabel(collection.model)}</span>
-            <span>Updated {timeAgo(collection.updated_at, now)}</span>
+            <span>{t('row.updated', { time: timeAgo(collection.updated_at, now, locale) })}</span>
           </span>
           {collection.status === 'building' && <BuildProgress collection={collection} />}
           {collection.status === 'failed' && collection.error && (
@@ -109,12 +122,16 @@ function CollectionRow({ collection, now }: { collection: CollectionOut; now: nu
         <span className="coll-item-stats">
           {collection.points_count != null && collection.status === 'ready' && (
             <span>
-              <b>{formatCount(collection.points_count)}</b> points
+              {t.rich('row.points', {
+                count: collection.points_count,
+                formatted: formatCount(collection.points_count, locale),
+                b: rich.b,
+              })}
             </span>
           )}
           {test && collection.status === 'ready' && (
-            <span title={`Retrieval test on ${test.queries} rows, k = ${test.k}`}>
-              <b>{percent(test.hit_at_1)}</b> found first
+            <span title={t('row.testTitle', { queries: test.queries, k: test.k })}>
+              {t.rich('row.foundFirst', { percent: percent(test.hit_at_1, locale), b: rich.b })}
             </span>
           )}
         </span>
@@ -125,6 +142,7 @@ function CollectionRow({ collection, now }: { collection: CollectionOut; now: nu
 }
 
 export function CollectionsPage() {
+  const t = useTranslations('collections')
   const router = useRouter()
   const params = useSearchParams()
   const initialRepo = params.get('repo')
@@ -145,12 +163,8 @@ export function CollectionsPage() {
     <div className="hub-page coll-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Collections</h1>
-          <p className="page-sub">
-            Splits of your Hugging Face datasets, embedded into Qdrant with your endpoint&apos;s
-            embedding model. Build one, then search it and test how well its questions find their
-            answers.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
         {data?.qdrant_configured && !creating && (
           <div className="page-actions">
@@ -159,10 +173,10 @@ export function CollectionsPage() {
               className="btn btn-primary"
               onClick={() => setCreating(true)}
               disabled={full}
-              title={full ? `You have ${data.quota} collections, the limit` : undefined}
+              title={full ? t('quotaReached', { quota: data.quota }) : undefined}
             >
               <Icon name="plus" />
-              New collection
+              {t('new')}
             </button>
           </div>
         )}
@@ -171,7 +185,7 @@ export function CollectionsPage() {
       {collections.isPending && (
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Loading your collections…
+          {t('loading')}
         </div>
       )}
 
@@ -181,12 +195,12 @@ export function CollectionsPage() {
             <Icon name="alert" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">Couldn&apos;t load your collections</div>
+            <div className="card-title">{t('loadFailed')}</div>
             <p className="card-desc">{collections.error.message}</p>
           </div>
           <button type="button" className="btn btn-outline" onClick={() => collections.refetch()}>
             <Icon name="refresh" />
-            Try again
+            {t('tryAgain')}
           </button>
         </div>
       )}
@@ -197,12 +211,8 @@ export function CollectionsPage() {
             <Icon name="boxes" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">Qdrant is not set up</div>
-            <p className="card-desc">
-              Collections are stored in Qdrant. The local stack runs one (<code>make dev</code>);
-              elsewhere, set <code>QDRANT_URL</code> (and <code>QDRANT_API_KEY</code> when it needs
-              one) on the server and its worker.
-            </p>
+            <div className="card-title">{t('noQdrant.title')}</div>
+            <p className="card-desc">{t.rich('noQdrant.description', { code: rich.code })}</p>
           </div>
         </div>
       )}
@@ -217,16 +227,12 @@ export function CollectionsPage() {
             <Icon name="boxes" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">No collection yet</div>
-            <p className="card-desc">
-              Pick a dataset and a split: a worker embeds every row, then you can search it, test
-              it, and query it from your own code. Start from a dataset&apos;s page with{' '}
-              <b>Build a collection</b>, or here.
-            </p>
+            <div className="card-title">{t('empty.title')}</div>
+            <p className="card-desc">{t.rich('empty.description', { b: rich.b })}</p>
           </div>
           <button type="button" className="btn btn-outline" onClick={() => setCreating(true)}>
             <Icon name="plus" />
-            New collection
+            {t('new')}
           </button>
         </div>
       )}
@@ -241,9 +247,8 @@ export function CollectionsPage() {
 
       {list.length > 0 && (
         <p className="hint coll-foot">
-          A collection reads its dataset at one commit: <Link href="/datasets">publish</Link> new
-          pairs, then rebuild it from its page.{' '}
-          {data && data.quota > 0 && `${list.length} of ${data.quota} collections.`}
+          {t.rich('footer', { link: datasetsLink })}{' '}
+          {data && data.quota > 0 && t('quota', { count: list.length, quota: data.quota })}
         </p>
       )}
     </div>

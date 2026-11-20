@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import {
   Table,
   TableBody,
@@ -16,30 +17,32 @@ interface DatasetsTableProps {
   datasets: DatasetResponse[]
 }
 
-function formatDate(value?: string | null): string {
+function formatDate(value: string | null | undefined, locale: string): string {
   if (!value) return '—'
   const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale)
 }
 
 export function DatasetsTable({ datasets }: DatasetsTableProps) {
+  const t = useTranslations('generate.table')
+  const locale = useLocale()
   return (
     <div className="border rounded-lg overflow-x-auto">
       <Table className="stack-table w-full">
-        <TableCaption>{datasets.length} draft(s)</TableCaption>
+        <TableCaption>{t('caption', { count: datasets.length })}</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead className="text-center">Items</TableHead>
-            <TableHead className="text-center">Version</TableHead>
-            <TableHead className="text-center">Created</TableHead>
+            <TableHead>{t('name')}</TableHead>
+            <TableHead>{t('description')}</TableHead>
+            <TableHead className="text-center">{t('items')}</TableHead>
+            <TableHead className="text-center">{t('version')}</TableHead>
+            <TableHead className="text-center">{t('created')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {datasets.map((dataset) => (
             <TableRow key={dataset.id}>
-              <TableCell className="font-medium" data-label="Name">
+              <TableCell className="font-medium" data-label={t('name')}>
                 {/* Drafts are keyed by name — the detail route takes that
                     name, URL-encoded. */}
                 <Link
@@ -52,18 +55,18 @@ export function DatasetsTable({ datasets }: DatasetsTableProps) {
               {/* Descriptions wrap rather than stretching the table. */}
               <TableCell
                 className="min-w-64 whitespace-normal text-muted-foreground"
-                data-label="Description"
+                data-label={t('description')}
               >
                 {dataset.description || '—'}
               </TableCell>
-              <TableCell className="text-center" data-label="Items">
+              <TableCell className="text-center" data-label={t('items')}>
                 {dataset.qa_sources_count ?? '—'}
               </TableCell>
-              <TableCell className="text-center" data-label="Version">
+              <TableCell className="text-center" data-label={t('version')}>
                 {dataset.version != null ? `v${dataset.version}` : '—'}
               </TableCell>
-              <TableCell className="text-center" data-label="Created">
-                {formatDate(dataset.created_at)}
+              <TableCell className="text-center" data-label={t('created')}>
+                {formatDate(dataset.created_at, locale)}
               </TableCell>
             </TableRow>
           ))}

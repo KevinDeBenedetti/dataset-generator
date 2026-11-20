@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
 import { ModelSelect } from '@/components/app/model-select'
@@ -11,9 +11,14 @@ import {
   useTestModel,
   useUpdateDefaultModel,
 } from '@/hooks/use-models'
+import { richLink } from '@/lib/rich'
 import type { ModelsResponse, ModelTestResponse, ProviderOut } from '@/api/types'
 
+// The `<code>` tag of the rich messages: a monospace reference or endpoint.
+const codeMono = (chunks: ReactNode) => <code className="mono">{chunks}</code>
+
 function ProviderCard({ provider }: { provider: ProviderOut }) {
+  const t = useTranslations('models')
   const [selected, setSelected] = useState(provider.models[0]?.ref ?? '')
   const [result, setResult] = useState<ModelTestResponse | null>(null)
   const testMutation = useTestModel()
@@ -30,31 +35,33 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
         <div>
           <div className="card-title">{provider.label}</div>
           <div className="card-desc">
-            References start with <code className="mono">{provider.name}:</code>
+            {t.rich('provider.references', { name: provider.name, code: codeMono })}
           </div>
         </div>
         <span className={`badge badge-${provider.configured ? 'success' : 'destructive'}`}>
           <span className="dot" />
-          {provider.configured ? 'Configured' : 'Not configured'}
+          {provider.configured ? t('provider.configured') : t('provider.notConfigured')}
         </span>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {(provider.missing ?? []).length > 0 && (
           <p className="hint" style={{ color: 'var(--destructive)' }}>
-            Add {(provider.missing ?? []).join(', ')} in <Link href="/settings">Settings</Link> to
-            enable it.
+            {t.rich('provider.missing', {
+              missing: (provider.missing ?? []).join(', '),
+              link: richLink('/settings'),
+            })}
           </p>
         )}
         {provider.configured && provider.endpoint && (
           <p className="hint">
-            Calls go to <code className="mono">{provider.endpoint}</code>
-            {provider.lent
-              ? " with the server's key: you saved none of your own. Save yours in Settings to use your own endpoint instead."
-              : ' with your own key.'}
+            {t.rich(provider.lent ? 'provider.endpointLent' : 'provider.endpointOwn', {
+              endpoint: provider.endpoint,
+              code: codeMono,
+            })}
           </p>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {provider.models.length === 0 && <span className="muted">No models configured.</span>}
+          {provider.models.length === 0 && <span className="muted">{t('provider.noModels')}</span>}
           {provider.models.map((m) => (
             <span key={m.ref} className="tag mono">
               {m.label}
@@ -63,9 +70,9 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
         </div>
         {(provider.embedding_models ?? []).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <span className="hint">Embeddings</span>
+            <span className="hint">{t('provider.embeddings')}</span>
             {(provider.embedding_models ?? []).map((m) => (
-              <span key={m.ref} className="tag mono" title="Embedding model">
+              <span key={m.ref} className="tag mono" title={t('provider.embeddingTitle')}>
                 {m.label}
               </span>
             ))}
@@ -81,7 +88,7 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
             className="input"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
-            aria-label={`${provider.label} model to test`}
+            aria-label={t('provider.testLabel', { provider: provider.label })}
             disabled={!provider.configured || testMutation.isPending}
           >
             {provider.models.map((m) => (
@@ -100,12 +107,14 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
               name={testMutation.isPending ? 'loader' : 'play'}
               className={testMutation.isPending ? 'animate-spin' : undefined}
             />
-            Test
+            {t('provider.test')}
           </button>
         </div>
         {result && (
           <p className="hint" style={result.ok ? undefined : { color: 'var(--destructive)' }}>
-            {result.ok ? `“${result.text}”` : result.error} · {result.latency_ms} ms
+            {result.ok ? t('provider.testReply', { text: String(result.text) }) : result.error}
+            {' · '}
+            {result.latency_ms} ms
             {result.usage?.total_cost_usd != null &&
               ` · $${Number(result.usage.total_cost_usd).toFixed(4)}`}
           </p>
@@ -115,16 +124,19 @@ function ProviderCard({ provider }: { provider: ProviderOut }) {
   )
 }
 
-const pct = (value: number) => `${Math.round(value * 100)}%`
+// A 0–1 score as a whole percentage; the messages carry the `%` sign.
+const pct = (value: number) => Math.round(value * 100)
 
 /** The checks' embedding model: picked among your endpoint's, measured on the
  * built-in test set, and used with the thresholds the measurement put. */
 function EmbeddingModel({ data }: { data: ModelsResponse }) {
+  const t = useTranslations('models')
+  const tc = useTranslations('common')
   const options = data.providers.flatMap((p) => p.embedding_models ?? []).map((m) => m.ref)
   const current = data.embedding_model ?? ''
   const [picked, setPicked] = useState(current || options[0] || '')
   const choose = useEmbeddingModel()
-  const t = data.embedding_thresholds
+  const thresholds = data.embedding_thresholds
   const report = data.embedding_calibration
 
   const measure = () =>
@@ -133,8 +145,11 @@ function EmbeddingModel({ data }: { data: ModelsResponse }) {
         const r = next.embedding_calibration
         toast.success(
           r
-            ? `Measured: duplicates from ${pct(r.dedup.threshold)}, grounding below ${pct(r.grounding.threshold)} held out`
-            : 'Embedding model saved',
+            ? t('embedding.measuredToast', {
+                dedup: pct(r.dedup.threshold),
+                grounding: pct(r.grounding.threshold),
+              })
+            : t('embedding.saved'),
         )
       },
       onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
@@ -143,11 +158,11 @@ function EmbeddingModel({ data }: { data: ModelsResponse }) {
   return (
     <div className="field">
       <label htmlFor="embedding-model" className="label">
-        Embedding model
+        {t('embedding.label')}
       </label>
       {options.length === 0 ? (
         <div className="input mono" aria-readonly="true">
-          None
+          {tc('none')}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 8 }}>
@@ -169,29 +184,35 @@ function EmbeddingModel({ data }: { data: ModelsResponse }) {
             className="btn btn-outline"
             disabled={!picked || choose.isPending}
             onClick={measure}
-            title="Measure its thresholds on the built-in test set, then use it"
+            title={t('embedding.measureTitle')}
           >
             <Icon
               name={choose.isPending ? 'loader' : 'check'}
               className={choose.isPending ? 'animate-spin' : undefined}
             />
-            Measure and use
+            {t('embedding.measure')}
           </button>
         </div>
       )}
       <div className="hint">
         {current ? (
           <>
-            {current.replace(/^openai:/, '')}
-            {data.embedding_chosen ? ' (yours)' : ' (the server’s)'}: a rephrasing from{' '}
-            {pct(t.dedup)} is dropped, an answer below {pct(t.grounding)} of its source is held for
-            review, a section below {pct(t.uncovered)} is asked about.{' '}
+            {t(data.embedding_chosen ? 'embedding.thresholdsYours' : 'embedding.thresholdsServer', {
+              model: current.replace(/^openai:/, ''),
+              dedup: pct(thresholds.dedup),
+              grounding: pct(thresholds.grounding),
+              uncovered: pct(thresholds.uncovered),
+            })}{' '}
             {report
-              ? `Measured on the built-in test set: they separate rephrasings ${pct(report.dedup.accuracy)}, faithful answers ${pct(report.grounding.accuracy)} and covered sections ${pct(report.uncovered.accuracy)} of the time.`
-              : 'Default thresholds: not measured for this model yet.'}
+              ? t('embedding.measured', {
+                  dedup: pct(report.dedup.accuracy),
+                  grounding: pct(report.grounding.accuracy),
+                  uncovered: pct(report.uncovered.accuracy),
+                })
+              : t('embedding.notMeasured')}
           </>
         ) : (
-          'None on your endpoint: the duplicate and grounding checks compare the words, and no collection can be built.'
+          t('embedding.none')
         )}
       </div>
       {data.embedding_chosen && (
@@ -202,7 +223,7 @@ function EmbeddingModel({ data }: { data: ModelsResponse }) {
           disabled={choose.isPending}
           onClick={() => choose.mutate(null)}
         >
-          Back to the server’s model
+          {t('embedding.backToServer')}
         </button>
       )}
     </div>
@@ -210,6 +231,8 @@ function EmbeddingModel({ data }: { data: ModelsResponse }) {
 }
 
 export default function ModelsPage() {
+  const t = useTranslations('models')
+  const tc = useTranslations('common')
   const modelsQuery = useModels(true)
   const updateMutation = useUpdateDefaultModel()
   // What the user picked, until it is saved; null shows the saved LLM.
@@ -223,7 +246,7 @@ export default function ModelsPage() {
     updateMutation.mutate(draft, {
       onSuccess: () => {
         setEdit(null)
-        toast.success('LLM saved')
+        toast.success(t('defaults.saved'))
       },
       onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
     })
@@ -232,11 +255,8 @@ export default function ModelsPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Models</h1>
-          <p className="page-sub">
-            Your LLM and the embedding model, on an OpenAI-compatible endpoint (OpenAI, or a gateway
-            such as LiteLLM). A generation can still pick another model.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
         <div className="page-actions">
           <button
@@ -249,25 +269,25 @@ export default function ModelsPage() {
               name="refresh"
               className={modelsQuery.isRefetching ? 'animate-spin' : undefined}
             />
-            Refresh
+            {tc('refresh')}
           </button>
         </div>
       </div>
 
       {modelsQuery.error && (
         <p className="hint" style={{ color: 'var(--destructive)', marginBottom: 18 }}>
-          {modelsQuery.error instanceof Error ? modelsQuery.error.message : 'Failed to load models'}
+          {modelsQuery.error instanceof Error ? modelsQuery.error.message : t('loadFailed')}
         </p>
       )}
-      {modelsQuery.isPending && <p className="muted">Loading models…</p>}
+      {modelsQuery.isPending && <p className="muted">{t('loading')}</p>}
 
       {modelsQuery.data && (
         <>
           <div className="card" style={{ marginBottom: 24 }}>
             <div className="card-head">
               <div>
-                <div className="card-title">Your models</div>
-                <div className="card-desc">Used whenever a request doesn&apos;t name a model.</div>
+                <div className="card-title">{t('defaults.title')}</div>
+                <div className="card-desc">{t('defaults.description')}</div>
               </div>
             </div>
             <div
@@ -280,7 +300,7 @@ export default function ModelsPage() {
             >
               <div className="field">
                 <label htmlFor="default-llm" className="label">
-                  LLM
+                  {t('defaults.llm')}
                 </label>
                 <ModelSelect
                   id="default-llm"
@@ -290,10 +310,7 @@ export default function ModelsPage() {
                   disabled={updateMutation.isPending}
                   className="input"
                 />
-                <div className="hint">
-                  Every step: cleaning, Q&amp;A, scoring, the jobs, and the transcription of PDF and
-                  image pages — so it must read images.
-                </div>
+                <div className="hint">{t('defaults.llmHint')}</div>
               </div>
               <EmbeddingModel data={modelsQuery.data} />
             </div>
@@ -308,7 +325,7 @@ export default function ModelsPage() {
                   name={updateMutation.isPending ? 'loader' : 'check'}
                   className={updateMutation.isPending ? 'animate-spin' : undefined}
                 />
-                Save
+                {tc('save')}
               </button>
             </div>
           </div>

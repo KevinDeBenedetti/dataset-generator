@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from server.core.config import _env
 from server.services.credentials import GITHUB_TOKEN, Credentials
-import httpx
+import httpx2
 
 from server.jobs.github_snapshot import (
     CorpusGitHubClient,
@@ -888,7 +888,7 @@ async def _build_from_recipe(
         name = str(source.get("repo") or "")
         try:
             repo = await client.fetch_repo(username, name)
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             return None, [], [f"{name}: {exc}"]
         docs = source.get("docs")
         if docs is None:

@@ -64,6 +64,27 @@ export function runMetric(metrics: unknown, label: string): string | number | nu
   return null
 }
 
+/** A metric found by its English label, shown in the reader's language: the
+ * value at the same place in `metrics_display` (the server translates it),
+ * else the stored one, else null. */
+export function shownMetric(
+  result: { metrics?: unknown; metrics_display?: unknown } | null | undefined,
+  label: string,
+): string | number | null {
+  const metrics = result?.metrics
+  if (!Array.isArray(metrics)) return null
+  const index = metrics.findIndex((entry) => Array.isArray(entry) && entry[0] === label)
+  if (index < 0) return null
+  const shown: unknown = Array.isArray(result?.metrics_display)
+    ? result.metrics_display[index]
+    : undefined
+  if (Array.isArray(shown)) {
+    const value: unknown = shown[1]
+    if (typeof value === 'string' || typeof value === 'number') return value
+  }
+  return runMetric(metrics, label)
+}
+
 /** Whether the form differs from what is saved (always, before a first save). */
 export function isDirty(
   form: DatasetForm,

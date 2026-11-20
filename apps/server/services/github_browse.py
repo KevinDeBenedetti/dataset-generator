@@ -22,7 +22,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, Hashable, List, Optional, TypeVar
 
-import httpx
+import httpx2
 
 from server.jobs.github_snapshot import (
     DOC_EXTENSIONS,
@@ -127,7 +127,7 @@ async def _with_client(
         if "not found" in message:
             raise GitHubNotFoundError(message) from exc
         raise GitHubUnavailableError(message) from exc
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         raise GitHubUnavailableError(f"GitHub did not answer: {exc}") from exc
     finally:
         await client.close()

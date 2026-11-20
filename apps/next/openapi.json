@@ -8604,7 +8604,23 @@
             },
             "type": "array",
             "title": "Metrics",
-            "description": "(label, value) pairs, in display order"
+            "description": "(label, value) pairs in English, in display order: what a client looks a metric up by"
+          },
+          "metrics_display": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {}
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Metrics Display",
+            "description": "The same pairs in the reader's language, for display"
           },
           "errors": {
             "items": {

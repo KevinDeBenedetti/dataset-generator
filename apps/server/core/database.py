@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
@@ -76,7 +76,6 @@ SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
 )
 Base = declarative_base()
-Session = scoped_session(SessionLocal)
 
 
 def get_db():
@@ -89,7 +88,12 @@ def get_db():
 
 @contextmanager
 def get_scoped_db():
-    db = Session()
+    """A session of its own for code outside a request (jobs, sweeps, checks).
+
+    Never a shared one: a helper called inside the block opens and closes its
+    own, and what the caller still holds stays attached to the caller's.
+    """
+    db = SessionLocal()
     try:
         yield db
     finally:

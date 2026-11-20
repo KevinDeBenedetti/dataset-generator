@@ -7,7 +7,11 @@ and the client gets what failed, in words.
 
 import logging
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from server.core.i18n import request_locale, translate_message
 
 logger = logging.getLogger("server.api")
 
@@ -22,3 +26,17 @@ def internal_error(what: str, status_code: int = 500) -> HTTPException:
         status_code=status_code,
         detail=f"{what} failed. Try again; if it keeps failing, the server logs say why.",
     )
+
+
+async def translated_http_exception(request: Request, exc: Exception):
+    """FastAPI's HTTP error response, its ``detail`` in the reader's language
+    when it is one of the server's own messages (core/locales); any other
+    detail — an upstream error, a validation list — is sent as it is.
+    Registered for Starlette's HTTPException (main.py)."""
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc  # registered for HTTPException only
+    if isinstance(exc.detail, str):
+        exc.detail = (
+            translate_message(exc.detail, request_locale(request)) or exc.detail
+        )
+    return await http_exception_handler(request, exc)

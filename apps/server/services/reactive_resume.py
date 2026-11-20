@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urljoin, urlsplit
 
-import httpx
+import httpx2
 
 from server.core.config import config
 
@@ -101,7 +101,7 @@ async def _get(
     try:
         # Redirects are not followed: the key opens the whole account, and the
         # client would send it on to wherever a redirect points.
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             timeout=TIMEOUT_SECONDS, follow_redirects=False
         ) as client:
             response = await client.get(
@@ -113,11 +113,11 @@ async def _get(
                     "User-Agent": "dataset-generator",
                 },
             )
-    except httpx.TimeoutException:
+    except httpx2.TimeoutException:
         raise ResumeUnavailableError(
             f"{instance_origin()} did not answer within {TIMEOUT_SECONDS:.0f} s"
         ) from None
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         raise ResumeUnavailableError(
             f"{instance_origin()} can't be reached ({type(exc).__name__}): "
             "check REACTIVE_RESUME_URL"

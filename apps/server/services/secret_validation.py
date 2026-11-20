@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, replace
 from typing import Any
 
-import httpx
+import httpx2
 from pydantic import SecretStr
 
 from server.services.providers.openai import OpenAIProvider
@@ -86,7 +86,7 @@ async def _huggingface(creds: Credentials) -> Check:
 
 async def _github(creds: Credentials) -> Check:
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_S, trust_env=False) as client:
+        async with httpx2.AsyncClient(timeout=_TIMEOUT_S, trust_env=False) as client:
             response = await client.get(
                 "https://api.github.com/user",
                 headers={
@@ -94,7 +94,7 @@ async def _github(creds: Credentials) -> Check:
                     "Accept": "application/vnd.github+json",
                 },
             )
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         return Check(False, True, "Could not reach GitHub to check the token")
     if response.status_code == 200:
         return Check(True, True, "The token works")

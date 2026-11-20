@@ -7,7 +7,7 @@ raises the API rate limit — only public information is ever read.
 
 from typing import List, Optional
 
-import httpx
+import httpx2
 
 GITHUB_API = "https://api.github.com"
 
@@ -22,7 +22,7 @@ class GitHubService:
         }
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        self.client = httpx.AsyncClient(
+        self.client = httpx2.AsyncClient(
             base_url=GITHUB_API, headers=headers, timeout=timeout
         )
 

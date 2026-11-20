@@ -1,0 +1,1581 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "close": "Close",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "loading": "Loading…",
+    "search": "Search",
+    "copy": "Copy",
+    "copied": "Copied",
+    "back": "Back",
+    "open": "Open",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "all": "All",
+    "previous": "Previous",
+    "next": "Next",
+    "download": "Download",
+    "publish": "Publish",
+    "error": "Something went wrong",
+    "unknownError": "Unknown error"
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch language: {language}",
+    "en": "English",
+    "fr": "Français"
+  },
+  "theme": {
+    "label": "Theme",
+    "toggle": "Toggle theme"
+  },
+  "nav": {
+    "groups": {
+      "platform": "Platform",
+      "quality": "Quality",
+      "configuration": "Configuration",
+      "admin": "Admin",
+      "account": "Account"
+    },
+    "overview": "Overview",
+    "datasets": "Datasets",
+    "collections": "Collections",
+    "drafts": "Drafts",
+    "github": "GitHub",
+    "resume": "Resume",
+    "generate": "Generate",
+    "qualityControl": "Quality control",
+    "verifyQa": "Verify QA",
+    "prompts": "LLM Prompts",
+    "models": "Models",
+    "backoffice": "Backoffice",
+    "settings": "Settings",
+    "legalNotice": "Legal notice"
+  },
+  "shell": {
+    "navigation": "Navigation",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation",
+    "hubConnected": "Connected",
+    "hubOff": "Off",
+    "loading": "Loading…",
+    "signOut": "Sign out",
+    "documentation": "Documentation",
+    "notifications": "Notifications",
+    "searchPlaceholder": "Search datasets, sources, jobs…",
+    "newDataset": "New dataset",
+    "roles": {
+      "admin": "admin",
+      "user": "user"
+    }
+  },
+  "login": {
+    "back": "Back to the homepage",
+    "title": "Sign in",
+    "description": "Access your datasets",
+    "descriptionSignup": "Access your datasets — a first sign-in creates your account.",
+    "loadingOptions": "Loading sign-in options…",
+    "optionsFailed": "Couldn't load the sign-in options from {url}{reason}. Check that the API is running, then retry.",
+    "retry": "Retry",
+    "continueWith": "Continue with {provider}",
+    "noMethod": "No sign-in method is configured.",
+    "or": "OR",
+    "email": "Email",
+    "password": "Password",
+    "failed": "Login failed",
+    "submit": "Sign in",
+    "errors": {
+      "signup_closed": "New accounts are not open at the moment.",
+      "domain_not_allowed": "Accounts are limited to certain email domains.",
+      "no_verified_email": "Your account at this provider has no verified email address. Verify one there, then try again.",
+      "link_required": "An account with this email already exists. Sign in to it another way, then link this provider from Settings.",
+      "identity_in_use": "This sign-in is already linked to another account.",
+      "account_disabled": "This account is disabled.",
+      "session_expired": "Your session expired. Sign in again.",
+      "sso_failed": "Sign-in did not complete. Please try again.",
+      "no_subject": "The provider did not identify your account."
+    }
+  },
+  "home": {
+    "nav": {
+      "features": "Features",
+      "pipeline": "Pipeline",
+      "exports": "Exports",
+      "docs": "Docs",
+      "dashboardShort": "Dashboard",
+      "openDashboard": "Open the dashboard",
+      "openMenu": "Open the menu",
+      "closeMenu": "Close the menu"
+    },
+    "hero": {
+      "badge": "File / GitHub → LLM → dataset pipeline, open-source",
+      "title": "Clean Q/A datasets,",
+      "titleMuted": "straight from your files and repos.",
+      "lead": "Mine files and GitHub repos, generate context-aware question-answer pairs with an LLM, catch duplicates, and export to JSONL or CSV — all from a single interface.",
+      "generate": "Generate a dataset",
+      "viewDashboard": "View the dashboard",
+      "languages": "languages — FR · EN · ES · DE",
+      "coverage": "test coverage"
+    },
+    "terminal": {
+      "comment": "# Run the pipeline on a source"
+    },
+    "features": {
+      "eyebrow": "// features",
+      "title": "The whole pipeline, without gluing scripts together.",
+      "lead": "Each step is a module: ingestion, LLM client, data manager, export. Compose them from the UI or the REST API.",
+      "items": {
+        "ingestion": {
+          "title": "Multi-source ingestion",
+          "description": "File upload (PDF/image, read by your LLM) or a GitHub account's public docs."
+        },
+        "generation": {
+          "title": "LLM Q/A generation",
+          "description": "Configurable prompts, your choice of models, and question-answer pairs grounded in the source."
+        },
+        "duplicates": {
+          "title": "Duplicate detection",
+          "description": "Semantic similarity filters out redundancy before pairs reach your dataset."
+        },
+        "languages": {
+          "title": "Multi-language",
+          "description": "Generation in French, English, Spanish and German, with localized prompts."
+        },
+        "quality": {
+          "title": "Quality control",
+          "description": "Automatic validation and filtering, quality scores and configurable thresholds."
+        },
+        "api": {
+          "title": "REST API",
+          "description": "Programmatic access to embed generation into your own workflows."
+        }
+      }
+    },
+    "workflow": {
+      "eyebrow": "// pipeline",
+      "title": "Six steps, from raw page to versioned dataset.",
+      "steps": {
+        "ingestion": {
+          "title": "Ingestion",
+          "description": "Read a file or fetch GitHub docs."
+        },
+        "cleaning": {
+          "title": "Cleaning",
+          "description": "Normalize, extract the useful content."
+        },
+        "generation": {
+          "title": "Generation",
+          "description": "Q/A pairs via LLM and prompts."
+        },
+        "quality": {
+          "title": "Quality",
+          "description": "Validation and deduplication."
+        },
+        "export": {
+          "title": "Export",
+          "description": "JSON, CSV, JSONL, dataset copies."
+        },
+        "versioning": {
+          "title": "Versioning",
+          "description": "Storage and metadata tracking."
+        }
+      }
+    },
+    "formats": {
+      "eyebrow": "// exports",
+      "title": "Send your data wherever you need it.",
+      "items": {
+        "hub": "Private dataset repos, versioned",
+        "json": "Standard data interchange",
+        "csv": "Tabular analysis and review",
+        "api": "Extensible custom formats"
+      }
+    },
+    "cta": {
+      "title": "Build your first dataset in minutes.",
+      "lead": "Pick a source, run the pipeline, review the Q/A pairs and export. Without leaving the interface.",
+      "start": "Start generating",
+      "browse": "Browse datasets"
+    },
+    "footer": {
+      "tagline": "Automated question-answer dataset generation from files and repos, via LLMs. Duplicate detection and exports.",
+      "product": "Product",
+      "resources": "Resources",
+      "legal": "Legal",
+      "dashboard": "Dashboard",
+      "generate": "Generate",
+      "datasets": "Datasets",
+      "verifyQa": "Verify QA",
+      "documentation": "Documentation",
+      "restApi": "REST API",
+      "changelog": "Changelog",
+      "legalNotice": "Legal notice",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "copyright": "© 2026 DatasetGen. Open-source licensed."
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "An overview of your datasets and recent activity.",
+    "stats": {
+      "hubDatasets": "Datasets on Hugging Face",
+      "hubHint": "{namespace} · {count} private",
+      "downloads": "Downloads",
+      "downloadsHint": "last 30 days",
+      "drafts": "Drafts to review",
+      "draftsHint": "generated, not published yet"
+    },
+    "hub": {
+      "connect": "Connect Hugging Face",
+      "noAnswer": "Hugging Face didn't answer",
+      "connectHint": "Your datasets are read straight from the Hub, with your own token.",
+      "tryAgain": "Try again in a moment.",
+      "addToken": "Add your token in Settings"
+    },
+    "actions": {
+      "generate": "Generate",
+      "browse": "Browse datasets"
+    },
+    "recent": {
+      "title": "Recently updated datasets",
+      "viewAll": "View all",
+      "connect": "Connect Hugging Face to see your datasets here.",
+      "empty": "Nothing published yet. Generate Q/A pairs, review the draft, then publish it.",
+      "generate": "Generate a dataset"
+    },
+    "drafts": {
+      "title": "Waiting for review",
+      "all": "All drafts",
+      "empty": "No draft waiting.",
+      "pairs": "{count, plural, one {# pair} other {# pairs}}"
+    },
+    "activity": {
+      "title": "Drafts generated",
+      "range": "last {count} weeks",
+      "thisWeek": "this week",
+      "weeksAgo": "{count}w ago",
+      "barTitle": "{label}: {value}"
+    },
+    "languages": {
+      "title": "Languages",
+      "likes": "{count, plural, one {# like} other {# likes}}",
+      "unknown": "unknown"
+    },
+    "time": {
+      "today": "today",
+      "days": "{count}d ago",
+      "weeks": "{count}w ago",
+      "months": "{count}mo ago",
+      "years": "{count}y ago"
+    }
+  },
+  "generate": {
+    "page": {
+      "title": "Generate a dataset",
+      "addDataTo": "Add data to {target}",
+      "draftReady": "Draft ready: review the pairs before they go to Hugging Face.",
+      "reviewDraft": "Review the draft",
+      "generatedDataset": "Generated Dataset",
+      "footnote": "Datasets from your GitHub account (Q&A pairs, the knowledge corpus) are generated on the <github>GitHub page</github>; duplicates across a dataset are analysed and cleaned on <quality>Quality control</quality>."
+    },
+    "form": {
+      "draftReady": "Draft ready: review it before it goes to Hugging Face",
+      "title": "Title",
+      "titlePlaceholder": "Product documentation",
+      "target": "Publishes to (Hugging Face dataset)",
+      "targetHint": "The pairs become a draft you review before they are added to this dataset (created private if it doesn't exist).",
+      "sources": {
+        "file": "File",
+        "url": "Web page"
+      },
+      "fileHint": "PDF or image — each page is transcribed by the model, then mined for Q&A.",
+      "urlHint": "One public page (no crawling) — its text is cleaned, then mined for Q&A.",
+      "advanced": "Advanced options",
+      "model": "Model",
+      "targetLanguage": "Target Language",
+      "selectLanguage": "Select a language",
+      "languages": {
+        "fr": "French",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German"
+      },
+      "similarityThreshold": "Similarity Threshold",
+      "similarityThresholdLabel": "Similarity threshold",
+      "submit": "Generate draft"
+    },
+    "table": {
+      "caption": "{count} draft(s)",
+      "name": "Name",
+      "description": "Description",
+      "items": "Items",
+      "version": "Version",
+      "created": "Created"
+    },
+    "empty": {
+      "title": "No draft waiting",
+      "hint": "Generate Q/A pairs to start a draft"
+    },
+    "error": {
+      "title": "Error",
+      "fallback": "An error occurred"
+    },
+    "timeline": {
+      "title": "Pipeline",
+      "viewContent": "View extracted content",
+      "hideContent": "Hide extracted content"
+    },
+    "qa": {
+      "listTitle": "Questions & Answers",
+      "found": "{count} question-answer pair(s) found",
+      "listEmpty": "No question-answer pairs found for this dataset.",
+      "heading": "Q{index}: {question}",
+      "confidence": "Confidence: {percent}%",
+      "needsReview": "Needs review · grounding {percent}%",
+      "needsReviewHint": "The answer is far from the source text — check it before relying on it",
+      "shortId": "ID: {id}...",
+      "question": "Question",
+      "answer": "Answer",
+      "context": "Context",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "additionalInfo": "Additional Information",
+      "source": "Source:",
+      "fullId": "Full ID:",
+      "metadata": "Metadata:"
+    },
+    "runs": {
+      "title": "Recent runs",
+      "description": "Recorded generations — one row per run.",
+      "loading": "Loading runs…",
+      "loadFailed": "Failed to load generation runs",
+      "empty": "No generation runs recorded yet.",
+      "dataset": "Dataset",
+      "version": "Version",
+      "pairs": "Pairs",
+      "source": "Source",
+      "started": "Started"
+    },
+    "result": {
+      "empty": "No results available",
+      "model": "Model: {model}",
+      "threshold": "Threshold: {value}",
+      "language": "Language: {language}",
+      "pagesCrawled": "Pages crawled: {count}",
+      "saved": "Saved: {run} ({count} pairs)",
+      "totalQuestions": "<strong>Total questions:</strong> {count}",
+      "processingTime": "<strong>Processing time:</strong> {seconds}s",
+      "pairsTitle": "Q&A Pairs",
+      "question": "Q: {text}",
+      "answer": "A: {text}"
+    }
+  },
+  "datasets": {
+    "title": "Datasets",
+    "private": "Private",
+    "public": "Public",
+    "gated": "Gated",
+    "tryAgain": "Try again",
+    "latestVersion": "Latest version",
+    "connect": {
+      "title": "Connect Hugging Face",
+      "description": "Datasets are read straight from the Hugging Face Hub, with your own access token.",
+      "openSettings": "Open Settings"
+    },
+    "list": {
+      "subtitle": "Every dataset is read from Hugging Face, the source of truth. Generated data waits in <drafts>Drafts</drafts> until you review and publish it.",
+      "namespace": "Namespace",
+      "generate": "Generate",
+      "loadFailed": "Couldn't list your datasets",
+      "stats": {
+        "datasets": "Datasets",
+        "private": "Private",
+        "downloads": "Downloads, last 30 days",
+        "storage": "Storage"
+      },
+      "searchPlaceholder": "Search {namespace}'s datasets",
+      "visibility": "Visibility",
+      "sortBy": "Sort by",
+      "sorts": {
+        "updated": "Recently updated",
+        "name": "Name",
+        "downloads": "Most downloaded",
+        "likes": "Most liked",
+        "size": "Largest"
+      },
+      "emptyTitle": "No dataset in {namespace} yet",
+      "emptyDescription": "Generate one from a file, a web page or GitHub, review it in Drafts, then publish it to Hugging Face: it shows up here.",
+      "drafts": "Drafts",
+      "noMatch": "No dataset matches these filters.",
+      "downloadsTitle": "Downloads, last 30 days",
+      "likesTitle": "Likes"
+    },
+    "page": {
+      "back": "Datasets",
+      "sections": "Dataset sections",
+      "tabs": {
+        "data": "Data",
+        "card": "Card",
+        "stats": "Statistics",
+        "files": "Files",
+        "history": "History"
+      },
+      "version": "Version",
+      "branches": "Branches",
+      "tags": "Tags",
+      "commits": "Commits",
+      "commitFallback": "commit",
+      "snippetCopied": "Python snippet copied",
+      "snippetPrivateHint": "Private dataset: sign in first with `hf auth login`.",
+      "clipboardRefused": "The browser refused access to the clipboard",
+      "updated": "Updated {time}",
+      "files": "{count} files",
+      "downloads": "{count} downloads (30 days)",
+      "likes": "{count} likes",
+      "license": "license: {license}",
+      "addData": "Add data",
+      "buildCollection": "Build a collection",
+      "useInPython": "Use in Python",
+      "reading": "Reading {repo} from Hugging Face…",
+      "notFound": "Dataset not found",
+      "loadFailed": "Couldn't load this dataset",
+      "earlierVersion": "You are viewing an earlier version, commit <mono>{sha}</mono>.",
+      "backToLatest": "Back to the latest"
+    },
+    "history": {
+      "compareTitle": "Changes from <mono>{base}</mono> to <mono>{head}</mono>",
+      "split": "{split} split",
+      "defaultSplit": "Default split",
+      "matchedById": "rows matched by id",
+      "matchedByContent": "rows matched by content",
+      "closeComparison": "Close the comparison",
+      "readingBoth": "Reading both versions…",
+      "addedCount": "<b>+{count}</b> added",
+      "removedCount": "<b>−{count}</b> removed",
+      "changedCount": "<b>~{count}</b> changed",
+      "unchangedCount": "{unchanged} unchanged · {base} → {head} rows",
+      "identical": "The rows of this split are identical in both versions.",
+      "added": "Added",
+      "changed": "Changed",
+      "removed": "Removed",
+      "firstShown": "first {count} shown",
+      "versions": "Versions",
+      "versionsDescription": "Every commit to the repo is a version of the dataset, newest first.",
+      "mostRecent": "The {shown} most recent of {total}.",
+      "loading": "Loading the history…",
+      "untitledCommit": "Untitled commit",
+      "latest": "Latest",
+      "viewing": "Viewing",
+      "browse": "Browse",
+      "changes": "Changes"
+    },
+    "card": {
+      "empty": "This dataset has no card (README.md). A card describes the data, its sources and its license; the Hub shows it on the dataset page.",
+      "metadata": "Card metadata",
+      "metadataHint": "{count} field(s), from the README front matter"
+    },
+    "markdown": {
+      "image": "image"
+    }
+  },
+  "viewer": {
+    "dataViewer": {
+      "config": "Config",
+      "split": "Split",
+      "extra": "extra",
+      "ops": {
+        "eq": "is",
+        "ne": "is not",
+        "contains": "contains",
+        "null": "is empty",
+        "not_null": "is not empty"
+      },
+      "noFilterableColumn": "No column of this split can be filtered.",
+      "column": "Column",
+      "condition": "Condition",
+      "value": "Value",
+      "choose": "Choose…",
+      "apply": "Apply",
+      "rowCount": "{count, plural, one {{formatted} row} other {{formatted} rows}}",
+      "empty": "empty",
+      "valueCount": "{count, plural, one {{formatted} value} other {{formatted} values}}",
+      "rangeChars": "{min}–{max} chars",
+      "rangeItems": "{min}–{max} items",
+      "sortBy": "Sort by {column}",
+      "openRow": "Open row {index}",
+      "noRows": "No rows",
+      "noRowsFiltered": "No rows (filtered from {total})",
+      "rowsRange": "Rows {from}–{to} of {matched}",
+      "rowsRangeFiltered": "Rows {from}–{to} of {matched} (filtered from {total})",
+      "rowsPerPage": "Rows per page",
+      "perPage": "{size} / page",
+      "firstPage": "First page",
+      "lastPage": "Last page",
+      "noDataTitle": "No data file to show",
+      "noDataDesc": "This revision has no JSONL, JSON, CSV or Parquet file the viewer can read. The Files tab lists what the repo holds.",
+      "searchPlaceholder": "Search every text field…",
+      "filter": "Filter",
+      "layout": "Layout",
+      "layoutQa": "Q/A",
+      "layoutTable": "Table",
+      "removeFilter": "Remove filter {filter}",
+      "removeSorting": "Remove sorting",
+      "sortedBy": "sorted by {column} {arrow}",
+      "clearFilters": "Clear filters",
+      "loading": "Loading {split} from Hugging Face…",
+      "loadingSized": "Loading {split} ({size}) from Hugging Face…",
+      "errors": {
+        "tooLarge": "Too large for the in-app viewer",
+        "notTabular": "This split can't be read as a table",
+        "badFilter": "This filter does not apply",
+        "loadFailed": "Couldn't load the rows"
+      },
+      "openOnHub": "Open on Hugging Face",
+      "tryAgain": "Try again",
+      "noMatchTitle": "No row matches",
+      "emptySplit": "This split is empty.",
+      "noMatchDesc": "None of the {total} rows matches the search and filters.",
+      "clearSearchAndFilters": "Clear search and filters"
+    },
+    "rowDrawer": {
+      "title": "Row {index}",
+      "hint": "{split} split · ←/→ to move, Esc to close",
+      "hintLoading": "{split} split · ←/→ to move, Esc to close · loading the full row…",
+      "previousRow": "Previous row",
+      "nextRow": "Next row",
+      "copyAsJson": "Copy as JSON",
+      "copied": "Row {index} copied as JSON",
+      "clipboardRefused": "The browser refused access to the clipboard",
+      "question": "Question",
+      "answer": "Answer",
+      "context": "Context",
+      "empty": "empty"
+    },
+    "charts": {
+      "binLabel": "{range}: {count} ({share})",
+      "range": "Range",
+      "rangeUnit": "Range ({unit})",
+      "rows": "Rows",
+      "share": "Share"
+    },
+    "stats": {
+      "min": "min",
+      "median": "median",
+      "mean": "mean",
+      "max": "max",
+      "chart": "Chart",
+      "table": "Table",
+      "emptyCount": "{count} empty ({share})",
+      "itemsOf": "Items of {column}",
+      "valuesOf": "Values of {column}",
+      "showRows": "Show these rows",
+      "distinctItems": "{count, plural, one {{formatted} distinct item} other {{formatted} distinct items}}",
+      "distinctValues": "{count, plural, one {{formatted} distinct value} other {{formatted} distinct values}}",
+      "othersItems": "{count, plural, one {{formatted} item in the others} other {{formatted} items in the others}}",
+      "othersRows": "{count, plural, one {{formatted} row in the others} other {{formatted} rows in the others}}",
+      "itemsPerValue": "Items per value",
+      "charsPerValue": "Characters per value",
+      "unitItems": "items",
+      "unitChars": "chars",
+      "values": "Values",
+      "noDistribution": "No distribution for {kind} values.",
+      "noDataFile": "This revision has no data file to profile.",
+      "profiling": "Profiling the {split} split…",
+      "tooLarge": "Too large to profile in the app",
+      "computeFailed": "Couldn't compute the statistics",
+      "rows": "Rows",
+      "columns": "Columns",
+      "emptyCells": "Empty cells",
+      "ofAllCells": "{share} of all cells",
+      "repeated": "Repeated {column}s",
+      "caseIgnored": "case and spacing ignored",
+      "split": "Split",
+      "profileNote": "Profile of the <b>{split}</b> split. Click a value to see its rows.",
+      "profileNoteMulti": "Profile of the <b>{split}</b> split (switch splits on the Data tab). Click a value to see its rows."
+    },
+    "files": {
+      "title": "Files",
+      "summary": "{count, plural, one {{formatted} file} other {{formatted} files}}, {size}, at commit <mono>{sha}</mono>",
+      "browse": "Browse on Hugging Face",
+      "path": "Path",
+      "usedBy": "Used by",
+      "size": "Size",
+      "openFile": "Open {path} on Hugging Face"
+    }
+  },
+  "drafts": {
+    "title": "Drafts",
+    "subtitle": "Generated Q/A pairs waiting for review. Review one, then publish it to Hugging Face: published datasets are listed under <datasets>Datasets</datasets>.",
+    "toReview": {
+      "title": "To review",
+      "empty": "Nothing waiting. Generate from a file or a web page, or run a GitHub recipe.",
+      "new": "{count} new",
+      "review": "Review"
+    },
+    "local": {
+      "title": "Local drafts",
+      "description": "Generated before drafts were reviewed this way: publish each one to Hugging Face, or delete it. They will go away in a later release.",
+      "loadError": "Error loading drafts"
+    },
+    "detail": {
+      "back": "Drafts",
+      "badge": "Draft",
+      "badgeTitle": "Not on Hugging Face yet",
+      "summary": "{pairs} Q/A pairs · {sources} source(s) · {runs} analysis run(s)",
+      "language": "language {language}",
+      "publish": "Publish to Hugging Face",
+      "publishing": "Publishing…",
+      "publishTitle": "Publish to the Hugging Face Hub as a private dataset repo",
+      "published": "Published {count} pair(s) to {repo}",
+      "publishedDescription": "The dataset repo is private.",
+      "viewDataset": "View dataset",
+      "publishFailed": "Publishing to Hugging Face failed",
+      "loadingDataset": "Loading dataset…",
+      "loadingPairs": "Loading Q/A pairs…",
+      "tabs": {
+        "pairs": "Q/A pairs",
+        "sources": "Sources",
+        "history": "History"
+      },
+      "sources": {
+        "title": "Sources",
+        "description": "Every origin that produced Q/A pairs in this dataset — one row per crawled page, uploaded file or GitHub account.",
+        "loading": "Loading sources…",
+        "loadFailed": "Failed to load the dataset sources",
+        "empty": "No source recorded.",
+        "columns": {
+          "source": "Source",
+          "type": "Type",
+          "pairs": "Q/A pairs",
+          "firstSeen": "First seen",
+          "lastSeen": "Last seen"
+        }
+      },
+      "history": {
+        "title": "Analysis history",
+        "description": "Every analysis recorded for this dataset, newest first — the seed that was read and what it contributed.",
+        "loading": "Loading history…",
+        "empty": "No analysis recorded yet. A run is recorded each time a generation is saved.",
+        "latest": "Latest",
+        "analysed": "Analysed {label}",
+        "pagesRead": "{count} page(s) read",
+        "newPairs": "+{count} pairs",
+        "duplicatesSkipped": "{count} duplicate(s) skipped"
+      }
+    }
+  },
+  "github": {
+    "subtitle": "Your public GitHub data and the datasets made from it: from your whole account, or from a recipe that picks repos, READMEs and docs. A Q&A generation stops at a draft you review before it is published to Hugging Face.",
+    "readingAccount": "Reading your GitHub account…",
+    "fromRecipe": "From a recipe",
+    "startRecipe": {
+      "title": "Start a recipe",
+      "description": "A recipe picks the repos, READMEs and docs files a dataset is generated from, and names the Hugging Face dataset it publishes to."
+    },
+    "listingRepos": "Listing your repos…",
+    "account": {
+      "publicRepos": "{count, plural, one {{formatted} public repo} other {{formatted} public repos}}",
+      "followers": "{count, plural, one {{formatted} follower} other {{formatted} followers}}",
+      "requestsLeft": "GitHub requests left",
+      "resetsNow": "resets now",
+      "resetsIn": "resets in {minutes} min",
+      "addToken": "<link>Add a GitHub token</link> to raise it to 5,000 an hour."
+    },
+    "problem": {
+      "connectTitle": "Connect your GitHub account",
+      "rateLimitTitle": "GitHub rate limit reached",
+      "readFailedTitle": "Couldn't read GitHub",
+      "connectDescription": "Save your GitHub username in Settings: this page reads its public repos, READMEs and docs.",
+      "openSettings": "Open Settings"
+    },
+    "jobs": {
+      "title": "From your whole account",
+      "description": "Built from every public repo of your account, and published to the dataset repos saved in Settings.",
+      "loadFailed": "Failed to load the jobs",
+      "loading": "Loading the jobs…"
+    },
+    "recipe": {
+      "created": "Recipe \"{name}\" created",
+      "name": "Recipe name",
+      "namePlaceholder": "Portfolio Q&A",
+      "dataset": "Hugging Face dataset",
+      "datasetHint": "Created private on the first publish.",
+      "create": "Create recipe",
+      "newTitle": "New recipe",
+      "label": "Recipe",
+      "new": "New",
+      "publishesTo": "Publishes to",
+      "model": "Model",
+      "profileFacts": "Profile facts (who you are, your stack, your projects)",
+      "reposSelected": "{count, plural, one {# repo selected} other {# repos selected}}",
+      "saving": "Saving…",
+      "unsaved": "Unsaved changes",
+      "saved": "Saved",
+      "generate": "Generate draft",
+      "nothingSelected": "Select a repo or the profile facts first",
+      "generationQueued": "Generation queued: it runs on the server.",
+      "confirmDelete": "Delete the recipe \"{name}\"? Its Hugging Face dataset stays."
+    },
+    "run": {
+      "queued": "Queued — waiting for a worker.",
+      "generating": "Generating… {done}/{total} repos",
+      "generatingLabel": "Generating… {done}/{total} repos · {label}",
+      "reading": "Reading GitHub…",
+      "cancelling": "Cancelling…",
+      "publishing": "Publishing to Hugging Face…",
+      "published": "Published {date} · <link>Open the dataset</link>",
+      "publishedUndated": "Published · <link>Open the dataset</link>",
+      "new": "<b>{count}</b> new",
+      "kept": "<b>{count}</b> kept",
+      "heldOut": "<b>{count}</b> held out",
+      "removed": "<b>{count}</b> removed",
+      "draftReady": "Draft ready: review it before it goes to Hugging Face.",
+      "reviewDraft": "Review the draft",
+      "cancelled": "The last generation was cancelled.",
+      "interrupted": "The last generation was interrupted (its worker stopped). Generate again.",
+      "failed": "The last generation failed: {error}",
+      "unknownError": "unknown error"
+    },
+    "schedule": {
+      "publishLabel": "Publish what passes the checks at once, and keep the doubtful pairs for review",
+      "description": "At {time} UTC, from the recipe as it is then. A run that finds nothing changed on GitHub makes no model call and publishes nothing. One recipe runs at a time: another one at the same time starts once it is done.",
+      "nextRun": "Next run: {date}."
+    },
+    "repos": {
+      "searchPlaceholder": "Search repos, descriptions, topics",
+      "language": "Language",
+      "allLanguages": "All languages",
+      "selectedOnly": "Selected only",
+      "showHidden": "Show forks and archived ({count})",
+      "shownOf": "{shown} of {total}",
+      "noMatch": "No repo matches.",
+      "useInRecipe": "Use {repo} in the recipe",
+      "fork": "fork",
+      "archived": "archived",
+      "selection": {
+        "defaultDocs": "default docs",
+        "noDocs": "no docs",
+        "docs": "{count, plural, one {# doc} other {# docs}}",
+        "withReadme": "README · {docs}"
+      }
+    },
+    "panel": {
+      "openOnGitHub": "Open on GitHub",
+      "useRepo": "Use this repo",
+      "readmeAndMetadata": "README and metadata",
+      "notEligible": "Forks and archived repos are left out.",
+      "sections": "Repo sections",
+      "tabs": {
+        "overview": "What the model sees",
+        "readme": "README",
+        "docs": "Docs",
+        "docsCount": "Docs ({count})"
+      },
+      "reading": "Reading {repo} on GitHub…",
+      "modelInput": "The overview call gets exactly this text ({count} characters); its hash decides whether the next run regenerates it.",
+      "readmeCut": "Cut at {count} characters: the model reads no more.",
+      "noReadme": "No README."
+    },
+    "docs": {
+      "reading": "Reading {path}…",
+      "truncated": "The model reads the first {count} characters.",
+      "whole": "The model reads all of it.",
+      "none": "This repo has no Markdown or text file under docs/.",
+      "modeLegend": "Which docs files to use",
+      "modes": {
+        "default": "Default pick",
+        "custom": "Choose files"
+      },
+      "limits": "The default pick is the first {files} readable files. Files over {size} are skipped; each is cut at {chars} characters.",
+      "use": "Use {path}",
+      "tooLarge": "too large"
+    }
+  },
+  "jobs": {
+    "serverDefault": "Server default",
+    "model": "Model",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "missing": "Not configured — add {missing} in <link>Settings</link>.",
+    "start": {
+      "draft": "Generate draft",
+      "dryRun": "Run (dry run)",
+      "publish": "Run & publish"
+    },
+    "running": "Running…",
+    "reviewFirst": "Nothing is published until you review the draft.",
+    "errors": "{count, plural, one {# non-fatal error} other {# non-fatal errors}} — those sources are retried next run",
+    "grounding": "grounding {percent}%",
+    "draft": {
+      "published": "Published to Hugging Face",
+      "title": "Review the draft",
+      "summary": "{kept, plural, one {# pair} other {# pairs}} carried over unchanged, {added} new. Untick what you don't want published.",
+      "summaryHeld": "{kept, plural, one {# pair} other {# pairs}} carried over unchanged, {added} new, {held} held out (answer far from its source — off by default). Untick what you don't want published.",
+      "unchanged": "Nothing changed since the published version — no new pair.",
+      "newPairs": "New pairs",
+      "selected": "{selected}/{total} selected",
+      "toReview": "To review",
+      "included": "{included}/{total} included",
+      "publishing": "Publishing…",
+      "publish": "Publish {count, plural, one {# pair} other {# pairs}} to Hugging Face",
+      "target": "→ {repo} (private)"
+    },
+    "run": {
+      "stopping": "Stopping…",
+      "queued": "Queued — waiting for a worker to pick it up.",
+      "publishing": "Publishing to Hugging Face…",
+      "generating": "Generating… {done}/{total} repos",
+      "fetching": "Fetching your GitHub repositories…",
+      "background": "Runs on the server — you can leave this page and come back.",
+      "cancelled": "The last run was cancelled.",
+      "interrupted": "The last run was interrupted (its worker stopped). Start it again.",
+      "failed": "The last run failed: {error}",
+      "publishedAt": "Published {date}.",
+      "published": "Published.",
+      "dryRun": "Dry run complete — nothing published.",
+      "viewOnHub": "View on Hugging Face"
+    },
+    "schedule": {
+      "stale": "The schedule runs with other options than these.",
+      "staleModel": "The schedule runs with other options or another model than these.",
+      "replace": "Schedule these instead",
+      "publishDraft": "Publish what passes the checks at once, and keep the doubtful pairs for review",
+      "publishBuilt": "Publish what it builds",
+      "hint": "At {time} UTC, with the options saved with the schedule.",
+      "hintModel": "At {time} UTC, with the options and the model saved with the schedule.",
+      "noChange": "A run that finds nothing changed makes no model call.",
+      "nextRun": "Next run: {date}.",
+      "regenerate": "Regenerate",
+      "every": {
+        "off": "Only when I start it",
+        "day": "Every day",
+        "week": "Every Monday",
+        "month": "The 1st of every month"
+      },
+      "time": "Time (UTC)",
+      "skipped": "The run scheduled for {when} did not start: {reason}. Fix it, then save the schedule again."
+    }
+  },
+  "review": {
+    "loading": "Loading the draft…",
+    "title": "Review: {name}",
+    "fallbackName": "Draft",
+    "back": {
+      "github": "GitHub",
+      "resume": "Resume",
+      "drafts": "Drafts"
+    },
+    "publishesTo": "Publishes to <mono>{target}</mono>",
+    "generatedWith": "generated with {model}",
+    "waiting": {
+      "queued": "Queued — waiting for a worker.",
+      "generating": "Generating… {done}/{total} repos",
+      "reading": "Reading GitHub…",
+      "ready": "The draft shows up here when it is ready."
+    },
+    "publishing": "Publishing…",
+    "published": "Published",
+    "openDataset": "Open the dataset",
+    "failed": "The generation failed: {error}",
+    "unknownError": "unknown error",
+    "noDraft": "This run has no draft to review ({status}).",
+    "publishedToast": "Published {count, plural, one {# pair} other {# pairs}} to {repo}",
+    "publish": "Publish to Hugging Face",
+    "scores": {
+      "confidence": "confidence",
+      "grounding": "grounding",
+      "grade": "grade"
+    },
+    "pair": {
+      "leaveOut": "Leave this pair out",
+      "include": "Include this pair",
+      "graderReason": "The grader's reason",
+      "failsRules": "fails your rules: {reason}",
+      "edited": "Edited",
+      "undoEdit": "Undo edit",
+      "question": "Question",
+      "answer": "Answer",
+      "keep": "Keep this version"
+    },
+    "sections": {
+      "new": "New",
+      "review": "Held out",
+      "removed": "Removed"
+    },
+    "stats": {
+      "total": "Will be published",
+      "kept": "{count} kept unchanged",
+      "new": "New pairs",
+      "promoted": "Held out, taken in",
+      "promotedHint": "answer far from its source",
+      "removed": "Removed from the dataset",
+      "removedHint": "sources deselected or gone"
+    },
+    "problems": {
+      "title": "{count, plural, one {# problem} other {# problems}} while generating",
+      "hint": "the affected sources were skipped"
+    },
+    "duplicates": {
+      "title": "{count, plural, one {# possible duplicate} other {# possible duplicates}}",
+      "hint": "same question, close answers",
+      "leftOut": "Left out",
+      "leaveOut": "Leave out the second"
+    },
+    "filters": {
+      "pairs": "Pairs",
+      "search": "Search questions and answers",
+      "category": "Category",
+      "allCategories": "All categories",
+      "repo": "Repo",
+      "allRepos": "All repos",
+      "lowGrounding": "Low grounding",
+      "failsRules": "Fails your rules"
+    },
+    "removedHint": "These pairs are in the published dataset and not in this draft: publishing deletes them.",
+    "empty": "Nothing here.",
+    "bar": {
+      "pairs": "{count, plural, one {{formatted} pair} other {{formatted} pairs}}",
+      "edited": "{count} edited",
+      "repo": "private repo <mono>{target}</mono>"
+    }
+  },
+  "resume": {
+    "title": "Resume",
+    "subtitle": "Your resumes on Reactive Resume, read with the server's API key. Pick one to read it as text: its sections and descriptions, hidden ones left out.",
+    "reading": "Reading the resume…",
+    "problem": {
+      "connectTitle": "Connect Reactive Resume",
+      "adminsTitle": "Admins only",
+      "readFailedTitle": "Couldn't read Reactive Resume",
+      "connectDescription": "Set REACTIVE_RESUME_API_KEY on the server, and REACTIVE_RESUME_URL for a self-hosted instance (blank: rxresu.me), then reload this page.",
+      "adminsDescription": "The resumes are read with the server’s own Reactive Resume key: only an admin sees them."
+    },
+    "list": {
+      "loading": "Listing your resumes…",
+      "count": "{count} on {instance}",
+      "public": "public",
+      "locked": "locked",
+      "updated": "updated {ago}",
+      "emptyTitle": "No resume yet",
+      "emptyDescription": "The API key's account on {instance} holds no resume."
+    },
+    "view": {
+      "fallbackName": "Resume",
+      "summary": "Summary",
+      "nothingVisible": "Nothing visible in this resume yet."
+    },
+    "dataset": {
+      "loading": "Reading the dataset settings…",
+      "title": "Hugging Face dataset",
+      "description": "Q&A pairs about you from this resume: exact facts from its fields (never the phone number) and pairs generated per section, deduplicated and checked against the text. Published to a private dataset.",
+      "publishesTo": "Publishes to",
+      "targetInvalid": "A dataset id: namespace/name",
+      "language": "Language",
+      "languages": {
+        "auto": "The resume’s own",
+        "en": "English",
+        "fr": "French"
+      },
+      "model": "Model",
+      "scheduleHint": "At {time} UTC. A run whose resume hasn't changed stops early, with no model call.",
+      "saveSettings": "Save the settings",
+      "saveFirst": "Save the settings first",
+      "generate": "Generate a draft",
+      "fullRefresh": "Regenerate every section",
+      "forget": "Forget the settings",
+      "saved": "Dataset settings saved",
+      "queued": "Generation queued: it stops at a draft to review",
+      "forgotten": "Settings forgotten; the dataset stays",
+      "nextRun": "Next scheduled run: {date}"
+    },
+    "embedding": {
+      "none": "No embedding model: the duplicate and grounding checks compare words. <link>Pick one on Models</link>",
+      "hint": "Embedding checks: <mono>{model}</mono> ({whose}, {measured}) · <link>change it on Models</link>",
+      "yours": "yours",
+      "server": "the server’s",
+      "measured": "measured",
+      "notMeasured": "not measured"
+    },
+    "run": {
+      "errors": "{count, plural, one {# section not generated — it is tried again next run} other {# sections not generated — they are tried again next run}}",
+      "queued": "Queued — waiting for a worker.",
+      "generating": "Generating… {done}/{total} sections",
+      "generatingLabel": "Generating… {done}/{total} sections · {label}",
+      "cancelling": "Cancelling…",
+      "publishing": "Publishing to Hugging Face…",
+      "published": "Published {date} · <link>Open the dataset</link>",
+      "publishedUndated": "Published · <link>Open the dataset</link>",
+      "new": "<b>{count}</b> new",
+      "kept": "<b>{count}</b> kept",
+      "heldOut": "<b>{count}</b> held out",
+      "removed": "<b>{count}</b> removed",
+      "dropped": "<b>{count}</b> dropped",
+      "droppedTitle": "Failed the checks: trivial, duplicated, or graded wrong",
+      "checks": "Embedding checks: {result}",
+      "checksModel": "Embedding checks ({model}): {result}",
+      "heldOutReview": "Some pairs were held out: review them to publish them too.",
+      "draftReady": "Draft ready: review it before it goes to Hugging Face.",
+      "review": "Review",
+      "unchanged": "{date}: nothing changed since the published version — no model call.",
+      "unchangedUndated": "Nothing changed since the published version — no model call.",
+      "cancelled": "The last generation was cancelled.",
+      "interrupted": "The last generation was interrupted (its worker stopped). Generate again.",
+      "failed": "The last generation failed: {error}",
+      "unknownError": "unknown error"
+    }
+  },
+  "collections": {
+    "title": "Collections",
+    "subtitle": "Splits of your Hugging Face datasets, embedded into Qdrant with your endpoint's embedding model. Build one, then search it and test how well its questions find their answers.",
+    "new": "New collection",
+    "quotaReached": "You have {quota, plural, one {# collection} other {# collections}}, the limit",
+    "loading": "Loading your collections…",
+    "loadFailed": "Couldn't load your collections",
+    "tryAgain": "Try again",
+    "status": {
+      "modelRemoved": "Model removed",
+      "modelRemovedTitle": "Built with a local model the server no longer runs",
+      "rebuildNeeded": "Rebuild needed",
+      "rebuildNeededTitle": "Built on {endpoint}; your endpoint is now {current}",
+      "ready": "Ready",
+      "failed": "Failed",
+      "building": "Building"
+    },
+    "progress": {
+      "embedding": "Embedding rows",
+      "waiting": "Waiting for a worker…"
+    },
+    "row": {
+      "updated": "Updated {time}",
+      "points": "{count, plural, one {<b>{formatted}</b> point} other {<b>{formatted}</b> points}}",
+      "foundFirst": "<b>{percent}</b> found first",
+      "testTitle": "Retrieval test on {queries, plural, one {# row} other {# rows}}, k = {k}"
+    },
+    "noQdrant": {
+      "title": "Qdrant is not set up",
+      "description": "Collections are stored in Qdrant. The local stack runs one (<code>make dev</code>); elsewhere, set <code>QDRANT_URL</code> (and <code>QDRANT_API_KEY</code> when it needs one) on the server and its worker."
+    },
+    "empty": {
+      "title": "No collection yet",
+      "description": "Pick a dataset and a split: a worker embeds every row, then you can search it, test it, and query it from your own code. Start from a dataset's page with <b>Build a collection</b>, or here."
+    },
+    "footer": "A collection reads its dataset at one commit: <link>publish</link> new pairs, then rebuild it from its page.",
+    "quota": "{count} of {quota} collections.",
+    "form": {
+      "description": "One split of a dataset, read from Hugging Face at its latest commit and embedded row by row with an embedding model of your endpoint: the rows are sent to it.",
+      "dataset": "Dataset",
+      "loadingDatasets": "Loading your datasets…",
+      "pickOne": "Pick one",
+      "split": "Split",
+      "readingDataset": "Reading the dataset…",
+      "tooLarge": "{label} (too large)",
+      "textToEmbed": "Text to embed",
+      "readingColumns": "Reading the columns…",
+      "noTextColumn": "This split has no text column to embed.",
+      "joinHint": "Joined in this order, a blank line between them. Rows empty in all of them are skipped.",
+      "queryColumn": "Questions for the retrieval test",
+      "trivialHint": "This column is embedded too, so every row finds itself: embed the answer only to test retrieval.",
+      "queryHint": "Each tested row asks with this column; a hit is its own row coming back first.",
+      "model": "Embedding model",
+      "noModel": "Your endpoint serves no embedding model: add your API key in Settings, on an endpoint that serves OPENAI_EMBEDDING_MODEL.",
+      "name": "Name",
+      "submit": "Build collection",
+      "building": "Building \"{name}\""
+    }
+  },
+  "collection": {
+    "back": "Collections",
+    "loading": "Loading the collection…",
+    "notFound": "Collection not found",
+    "loadFailed": "Couldn't load this collection",
+    "tryAgain": "Try again",
+    "sections": "Collection sections",
+    "row": "Row {index}",
+    "top": "Top {count}",
+    "tabs": {
+      "search": "Search",
+      "test": "Retrieval test",
+      "use": "Use it"
+    },
+    "header": {
+      "points": "{count, plural, one {{formatted} point} other {{formatted} points}}",
+      "pointsOfRows": "{count, plural, one {{formatted} point} other {{formatted} points}} of {rows, plural, one {{rowsFormatted} row} other {{rowsFormatted} rows}}",
+      "dimensions": "{count, plural, one {# dimension} other {# dimensions}}",
+      "built": "Built {time}",
+      "embeds": "embeds: {columns}",
+      "asksWith": "asks with: {column}",
+      "rebuild": "Rebuild",
+      "rebuilding": "Rebuilding at the latest commit",
+      "deleted": "Deleted \"{name}\"",
+      "confirmDelete": "Delete it and its vectors?",
+      "keep": "Keep",
+      "cancelFirst": "Cancel the build first"
+    },
+    "building": {
+      "title": "Embedding the split",
+      "desc": "A worker reads the split from Hugging Face, embeds every row with {model} and stores the vectors in Qdrant.",
+      "endpoint": "The rows are sent to your endpoint to be embedded.",
+      "local": "The first build with a model downloads it too.",
+      "serving": "Search and the test keep answering on the version at {sha} until this one is complete.",
+      "cancelling": "Cancelling…",
+      "cancel": "Cancel the build"
+    },
+    "failed": {
+      "title": "The build didn't finish",
+      "fallback": "The build failed.",
+      "serving": "The previous version, at {sha}, still answers.",
+      "buildAgain": "Build again"
+    },
+    "newerCommit": {
+      "text": "The dataset has a newer commit, <mono>{latest}</mono>: this collection still holds <mono>{current}</mono>.",
+      "rebuildAt": "Rebuild at {sha}"
+    },
+    "movedEndpoint": {
+      "text": "Built on <mono>{endpoint}</mono>, but your endpoint is now <mono>{current}</mono>: a search or a test would embed its questions with another endpoint's model, and compare vectors that don't match. Build it again on your endpoint.",
+      "buildAgain": "Build it again"
+    },
+    "removedModel": {
+      "title": "This collection has to be made again",
+      "text": "It was built with <mono>{model}</mono>, a local model this server no longer runs: a question can't be embedded for its vectors, so it can't be searched or tested, and building it again would use the same model. Delete it, then create it again from <link>its dataset</link> with one of your endpoint's embedding models."
+    },
+    "score": "Cosine similarity {score}",
+    "search": {
+      "placeholder": "Ask something the dataset should answer…",
+      "queryLabel": "Search query",
+      "resultsLabel": "Results",
+      "summary": "{count, plural, one {# closest row} other {# closest rows}} to “{query}” · {ms} ms, query embedded with {model}",
+      "empty": "No point comes back for this query."
+    },
+    "metrics": {
+      "foundFirst": "Found first",
+      "foundFirstHint": "its own row is the top hit",
+      "inTopK": "In the top {k}",
+      "inTopKHint": "its own row comes back at all",
+      "mrr": "Mean reciprocal rank",
+      "mrrHint": "1 = always first, 0 = never in the top {k}",
+      "rowsTested": "Rows tested",
+      "rowsTestedHint": "sampled, asking with {column}"
+    },
+    "test": {
+      "lead": "Sampled rows ask with one of their columns, and a hit is their own row coming back. The sample depends on the split and its commit only: collections of the same split, with other models or columns, are tested on the same rows.",
+      "askWith": "Ask with",
+      "pickColumn": "Pick a column",
+      "sampleLabel": "Rows to test",
+      "sampleOption": "{count, plural, one {# row} other {# rows}}",
+      "topKLabel": "Top k",
+      "run": "Run the test",
+      "notTested": "Not tested yet. With a Q/A split, embed the answers and ask with the questions: the test then shows how often a question finds its own answer, and which rows get confused.",
+      "trivial": "<mono>{column}</mono> is embedded too, so every row finds itself. Build a collection of the answers alone to test retrieval.",
+      "tested": "Tested {time} on {queries} of {sample} sampled rows, top {k}.",
+      "allFound": "Every tested row found its own row first."
+    },
+    "compare": {
+      "title": "Collections of this split",
+      "desc": "Every collection of this split at this commit is tested on the same sampled rows, so their figures compare: which embedding model, on which columns, finds the rows best.",
+      "collection": "Collection",
+      "model": "Model",
+      "embeds": "Embeds",
+      "foundFirst": "Found first",
+      "inTopK": "In the top k",
+      "mrr": "MRR",
+      "rows": "Rows",
+      "thisOne": "This one",
+      "caveat": {
+        "notTested": "Not tested yet",
+        "notBuilt": "Not built",
+        "trivial": "{column} is embedded too: every row finds itself",
+        "askedWith": "Asked with {column}",
+        "sampled": "Tested on {sample, plural, one {# sampled row} other {# sampled rows}}",
+        "topK": "Top {k}"
+      }
+    },
+    "misses": {
+      "title": "Rows not found first",
+      "desc": "What each row asked, its own text, and the row that came first instead. A near-identical top hit is often the same pair twice.",
+      "descFirst": "The first {count}: what each row asked, its own text, and the row that came first instead. A near-identical top hit is often the same pair twice.",
+      "asked": "Asked",
+      "ownRow": "Its own row",
+      "cameFirst": "Came first instead",
+      "rank": "Rank",
+      "duplicate": "Possible duplicate",
+      "nothing": "Nothing came back"
+    },
+    "use": {
+      "lead": "The vectors are a plain Qdrant collection: query it from your own code with the same model, embedding the query the way the build embedded the rows. Each point's payload holds <mono>row_idx</mono>, the embedded <mono>text</mono> and its <mono>fields</mono>.",
+      "copyFailed": "Couldn't copy: select the code instead"
+    }
+  },
+  "models": {
+    "title": "Models",
+    "subtitle": "Your LLM and the embedding model, on an OpenAI-compatible endpoint (OpenAI, or a gateway such as LiteLLM). A generation can still pick another model.",
+    "loading": "Loading models…",
+    "loadFailed": "Failed to load models",
+    "defaults": {
+      "title": "Your models",
+      "description": "Used whenever a request doesn't name a model.",
+      "llm": "LLM",
+      "llmHint": "Every step: cleaning, Q&A, scoring, the jobs, and the transcription of PDF and image pages — so it must read images.",
+      "saved": "LLM saved"
+    },
+    "embedding": {
+      "label": "Embedding model",
+      "measure": "Measure and use",
+      "measureTitle": "Measure its thresholds on the built-in test set, then use it",
+      "measuredToast": "Measured: duplicates from {dedup}%, grounding below {grounding}% held out",
+      "saved": "Embedding model saved",
+      "thresholdsYours": "{model} (yours): a rephrasing from {dedup}% is dropped, an answer below {grounding}% of its source is held for review, a section below {uncovered}% is asked about.",
+      "thresholdsServer": "{model} (the server’s): a rephrasing from {dedup}% is dropped, an answer below {grounding}% of its source is held for review, a section below {uncovered}% is asked about.",
+      "measured": "Measured on the built-in test set: they separate rephrasings {dedup}%, faithful answers {grounding}% and covered sections {uncovered}% of the time.",
+      "notMeasured": "Default thresholds: not measured for this model yet.",
+      "none": "None on your endpoint: the duplicate and grounding checks compare the words, and no collection can be built.",
+      "backToServer": "Back to the server’s model"
+    },
+    "provider": {
+      "references": "References start with <code>{name}:</code>",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "missing": "Add {missing} in <link>Settings</link> to enable it.",
+      "endpointLent": "Calls go to <code>{endpoint}</code> with the server's key: you saved none of your own. Save yours in Settings to use your own endpoint instead.",
+      "endpointOwn": "Calls go to <code>{endpoint}</code> with your own key.",
+      "noModels": "No models configured.",
+      "embeddings": "Embeddings",
+      "embeddingTitle": "Embedding model",
+      "testLabel": "{provider} model to test",
+      "test": "Test",
+      "testReply": "“{text}”"
+    },
+    "select": {
+      "ariaLabel": "Model",
+      "yourLlm": "Your LLM",
+      "yourLlmNamed": "Your LLM ({model})",
+      "pick": "Pick a model…",
+      "notConfigured": "{provider} (not configured)"
+    }
+  },
+  "prompts": {
+    "title": "LLM Prompts",
+    "subtitle": "The prompts the app really sends to the models — cleaning, transcription and QA generation. They live in the server code and change with a deploy.",
+    "loading": "Loading prompts…",
+    "loadFailed": "Failed to load prompts",
+    "active": "active",
+    "legacy": "legacy",
+    "defaultModel": "default model",
+    "promptLabel": "Prompt ({role})",
+    "readOnlyHint": "Read-only: prompts are versioned with the code (apps/server/services). Edit them there and redeploy.",
+    "variables": "Detected variables",
+    "parameters": {
+      "title": "Default parameters",
+      "description": "From the server configuration (.env)",
+      "test": "Test on /agent-test",
+      "model": "Model",
+      "default": "default",
+      "sentAs": "Sent as",
+      "roleMessage": "{role} message"
+    }
+  },
+  "quality": {
+    "title": "Quality control",
+    "subtitle": "Detected duplicates, score distribution and pairs below the threshold — per dataset.",
+    "noDatasets": "No datasets available yet. Generate a dataset first.",
+    "dataset": {
+      "label": "Dataset",
+      "placeholder": "Select a dataset…",
+      "hubGroup": "Hugging Face (import to analyze)"
+    },
+    "analysis": {
+      "running": "Analyzing…",
+      "rerun": "Re-run analysis"
+    },
+    "import": {
+      "pending": "Importing from Hugging Face…",
+      "failed": "Failed to import the Hugging Face dataset"
+    },
+    "stats": {
+      "average": "Average score",
+      "scored": "{scored} of {total} scored",
+      "duplicates": "Duplicates",
+      "toArbitrate": "{count} to arbitrate",
+      "below": "Below {threshold} threshold",
+      "shareOfDataset": "{percent}% of the dataset",
+      "share": "{percent}%",
+      "noScores": "No scores",
+      "validated": "Validated"
+    },
+    "distribution": {
+      "title": "Score distribution",
+      "loading": "Loading scores…",
+      "unscored": "None of the {count, plural, one {# pair} other {# pairs}} has a confidence score — datasets imported from Hugging Face usually don't carry one. Score them with the LLM to get a distribution.",
+      "empty": "No scored Q&A items for this dataset yet."
+    },
+    "scoring": {
+      "running": "Scoring…",
+      "run": "Score {count, plural, one {# unscored pair} other {# unscored pairs}} with the LLM",
+      "failed": "Scoring failed",
+      "done": "Scored {scored} of {requested, plural, one {# pair} other {# pairs}} with {model}.",
+      "partial": "Scored {scored} of {requested, plural, one {# pair} other {# pairs}} with {model} — {failed} left unscored, run it again to retry them."
+    },
+    "rules": {
+      "title": "Quality rules",
+      "duplicateThreshold": "Duplicate threshold",
+      "duplicateThresholdHint": "Text similarity used by analyze & clean",
+      "rejectionThreshold": "Quality rejection threshold",
+      "rejectionThresholdHint": "Minimum confidence kept as \"validated\"",
+      "minAnswerLength": "Min. answer length",
+      "minAnswerLengthHint": "Words (0 = no minimum)",
+      "minAnswerLengthAria": "Minimum answer length in words",
+      "autoReject": "Automatic rejection",
+      "autoRejectHint": "Applied at generation",
+      "autoRejectAria": "Automatic rejection at generation",
+      "saving": "Saving…",
+      "save": "Save rules",
+      "saveFailed": "Failed to save quality rules"
+    },
+    "clean": {
+      "running": "Cleaning…",
+      "run": "Clean duplicates now",
+      "done": "Removed {removed} of {total, plural, one {# record} other {# records}}.",
+      "failed": "Failed to clean duplicates"
+    },
+    "confirm": {
+      "resolve": "Delete \"{question}\" and keep the other one? This can't be undone.",
+      "clean": "Remove the lower-confidence item of every pair at or above {threshold} similarity? This can't be undone."
+    },
+    "duplicates": {
+      "title": "Duplicates to arbitrate",
+      "description": "Semantically close pairs detected in {dataset}.",
+      "selectDataset": "Select a dataset to detect duplicates.",
+      "tabs": {
+        "pending": "To handle",
+        "resolved": "Resolved"
+      },
+      "analyzing": "Analyzing similarities…",
+      "resolveFailed": "Failed to resolve the duplicate pair",
+      "analyzeFailed": "Failed to analyze similarities",
+      "emptyPending": "No duplicate pairs above the threshold.",
+      "emptyResolved": "Nothing kept yet.",
+      "item": "Duplicate #{index}",
+      "similarity": "similarity {percent}%",
+      "similar": "similar",
+      "keepBoth": "Keep both",
+      "keepLeft": "Keep left",
+      "keepRight": "Keep right",
+      "showFewer": "Show fewer",
+      "showRemaining": "View the remaining {count, plural, one {# duplicate} other {# duplicates}}"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Your account and the keys your requests run on. Generation models are set on the Models page.",
+    "profile": {
+      "title": "Profile",
+      "admin": "Admin · {provider} sign-in",
+      "user": "User · {provider} sign-in"
+    },
+    "keys": {
+      "title": "Your keys",
+      "description": "Every model call and Hugging Face upload runs on <strong>your own</strong> keys. They are stored encrypted, only ever sent to their provider, and nobody — administrators included — can read them back."
+    },
+    "models": {
+      "title": "Models",
+      "description": "Your LLM, the model of every step, and the embedding model of your endpoint.",
+      "open": "Open Models"
+    },
+    "integrations": {
+      "groups": {
+        "endpoint": {
+          "title": "OpenAI-compatible endpoint",
+          "description": "Your own key, on OpenAI or a gateway such as LiteLLM, pays for your LLM (every generation step) and the embedding model. Admins without a key of their own may use the server’s endpoint, when the server offers it."
+        },
+        "huggingFace": {
+          "title": "Hugging Face",
+          "description": "Where your jobs and dataset exports publish (always as private repos)."
+        },
+        "github": {
+          "title": "GitHub",
+          "description": "Public repositories are read to build your datasets."
+        }
+      },
+      "secrets": {
+        "openai_api_key": {
+          "label": "API key",
+          "help": "From platform.openai.com/api-keys, or a virtual key of your gateway."
+        },
+        "hf_token": {
+          "label": "Access token",
+          "help": "A token with write access, from huggingface.co/settings/tokens."
+        },
+        "github_token": {
+          "label": "Personal access token (optional)",
+          "help": "Without one GitHub allows 60 requests an hour — too few for a code export."
+        }
+      },
+      "settings": {
+        "openai_base_url": {
+          "label": "Base URL (optional)",
+          "help": "Your gateway’s URL, if your administrator allows it. Leave empty for OpenAI. Your key is only ever sent here."
+        },
+        "hf_namespace": {
+          "label": "Namespace (optional)",
+          "placeholder": "your-user-or-org",
+          "help": "Defaults to the account the token belongs to."
+        },
+        "hf_qa_repo": {
+          "label": "Q&A dataset repo",
+          "help": "Where the GitHub personal Q&A job publishes."
+        },
+        "hf_corpus_repo": {
+          "label": "Corpus dataset repo",
+          "help": "Where the knowledge corpus job publishes."
+        },
+        "github_username": {
+          "label": "Username",
+          "help": "Whose public repositories the jobs read."
+        }
+      },
+      "secretSaved": "{label} saved",
+      "secretSavedChecked": "{label} saved — {message}",
+      "secretRemoved": "{label} removed",
+      "statusSaved": "Saved",
+      "statusSavedHint": "Saved · …{hint}",
+      "statusNotSet": "Not set",
+      "replacePlaceholder": "Paste a new value to replace it",
+      "test": "Test",
+      "remove": "Remove",
+      "storedEncrypted": "It is stored encrypted and never shown again.",
+      "saveAnyway": "Save anyway",
+      "settingsSaved": "Settings saved",
+      "saveSettings": "Save settings"
+    },
+    "accounts": {
+      "title": "Sign-in methods",
+      "description": "Accounts you can sign in with. You always keep at least one.",
+      "lockedAdmin": "Your email is a platform administrator address.",
+      "linked": "{provider} linked",
+      "unlinked": "{provider} unlinked",
+      "lastUsed": "last used {date}",
+      "onlyWay": "Your only way to sign in",
+      "unlink": "Unlink",
+      "passwordEnabled": "Email and password sign-in is enabled for this account.",
+      "link": "Link {provider}",
+      "signOutEverywhere": "Sign out everywhere",
+      "errors": {
+        "identity_in_use": "That account is already linked to another DatasetGen account.",
+        "sso_failed": "Linking did not complete. Please try again.",
+        "session_expired": "Your session expired. Sign in again, then retry."
+      }
+    },
+    "data": {
+      "title": "Your data",
+      "description": "Download everything you own (datasets, settings — never your keys), or delete your account. Hugging Face repos you published are yours and are not touched. Deleting asks you to have signed in within the last 10 minutes.",
+      "export": "Export my data",
+      "delete": "Delete my account",
+      "confirmDelete": "Delete your account, your datasets, your runs and your saved keys? This cannot be undone.",
+      "signInAgain": "Sign in again"
+    }
+  },
+  "verify": {
+    "title": "Verify QA agent",
+    "subtitle": "Runs the QA agent on the text below and shows the raw model response and the parsed pairs — without the scrape/clean pipeline.",
+    "placeholder": "Paste source text…",
+    "targetLanguage": "Target language",
+    "languages": {
+      "fr": "French",
+      "en": "English",
+      "es": "Spanish",
+      "de": "German"
+    },
+    "run": "Run agent",
+    "result": {
+      "ok": "Agent OK",
+      "noPairs": "No QA pairs parsed",
+      "model": "Model: {model}",
+      "language": "Lang: {language}",
+      "pairs": "Pairs: {count}",
+      "raw": "Raw: {count} chars",
+      "error": "Error: {error}",
+      "rawResponse": "Raw model response",
+      "emptyResponse": "(empty response)",
+      "parsed": "Parsed Q&A pairs ({count})",
+      "question": "Q: {question}",
+      "answer": "A: {answer}",
+      "context": "Context: {context}"
+    }
+  },
+  "admin": {
+    "title": "Administration",
+    "subtitle": "Accounts, usage and platform switches. Dataset content and keys are never shown here.",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "audit": "Audit log",
+      "platform": "Platform"
+    },
+    "guard": "This page is for administrators.",
+    "overview": {
+      "accounts": "Accounts",
+      "active": "Active",
+      "admins": "Admins",
+      "signedIn": "Signed in (30 days)",
+      "datasets": "Datasets",
+      "pairs": "Q&A pairs",
+      "running": "Runs in progress",
+      "runsTitle": "Job runs, last 30 days",
+      "noRuns": "No runs."
+    },
+    "audit": {
+      "title": "Audit log",
+      "description": "Security events. Deleted accounts appear as a short hash of their email.",
+      "filter": "Filter: e.g. user.signup",
+      "when": "When",
+      "action": "Action",
+      "by": "By",
+      "on": "On",
+      "detail": "Detail",
+      "newer": "Newer",
+      "older": "Older"
+    },
+    "platform": {
+      "title": "Platform",
+      "description": "Switches stored in the database override the environment. Other replicas pick changes up within a few seconds.",
+      "saved": "Saved",
+      "setHere": "set here",
+      "envDefault": "env default",
+      "commaSeparated": "comma-separated",
+      "on": "On",
+      "off": "Off",
+      "reset": "Reset to env"
+    },
+    "users": {
+      "title": "Users",
+      "description": "Datasets / pairs / runs are counts only. Locked accounts are listed in ADMIN_EMAILS.",
+      "search": "Search by email",
+      "account": "Account",
+      "role": "Role",
+      "data": "Data",
+      "keys": "Keys saved",
+      "dates": "Created · last sign-in",
+      "actions": "Actions",
+      "password": "password",
+      "locked": "locked",
+      "disabled": "disabled",
+      "roles": {
+        "admin": "admin",
+        "user": "user"
+      },
+      "makeUser": "Make user",
+      "makeAdmin": "Make admin",
+      "disable": "Disable",
+      "enable": "Enable",
+      "confirmDelete": "Delete {email} and everything they own? Their Hugging Face repos are not touched.",
+      "deleted": "{email} deleted",
+      "range": "{first}–{last} of {total}"
+    }
+  }
+}

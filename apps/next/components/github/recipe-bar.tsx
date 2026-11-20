@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { type FormEvent, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import type { JobRunOut, RecipeIn, RecipeOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
@@ -16,6 +17,7 @@ import {
   useRunRecipe,
   useSaveRecipeSchedule,
 } from '@/hooks'
+import { rich, richLink } from '@/lib/rich'
 import { SchedulePicker } from '@/components/jobs/schedule-picker'
 import { type ScheduleForm, scheduleForm, toSchedule } from '@/components/jobs/schedule-state'
 import { HF_REPO_PATTERN, defaultTargetRepo, selectsSomething } from './recipe-state'
@@ -30,6 +32,8 @@ export function NewRecipeForm({
   onCreated: (recipe: RecipeOut) => void
   onCancel?: () => void
 }) {
+  const t = useTranslations('github')
+  const tc = useTranslations('common')
   const [name, setName] = useState('')
   const [target, setTarget] = useState<string | null>(null)
   const create = useCreateRecipe()
@@ -43,7 +47,7 @@ export function NewRecipeForm({
       { name: name.trim(), target_repo: targetRepo, include_profile: true, sources: [] },
       {
         onSuccess: (recipe) => {
-          toast.success(`Recipe "${recipe.name}" created`)
+          toast.success(t('recipe.created', { name: recipe.name }))
           onCreated(recipe)
         },
         onError: (error) => toast.error(error.message),
@@ -55,12 +59,12 @@ export function NewRecipeForm({
     <form className="gh-new-recipe" onSubmit={submit}>
       <div className="field">
         <label className="label" htmlFor="recipe-name">
-          Recipe name
+          {t('recipe.name')}
         </label>
         <input
           id="recipe-name"
           className="input"
-          placeholder="Portfolio Q&A"
+          placeholder={t('recipe.namePlaceholder')}
           maxLength={100}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -68,7 +72,7 @@ export function NewRecipeForm({
       </div>
       <div className="field">
         <label className="label" htmlFor="recipe-target">
-          Hugging Face dataset
+          {t('recipe.dataset')}
         </label>
         <input
           id="recipe-target"
@@ -77,16 +81,16 @@ export function NewRecipeForm({
           onChange={(e) => setTarget(e.target.value)}
           aria-invalid={!HF_REPO_PATTERN.test(targetRepo)}
         />
-        <div className="hint">Created private on the first publish.</div>
+        <div className="hint">{t('recipe.datasetHint')}</div>
       </div>
       <div className="gh-new-actions">
         <button type="submit" className="btn btn-primary" disabled={!valid || create.isPending}>
           <Icon name={create.isPending ? 'loader' : 'plus'} />
-          Create recipe
+          {t('recipe.create')}
         </button>
         {onCancel && (
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Cancel
+            {tc('cancel')}
           </button>
         )}
       </div>
@@ -95,6 +99,9 @@ export function NewRecipeForm({
 }
 
 function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
+  const t = useTranslations('github')
+  const tc = useTranslations('common')
+  const locale = useLocale()
   const cancel = useCancelJobRun(run.id)
   if (run.status === 'queued' || run.status === 'running') {
     const { done = 0, total = 0, label = '' } = run.progress ?? {}
@@ -103,10 +110,12 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
       <div className="gh-run">
         <div className="hint">
           {run.status === 'queued'
-            ? 'Queued — waiting for a worker.'
+            ? t('run.queued')
             : total > 0
-              ? `Generating… ${done}/${total} repos${label ? ` · ${label}` : ''}`
-              : label || 'Reading GitHub…'}
+              ? label
+                ? t('run.generatingLabel', { done, total, label })
+                : t('run.generating', { done, total })
+              : label || t('run.reading')}
         </div>
         <div className="job-progress">
           <div style={{ width: `${pct}%` }} />
@@ -117,19 +126,24 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
           onClick={() => cancel.mutate()}
           disabled={cancel.isPending || !!run.cancel_requested}
         >
-          {run.cancel_requested ? 'Cancelling…' : 'Cancel'}
+          {run.cancel_requested ? t('run.cancelling') : tc('cancel')}
         </button>
       </div>
     )
   }
   if (run.status === 'publishing') {
-    return <div className="gh-run hint">Publishing to Hugging Face…</div>
+    return <div className="gh-run hint">{t('run.publishing')}</div>
   }
   if (run.status === 'published') {
+    const link = richLink(datasetHref(recipe.target_repo))
     return (
       <div className="gh-run hint">
-        Published {run.published_at ? new Date(run.published_at).toLocaleString() : ''} ·{' '}
-        <Link href={datasetHref(recipe.target_repo)}>Open the dataset</Link>
+        {run.published_at
+          ? t.rich('run.published', {
+              date: new Date(run.published_at).toLocaleString(locale),
+              link,
+            })
+          : t.rich('run.publishedUndated', { link })}
       </div>
     )
   }
@@ -138,28 +152,20 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
     return (
       <div className="gh-run">
         <div className="gh-run-counts">
-          <span>
-            <b>{preview.new.length}</b> new
-          </span>
-          <span>
-            <b>{preview.kept}</b> kept
-          </span>
+          <span>{t.rich('run.new', { count: preview.new.length, b: rich.b })}</span>
+          <span>{t.rich('run.kept', { count: preview.kept, b: rich.b })}</span>
           {preview.review.length > 0 && (
-            <span>
-              <b>{preview.review.length}</b> held out
-            </span>
+            <span>{t.rich('run.heldOut', { count: preview.review.length, b: rich.b })}</span>
           )}
           {(preview.removed ?? []).length > 0 && (
-            <span>
-              <b>{preview.removed?.length}</b> removed
-            </span>
+            <span>{t.rich('run.removed', { count: preview.removed?.length ?? 0, b: rich.b })}</span>
           )}
         </div>
         <div className="gh-run-review">
-          <span className="hint">Draft ready: review it before it goes to Hugging Face.</span>
+          <span className="hint">{t('run.draftReady')}</span>
           <Link className="btn btn-primary btn-sm" href={`/drafts/runs/${run.id}`}>
             <Icon name="eye" />
-            Review the draft
+            {t('run.reviewDraft')}
           </Link>
         </div>
       </div>
@@ -168,10 +174,10 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
   return (
     <div className="gh-run hint job-error">
       {run.status === 'cancelled'
-        ? 'The last generation was cancelled.'
+        ? t('run.cancelled')
         : run.status === 'interrupted'
-          ? 'The last generation was interrupted (its worker stopped). Generate again.'
-          : `The last generation failed: ${run.error ?? 'unknown error'}`}
+          ? t('run.interrupted')
+          : t('run.failed', { error: run.error ?? t('run.unknownError') })}
     </div>
   )
 }
@@ -179,6 +185,8 @@ function RunStatus({ run, recipe }: { run: JobRunOut; recipe: RecipeIn }) {
 /** When the recipe's dataset regenerates by itself. Saved on every change,
  * like the recipe; "Only when I start it" removes the schedule. */
 function RecipeSchedule({ recipeId }: { recipeId: string }) {
+  const t = useTranslations('github')
+  const locale = useLocale()
   const saved = useRecipeSchedule(recipeId)
   const save = useSaveRecipeSchedule(recipeId)
   const form = scheduleForm(saved.data)
@@ -189,7 +197,7 @@ function RecipeSchedule({ recipeId }: { recipeId: string }) {
       id="recipe-every"
       form={form}
       disabled={save.isPending}
-      publishLabel="Publish what passes the checks at once, and keep the doubtful pairs for review"
+      publishLabel={t('schedule.publishLabel')}
       skipped={saved.data?.skipped}
       onChange={(patch: Partial<ScheduleForm>) =>
         save.mutate(toSchedule({ ...form, ...patch }), {
@@ -197,11 +205,11 @@ function RecipeSchedule({ recipeId }: { recipeId: string }) {
         })
       }
     >
-      At {form.time} UTC, from the recipe as it is then. A run that finds nothing changed on GitHub
-      makes no model call and publishes nothing. One recipe runs at a time: another one at the same
-      time starts once it is done.
+      {t('schedule.description', { time: form.time })}
       {saved.data?.next_run_at &&
-        ` Next run: ${new Date(saved.data.next_run_at).toLocaleString()}.`}
+        ` ${t('schedule.nextRun', {
+          date: new Date(saved.data.next_run_at).toLocaleString(locale),
+        })}`}
     </SchedulePicker>
   )
 }
@@ -226,6 +234,8 @@ export function RecipeBar({
   onSelect: (id: string | null) => void
   onChange: (recipe: RecipeIn) => void
 }) {
+  const t = useTranslations('github')
+  const tc = useTranslations('common')
   const [creating, setCreating] = useState(false)
   const [target, setTarget] = useState<string | null>(null)
   const run = useJobRun(current.latest_run?.id)
@@ -241,13 +251,13 @@ export function RecipeBar({
     start.mutate(
       { id: current.id },
       {
-        onSuccess: () => toast.success('Generation queued: it runs on the server.'),
+        onSuccess: () => toast.success(t('recipe.generationQueued')),
         onError: (error) => toast.error(error.message),
       },
     )
 
   const destroy = () => {
-    if (!window.confirm(`Delete the recipe "${current.name}"? Its Hugging Face dataset stays.`)) {
+    if (!window.confirm(t('recipe.confirmDelete', { name: current.name }))) {
       return
     }
     remove.mutate(current.id, {
@@ -259,7 +269,7 @@ export function RecipeBar({
   if (creating) {
     return (
       <div className="card gh-recipe">
-        <div className="card-title">New recipe</div>
+        <div className="card-title">{t('recipe.newTitle')}</div>
         <NewRecipeForm
           namespace={namespace}
           onCancel={() => setCreating(false)}
@@ -277,7 +287,7 @@ export function RecipeBar({
       <div className="gh-recipe-row">
         <div className="field gh-recipe-pick">
           <label className="label" htmlFor="recipe-pick">
-            Recipe
+            {t('recipe.label')}
           </label>
           <div className="gh-inline">
             <select
@@ -294,13 +304,13 @@ export function RecipeBar({
             </select>
             <button type="button" className="btn btn-outline" onClick={() => setCreating(true)}>
               <Icon name="plus" />
-              New
+              {t('recipe.new')}
             </button>
           </div>
         </div>
         <div className="field gh-recipe-target">
           <label className="label" htmlFor="recipe-target-edit">
-            Publishes to
+            {t('recipe.publishesTo')}
           </label>
           <input
             id="recipe-target-edit"
@@ -318,7 +328,7 @@ export function RecipeBar({
         </div>
         <div className="field">
           <label className="label" htmlFor="recipe-model">
-            Model
+            {t('recipe.model')}
           </label>
           <ModelSelect
             id="recipe-model"
@@ -336,11 +346,11 @@ export function RecipeBar({
             checked={working.include_profile ?? true}
             onChange={(e) => onChange({ ...working, include_profile: e.target.checked })}
           />
-          Profile facts (who you are, your stack, your projects)
+          {t('recipe.profileFacts')}
         </label>
         <span className="hint">
-          {sources.length} repo{sources.length === 1 ? '' : 's'} selected ·{' '}
-          {saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved'}
+          {t('recipe.reposSelected', { count: sources.length })} ·{' '}
+          {saving ? t('recipe.saving') : dirty ? t('recipe.unsaved') : t('recipe.saved')}
         </span>
         <div className="gh-recipe-actions">
           <button
@@ -350,17 +360,17 @@ export function RecipeBar({
             disabled={remove.isPending}
           >
             <Icon name="trash" />
-            Delete
+            {tc('delete')}
           </button>
           <button
             type="button"
             className="btn btn-primary"
             onClick={generate}
             disabled={active || start.isPending || saving || dirty || nothing}
-            title={nothing ? 'Select a repo or the profile facts first' : undefined}
+            title={nothing ? t('recipe.nothingSelected') : undefined}
           >
             <Icon name={start.isPending ? 'loader' : 'sparkles'} />
-            Generate draft
+            {t('recipe.generate')}
           </button>
         </div>
       </div>

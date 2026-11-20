@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import type { ResumeOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { useResume } from '@/hooks'
@@ -15,6 +16,7 @@ function hostOf(url: string): string {
 }
 
 function ResumeBody({ resume }: { resume: ResumeOut }) {
+  const t = useTranslations('resume')
   const { basics } = resume
   const contact = [basics.location, basics.email, basics.phone].filter(Boolean)
   const facts = basics.facts ?? []
@@ -50,7 +52,7 @@ function ResumeBody({ resume }: { resume: ResumeOut }) {
 
       {resume.summary && (
         <section>
-          <h3 className="rs-section-title">Summary</h3>
+          <h3 className="rs-section-title">{t('view.summary')}</h3>
           <p className="rs-text">{resume.summary}</p>
         </section>
       )}
@@ -92,7 +94,7 @@ function ResumeBody({ resume }: { resume: ResumeOut }) {
       ))}
 
       {!resume.summary && resume.sections.length === 0 && (
-        <p className="muted">Nothing visible in this resume yet.</p>
+        <p className="muted">{t('view.nothingVisible')}</p>
       )}
     </div>
   )
@@ -100,17 +102,19 @@ function ResumeBody({ resume }: { resume: ResumeOut }) {
 
 /** The resume picked in the list, read as text. */
 export function ResumeView({ id, onClose }: { id: string; onClose: () => void }) {
+  const t = useTranslations('resume')
+  const tc = useTranslations('common')
   const query = useResume(id)
   const resume = query.data
   return (
-    <section className="card gh-panel" aria-label={resume?.name ?? 'Resume'}>
+    <section className="card gh-panel" aria-label={resume?.name ?? t('view.fallbackName')}>
       <header className="gh-panel-head">
         <div>
-          <div className="card-title">{resume?.name ?? 'Resume'}</div>
+          <div className="card-title">{resume?.name ?? t('view.fallbackName')}</div>
           {resume && <div className="hint mono">{resume.slug}</div>}
         </div>
         <div className="gh-panel-actions">
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={tc('close')}>
             <Icon name="x" />
           </button>
         </div>
@@ -120,7 +124,7 @@ export function ResumeView({ id, onClose }: { id: string; onClose: () => void })
           <p className="hub-error">{query.error.message}</p>
         ) : !resume ? (
           <p className="hint" aria-busy="true">
-            <Icon name="loader" className="animate-spin" /> Reading the resume…
+            <Icon name="loader" className="animate-spin" /> {t('reading')}
           </p>
         ) : (
           <>

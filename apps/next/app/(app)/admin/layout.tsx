@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { AdminGuard, AdminTabs } from '@/components/admin/admin-shell'
 
 // Where the server-side check reaches the API (inside the cluster / compose).
@@ -26,14 +27,13 @@ async function serverRole(): Promise<'admin' | 'user' | 'unknown'> {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const role = await serverRole()
   if (role === 'user') notFound()
+  const t = await getTranslations('admin')
   return (
     <AdminGuard>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Administration</h1>
-          <p className="page-sub">
-            Accounts, usage and platform switches. Dataset content and keys are never shown here.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
       </div>
       <AdminTabs />

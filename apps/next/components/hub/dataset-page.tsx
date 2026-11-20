@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { errorStatus, type HubRepoRef } from '@/api/sdk'
 import type { HubDatasetDetail } from '@/api/types'
@@ -16,13 +17,15 @@ import { formatBytes, formatCount, formatDateTime, shortSha, timeAgo } from './f
 import { HistoryPanel } from './history-panel'
 import { StatsPanel } from './stats-panel'
 import { type HubTab, type HubViewState, useHubUrlState } from './url-state'
+import { rich } from '@/lib/rich'
 
-const TABS: { key: HubTab; label: string; icon: string }[] = [
-  { key: 'data', label: 'Data', icon: 'table' },
-  { key: 'card', label: 'Card', icon: 'book' },
-  { key: 'stats', label: 'Statistics', icon: 'activity' },
-  { key: 'files', label: 'Files', icon: 'fileText' },
-  { key: 'history', label: 'History', icon: 'gitBranch' },
+// The tab labels are the `datasets.page.tabs.<key>` messages.
+const TABS: { key: HubTab; icon: string }[] = [
+  { key: 'data', icon: 'table' },
+  { key: 'card', icon: 'book' },
+  { key: 'stats', icon: 'activity' },
+  { key: 'files', icon: 'fileText' },
+  { key: 'history', icon: 'gitBranch' },
 ]
 
 function RevisionPicker({
@@ -36,6 +39,8 @@ function RevisionPicker({
   state: HubViewState
   update: (patch: Partial<HubViewState>) => void
 }) {
+  const t = useTranslations('datasets')
+  const locale = useLocale()
   const commits = useHubCommits(repo)
   const [now] = useState(() => Date.now())
   const branches = (detail.refs.branches ?? []).filter((b) => b.name !== 'main')
@@ -44,7 +49,7 @@ function RevisionPicker({
   const known = new Set([
     '',
     ...branches.map((b) => b.name),
-    ...tags.map((t) => t.name),
+    ...tags.map((tag) => tag.name),
     ...recent.map((c) => c.id),
   ])
   const value = state.rev ?? ''
@@ -52,14 +57,14 @@ function RevisionPicker({
   return (
     <select
       className="select hub-rev"
-      aria-label="Version"
+      aria-label={t('page.version')}
       value={value}
       onChange={(e) => update({ rev: e.target.value || null, row: null, base: null, head: null })}
     >
-      <option value="">Latest version</option>
+      <option value="">{t('latestVersion')}</option>
       {!known.has(value) && <option value={value}>{shortSha(value)}</option>}
       {branches.length > 0 && (
-        <optgroup label="Branches">
+        <optgroup label={t('page.branches')}>
           {branches.map((b) => (
             <option key={b.name} value={b.name}>
               {b.name}
@@ -68,19 +73,20 @@ function RevisionPicker({
         </optgroup>
       )}
       {tags.length > 0 && (
-        <optgroup label="Tags">
-          {tags.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
+        <optgroup label={t('page.tags')}>
+          {tags.map((tag) => (
+            <option key={tag.name} value={tag.name}>
+              {tag.name}
             </option>
           ))}
         </optgroup>
       )}
       {recent.length > 1 && (
-        <optgroup label="Commits">
+        <optgroup label={t('page.commits')}>
           {recent.map((c) => (
             <option key={c.id} value={c.id}>
-              {shortSha(c.id)} · {c.title.slice(0, 48) || 'commit'} · {timeAgo(c.created_at, now)}
+              {shortSha(c.id)} · {c.title.slice(0, 48) || t('page.commitFallback')} ·{' '}
+              {timeAgo(c.created_at, now, locale)}
             </option>
           ))}
         </optgroup>
@@ -100,21 +106,21 @@ function Header({
   state: HubViewState
   update: (patch: Partial<HubViewState>) => void
 }) {
+  const t = useTranslations('datasets')
+  const locale = useLocale()
   const [now] = useState(() => Date.now())
   const title = detail.pretty_name || repo.name
-  const tags = (detail.tags ?? []).filter((t) => !t.includes(':'))
+  const tags = (detail.tags ?? []).filter((tag) => !tag.includes(':'))
 
   const copySnippet = async () => {
     const snippet = `from datasets import load_dataset\n\nds = load_dataset("${detail.id}")`
     try {
       await navigator.clipboard.writeText(snippet)
-      toast.success('Python snippet copied', {
-        description: detail.private
-          ? 'Private dataset: sign in first with `hf auth login`.'
-          : undefined,
+      toast.success(t('page.snippetCopied'), {
+        description: detail.private ? t('page.snippetPrivateHint') : undefined,
       })
     } catch {
-      toast.error('The browser refused access to the clipboard')
+      toast.error(t('page.clipboardRefused'))
     }
   }
 
@@ -130,25 +136,27 @@ function Header({
             {detail.private ? (
               <span className="badge badge-secondary">
                 <Icon name="key" className="ic-sm" />
-                Private
+                {t('private')}
               </span>
             ) : (
               <span className="badge badge-outline">
                 <Icon name="globe" className="ic-sm" />
-                Public
+                {t('public')}
               </span>
             )}
-            {Boolean(detail.gated) && <span className="badge badge-warning">Gated</span>}
+            {Boolean(detail.gated) && <span className="badge badge-warning">{t('gated')}</span>}
           </h1>
           <div className="hub-meta-line">
             <span className="mono">{detail.id}</span>
-            <span title={formatDateTime(detail.last_modified)}>
-              Updated {timeAgo(detail.last_modified, now)}
+            <span title={formatDateTime(detail.last_modified, locale)}>
+              {t('page.updated', { time: timeAgo(detail.last_modified, now, locale) })}
             </span>
-            {detail.used_storage != null && <span>{formatBytes(detail.used_storage)}</span>}
-            <span>{formatCount(detail.files.length)} files</span>
-            <span>{formatCount(detail.downloads ?? 0)} downloads (30 days)</span>
-            <span>{formatCount(detail.likes ?? 0)} likes</span>
+            {detail.used_storage != null && <span>{formatBytes(detail.used_storage, locale)}</span>}
+            <span>{t('page.files', { count: formatCount(detail.files.length, locale) })}</span>
+            <span>
+              {t('page.downloads', { count: formatCount(detail.downloads ?? 0, locale) })}
+            </span>
+            <span>{t('page.likes', { count: formatCount(detail.likes ?? 0, locale) })}</span>
           </div>
           {detail.description && <p className="hub-desc">{detail.description}</p>}
           <div className="hub-chips">
@@ -158,7 +166,9 @@ function Header({
                 {lang}
               </span>
             ))}
-            {detail.license && <span className="tag">license: {detail.license}</span>}
+            {detail.license && (
+              <span className="tag">{t('page.license', { license: detail.license })}</span>
+            )}
             {detail.size_category && <span className="tag mono">{detail.size_category}</span>}
             {tags.map((tag) => (
               <span key={tag} className="tag">
@@ -175,18 +185,18 @@ function Header({
           href={`/generate?target=${encodeURIComponent(detail.id)}`}
         >
           <Icon name="plus" />
-          Add data
+          {t('page.addData')}
         </Link>
         <Link
           className="btn btn-outline"
           href={`/collections?repo=${encodeURIComponent(detail.id)}`}
         >
           <Icon name="boxes" />
-          Build a collection
+          {t('page.buildCollection')}
         </Link>
         <button type="button" className="btn btn-outline" onClick={copySnippet}>
           <Icon name="terminal" />
-          Use in Python
+          {t('page.useInPython')}
         </button>
         <a className="btn btn-outline" href={detail.url} target="_blank" rel="noopener noreferrer">
           <Icon name="external" />
@@ -198,6 +208,7 @@ function Header({
 }
 
 export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
+  const t = useTranslations('datasets')
   const [state, update] = useHubUrlState()
   const dataset = useHubDataset(repo, state.rev)
   const status = errorStatus(dataset.error)
@@ -205,7 +216,7 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
   const back = (
     <Link href="/datasets" className="btn btn-ghost btn-sm hub-back">
       <Icon name="chevronLeft" />
-      Datasets
+      {t('page.back')}
     </Link>
   )
 
@@ -215,7 +226,7 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
         {back}
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Reading {repo.owner}/{repo.name} from Hugging Face…
+          {t('page.reading', { repo: `${repo.owner}/${repo.name}` })}
         </div>
       </div>
     )
@@ -234,7 +245,7 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
             </span>
             <div>
               <div className="card-title">
-                {status === 404 ? 'Dataset not found' : "Couldn't load this dataset"}
+                {status === 404 ? t('page.notFound') : t('page.loadFailed')}
               </div>
               <p className="card-desc">{dataset.error.message}</p>
             </div>
@@ -244,12 +255,12 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
                 className="btn btn-outline"
                 onClick={() => update({ rev: null })}
               >
-                Latest version
+                {t('latestVersion')}
               </button>
             ) : (
               <button type="button" className="btn btn-outline" onClick={() => dataset.refetch()}>
                 <Icon name="refresh" />
-                Try again
+                {t('tryAgain')}
               </button>
             )}
           </div>
@@ -268,20 +279,22 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
         <div className="hub-notice">
           <Icon name="clock" />
           <span>
-            You are viewing an earlier version, commit{' '}
-            <span className="mono">{shortSha(detail.sha)}</span>.
+            {t.rich('page.earlierVersion', {
+              sha: shortSha(detail.sha),
+              mono: rich.mono,
+            })}
           </span>
           <button
             type="button"
             className="btn btn-outline btn-sm"
             onClick={() => update({ rev: null, row: null })}
           >
-            Back to the latest
+            {t('page.backToLatest')}
           </button>
         </div>
       )}
 
-      <nav className="tabs hub-tabs" aria-label="Dataset sections">
+      <nav className="tabs hub-tabs" aria-label={t('page.sections')}>
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -291,7 +304,7 @@ export function HubDatasetPage({ repo }: { repo: HubRepoRef }) {
             onClick={() => update({ tab: tab.key, row: null })}
           >
             <Icon name={tab.icon} />
-            {tab.label}
+            {t(`page.tabs.${tab.key}`)}
           </button>
         ))}
       </nav>

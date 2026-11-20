@@ -9,9 +9,12 @@ dependencies = [
     # The "standard" extra minus fastapi-cloud-cli (and its sentry-sdk), which
     # the image would ship without using.
     "fastapi[standard-no-fastapi-cloud-cli]>=0.162.0",
+    # Only for the errors huggingface_hub raises (services/hub.py): the Hub
+    # client is built on it. The app's own HTTP calls use httpx2 below.
     "httpx>=0.28.1",
-    # The HTTP stack of openai 3.x. The outbound-request guard (core/net.py) is
-    # built on it, so the clients it hands to the SDK are the SDK's own kind.
+    # The HTTP stack of openai 3.x, and of every client the app builds: the
+    # outbound-request guard (core/net.py), GitHub, Reactive Resume, the key
+    # checks and the reindex call.
     "httpx2>=2.13.1",
     # Capped below 4.0 until the provider (services/providers/openai.py) is
     # checked against the 4.x client.

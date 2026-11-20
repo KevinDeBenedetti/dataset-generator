@@ -3,11 +3,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import type { DraftPair, JobRunOut } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { datasetHref, formatCount, formatPercent } from '@/components/hub/format'
 import { useDraftChecks, useJobRun, usePublishJobRun } from '@/hooks'
+import { rich } from '@/lib/rich'
 import { cn } from '@/lib/utils'
 
 type Section = 'new' | 'review' | 'removed'
@@ -18,13 +20,18 @@ type Edit = { question: string; answer: string }
 const LOW_GROUNDING = 0.6
 const LOW_GRADE = 0.6
 
-function Score({ label, value }: { label: string; value: number | null | undefined }) {
+type ScoreKind = 'confidence' | 'grounding' | 'grade'
+
+// The label is the `review.scores.<kind>` message.
+function Score({ kind, value }: { kind: ScoreKind; value: number | null | undefined }) {
+  const t = useTranslations('review')
+  const locale = useLocale()
   if (value == null) return null
   const low =
-    (label === 'grounding' && value < LOW_GROUNDING) || (label === 'grade' && value < LOW_GRADE)
+    (kind === 'grounding' && value < LOW_GROUNDING) || (kind === 'grade' && value < LOW_GRADE)
   return (
     <span className={cn('tag', low && 'gh-low')}>
-      {label} {formatPercent(value, 1)}
+      {t(`scores.${kind}`)} {formatPercent(value, 1, locale)}
     </span>
   )
 }
@@ -46,6 +53,8 @@ function PairCard({
   onToggle?: () => void
   onEdit?: (edit: Edit | null) => void
 }) {
+  const t = useTranslations('review')
+  const tc = useTranslations('common')
   const [draft, setDraft] = useState<Edit | null>(null)
   const shown = edit ?? { question: pair.question, answer: pair.answer }
   return (
@@ -56,31 +65,31 @@ function PairCard({
             type="checkbox"
             checked={included}
             onChange={onToggle}
-            aria-label={included ? 'Leave this pair out' : 'Include this pair'}
+            aria-label={included ? t('pair.leaveOut') : t('pair.include')}
           />
         )}
         {pair.category && <span className="tag">{pair.category}</span>}
         {pair.repo && <span className="tag">{pair.repo}</span>}
-        <Score label="confidence" value={pair.confidence} />
-        <Score label="grounding" value={pair.grounding} />
-        <Score label="grade" value={pair.judge} />
+        <Score kind="confidence" value={pair.confidence} />
+        <Score kind="grounding" value={pair.grounding} />
+        <Score kind="grade" value={pair.judge} />
         {pair.judge_note && (pair.judge ?? 1) < LOW_GRADE && (
-          <span className="tag gh-low" title="The grader's reason">
+          <span className="tag gh-low" title={t('pair.graderReason')}>
             {pair.judge_note}
           </span>
         )}
-        {flag && <span className="tag gh-low">fails your rules: {flag}</span>}
-        {edit && <span className="badge badge-info">Edited</span>}
+        {flag && <span className="tag gh-low">{t('pair.failsRules', { reason: flag })}</span>}
+        {edit && <span className="badge badge-info">{t('pair.edited')}</span>}
         {editable && onEdit && !draft && (
           <span className="gh-pair-actions">
             {edit && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEdit(null)}>
-                Undo edit
+                {t('pair.undoEdit')}
               </button>
             )}
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft(shown)}>
               <Icon name="edit" />
-              Edit
+              {tc('edit')}
             </button>
           </span>
         )}
@@ -88,7 +97,7 @@ function PairCard({
       {draft && onEdit ? (
         <div className="gh-pair-edit">
           <label className="label" htmlFor={`q-${pair.id}`}>
-            Question
+            {t('pair.question')}
           </label>
           <textarea
             id={`q-${pair.id}`}
@@ -99,7 +108,7 @@ function PairCard({
             onChange={(e) => setDraft({ ...draft, question: e.target.value })}
           />
           <label className="label" htmlFor={`a-${pair.id}`}>
-            Answer
+            {t('pair.answer')}
           </label>
           <textarea
             id={`a-${pair.id}`}
@@ -125,10 +134,10 @@ function PairCard({
                 setDraft(null)
               }}
             >
-              Keep this version
+              {t('pair.keep')}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft(null)}>
-              Cancel
+              {tc('cancel')}
             </button>
           </div>
         </div>
@@ -151,22 +160,25 @@ function toggled(set: Set<string>, id: string): Set<string> {
 }
 
 function Waiting({ run }: { run: JobRunOut }) {
+  const t = useTranslations('review')
   const { done = 0, total = 0, label = '' } = run.progress ?? {}
   return (
     <div className="card hub-loading">
       <Icon name="loader" className="animate-spin" />
       {run.status === 'queued'
-        ? 'Queued — waiting for a worker.'
+        ? t('waiting.queued')
         : total > 0
-          ? `Generating… ${done}/${total} repos${label ? ` · ${label}` : ''}`
-          : 'Reading GitHub…'}{' '}
-      The draft shows up here when it is ready.
+          ? `${t('waiting.generating', { done, total })}${label ? ` · ${label}` : ''}`
+          : t('waiting.reading')}{' '}
+      {t('waiting.ready')}
     </div>
   )
 }
 
 /** Review a run's draft, then publish exactly that to Hugging Face. */
 export function DraftReview({ runId }: { runId: string }) {
+  const t = useTranslations('review')
+  const locale = useLocale()
   const router = useRouter()
   const run = useJobRun(runId)
   const publish = usePublishJobRun(runId)
@@ -204,7 +216,7 @@ export function DraftReview({ runId }: { runId: string }) {
     return (
       <div className="card hub-loading" aria-busy="true">
         <Icon name="loader" className="animate-spin" />
-        Loading the draft…
+        {t('loading')}
       </div>
     )
   }
@@ -214,14 +226,14 @@ export function DraftReview({ runId }: { runId: string }) {
   // page, else the drafts list.
   const back =
     data.job === 'github-recipe'
-      ? { href: '/github', label: 'GitHub' }
+      ? { href: '/github', label: t('back.github') }
       : data.job === 'resume-qa'
-        ? { href: '/resume', label: 'Resume' }
-        : { href: '/drafts', label: 'Drafts' }
+        ? { href: '/resume', label: t('back.resume') }
+        : { href: '/drafts', label: t('back.drafts') }
   const recipeName =
     (data.options?.recipe as { name?: string } | undefined)?.name ??
     (data.options?.title as string | undefined) ??
-    'Draft'
+    t('fallbackName')
   const target = preview?.repo_id ?? ''
 
   const header = (
@@ -232,14 +244,10 @@ export function DraftReview({ runId }: { runId: string }) {
       </Link>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Review: {recipeName}</h1>
+          <h1 className="page-title">{t('title', { name: recipeName })}</h1>
           <p className="page-sub">
-            {target ? (
-              <>
-                Publishes to <span className="mono">{target}</span>
-              </>
-            ) : null}
-            {data.model_ref ? ` · generated with ${data.model_ref}` : ''}
+            {target ? t.rich('publishesTo', { ...rich, target }) : null}
+            {data.model_ref ? ` · ${t('generatedWith', { model: data.model_ref })}` : ''}
           </p>
         </div>
       </div>
@@ -264,15 +272,15 @@ export function DraftReview({ runId }: { runId: string }) {
           </span>
           <div>
             <div className="card-title">
-              {data.status === 'publishing' ? 'Publishing…' : 'Published'}
+              {data.status === 'publishing' ? t('publishing') : t('published')}
             </div>
             <p className="card-desc">
-              {data.published_at ? new Date(data.published_at).toLocaleString() : ''}
+              {data.published_at ? new Date(data.published_at).toLocaleString(locale) : ''}
             </p>
           </div>
           {target && (
             <Link className="btn btn-primary" href={datasetHref(target)}>
-              Open the dataset
+              {t('openDataset')}
             </Link>
           )}
         </div>
@@ -285,8 +293,8 @@ export function DraftReview({ runId }: { runId: string }) {
         {header}
         <p className="hub-error">
           {data.status === 'failed'
-            ? `The generation failed: ${data.error ?? 'unknown error'}`
-            : `This run has no draft to review (${data.status}).`}
+            ? t('failed', { error: data.error ?? t('unknownError') })
+            : t('noDraft', { status: data.status })}
         </p>
       </div>
     )
@@ -317,17 +325,18 @@ export function DraftReview({ runId }: { runId: string }) {
       },
       {
         onSuccess: () => {
-          toast.success(`Published ${total} pairs to ${target}`)
+          toast.success(t('publishedToast', { count: total, repo: target }))
           router.push(datasetHref(target))
         },
         onError: (error) => toast.error(error.message),
       },
     )
 
-  const sections: [Section, string, number][] = [
-    ['new', 'New', preview.new.length],
-    ['review', 'Held out', preview.review.length],
-    ['removed', 'Removed', (preview.removed ?? []).length],
+  // The tab labels are the `review.sections.<key>` messages.
+  const sections: [Section, number][] = [
+    ['new', preview.new.length],
+    ['review', preview.review.length],
+    ['removed', (preview.removed ?? []).length],
   ]
 
   return (
@@ -336,29 +345,31 @@ export function DraftReview({ runId }: { runId: string }) {
 
       <div className="stat-grid hub-stats">
         <div className="card stat">
-          <div className="stat-label">Will be published</div>
-          <div className="stat-val">{formatCount(total)}</div>
-          <div className="stat-delta">{formatCount(preview.kept)} kept unchanged</div>
-        </div>
-        <div className="card stat">
-          <div className="stat-label">New pairs</div>
-          <div className="stat-val">
-            {formatCount(preview.new.length - excluded.size)}
-            <span className="muted"> / {formatCount(preview.new.length)}</span>
+          <div className="stat-label">{t('stats.total')}</div>
+          <div className="stat-val">{formatCount(total, locale)}</div>
+          <div className="stat-delta">
+            {t('stats.kept', { count: formatCount(preview.kept, locale) })}
           </div>
         </div>
         <div className="card stat">
-          <div className="stat-label">Held out, taken in</div>
+          <div className="stat-label">{t('stats.new')}</div>
           <div className="stat-val">
-            {formatCount(promoted.size)}
-            <span className="muted"> / {formatCount(preview.review.length)}</span>
+            {formatCount(preview.new.length - excluded.size, locale)}
+            <span className="muted"> / {formatCount(preview.new.length, locale)}</span>
           </div>
-          <div className="stat-delta">answer far from its source</div>
         </div>
         <div className="card stat">
-          <div className="stat-label">Removed from the dataset</div>
-          <div className="stat-val">{formatCount((preview.removed ?? []).length)}</div>
-          <div className="stat-delta">sources deselected or gone</div>
+          <div className="stat-label">{t('stats.promoted')}</div>
+          <div className="stat-val">
+            {formatCount(promoted.size, locale)}
+            <span className="muted"> / {formatCount(preview.review.length, locale)}</span>
+          </div>
+          <div className="stat-delta">{t('stats.promotedHint')}</div>
+        </div>
+        <div className="card stat">
+          <div className="stat-label">{t('stats.removed')}</div>
+          <div className="stat-val">{formatCount((preview.removed ?? []).length, locale)}</div>
+          <div className="stat-delta">{t('stats.removedHint')}</div>
         </div>
       </div>
 
@@ -366,8 +377,8 @@ export function DraftReview({ runId }: { runId: string }) {
         <details className="card hub-meta">
           <summary>
             <Icon name="alert" className="ic-sm" />
-            {errors.length} problem(s) while generating
-            <span className="muted">the affected sources were skipped</span>
+            {t('problems.title', { count: errors.length })}
+            <span className="muted">{t('problems.hint')}</span>
           </summary>
           <ul className="gh-errors">
             {errors.map((e) => (
@@ -381,8 +392,8 @@ export function DraftReview({ runId }: { runId: string }) {
         <details className="card hub-meta" open>
           <summary>
             <Icon name="copy" className="ic-sm" />
-            {checks.data.duplicates.length} possible duplicate(s)
-            <span className="muted">same question, close answers</span>
+            {t('duplicates.title', { count: checks.data.duplicates.length })}
+            <span className="muted">{t('duplicates.hint')}</span>
           </summary>
           <ul className="gh-dupes">
             {checks.data.duplicates.map((d) => {
@@ -390,7 +401,7 @@ export function DraftReview({ runId }: { runId: string }) {
               const out = excluded.has(d.second) || !newIds.has(d.second)
               return (
                 <li key={`${d.first}-${d.second}`}>
-                  <span className="mono muted">{formatPercent(d.similarity, 1)}</span>
+                  <span className="mono muted">{formatPercent(d.similarity, 1, locale)}</span>
                   <span className="gh-dupe-q">
                     {byId.get(d.first)?.question} ≈ {second?.question}
                   </span>
@@ -401,7 +412,7 @@ export function DraftReview({ runId }: { runId: string }) {
                       disabled={out}
                       onClick={() => setExcluded(toggled(excluded, d.second))}
                     >
-                      {out ? 'Left out' : 'Leave out the second'}
+                      {out ? t('duplicates.leftOut') : t('duplicates.leaveOut')}
                     </button>
                   )}
                 </li>
@@ -413,8 +424,8 @@ export function DraftReview({ runId }: { runId: string }) {
 
       <div className="hub-toolbar">
         <fieldset className="tabs">
-          <legend className="sr-only">Pairs</legend>
-          {sections.map(([key, label, count]) => (
+          <legend className="sr-only">{t('filters.pairs')}</legend>
+          {sections.map(([key, count]) => (
             <button
               key={key}
               type="button"
@@ -422,7 +433,7 @@ export function DraftReview({ runId }: { runId: string }) {
               aria-pressed={section === key}
               onClick={() => setSection(key)}
             >
-              {label} <span className="mono muted">{count}</span>
+              {t(`sections.${key}`)} <span className="mono muted">{count}</span>
             </button>
           ))}
         </fieldset>
@@ -430,18 +441,18 @@ export function DraftReview({ runId }: { runId: string }) {
           <Icon name="search" />
           <input
             type="search"
-            placeholder="Search questions and answers"
+            placeholder={t('filters.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <select
           className="select gh-lang"
-          aria-label="Category"
+          aria-label={t('filters.category')}
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="">All categories</option>
+          <option value="">{t('filters.allCategories')}</option>
           {categories.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -450,11 +461,11 @@ export function DraftReview({ runId }: { runId: string }) {
         </select>
         <select
           className="select gh-lang"
-          aria-label="Repo"
+          aria-label={t('filters.repo')}
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
         >
-          <option value="">All repos</option>
+          <option value="">{t('filters.allRepos')}</option>
           {repos.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -463,7 +474,7 @@ export function DraftReview({ runId }: { runId: string }) {
         </select>
         <label className="gh-toggle">
           <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} />
-          Low grounding
+          {t('filters.lowGrounding')}
         </label>
         <label className="gh-toggle">
           <input
@@ -471,17 +482,13 @@ export function DraftReview({ runId }: { runId: string }) {
             checked={flaggedOnly}
             onChange={(e) => setFlaggedOnly(e.target.checked)}
           />
-          Fails your rules
+          {t('filters.failsRules')}
         </label>
       </div>
 
-      {section === 'removed' && visible.length > 0 && (
-        <p className="hint">
-          These pairs are in the published dataset and not in this draft: publishing deletes them.
-        </p>
-      )}
+      {section === 'removed' && visible.length > 0 && <p className="hint">{t('removedHint')}</p>}
       {visible.length === 0 ? (
-        <p className="muted hub-none">Nothing here.</p>
+        <p className="muted hub-none">{t('empty')}</p>
       ) : (
         <ul className="gh-pairs">
           {visible.map((pair) => {
@@ -513,9 +520,9 @@ export function DraftReview({ runId }: { runId: string }) {
 
       <div className="gh-publish-bar">
         <span className="hint">
-          {formatCount(total)} pairs
-          {editCount > 0 ? ` · ${editCount} edited` : ''} · private repo{' '}
-          <span className="mono">{target}</span>
+          {t('bar.pairs', { count: total, formatted: formatCount(total, locale) })}
+          {editCount > 0 ? ` · ${t('bar.edited', { count: editCount })}` : ''} ·{' '}
+          {t.rich('bar.repo', { ...rich, target })}
         </span>
         <button
           type="button"
@@ -524,7 +531,7 @@ export function DraftReview({ runId }: { runId: string }) {
           onClick={doPublish}
         >
           <Icon name={publish.isPending ? 'loader' : 'upload'} />
-          Publish to Hugging Face
+          {t('publish')}
         </button>
       </div>
     </div>
