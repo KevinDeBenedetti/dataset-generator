@@ -16,93 +16,47 @@ import {
   Upload,
   Zap,
 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { LandingMenu, type LandingLink } from '@/components/app/landing-menu'
+import { LanguageSwitch } from '@/components/app/language-switch'
 import { ThemeToggle } from '@/components/app/theme-toggle'
 
 const GITHUB_URL = 'https://github.com/KevinDeBenedetti/dataset-generator'
 
-const NAV_LINKS: LandingLink[] = [
-  { href: '#features', label: 'Features' },
-  { href: '#workflow', label: 'Pipeline' },
-  { href: '#formats', label: 'Exports' },
-  { href: GITHUB_URL, label: 'Docs', external: true },
-]
+// Section links of the landing bar; `label` is a key of `home.nav`.
+const NAV_LINKS = [
+  { href: '#features', label: 'features' },
+  { href: '#workflow', label: 'pipeline' },
+  { href: '#formats', label: 'exports' },
+  { href: GITHUB_URL, label: 'docs', external: true },
+] as const
 
+// Keys of `home.features.items`, `home.workflow.steps` and `home.formats.items`.
 const features = [
-  {
-    icon: Upload,
-    title: 'Multi-source ingestion',
-    description: "File upload (PDF/image, read by your LLM) or a GitHub account's public docs.",
-  },
-  {
-    icon: Sparkles,
-    title: 'LLM Q/A generation',
-    description:
-      'Configurable prompts, your choice of models, and question-answer pairs grounded in the source.',
-  },
-  {
-    icon: CopyCheck,
-    title: 'Duplicate detection',
-    description: 'Semantic similarity filters out redundancy before pairs reach your dataset.',
-  },
-  {
-    icon: Languages,
-    title: 'Multi-language',
-    description: 'Generation in French, English, Spanish and German, with localized prompts.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Quality control',
-    description: 'Automatic validation and filtering, quality scores and configurable thresholds.',
-  },
-  {
-    icon: Command,
-    title: 'REST API',
-    description: 'Programmatic access to embed generation into your own workflows.',
-  },
-]
+  { icon: Upload, key: 'ingestion' },
+  { icon: Sparkles, key: 'generation' },
+  { icon: CopyCheck, key: 'duplicates' },
+  { icon: Languages, key: 'languages' },
+  { icon: ShieldCheck, key: 'quality' },
+  { icon: Command, key: 'api' },
+] as const
 
 const steps = [
-  { num: '01', icon: Upload, title: 'Ingestion', description: 'Read a file or fetch GitHub docs.' },
-  {
-    num: '02',
-    icon: FilterX,
-    title: 'Cleaning',
-    description: 'Normalize, extract the useful content.',
-  },
-  {
-    num: '03',
-    icon: Sparkles,
-    title: 'Generation',
-    description: 'Q/A pairs via LLM and prompts.',
-  },
-  {
-    num: '04',
-    icon: ShieldCheck,
-    title: 'Quality',
-    description: 'Validation and deduplication.',
-  },
-  {
-    num: '05',
-    icon: Download,
-    title: 'Export',
-    description: 'JSON, CSV, JSONL, dataset copies.',
-  },
-  {
-    num: '06',
-    icon: GitBranch,
-    title: 'Versioning',
-    description: 'Storage and metadata tracking.',
-  },
-]
+  { num: '01', icon: Upload, key: 'ingestion' },
+  { num: '02', icon: FilterX, key: 'cleaning' },
+  { num: '03', icon: Sparkles, key: 'generation' },
+  { num: '04', icon: ShieldCheck, key: 'quality' },
+  { num: '05', icon: Download, key: 'export' },
+  { num: '06', icon: GitBranch, key: 'versioning' },
+] as const
 
 const formats = [
-  { icon: Zap, name: 'Hugging Face', description: 'Private dataset repos, versioned' },
-  { icon: FileJson, name: 'JSON / JSONL', description: 'Standard data interchange' },
-  { icon: Table, name: 'CSV', description: 'Tabular analysis and review' },
-  { icon: Command, name: 'REST API', description: 'Extensible custom formats' },
-]
+  { icon: Zap, name: 'Hugging Face', key: 'hub' },
+  { icon: FileJson, name: 'JSON / JSONL', key: 'json' },
+  { icon: Table, name: 'CSV', key: 'csv' },
+  { icon: Command, name: 'REST API', key: 'api' },
+] as const
 
 function Brand() {
   return (
@@ -119,6 +73,10 @@ function Brand() {
 }
 
 export default function HomePage() {
+  const t = useTranslations('home')
+  const navLinks: LandingLink[] = NAV_LINKS.map((link) =>
+    Object.assign({}, link, { label: t(`nav.${link.label}`) }),
+  )
   return (
     <>
       {/* Landing navigation: one sticky row. From md up the section links sit
@@ -129,7 +87,7 @@ export default function HomePage() {
             <Brand />
           </Link>
           <div className="ml-1 hidden gap-1 md:flex">
-            {NAV_LINKS.map(({ href, label, external }) => (
+            {navLinks.map(({ href, label, external }) => (
               <Link
                 key={label}
                 href={href}
@@ -141,6 +99,7 @@ export default function HomePage() {
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <LanguageSwitch className="hidden h-[34px] md:inline-flex" />
             <ThemeToggle className="hidden md:inline-flex" />
             <Button asChild size="sm" variant="ghost" className="hidden md:inline-flex">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer" aria-label="GitHub">
@@ -150,12 +109,12 @@ export default function HomePage() {
             </Button>
             <Button asChild size="sm" className="max-md:h-9">
               <Link href="/dashboard">
-                <span className="sm:hidden">Dashboard</span>
-                <span className="hidden sm:inline">Open the dashboard</span>
+                <span className="sm:hidden">{t('nav.dashboardShort')}</span>
+                <span className="hidden sm:inline">{t('nav.openDashboard')}</span>
                 <ArrowRight className="size-4 max-[359px]:hidden" />
               </Link>
             </Button>
-            <LandingMenu links={NAV_LINKS} />
+            <LandingMenu links={navLinks} />
           </div>
         </div>
       </nav>
@@ -168,37 +127,35 @@ export default function HomePage() {
               <span className="size-1.5 rounded-full bg-current" />
               v0.7.7
             </span>
-            File / GitHub → LLM → dataset pipeline, open-source
+            {t('hero.badge')}
           </div>
           <h1 className="mt-[22px] max-w-[16ch] text-[34px] font-semibold leading-[1.04] tracking-[-0.035em] min-[380px]:text-[38px] sm:text-[52px]">
-            Clean Q/A datasets,{' '}
-            <span className="text-muted-foreground">straight from your files and repos.</span>
+            {t('hero.title')} <span className="text-muted-foreground">{t('hero.titleMuted')}</span>
           </h1>
           <p className="mt-5 max-w-[56ch] text-base leading-[1.55] text-muted-foreground sm:text-[17px]">
-            Mine files and GitHub repos, generate context-aware question-answer pairs with an LLM,
-            catch duplicates, and export to JSONL or CSV — all from a single interface.
+            {t('hero.lead')}
           </p>
           <div className="mt-[30px] flex flex-col gap-[11px] sm:flex-row sm:flex-wrap">
             <Button asChild size="lg">
               <Link href="/generate">
                 <Sparkles className="size-4" />
-                Generate a dataset
+                {t('hero.generate')}
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
               <Link href="/dashboard">
                 <LayoutDashboard className="size-4" />
-                View the dashboard
+                {t('hero.viewDashboard')}
               </Link>
             </Button>
           </div>
           <div className="mt-[34px] flex flex-wrap gap-[22px] text-[13px] text-muted-foreground">
             <div>
-              <b className="font-semibold tabular-nums text-foreground">4</b> languages — FR · EN ·
-              ES · DE
+              <b className="font-semibold tabular-nums text-foreground">4</b> {t('hero.languages')}
             </div>
             <div>
-              <b className="font-semibold tabular-nums text-foreground">70%+</b> test coverage
+              <b className="font-semibold tabular-nums text-foreground">70%+</b>{' '}
+              {t('hero.coverage')}
             </div>
             <div>
               <b className="font-semibold text-foreground">FastAPI</b> + Next.js
@@ -217,7 +174,7 @@ export default function HomePage() {
             </span>
           </div>
           <pre className="overflow-x-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-[12px] leading-[1.75] sm:whitespace-pre sm:px-5 sm:py-[18px] sm:text-[13px] sm:leading-[1.85]">
-            <span className="text-muted-foreground"># Run the pipeline on a source</span>
+            <span className="text-muted-foreground">{t('terminal.comment')}</span>
             {'\n'}
             <span className="text-success">$</span> <span className="text-info">datasetgen</span>{' '}
             generate <span className="text-warning">--github</span> octocat{' '}
@@ -247,27 +204,28 @@ export default function HomePage() {
         {/* Features */}
         <section id="features" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {'// features'}
+            {t('features.eyebrow')}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
-            The whole pipeline, without gluing scripts together.
+            {t('features.title')}
           </h2>
           <p className="mt-3 max-w-[58ch] text-[15px] text-muted-foreground">
-            Each step is a module: ingestion, LLM client, data manager, export. Compose them from
-            the UI or the REST API.
+            {t('features.lead')}
           </p>
           <div className="mt-[34px] grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map(({ icon: Icon, title, description }) => (
+            {features.map(({ icon: Icon, key }) => (
               <div
-                key={title}
+                key={key}
                 className="rounded-[10px] border border-border bg-card p-5 shadow-xs sm:p-[22px]"
               >
                 <div className="flex size-[38px] items-center justify-center rounded-[9px] bg-secondary text-muted-foreground">
                   <Icon className="size-[19px]" />
                 </div>
-                <h3 className="mt-4 text-[15.5px] font-semibold">{title}</h3>
+                <h3 className="mt-4 text-[15.5px] font-semibold">
+                  {t(`features.items.${key}.title`)}
+                </h3>
                 <p className="mt-[7px] text-[13.5px] leading-[1.55] text-muted-foreground">
-                  {description}
+                  {t(`features.items.${key}.description`)}
                 </p>
               </div>
             ))}
@@ -277,18 +235,22 @@ export default function HomePage() {
         {/* Workflow */}
         <section id="workflow" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {'// pipeline'}
+            {t('workflow.eyebrow')}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
-            Six steps, from raw page to versioned dataset.
+            {t('workflow.title')}
           </h2>
           <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 md:grid-cols-6">
-            {steps.map(({ num, icon: Icon, title, description }) => (
+            {steps.map(({ num, icon: Icon, key }) => (
               <div key={num} className="bg-card p-4 sm:p-5">
                 <div className="font-mono text-xs text-muted-foreground">{num}</div>
                 <Icon className="mt-3.5 size-[18px]" />
-                <h4 className="mt-2.5 text-[13.5px] font-semibold">{title}</h4>
-                <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">{description}</p>
+                <h4 className="mt-2.5 text-[13.5px] font-semibold">
+                  {t(`workflow.steps.${key}.title`)}
+                </h4>
+                <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
+                  {t(`workflow.steps.${key}.description`)}
+                </p>
               </div>
             ))}
           </div>
@@ -297,13 +259,13 @@ export default function HomePage() {
         {/* Formats */}
         <section id="formats" className="scroll-mt-20 border-t border-border py-10 sm:py-14">
           <div className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
-            {'// exports'}
+            {t('formats.eyebrow')}
           </div>
           <h2 className="mt-3 max-w-[20ch] text-[26px] font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
-            Send your data wherever you need it.
+            {t('formats.title')}
           </h2>
           <div className="mt-[30px] grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-            {formats.map(({ icon: Icon, name, description }) => (
+            {formats.map(({ icon: Icon, name, key }) => (
               <div
                 key={name}
                 className="flex items-center gap-3 rounded-[10px] border border-border bg-card p-4 shadow-xs"
@@ -311,7 +273,9 @@ export default function HomePage() {
                 <Icon className="size-5 text-muted-foreground" />
                 <div>
                   <b className="font-mono text-[13.5px] font-semibold">{name}</b>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t(`formats.items.${key}`)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -322,21 +286,18 @@ export default function HomePage() {
         <section className="border-t border-border py-10 sm:py-14">
           <div className="rounded-2xl border border-border bg-card px-5 py-8 text-center sm:p-11">
             <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-[28px]">
-              Build your first dataset in minutes.
+              {t('cta.title')}
             </h2>
-            <p className="mx-auto mt-3 max-w-[48ch] text-muted-foreground">
-              Pick a source, run the pipeline, review the Q/A pairs and export. Without leaving the
-              interface.
-            </p>
+            <p className="mx-auto mt-3 max-w-[48ch] text-muted-foreground">{t('cta.lead')}</p>
             <div className="mt-6 flex flex-col justify-center gap-[11px] sm:flex-row sm:flex-wrap">
               <Button asChild size="lg">
                 <Link href="/generate">
                   <Sparkles className="size-4" />
-                  Start generating
+                  {t('cta.start')}
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/datasets">Browse datasets</Link>
+                <Link href="/datasets">{t('cta.browse')}</Link>
               </Button>
             </div>
           </div>
@@ -352,39 +313,38 @@ export default function HomePage() {
                 <Brand />
               </Link>
               <p className="mt-3 text-[13px] leading-[1.6] text-muted-foreground">
-                Automated question-answer dataset generation from files and repos, via LLMs.
-                Duplicate detection and exports.
+                {t('footer.tagline')}
               </p>
             </div>
             <FooterCol
-              title="Product"
+              title={t('footer.product')}
               links={[
-                { href: '/dashboard', label: 'Dashboard' },
-                { href: '/generate', label: 'Generate' },
-                { href: '/datasets', label: 'Datasets' },
-                { href: '/agent-test', label: 'Verify QA' },
+                { href: '/dashboard', label: t('footer.dashboard') },
+                { href: '/generate', label: t('footer.generate') },
+                { href: '/datasets', label: t('footer.datasets') },
+                { href: '/agent-test', label: t('footer.verifyQa') },
               ]}
             />
             <FooterCol
-              title="Resources"
+              title={t('footer.resources')}
               links={[
-                { href: GITHUB_URL, label: 'Documentation' },
+                { href: GITHUB_URL, label: t('footer.documentation') },
                 { href: GITHUB_URL, label: 'GitHub' },
-                { href: GITHUB_URL, label: 'REST API' },
-                { href: '#', label: 'Changelog' },
+                { href: GITHUB_URL, label: t('footer.restApi') },
+                { href: '#', label: t('footer.changelog') },
               ]}
             />
             <FooterCol
-              title="Legal"
+              title={t('footer.legal')}
               links={[
-                { href: '#', label: 'Legal notice' },
-                { href: '#', label: 'Privacy' },
-                { href: '#', label: 'Terms' },
+                { href: '#', label: t('footer.legalNotice') },
+                { href: '#', label: t('footer.privacy') },
+                { href: '#', label: t('footer.terms') },
               ]}
             />
           </div>
           <div className="mt-9 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 text-[12.5px] text-muted-foreground">
-            <span>© 2026 DatasetGen. Open-source licensed.</span>
+            <span>{t('footer.copyright')}</span>
             <span className="font-mono">Python · FastAPI · Next.js · shadcn/ui</span>
           </div>
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { useAuditLog } from '@/hooks/use-admin'
 
 const PAGE = 100
@@ -9,20 +10,20 @@ export default function AdminAuditPage() {
   const [offset, setOffset] = useState(0)
   const [action, setAction] = useState('')
   const { data, error } = useAuditLog(offset, action)
+  const t = useTranslations('admin.audit')
+  const locale = useLocale()
 
   return (
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">Audit log</div>
-          <div className="card-desc">
-            Security events. Deleted accounts appear as a short hash of their email.
-          </div>
+          <div className="card-title">{t('title')}</div>
+          <div className="card-desc">{t('description')}</div>
         </div>
         <input
           className="input mono"
           style={{ maxWidth: 220 }}
-          placeholder="Filter: e.g. user.signup"
+          placeholder={t('filter')}
           value={action}
           onChange={(e) => {
             setAction(e.target.value.trim())
@@ -35,25 +36,25 @@ export default function AdminAuditPage() {
         <table className="table stack-table" style={{ width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left' }}>When</th>
-              <th style={{ textAlign: 'left' }}>Action</th>
-              <th style={{ textAlign: 'left' }}>By</th>
-              <th style={{ textAlign: 'left' }}>On</th>
-              <th style={{ textAlign: 'left' }}>Detail</th>
+              <th style={{ textAlign: 'left' }}>{t('when')}</th>
+              <th style={{ textAlign: 'left' }}>{t('action')}</th>
+              <th style={{ textAlign: 'left' }}>{t('by')}</th>
+              <th style={{ textAlign: 'left' }}>{t('on')}</th>
+              <th style={{ textAlign: 'left' }}>{t('detail')}</th>
             </tr>
           </thead>
           <tbody>
             {(data?.entries ?? []).map((entry) => (
               <tr key={entry.id}>
-                <td className="hint" data-label="When">
-                  {new Date(entry.created_at).toLocaleString()}
+                <td className="hint" data-label={t('when')}>
+                  {new Date(entry.created_at).toLocaleString(locale)}
                 </td>
-                <td className="mono" data-label="Action">
+                <td className="mono" data-label={t('action')}>
                   {entry.action}
                 </td>
-                <td data-label="By">{entry.actor ?? '—'}</td>
-                <td data-label="On">{entry.target ?? '—'}</td>
-                <td className="mono hint" data-label="Detail">
+                <td data-label={t('by')}>{entry.actor ?? '—'}</td>
+                <td data-label={t('on')}>{entry.target ?? '—'}</td>
+                <td className="mono hint" data-label={t('detail')}>
                   {Object.keys(entry.detail).length ? JSON.stringify(entry.detail) : ''}
                   {entry.ip ? ` · ${entry.ip}` : ''}
                 </td>
@@ -70,7 +71,7 @@ export default function AdminAuditPage() {
             disabled={offset === 0}
             onClick={() => setOffset(Math.max(0, offset - PAGE))}
           >
-            Newer
+            {t('newer')}
           </button>
           <button
             className="btn btn-outline btn-sm"
@@ -78,7 +79,7 @@ export default function AdminAuditPage() {
             disabled={offset + PAGE >= data.total}
             onClick={() => setOffset(offset + PAGE)}
           >
-            Older
+            {t('older')}
           </button>
         </div>
       )}

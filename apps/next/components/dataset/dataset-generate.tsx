@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -18,19 +19,13 @@ import { useGenerateStore } from '@/stores/generate'
 import { HF_REPO_PATTERN, defaultTargetRepo } from '@/components/github/recipe-state'
 import { useGenerateDataset, useHubDatasets } from '@/hooks'
 
-const availableLanguages = [
-  { value: 'fr', label: 'French' },
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'de', label: 'German' },
-]
+// Labels are message keys: `generate.form.languages.<value>`.
+const availableLanguages = ['fr', 'en', 'es', 'de'] as const
 
 type SourceKind = 'file' | 'url'
 
-const sourceOptions: { value: SourceKind; label: string }[] = [
-  { value: 'file', label: 'File' },
-  { value: 'url', label: 'Web page' },
-]
+// Labels are message keys: `generate.form.sources.<value>`.
+const sourceOptions: SourceKind[] = ['file', 'url']
 
 const SELECT_CLASS =
   'h-9 w-full rounded-md border bg-white px-3 text-sm outline-none focus-visible:border-ring'
@@ -42,6 +37,7 @@ interface DatasetGenerateProps {
 }
 
 export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
+  const t = useTranslations('generate.form')
   const [source, setSource] = useState<SourceKind>('file')
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState('')
@@ -88,7 +84,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
           ? { ...common, source: 'file', file: file as File }
           : { ...common, source: 'url', url: url.trim() },
       )
-      toast.success('Draft ready: review it before it goes to Hugging Face')
+      toast.success(t('draftReady'))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
@@ -98,17 +94,17 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
     <div className="w-full flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium" htmlFor="gen-title">
-          Title
+          {t('title')}
         </label>
         <Input
           id="gen-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Product documentation"
+          placeholder={t('titlePlaceholder')}
           disabled={isProcessing}
         />
         <label className="text-sm font-medium" htmlFor="gen-target">
-          Publishes to (Hugging Face dataset)
+          {t('target')}
         </label>
         <Input
           id="gen-target"
@@ -126,26 +122,23 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
             </option>
           ))}
         </datalist>
-        <p className="text-xs text-muted-foreground">
-          The pairs become a draft you review before they are added to this dataset (created private
-          if it doesn't exist).
-        </p>
+        <p className="text-xs text-muted-foreground">{t('targetHint')}</p>
 
         {/* Source picker: File / Web page */}
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
           {sourceOptions.map((opt) => (
             <button
-              key={opt.value}
+              key={opt}
               type="button"
-              onClick={() => setSource(opt.value)}
+              onClick={() => setSource(opt)}
               disabled={isProcessing}
               className={`rounded-md py-1.5 text-sm font-medium transition-colors ${
-                source === opt.value
+                source === opt
                   ? 'bg-white shadow-sm text-gray-900'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {opt.label}
+              {t(`sources.${opt}`)}
             </button>
           ))}
         </div>
@@ -159,9 +152,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
               disabled={isProcessing}
               className="text-sm file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground"
             />
-            <span className="text-xs text-gray-400">
-              PDF or image — each page is transcribed by the model, then mined for Q&amp;A.
-            </span>
+            <span className="text-xs text-gray-400">{t('fileHint')}</span>
           </div>
         )}
 
@@ -174,20 +165,18 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
               placeholder="https://docs.example.com/guide"
               disabled={isProcessing}
             />
-            <span className="text-xs text-gray-400">
-              One public page (no crawling) — its text is cleaned, then mined for Q&amp;A.
-            </span>
+            <span className="text-xs text-gray-400">{t('urlHint')}</span>
           </div>
         )}
 
         {/* Advanced options */}
         <div className="bg-gray-50 p-3 rounded-lg mt-2">
-          <h4 className="text-sm font-medium mb-2">Advanced options</h4>
+          <h4 className="text-sm font-medium mb-2">{t('advanced')}</h4>
 
           <div className="space-y-3">
             <div className="flex flex-col gap-1">
               <label htmlFor="model" className="text-xs text-gray-500">
-                Model
+                {t('model')}
               </label>
               <ModelSelect
                 id="model"
@@ -200,16 +189,16 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
 
             <div className="flex flex-col gap-1 border-t pt-3">
               <label htmlFor="target-language" className="text-xs text-gray-500">
-                Target Language
+                {t('targetLanguage')}
               </label>
               <Select value={targetLanguage} onValueChange={setTargetLanguage}>
                 <SelectTrigger id="target-language" className="w-full">
-                  <SelectValue placeholder="Select a language" />
+                  <SelectValue placeholder={t('selectLanguage')} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableLanguages.map((lang) => (
-                    <SelectItem key={lang.value} value={lang.value}>
-                      {lang.label}
+                    <SelectItem key={lang} value={lang}>
+                      {t(`languages.${lang}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -221,7 +210,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
                 {/* Not a <label>: Radix's Slider thumb isn't a labelable
                     element, so the accessible name is set via thumbLabel
                     (aria-label) on the thumb itself instead. */}
-                <span className="text-xs text-gray-500">Similarity Threshold</span>
+                <span className="text-xs text-gray-500">{t('similarityThreshold')}</span>
                 <span className="text-xs">{similarityThreshold[0]}</span>
               </div>
               <Slider
@@ -230,7 +219,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
                 min={0.1}
                 max={1}
                 step={0.05}
-                thumbLabel="Similarity threshold"
+                thumbLabel={t('similarityThresholdLabel')}
               />
             </div>
           </div>
@@ -244,7 +233,7 @@ export function DatasetGenerate({ initialTarget = '' }: DatasetGenerateProps) {
           {isProcessing ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
-            <span>Generate draft</span>
+            <span>{t('submit')}</span>
           )}
         </Button>
 

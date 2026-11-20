@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import type { GitHubRepoDetail, RecipeIn } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { formatBytes, formatCount } from '@/components/hub/format'
@@ -20,16 +21,22 @@ import {
 
 type Tab = 'overview' | 'readme' | 'docs'
 
+// The labels are the `github.docs.modes.<mode>` and `github.panel.tabs.<tab>` messages.
+const DOCS_MODES: DocsMode[] = ['default', 'custom', 'none']
+const TABS: Tab[] = ['overview', 'readme', 'docs']
+
 function DocPreview({ owner, repo, path }: { owner: string; repo: string; path: string }) {
+  const t = useTranslations('github')
+  const locale = useLocale()
   const doc = useGitHubDoc(owner, repo, path)
-  if (doc.isPending) return <p className="muted">Reading {path}…</p>
+  if (doc.isPending) return <p className="muted">{t('docs.reading', { path })}</p>
   if (doc.error) return <p className="hub-error">{doc.error.message}</p>
   return (
     <div className="gh-doc">
       <div className="hint">
         {doc.data.truncated
-          ? `The model reads the first ${formatCount(doc.data.max_chars)} characters.`
-          : 'The model reads all of it.'}
+          ? t('docs.truncated', { count: formatCount(doc.data.max_chars, locale) })
+          : t('docs.whole')}
       </div>
       <div className="hub-markdown gh-doc-body">
         <Markdown>{doc.data.content}</Markdown>
@@ -49,20 +56,23 @@ function Docs({
   recipe: RecipeIn | null
   onChange: (recipe: RecipeIn) => void
 }) {
+  const t = useTranslations('github')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   const [preview, setPreview] = useState<string | null>(null)
   const source = recipe ? findSource(recipe, detail.name) : undefined
   const defaultPick = detail.docs.filter((d) => d.selected_by_default).map((d) => d.path)
   const mode = docsMode(source)
 
   if (detail.docs.length === 0) {
-    return <p className="muted">This repo has no Markdown or text file under docs/.</p>
+    return <p className="muted">{t('docs.none')}</p>
   }
   return (
     <div className="gh-docs">
       {recipe && source && (
         <fieldset className="tabs gh-docs-mode">
-          <legend className="sr-only">Which docs files to use</legend>
-          {(['default', 'custom', 'none'] as DocsMode[]).map((m) => (
+          <legend className="sr-only">{t('docs.modeLegend')}</legend>
+          {DOCS_MODES.map((m) => (
             <button
               key={m}
               type="button"
@@ -70,15 +80,17 @@ function Docs({
               aria-pressed={mode === m}
               onClick={() => onChange(setDocsMode(recipe, detail.name, m, defaultPick))}
             >
-              {m === 'default' ? 'Default pick' : m === 'custom' ? 'Choose files' : 'None'}
+              {m === 'none' ? tc('none') : t(`docs.modes.${m}`)}
             </button>
           ))}
         </fieldset>
       )}
       <p className="hint">
-        The default pick is the first {detail.limits.docs_per_repo} readable files. Files over{' '}
-        {formatBytes(detail.limits.doc_bytes)} are skipped; each is cut at{' '}
-        {formatCount(detail.limits.doc_chars)} characters.
+        {t('docs.limits', {
+          files: detail.limits.docs_per_repo,
+          size: formatBytes(detail.limits.doc_bytes, locale),
+          chars: formatCount(detail.limits.doc_chars, locale),
+        })}
       </p>
       <ul className="gh-doc-list">
         {detail.docs.map((doc) => {
@@ -87,7 +99,7 @@ function Docs({
             <li key={doc.path} className={cn(preview === doc.path && 'is-open')}>
               <input
                 type="checkbox"
-                aria-label={`Use ${doc.path}`}
+                aria-label={t('docs.use', { path: doc.path })}
                 checked={on}
                 disabled={!recipe || !source || !doc.readable}
                 onChange={() =>
@@ -102,8 +114,8 @@ function Docs({
                 {doc.path}
               </button>
               <span className="hint">
-                {formatBytes(doc.size)}
-                {!doc.readable && ' · too large'}
+                {formatBytes(doc.size, locale)}
+                {!doc.readable && ` · ${t('docs.tooLarge')}`}
               </span>
             </li>
           )
@@ -130,6 +142,9 @@ export function RepoPanel({
   onChange: (recipe: RecipeIn) => void
   onClose: () => void
 }) {
+  const t = useTranslations('github')
+  const locale = useLocale()
+  const tc = useTranslations('common')
   const [tab, setTab] = useState<Tab>('overview')
   const query = useGitHubRepo(owner, repo)
   const source = recipe ? findSource(recipe, repo) : undefined
@@ -148,12 +163,12 @@ export function RepoPanel({
               href={query.data.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open on GitHub"
+              aria-label={t('panel.openOnGitHub')}
             >
               <Icon name="external" />
             </a>
           )}
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={tc('close')}>
             <Icon name="x" />
           </button>
         </div>
@@ -168,7 +183,7 @@ export function RepoPanel({
               disabled={!eligible}
               onChange={(e) => onChange(toggleRepo(recipe, repo, e.target.checked))}
             />
-            Use this repo
+            {t('panel.useRepo')}
           </label>
           <label className="gh-toggle">
             <input
@@ -177,20 +192,14 @@ export function RepoPanel({
               disabled={!source}
               onChange={(e) => onChange(setReadme(recipe, repo, e.target.checked))}
             />
-            README and metadata
+            {t('panel.readmeAndMetadata')}
           </label>
-          {!eligible && <span className="hint">Forks and archived repos are left out.</span>}
+          {!eligible && <span className="hint">{t('panel.notEligible')}</span>}
         </div>
       )}
 
-      <div className="tabs gh-panel-tabs" role="tablist" aria-label="Repo sections">
-        {(
-          [
-            ['overview', 'What the model sees'],
-            ['readme', 'README'],
-            ['docs', `Docs${query.data ? ` (${query.data.docs.length})` : ''}`],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
+      <div className="tabs gh-panel-tabs" role="tablist" aria-label={t('panel.sections')}>
+        {TABS.map((key) => (
           <button
             key={key}
             type="button"
@@ -199,32 +208,33 @@ export function RepoPanel({
             className={cn('tab', tab === key && 'active')}
             onClick={() => setTab(key)}
           >
-            {label}
+            {key === 'docs' && query.data
+              ? t('panel.tabs.docsCount', { count: query.data.docs.length })
+              : t(`panel.tabs.${key}`)}
           </button>
         ))}
       </div>
 
       <div className="gh-panel-body">
-        {query.isPending && <p className="muted">Reading {repo} on GitHub…</p>}
+        {query.isPending && <p className="muted">{t('panel.reading', { repo })}</p>}
         {query.error && <p className="hub-error">{query.error.message}</p>}
         {query.data && tab === 'overview' && (
           <div className="gh-overview">
             <div className="hub-chips">
               {query.data.language && <span className="tag">{query.data.language}</span>}
-              {(query.data.technologies ?? []).map((t) => (
-                <span key={t} className="tag">
-                  {t}
+              {(query.data.technologies ?? []).map((tech) => (
+                <span key={tech} className="tag">
+                  {tech}
                 </span>
               ))}
-              {(query.data.topics ?? []).map((t) => (
-                <span key={`topic-${t}`} className="tag muted">
-                  #{t}
+              {(query.data.topics ?? []).map((topic) => (
+                <span key={`topic-${topic}`} className="tag muted">
+                  #{topic}
                 </span>
               ))}
             </div>
             <p className="hint">
-              The overview call gets exactly this text ({formatCount(query.data.model_input.length)}{' '}
-              characters); its hash decides whether the next run regenerates it.
+              {t('panel.modelInput', { count: formatCount(query.data.model_input.length, locale) })}
             </p>
             <pre className="hub-pre gh-model-input">{query.data.model_input}</pre>
           </div>
@@ -236,13 +246,14 @@ export function RepoPanel({
                 <Markdown>{query.data.readme}</Markdown>
                 {query.data.readme_truncated && (
                   <p className="hint">
-                    Cut at {formatCount(query.data.limits.readme_chars)} characters: the model reads
-                    no more.
+                    {t('panel.readmeCut', {
+                      count: formatCount(query.data.limits.readme_chars, locale),
+                    })}
                   </p>
                 )}
               </>
             ) : (
-              <p className="muted">No README.</p>
+              <p className="muted">{t('panel.noReadme')}</p>
             )}
           </div>
         )}

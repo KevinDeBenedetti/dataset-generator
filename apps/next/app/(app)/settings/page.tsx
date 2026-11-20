@@ -1,26 +1,27 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { Icon } from '@/components/app/icon'
 import { Integrations } from '@/components/settings/integrations'
 import { LinkedAccounts } from '@/components/settings/linked-accounts'
 import { YourData } from '@/components/settings/your-data'
 import { useCurrentUser } from '@/hooks/use-auth'
+import { rich } from '@/lib/rich'
 import { initialsFor } from '@/lib/utils'
 import './settings.css'
 
 export default function SettingsPage() {
+  const t = useTranslations('settings')
+  const tc = useTranslations('common')
   const { data: user } = useCurrentUser()
 
   return (
     <div className="settings-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="page-sub">
-            Your account and the keys your requests run on. Generation models are set on the Models
-            page.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
       </div>
 
@@ -28,7 +29,7 @@ export default function SettingsPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Profile</div>
+              <div className="card-title">{t('profile.title')}</div>
             </div>
           </div>
           <div className="card-body" style={{ paddingTop: 4 }}>
@@ -37,10 +38,12 @@ export default function SettingsPage() {
                 {initialsFor(user?.email)}
               </span>
               <div>
-                <div style={{ fontWeight: 500 }}>{user?.email ?? 'Loading…'}</div>
+                <div style={{ fontWeight: 500 }}>{user?.email ?? tc('loading')}</div>
                 <div className="hint" style={{ marginTop: 4 }}>
                   {user
-                    ? `${user.role === 'admin' ? 'Admin' : 'User'} · ${user.provider} sign-in`
+                    ? t(user.role === 'admin' ? 'profile.admin' : 'profile.user', {
+                        provider: user.provider,
+                      })
                     : ''}
                 </div>
               </div>
@@ -53,12 +56,8 @@ export default function SettingsPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Your keys</div>
-              <div className="card-desc">
-                Every model call and Hugging Face upload runs on <strong>your own</strong> keys.
-                They are stored encrypted, only ever sent to their provider, and nobody —
-                administrators included — can read them back.
-              </div>
+              <div className="card-title">{t('keys.title')}</div>
+              <div className="card-desc">{t.rich('keys.description', { strong: rich.strong })}</div>
             </div>
           </div>
         </div>
@@ -68,16 +67,14 @@ export default function SettingsPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Models</div>
-              <div className="card-desc">
-                Your LLM, the model of every step, and the embedding model of your endpoint.
-              </div>
+              <div className="card-title">{t('models.title')}</div>
+              <div className="card-desc">{t('models.description')}</div>
             </div>
           </div>
           <div className="card-foot">
             <Link className="btn btn-outline" href="/models">
               <Icon name="cpu" />
-              Open Models
+              {t('models.open')}
             </Link>
           </div>
         </div>

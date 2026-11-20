@@ -2,23 +2,20 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { errorStatus } from '@/api/sdk'
 import type { HuggingFaceDataset } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { useHubDatasets } from '@/hooks'
 import { cn } from '@/lib/utils'
 import { datasetHref, formatBytes, formatCount, splitRepoId, timeAgo } from './format'
+import { richLink } from '@/lib/rich'
 
 type Visibility = 'all' | 'private' | 'public'
 type SortKey = 'updated' | 'name' | 'downloads' | 'likes' | 'size'
 
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'updated', label: 'Recently updated' },
-  { key: 'name', label: 'Name' },
-  { key: 'downloads', label: 'Most downloaded' },
-  { key: 'likes', label: 'Most liked' },
-  { key: 'size', label: 'Largest' },
-]
+// The option labels are the `datasets.list.sorts.<key>` messages.
+const SORTS: SortKey[] = ['updated', 'name', 'downloads', 'likes', 'size']
 
 // Hub tags that only restate metadata shown elsewhere on the card.
 const NOISE_TAG = /^(region|library|format|modality|size_categories|task_categories|task_ids):/
@@ -66,7 +63,11 @@ function StatTile({ icon, label, value }: { icon: string; label: string; value: 
 }
 
 function DatasetCard({ dataset, now }: { dataset: HuggingFaceDataset; now: number }) {
-  const tags = (dataset.tags ?? []).filter((t) => !NOISE_TAG.test(t) && !t.startsWith('language:'))
+  const t = useTranslations('datasets')
+  const locale = useLocale()
+  const tags = (dataset.tags ?? []).filter(
+    (tag) => !NOISE_TAG.test(tag) && !tag.startsWith('language:'),
+  )
   const shown = tags.slice(0, 4)
   return (
     <Link href={datasetHref(dataset.id)} className="card hub-ds">
@@ -81,12 +82,12 @@ function DatasetCard({ dataset, now }: { dataset: HuggingFaceDataset; now: numbe
         {dataset.private ? (
           <span className="badge badge-secondary">
             <Icon name="key" className="ic-sm" />
-            Private
+            {t('private')}
           </span>
         ) : (
           <span className="badge badge-outline">
             <Icon name="globe" className="ic-sm" />
-            Public
+            {t('public')}
           </span>
         )}
       </div>
@@ -112,22 +113,22 @@ function DatasetCard({ dataset, now }: { dataset: HuggingFaceDataset; now: numbe
       <div className="hub-ds-meta">
         <span title={dataset.last_modified ?? undefined}>
           <Icon name="clock" className="ic-sm" />
-          {timeAgo(dataset.last_modified, now)}
+          {timeAgo(dataset.last_modified, now, locale)}
         </span>
         {dataset.used_storage != null && (
           <span>
             <Icon name="layers" className="ic-sm" />
-            {formatBytes(dataset.used_storage)}
+            {formatBytes(dataset.used_storage, locale)}
           </span>
         )}
         {dataset.size_category && <span className="mono">{dataset.size_category}</span>}
-        <span title="Downloads, last 30 days">
+        <span title={t('list.downloadsTitle')}>
           <Icon name="download" className="ic-sm" />
-          {formatCount(dataset.downloads ?? 0)}
+          {formatCount(dataset.downloads ?? 0, locale)}
         </span>
-        <span title="Likes">
+        <span title={t('list.likesTitle')}>
           <Icon name="star" className="ic-sm" />
-          {formatCount(dataset.likes ?? 0)}
+          {formatCount(dataset.likes ?? 0, locale)}
         </span>
       </div>
     </Link>
@@ -136,27 +137,30 @@ function DatasetCard({ dataset, now }: { dataset: HuggingFaceDataset; now: numbe
 
 /** Shown when the API answers 503: no Hugging Face token yet. */
 export function ConnectHuggingFace({ message }: { message?: string }) {
+  const t = useTranslations('datasets')
   return (
     <div className="card hub-empty">
       <span className="cell-ic ic-lg">
         <Icon name="key" className="ic-lg" />
       </span>
       <div>
-        <div className="card-title">Connect Hugging Face</div>
+        <div className="card-title">{t('connect.title')}</div>
         <p className="card-desc">
-          Datasets are read straight from the Hugging Face Hub, with your own access token.{' '}
-          {message}
+          {t('connect.description')} {message}
         </p>
       </div>
       <Link className="btn btn-primary" href="/settings">
         <Icon name="settings" />
-        Open Settings
+        {t('connect.openSettings')}
       </Link>
     </div>
   )
 }
 
 export function HubDatasetsList() {
+  const t = useTranslations('datasets')
+  const tc = useTranslations('common')
+  const locale = useLocale()
   const [author, setAuthor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('all')
@@ -193,17 +197,18 @@ export function HubDatasetsList() {
     <div className="hub-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Datasets</h1>
+          <h1 className="page-title">{t('title')}</h1>
           <p className="page-sub">
-            Every dataset is read from Hugging Face, the source of truth. Generated data waits in{' '}
-            <Link href="/drafts">Drafts</Link> until you review and publish it.
+            {t.rich('list.subtitle', {
+              drafts: richLink('/drafts'),
+            })}
           </p>
         </div>
         <div className="page-actions">
           {data && data.namespaces.length > 1 && (
             <select
               className="select hub-namespace"
-              aria-label="Namespace"
+              aria-label={t('list.namespace')}
               value={data.namespace}
               onChange={(e) => setAuthor(e.target.value)}
             >
@@ -221,11 +226,11 @@ export function HubDatasetsList() {
             disabled={isFetching}
           >
             <Icon name="refresh" className={isFetching ? 'animate-spin' : undefined} />
-            Refresh
+            {tc('refresh')}
           </button>
           <Link className="btn btn-primary" href="/generate">
             <Icon name="sparkles" />
-            Generate
+            {t('list.generate')}
           </Link>
         </div>
       </div>
@@ -240,12 +245,14 @@ export function HubDatasetsList() {
             <Icon name="alert" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">Couldn&apos;t list your datasets</div>
-            <p className="card-desc">{error instanceof Error ? error.message : 'Unknown error'}</p>
+            <div className="card-title">{t('list.loadFailed')}</div>
+            <p className="card-desc">
+              {error instanceof Error ? error.message : tc('unknownError')}
+            </p>
           </div>
           <button type="button" className="btn btn-outline" onClick={() => refetch()}>
             <Icon name="refresh" />
-            Try again
+            {t('tryAgain')}
           </button>
         </div>
       )}
@@ -261,14 +268,26 @@ export function HubDatasetsList() {
       {data && (
         <>
           <div className="stat-grid hub-stats">
-            <StatTile icon="database" label="Datasets" value={formatCount(data.total)} />
-            <StatTile icon="key" label="Private" value={formatCount(totals.private)} />
+            <StatTile
+              icon="database"
+              label={t('list.stats.datasets')}
+              value={formatCount(data.total, locale)}
+            />
+            <StatTile
+              icon="key"
+              label={t('list.stats.private')}
+              value={formatCount(totals.private, locale)}
+            />
             <StatTile
               icon="download"
-              label="Downloads, last 30 days"
-              value={formatCount(totals.downloads)}
+              label={t('list.stats.downloads')}
+              value={formatCount(totals.downloads, locale)}
             />
-            <StatTile icon="layers" label="Storage" value={formatBytes(totals.storage)} />
+            <StatTile
+              icon="layers"
+              label={t('list.stats.storage')}
+              value={formatBytes(totals.storage, locale)}
+            />
           </div>
 
           <div className="hub-toolbar">
@@ -276,13 +295,13 @@ export function HubDatasetsList() {
               <Icon name="search" />
               <input
                 type="search"
-                placeholder={`Search ${data.namespace}'s datasets`}
+                placeholder={t('list.searchPlaceholder', { namespace: data.namespace })}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
             <fieldset className="tabs">
-              <legend className="sr-only">Visibility</legend>
+              <legend className="sr-only">{t('list.visibility')}</legend>
               {(['all', 'private', 'public'] as const).map((v) => (
                 <button
                   key={v}
@@ -291,19 +310,19 @@ export function HubDatasetsList() {
                   aria-pressed={visibility === v}
                   onClick={() => setVisibility(v)}
                 >
-                  {v === 'all' ? 'All' : v === 'private' ? 'Private' : 'Public'}
+                  {v === 'all' ? tc('all') : t(v)}
                 </button>
               ))}
             </fieldset>
             <select
               className="select hub-sort"
-              aria-label="Sort by"
+              aria-label={t('list.sortBy')}
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
             >
-              {SORTS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
+              {SORTS.map((key) => (
+                <option key={key} value={key}>
+                  {t(`list.sorts.${key}`)}
                 </option>
               ))}
             </select>
@@ -315,19 +334,18 @@ export function HubDatasetsList() {
                 <Icon name="database" className="ic-lg" />
               </span>
               <div>
-                <div className="card-title">No dataset in {data.namespace} yet</div>
-                <p className="card-desc">
-                  Generate one from a file, a web page or GitHub, review it in Drafts, then publish
-                  it to Hugging Face: it shows up here.
-                </p>
+                <div className="card-title">
+                  {t('list.emptyTitle', { namespace: data.namespace })}
+                </div>
+                <p className="card-desc">{t('list.emptyDescription')}</p>
               </div>
               <Link className="btn btn-outline" href="/drafts">
                 <Icon name="fileText" />
-                Drafts
+                {t('list.drafts')}
               </Link>
             </div>
           ) : shown.length === 0 ? (
-            <p className="muted hub-none">No dataset matches these filters.</p>
+            <p className="muted hub-none">{t('list.noMatch')}</p>
           ) : (
             <div className={cn('hub-grid hub-results', isPlaceholderData && 'is-stale')}>
               {shown.map((dataset) => (

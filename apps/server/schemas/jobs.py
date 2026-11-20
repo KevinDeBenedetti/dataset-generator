@@ -93,7 +93,13 @@ class JobResultOut(BaseModel):
     dry_run: bool
     url: Optional[str] = None
     metrics: List[Tuple[str, Any]] = Field(
-        default_factory=list, description="(label, value) pairs, in display order"
+        default_factory=list,
+        description="(label, value) pairs in English, in display order: what a "
+        "client looks a metric up by",
+    )
+    metrics_display: List[Tuple[str, Any]] = Field(
+        default_factory=list,
+        description="The same pairs in the reader's language, for display",
     )
     errors: List[str] = Field(default_factory=list, description="Non-fatal errors")
 

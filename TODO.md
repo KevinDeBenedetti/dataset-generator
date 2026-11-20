@@ -6,20 +6,20 @@
 
 ## 🟡 To do
 
-- [ ] FEAT: create a new branch feat/add-multilingue AND open a PR in github, add multi languages english and french use
 
 - [ ] CHORE: Retire the local dataset tables (phase 3, 4/4): an Alembic migration drops `datasets`, `qa_pairs` and `dataset_runs`, with the Drafts pages, the local export to Hugging Face and the import into local datasets — after the grace period the owner chose on 2026-11-04 (existing local drafts keep Publish and Delete meanwhile) — BLOCKED 2026-11-04: waits for the release with phase 3 to be deployed long enough for users to publish or delete their local drafts; remove this marker to start it.
+
+
 
 ## 🖐 Manual — do it yourself, in order
 
 ### 22. One LLM and one embedding model
 
-- [ ] 22.5 Production (infra repo): set the server's `OPENAI_LLM_MODEL` to a gateway alias that exists and reads images (the one set today is not one the gateway serves), delete `OPENAI_VLM_MODEL` (and `FASTEMBED_CACHE_PATH` with its volume, if set), then deploy. Success: the migration Job logs `5d6e7f8091a2`, the deployed **Models** page shows that LLM, and a PDF generation gives pairs.
-- [ ] 22.6 (remaining) In production, each collection built with a local model (multilingual MiniLM, BGE, MiniLM L6): delete it and build it again with an endpoint model. Success: every collection on the deployed **Collections** page names an `openai:` model and answers a search.
+- [ ] 22.5 (remaining) Once the release with migration `a2b3c4d5e6f7` is deployed: check it. Success: the migration Job logs `a2b3c4d5e6f7`, the deployed **Models** page shows `chat-default`, and a PDF generation gives pairs.
 
 ### 23. Resume datasets and schedules
 
-- [ ] 23.4 Production (infra repo): the worker reads the resume now, so give the worker deployment the same `REACTIVE_RESUME_URL` and `REACTIVE_RESUME_API_KEY` as the server (21.2), and let it reach the Reactive Resume service; then deploy. Success: the migration Job logs `6e7f8091a2b3`, and a **Generate a draft** on the deployed **Resume** page ends with a draft, not "Reactive Resume isn't set up".
+- [ ] 23.4 (remaining) Once the release with migration `a2b3c4d5e6f7` is deployed: **Generate a draft** on the deployed **Resume** page. Success: it ends with a draft, not "Reactive Resume isn't set up".
 
 ### 24. Dataset quality
 
@@ -42,19 +42,47 @@
 - [ ] 30.1 `make test`. Success: every test passes on Postgres (1371 passed last time).
 - [ ] 30.2 With the stack running (`make dev`), generate a draft from a public web page with your own saved key. Success: pairs appear — the page fetch and the model calls both went through the pinned httpx2 clients; a private address (`http://169.254.169.254/`) is still refused with "non-public".
 
+### 31. The multilingual branch and its pull request
+
+- [ ] 31.1 Create the branch `feat/add-multilingue` from the current tree, commit the multilingual changes (see the commit plan), push it and open the pull request with `gh pr create --base main --head feat/add-multilingue`. Success: the PR's checks are green and its preview shows the homepage in French after a click on the language switch.
+
+### 34. Server texts in French, in the browser
+
+- [ ] 34.1 (remaining) On **GitHub** in French, run **Knowledge corpus** (à blanc is enough) and let it finish. Success: its figures read in French (« Points », « Réindexation »… or the corpus counts) without reloading the page, and switch back to English with the EN button.
+
 
 ## 🟢 Ideas / backlog
 
 ## 🤖 Agent recommendations
 
-- [ ] FIX: A schedule's latest run can stay on the previous run — after the scheduled resume run of 2026-11-17 20:05 UTC, `job_schedules.last_run_id` still named the run before it, and the run kept a `draft` although it published (apps/server/services/schedules.py `queue_due`, apps/server/services/queue.py `_finish`). Reproduce with a test, then fix — the card would otherwise link to the wrong run.
-- [ ] CHORE: Move the server's remaining HTTP clients to httpx2 (services/github.py, reactive_resume.py, secret_validation.py, github_browse.py, jobs/corpus.py `notify_reindex`, jobs/github_snapshot.py) — one HTTP stack and one family of exceptions instead of two side by side; `httpx` then stays only as huggingface_hub's dependency.
-
+- [ ] FIX: The homepage badge shows a fixed `v0.7.7` (apps/next/app/page.tsx:128) while the app is at 0.16.0 — read `package.json`'s version as the sidebar does (apps/next/components/app/app-sidebar.tsx), so a release never leaves it stale.
+- [ ] CHORE: Three shell controls do nothing — the top bar's search field and notifications button (apps/next/components/app/app-topbar.tsx) and the sidebar's "Legal notice" button (app-sidebar.tsx): wire them or remove them, so the translated shell offers no dead control.
 
 ## 🔒 Security audit
 
 ## ✅ Done
 
+- [x] 2026-11-19 — FEAT: Server texts in French (4/4): every HTTP error's `detail` goes through one handler (apps/server/api/errors.py `translated_http_exception`) that sends the server's own messages in the reader's language — 56 more templates (sign-in, quotas, unknown items, failed operations with their operation named, Hugging Face repo errors); validation lists and upstream errors stay as they are — 2 tests; server suite passes; live API: « E-mail ou mot de passe incorrect », « Non authentifié » (from Accept-Language).
+- [x] 2026-11-19 — FEAT: Server texts in French (3/4): a run's error, its non-fatal errors and a schedule's skip reason are served in the reader's language — 28 of the server's own message templates (quotas, models, missing settings, job failures) in core/locales/fr.json, matched when read; upstream errors (Hub, GitHub, LLM) stay as stored — 4 tests (one through the API, one on a schedule); server suite passes; live API answers in French.
+- [x] 2026-11-19 — CHORE: 🖐 34.1 (part) On the dev stack in French: the GitHub job cards read « Q/R GitHub personnelles » / « Corpus de connaissances » with French option labels, they flip back to English on the EN button without a reload, and Admin → Plateforme shows the French switch descriptions (browser pane). The stack started on fresh volumes (empty database), so no run was there to check.
+- [x] 2026-11-19 — FEAT: Server texts in French (2/4): a run's metrics are served twice, `metrics` in English (stored, looked up) and `metrics_display` in the reader's language, labels, known values and the embedding-check summary translated; the request's language is bound by a middleware (apps/server/core/i18n.py `bind_locale`) — 5 tests, server suite and 104 vitest pass; browser: 🖐 34.1.
+- [x] 2026-11-19 — CHORE: The language switch fetches every API answer again (apps/next/components/app/language-switch.tsx), so the job list, switches and runs arrive in the new language — checks clean; browser: 🖐 34.1.
+- [x] 2026-11-18 — FEAT: Server texts in French (1/4): the API reads the reader's language (`dg-locale` cookie, else Accept-Language; apps/server/core/i18n.py) and serves job titles, descriptions, options, missing-setting labels and platform switches in it, French in core/locales/fr.json — 3 tests; ruff, ty clean. Browser: 🖐 34.1.
+- [x] 2026-11-18 — FEAT: Dates, counts, sizes, percentages and relative times follow the page's language: the shared formatters (apps/next/components/hub/format.ts, `relativeTime` in lib/utils.ts, collections' `percent`) take a locale, passed at about 120 call sites — English unchanged, 6 French test cases; 102 vitest pass, tsc, oxlint, oxfmt and `next build` clean; French checked on the dev stack ("il y a 1 j", "25,2 Ko", "4 972 / 5 000").
+- [x] 2026-11-18 — FEAT: English and French UI (7/7): the admin overview, users, audit log and platform pages read their texts from the `admin` messages — every page is now translated; 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; all four checked in French on the dev stack, no missing message.
+- [x] 2026-11-18 — CHORE: 🖐 33.1 After `docker compose restart next`, Models, LLM Prompts, Quality control, Settings and Verify QA read in French with no dotted key and no `MISSING_MESSAGE` in the browser console (checked in the browser pane).
+- [x] 2026-11-18 — FEAT: English and French UI (6/7): Models, Prompts, Quality, Settings and Verify QA (and the shared model picker) read their texts from the `models`, `prompts`, `quality`, `settings` and `verify` messages; each language's messages are now imported by name (apps/next/i18n/request.ts) — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; seen in the browser: 🖐 33.1.
+- [x] 2026-11-18 — FEAT: English and French UI (5/7): the Collections list, create form and collection page (search, retrieval test, comparison, usage) read their texts from the `collections` and `collection` messages; a comparison's caveat is a message key (apps/next/components/collections/format.ts) — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; both languages checked on the dev stack.
+- [x] 2026-11-18 — CHORE: 🖐 32.1 The resume schedule ran by itself at 20:05:05 UTC on the fixed worker: run `04f3d4ca` succeeded and is the schedule's latest run, its row updated right after (dev database, read-only query); next run 2026-11-19 20:05.
+- [x] 2026-11-18 — FEAT: English and French UI (4/7): the Resume page (list, resume view, dataset settings, run status) reads its texts from the `resume` messages and reuses the schedule picker's — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; both languages checked on the dev stack, no missing message.
+- [x] 2026-11-18 — FEAT: English and French UI (3/7): the GitHub page (account card, repositories, recipes, run status), the job cards, the schedule picker and the draft review read their texts from the `github`, `jobs` and `review` messages; `skipNotice` returns a message key (apps/next/components/jobs/schedule-state.ts) — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; both languages checked on the dev stack.
+- [x] 2026-11-18 — FEAT: English and French UI (2/7): Dashboard, Generate, Datasets (list, page, data viewer, statistics, files, history) and Drafts read their texts from the `dashboard`, `generate`, `datasets`, `viewer` and `drafts` messages, with a shared `common` set and rich-text renderers (apps/next/lib/rich.tsx) — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; both languages checked on the dev stack, no missing message.
+- [x] 2026-11-18 — CHORE: Every HTTP client the server builds is httpx2 (GitHub, GitHub browse and snapshot, Reactive Resume, key validation, the reindex call) with their tests; `httpx` stays only for the errors huggingface_hub raises (services/hub.py) — server suite on SQLite, ruff and ty clean; Postgres run: 🖐 30.1.
+- [x] 2026-11-18 — FIX: A schedule keeps its latest run: `get_scoped_db` gave every caller on a thread the same session, so `queue_run`'s own block closed the sweep's and its later writes (latest run, skip reason, busy retry) were lost; each call now gets a session of its own (apps/server/core/database.py) — 1 test; the run itself had published without a draft (dev database read). Live check: 🖐 32.1.
+- [x] 2026-11-18 — FEAT: English and French UI (1/7): next-intl 4.15 with the language in the `dg-locale` cookie (the browser's at first, no URL prefix), a language switch in the top bar, drawer, login and homepage, and the shell, login and homepage translated (apps/next/i18n, messages/) — 96 vitest pass, tsc, oxlint, oxfmt and `next build` clean; the dev stack serves both languages; branch and PR: 🖐 31.1.
+- [x] 2026-11-18 — CHORE: 🖐 23.4 (part) The worker already reads the server's configmap and secret (`REACTIVE_RESUME_URL`, `REACTIVE_RESUME_API_KEY`), and both network rules to Reactive Resume cover every dataset-generator pod but Qdrant; only their comments were updated (infra repo, uncommitted).
+- [x] 2026-11-18 — CHORE: 🖐 22.6 (production) Every production collection built with a local model was deleted and rebuilt with an endpoint model — each names an `openai:` model and answers a search (owner's word).
+- [x] 2026-11-18 — CHORE: 🖐 22.5 (part) Production config: the infra configmap sets `OPENAI_LLM_MODEL` to `chat-default` (reads images) with no `OPENAI_VLM_MODEL` or FastEmbed cache (on infra main since 2026-11-13); a stale FastEmbed comment in the server deployment was corrected 2026-11-18 (uncommitted, infra repo).
 - [x] 2026-11-18 — CHORE: 🖐 21.2 Production server has `REACTIVE_RESUME_URL` (in-cluster address) and `REACTIVE_RESUME_API_KEY` — the deployed Resume page lists the resumes (owner's word).
 - [x] 2026-11-18 — CHORE: The outbound-request guard is built on httpx2 (apps/server/core/net.py: both pinned transports and clients), so the OpenAI SDK gets clients of its own kind; the page fetcher (services/web.py) follows and `httpx2` is a runtime dependency — server suite passes on SQLite, ruff and ty clean; over the network: 🖐 30.1, 30.2.
 - [x] 2026-11-18 — FIX: The "Use it" Python snippet builds `QdrantClient(url=…, api_key=None)` with a comment saying when the server's `QDRANT_API_KEY` goes there (apps/next/components/collections/format.ts `pythonSnippet`) — 1 vitest case, 89 pass; tsc, oxlint, oxfmt clean.

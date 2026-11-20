@@ -1,0 +1,164 @@
+{
+  "jobs": {
+    "github-personal": {
+      "title": "Q/R GitHub personnelles",
+      "description": "Des paires Q/R tirées de votre profil GitHub, des README de vos dépôts et de leurs dossiers docs/. Générez un brouillon, relisez-le, puis publiez-le dans votre jeu de données Hugging Face privé. Incrémental : seules les sources qui ont changé depuis la version publiée sont envoyées au modèle.",
+      "options": {
+        "max_repos": {
+          "title": "Nombre max. de dépôts",
+          "description": "Laissez vide pour traiter tous les dépôts publics ; mettez 1 ou 2 pour un essai peu coûteux (les plus étoilés)"
+        },
+        "full_refresh": {
+          "title": "Régénération complète",
+          "description": "Ignorer la version publiée et régénérer chaque source"
+        }
+      }
+    },
+    "knowledge-corpus": {
+      "title": "Corpus de connaissances",
+      "description": "Un corpus de recherche (profil, dépôts, extraits de code, docs) construit à partir de l'API GitHub — sans modèle — et publié dans un jeu de données Hugging Face privé.",
+      "options": {
+        "sources": {
+          "title": "Sources",
+          "description": "Les splits à construire"
+        },
+        "dry_run": {
+          "title": "À blanc",
+          "description": "Construire le corpus sans le publier"
+        }
+      }
+    }
+  },
+  "missing": {
+    "your GitHub username": "votre nom d'utilisateur GitHub",
+    "your Hugging Face token": "votre jeton Hugging Face",
+    "the Q&A dataset repo": "le dépôt du jeu de données Q/R",
+    "the corpus dataset repo": "le dépôt du jeu de données du corpus",
+    "your API key (and endpoint)": "votre clé d'API (et son endpoint)"
+  },
+  "platform": {
+    "allow_signup": "Une première connexion crée un compte",
+    "allowed_email_domains": "Inscriptions limitées à ces domaines d'e-mail (vide : tous)",
+    "allowed_llm_hosts": "Hôtes supplémentaires que l'URL de base compatible OpenAI d'un utilisateur peut utiliser (en plus de api.openai.com)",
+    "allow_custom_base_url": "Les utilisateurs peuvent viser n'importe quel endpoint https public"
+  },
+  "metrics": {
+    "Pairs": "Paires",
+    "Kept": "Conservées",
+    "New": "Nouvelles",
+    "Dropped": "Écartées",
+    "Rephrasings rejected": "Reformulations rejetées",
+    "To review": "À relire",
+    "Removed": "Supprimées",
+    "Model": "Modèle",
+    "Embedding model": "Modèle d'embedding",
+    "Embedding checks": "Contrôles par embedding",
+    "Unchanged": "Inchangé",
+    "Published": "Publiées",
+    "Points": "Points",
+    "Empty rows skipped": "Lignes vides ignorées",
+    "Dimensions": "Dimensions",
+    "Commit": "Commit",
+    "Reindex": "Réindexation",
+    "In the dataset": "Dans le jeu de données"
+  },
+  "metric_values": {
+    "none": "aucun",
+    "asked": "demandée",
+    "failed": "échouée",
+    "nothing changed on GitHub": "rien n'a changé sur GitHub",
+    "the resume hasn't changed": "le CV n'a pas changé",
+    "nothing new to compare": "rien de nouveau à comparer",
+    "off: no embedding model, the words are compared": "désactivés : aucun modèle d'embedding, les mots sont comparés",
+    "summary": {
+      "checked": "{count} nouvelle(s) paire(s) vérifiée(s) contre les reformulations et pour l'ancrage",
+      "rechecked": "{count} paire(s) modifiée(s) revérifiée(s) par rapport à leur source"
+    }
+  },
+  "messages": {
+    "unknown job '{job}'": "tâche inconnue « {job} »",
+    "its owner's account is disabled": "le compte de son propriétaire est désactivé",
+    "its owner is no longer an admin": "son propriétaire n'est plus administrateur",
+    "The run could not be queued (a server error)": "L'exécution n'a pas pu être mise en file (une erreur du serveur)",
+    "You already have {active} run(s) in progress (limit {limit}). Wait for one to finish.": "Vous avez déjà {active} exécution(s) en cours (limite {limit}). Attendez qu'une se termine.",
+    "Daily limit reached ({limit} runs in 24 h).": "Limite quotidienne atteinte ({limit} exécutions en 24 h).",
+    "Unknown model '{ref}'. Available: {known}": "Modèle inconnu « {ref} ». Disponibles : {known}",
+    "Model reference '{ref}' has no model id": "La référence de modèle « {ref} » n'a pas d'identifiant de modèle",
+    "The worker running this job stopped. Start it again.": "Le worker qui exécutait cette tâche s'est arrêté. Relancez-la.",
+    "Unknown job '{job}'": "Tâche inconnue « {job} »",
+    "build profile: github sync populated nothing — the GitHub API was unreachable or rate-limited": "profil : la synchronisation GitHub n'a rien rempli — l'API GitHub était injoignable ou limitée",
+    "source \"{name}\" produced only {count} chunks (expected at least {minimum}); refusing to publish a truncated dataset": "la source « {name} » n'a produit que {count} extraits (au moins {minimum} attendus) ; publication d'un jeu de données tronqué refusée",
+    "Your GitHub username is required (set it in Settings)": "Votre nom d'utilisateur GitHub est requis (renseignez-le dans les Paramètres)",
+    "This recipe selects nothing: add a repo or the profile facts": "Cette recette ne sélectionne rien : ajoutez un dépôt ou les faits du profil",
+    "The Q&A dataset repo is required in Settings (e.g. 'kevindb/github-qa')": "Le dépôt du jeu de données Q/R est requis dans les Paramètres (par ex. « kevindb/github-qa »)",
+    "This run's recipe no longer exists: delete its schedule": "La recette de cette exécution n'existe plus : supprimez sa planification",
+    "The corpus dataset repo is required in Settings": "Le dépôt du jeu de données du corpus est requis dans les Paramètres",
+    "The resume has nothing visible to generate from": "Le CV n'a rien de visible à partir de quoi générer",
+    "Reactive Resume has no resume '{id}' any more": "Reactive Resume n'a plus de CV « {id} »",
+    "The dataset repo is required (e.g. 'kevindb/resume-qa')": "Le dépôt du jeu de données est requis (par ex. « kevindb/resume-qa »)",
+    "This recipe names no dataset repo": "Cette recette ne nomme aucun dépôt de jeu de données",
+    "LLM returned no usable pairs (empty or unparseable) after retry": "Le LLM n'a renvoyé aucune paire exploitable (vide ou illisible) après une nouvelle tentative",
+    "Your Hugging Face token is required (add it in Settings)": "Votre jeton Hugging Face est requis (ajoutez-le dans les Paramètres)",
+    "could not read the previous dataset from {repo}: {error} — run with full_refresh to regenerate from scratch": "impossible de lire le jeu de données précédent depuis {repo} : {error} — relancez avec une régénération complète pour repartir de zéro",
+    "generated 0 pairs — refusing to publish an empty dataset": "0 paire générée — publication d'un jeu de données vide refusée",
+    "The dataset '{repo}' changed on Hugging Face since this draft was generated. Start a new run: it builds on the current version. This draft is kept, unpublished.": "Le jeu de données « {repo} » a changé sur Hugging Face depuis la génération de ce brouillon. Lancez une nouvelle exécution : elle part de la version actuelle. Ce brouillon est conservé, non publié.",
+    "No LLM configured: set OPENAI_LLM_MODEL, or pick one on the Models page": "Aucun LLM configuré : définissez OPENAI_LLM_MODEL, ou choisissez-en un sur la page Modèles",
+    "{missing} is required to run {model}": "{missing} est requis pour lancer {model}",
+    "{what} failed. Try again; if it keeps failing, the server logs say why.": "{what} a échoué. Réessayez ; si cela persiste, les journaux du serveur en donnent la raison.",
+    "The request": "La requête",
+    "The duplicate analysis": "L'analyse des doublons",
+    "The agent run": "L'exécution de l'agent",
+    "Saving the quality rules": "L'enregistrement des règles de qualité",
+    "Resolving the pair": "La résolution de la paire",
+    "Publishing to Hugging Face": "La publication sur Hugging Face",
+    "Listing your datasets": "L'affichage de vos jeux de données",
+    "Deleting the dataset": "La suppression du jeu de données",
+    "Creating the dataset": "La création du jeu de données",
+    "Creating the collection": "La création de la collection",
+    "Cleaning the duplicates": "Le nettoyage des doublons",
+    "Building the collection": "La construction de la collection",
+    "Scoring the Q&A of {name}": "La notation des Q/R de {name}",
+    "Reading the versions of {name}": "La lecture des versions de {name}",
+    "Reading the sources of {name}": "La lecture des sources de {name}",
+    "Reading the Q&A of {name}": "La lecture des Q/R de {name}",
+    "Computing the Q&A stats of {name}": "Le calcul des statistiques Q/R de {name}",
+    "Importing {repo} from Hugging Face": "L'import de {repo} depuis Hugging Face",
+    "Copying {name}": "La copie de {name}",
+    "Deleting {name}": "La suppression de {name}",
+    "Reading {what} failed": "Échec de la lecture : {what}",
+    "the dataset list": "la liste des jeux de données",
+    "your GitHub profile": "votre profil GitHub",
+    "your GitHub repos": "vos dépôts GitHub",
+    "the rows of {repo}": "les lignes de {repo}",
+    "the statistics of {repo}": "les statistiques de {repo}",
+    "the history of {repo}": "l'historique de {repo}",
+    "The Hugging Face Hub didn't answer. Try again shortly.": "Le Hub Hugging Face n'a pas répondu. Réessayez dans un instant.",
+    "GitHub didn't answer. Try again shortly.": "GitHub n'a pas répondu. Réessayez dans un instant.",
+    "Unknown run '{run}'": "Exécution inconnue « {run} »",
+    "Unknown user": "Utilisateur inconnu",
+    "Unknown identity": "Identité inconnue",
+    "An unexpected error occurred while processing your request.": "Une erreur inattendue s'est produite pendant le traitement de votre requête.",
+    "{provider} sign-in is not configured on this server.": "La connexion {provider} n'est pas configurée sur ce serveur.",
+    "Unknown sign-in provider '{name}'": "Fournisseur de connexion inconnu « {name} »",
+    "Unknown secret '{kind}'": "Secret inconnu « {kind} »",
+    "The file is larger than {size} MB": "Le fichier dépasse {size} Mo",
+    "Uploaded file is empty": "Le fichier envoyé est vide",
+    "Recipe '{recipe}' has no schedule yet": "La recette « {recipe} » n'a pas encore de planification",
+    "No dataset settings for resume '{resume}' yet": "Pas encore de paramètres de jeu de données pour le CV « {resume} »",
+    "Dataset '{dataset}' not found": "Jeu de données « {dataset} » introuvable",
+    "'{job}' has no schedule yet": "« {job} » n'a pas encore de planification",
+    "'{model}' is not an embedding model of your endpoint": "« {model} » n'est pas un modèle d'embedding de votre endpoint",
+    "Too many failed login attempts. Please try again later.": "Trop de tentatives de connexion échouées. Réessayez plus tard.",
+    "Too many attempts — try again shortly.": "Trop de tentatives — réessayez dans un instant.",
+    "That key is not saved": "Cette clé n'est pas enregistrée",
+    "Not authenticated": "Non authentifié",
+    "No LLM configured — set OPENAI_LLM_MODEL, or pick one on the Models page": "Aucun LLM configuré — définissez OPENAI_LLM_MODEL, ou choisissez-en un sur la page Modèles",
+    "Local login is disabled": "La connexion locale est désactivée",
+    "Invalid or expired refresh token": "Jeton de rafraîchissement invalide ou expiré",
+    "Incorrect email or password": "E-mail ou mot de passe incorrect",
+    "Admin privileges required": "Droits d'administrateur requis",
+    "Hugging Face rejected your token. Check it in Settings (it needs write access).": "Hugging Face a refusé votre jeton. Vérifiez-le dans les Paramètres (il lui faut l'accès en écriture).",
+    "Hugging Face is not configured. Add your Hugging Face token (with write access) in Settings to use the Hub.": "Hugging Face n'est pas configuré. Ajoutez votre jeton Hugging Face (avec l'accès en écriture) dans les Paramètres pour utiliser le Hub.",
+    "Hugging Face repo '{repo}' has no namespace and none could be determined. Use the full 'user/name' id, or set your namespace in Settings.": "Le dépôt Hugging Face « {repo} » n'a pas d'espace de noms et aucun n'a pu être déterminé. Utilisez l'identifiant complet « utilisateur/nom », ou indiquez votre espace de noms dans les Paramètres."
+  }
+}

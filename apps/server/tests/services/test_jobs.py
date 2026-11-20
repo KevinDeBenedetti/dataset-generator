@@ -360,24 +360,24 @@ async def test_corpus_pushes_when_not_dry_run():
 
 async def _publish_corpus(monkeypatch, *, admin, answers):
     """A corpus run that publishes, with the reindex site answering ``answers``."""
-    import httpx
+    import httpx2
 
     from server.jobs import corpus as corpus_job
 
     calls = []
 
-    def site(request: httpx.Request) -> httpx.Response:
+    def site(request: httpx2.Request) -> httpx2.Response:
         calls.append(
             (request.method, str(request.url), request.headers["authorization"])
         )
         if isinstance(answers, Exception):
             raise answers
-        return httpx.Response(answers)
+        return httpx2.Response(answers)
 
     monkeypatch.setattr(
         corpus_job,
         "notify_reindex",
-        lambda: _NOTIFY_REINDEX(httpx.MockTransport(site)),
+        lambda: _NOTIFY_REINDEX(httpx2.MockTransport(site)),
     )
     monkeypatch.setattr(f"{PREFIX}.user_is_admin", lambda user_id: admin)
     with (
@@ -413,7 +413,7 @@ async def test_an_admins_corpus_publish_asks_the_site_to_reindex(
 async def test_a_site_that_fails_is_reported_and_the_corpus_stays_published(
     monkeypatch, reindex_site
 ):
-    import httpx
+    import httpx2
 
     result, _ = await _publish_corpus(monkeypatch, admin=True, answers=500)
     assert result.url == "https://huggingface.co/datasets/ns/corpus"
@@ -421,7 +421,7 @@ async def test_a_site_that_fails_is_reported_and_the_corpus_stays_published(
     assert result.errors == ["The reindex call answered 500"]
 
     result, _ = await _publish_corpus(
-        monkeypatch, admin=True, answers=httpx.ConnectError("refused")
+        monkeypatch, admin=True, answers=httpx2.ConnectError("refused")
     )
     assert result.errors == ["The reindex call failed: ConnectError: refused"]
     # The secret never reaches the report.

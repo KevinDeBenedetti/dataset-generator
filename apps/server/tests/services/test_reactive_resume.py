@@ -7,7 +7,7 @@ a redirect is never followed.
 
 import json
 
-import httpx
+import httpx2
 import pytest
 
 from server.core.config import config
@@ -19,29 +19,31 @@ KEY = "rr-test-key-000"
 class FakeInstance:
     def __init__(self) -> None:
         self.routes = {}
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
     def json(self, path, data, status=200, headers=None) -> None:
-        self.routes[path] = lambda _req: httpx.Response(
+        self.routes[path] = lambda _req: httpx2.Response(
             status, content=json.dumps(data), headers=headers or {}
         )
 
-    def handler(self, request: httpx.Request) -> httpx.Response:
+    def handler(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         route = self.routes.get(request.url.path)
         return (
-            route(request) if route else httpx.Response(404, json={"code": "NOT_FOUND"})
+            route(request)
+            if route
+            else httpx2.Response(404, json={"code": "NOT_FOUND"})
         )
 
 
 @pytest.fixture
 def instance(monkeypatch):
     fake = FakeInstance()
-    real = httpx.AsyncClient
+    real = httpx2.AsyncClient
     monkeypatch.setattr(
-        httpx,
+        httpx2,
         "AsyncClient",
-        lambda **kwargs: real(transport=httpx.MockTransport(fake.handler), **kwargs),
+        lambda **kwargs: real(transport=httpx2.MockTransport(fake.handler), **kwargs),
     )
     monkeypatch.setattr(config, "reactive_resume_url", "https://cv.example.org/")
     monkeypatch.setattr(config, "reactive_resume_api_key", KEY)
@@ -301,7 +303,7 @@ async def test_a_site_that_is_no_instance_is_named(instance):
     # No such route at all, then a page that isn't JSON.
     with pytest.raises(rr.ResumeUnavailableError, match="root of a Reactive Resume"):
         await rr.list_resumes()
-    instance.routes["/api/openapi/resumes"] = lambda _r: httpx.Response(
+    instance.routes["/api/openapi/resumes"] = lambda _r: httpx2.Response(
         200, text="<html>hello</html>"
     )
     with pytest.raises(rr.ResumeUnavailableError, match="root of a Reactive Resume"):
@@ -310,7 +312,7 @@ async def test_a_site_that_is_no_instance_is_named(instance):
 
 async def test_an_unreachable_instance_is_named(instance):
     def down(request):
-        raise httpx.ConnectError("refused", request=request)
+        raise httpx2.ConnectError("refused", request=request)
 
     instance.routes["/api/openapi/resumes"] = down
     with pytest.raises(rr.ResumeUnavailableError, match="can't be reached"):

@@ -90,3 +90,30 @@ describe('cells', () => {
     expect(shortSha('0123456789abcdef')).toBe('0123456')
   })
 })
+
+// Intl puts (narrow) non-breaking spaces in French; which kind depends on its version.
+const plain = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ')
+
+describe('in French', () => {
+  const now = Date.parse('2026-11-04T12:00:00Z')
+
+  it('writes sizes, counts and shares the French way', () => {
+    expect(plain(formatBytes(1536, 'fr'))).toBe('1,5 Ko')
+    expect(plain(formatBytes(512, 'fr'))).toBe('512 o')
+    expect(plain(formatCount(1284, 'fr'))).toBe('1 284')
+    expect(plain(formatCount(12_900, 'fr'))).toBe('12,9 k')
+    expect(formatValue(0.87654, 'fr')).toBe('0,877')
+    expect(plain(formatPercent(1, 3, 'fr'))).toBe('33 %')
+    expect(plain(formatPercent(1, 500, 'fr'))).toBe('<1 %')
+  })
+
+  it.each([
+    ['2026-11-04T11:59:40Z', 'à l’instant'],
+    ['2026-11-04T11:55:00Z', 'il y a 5 min'],
+    ['2026-11-02T12:00:00Z', 'il y a 2 j'],
+    ['2026-07-04T12:00:00Z', 'il y a 4 mois'],
+    ['2024-11-04T12:00:00Z', 'il y a 2 ans'],
+  ])('%s → %s', (value, expected) => {
+    expect(plain(timeAgo(value, now, 'fr'))).toBe(expected)
+  })
+})

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import type { HubRepoRef, HubSplitQuery } from '@/api/sdk'
 import type { HubFeature, HubQaColumns, HubRow } from '@/api/types'
@@ -9,11 +10,13 @@ import { useHubRow } from '@/hooks'
 import { formatValue, isHttpUrl } from './format'
 
 function FieldValue({ value }: { value: unknown }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   if (value === null || value === undefined) return <span className="hub-null">null</span>
   if (typeof value === 'boolean') return <span className="tag">{String(value)}</span>
-  if (typeof value === 'number') return <span className="mono">{formatValue(value)}</span>
+  if (typeof value === 'number') return <span className="mono">{formatValue(value, locale)}</span>
   if (typeof value === 'string') {
-    if (value === '') return <span className="hub-null">empty</span>
+    if (value === '') return <span className="hub-null">{t('rowDrawer.empty')}</span>
     if (isHttpUrl(value)) {
       return (
         <a href={value} target="_blank" rel="noopener noreferrer" className="hub-link">
@@ -61,6 +64,8 @@ export function RowDrawer({
   onPrev: (() => void) | null
   onNext: (() => void) | null
 }) {
+  const t = useTranslations('viewer')
+  const tc = useTranslations('common')
   // The page's copy has long cells cut: fetch the whole row only then.
   const cut = (row.truncated_cells ?? []).length > 0
   const full = useHubRow(repo, cut ? row.row_idx : null, splitQuery)
@@ -107,9 +112,9 @@ export function RowDrawer({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(values, null, 2))
-      toast.success(`Row ${row.row_idx} copied as JSON`)
+      toast.success(t('rowDrawer.copied', { index: row.row_idx }))
     } catch {
-      toast.error('The browser refused access to the clipboard')
+      toast.error(t('rowDrawer.clipboardRefused'))
     }
   }
 
@@ -127,11 +132,12 @@ export function RowDrawer({
         <header className="hub-drawer-head">
           <div>
             <h2 id="hub-row-title" className="card-title">
-              Row {row.row_idx}
+              {t('rowDrawer.title', { index: row.row_idx })}
             </h2>
             <div className="hint">
-              {split} split · ←/→ to move, Esc to close
-              {cut && full.isPending && ' · loading the full row…'}
+              {cut && full.isPending
+                ? t('rowDrawer.hintLoading', { split })
+                : t('rowDrawer.hint', { split })}
             </div>
           </div>
           <div className="hub-drawer-actions">
@@ -140,7 +146,7 @@ export function RowDrawer({
               className="icon-btn"
               onClick={onPrev ?? undefined}
               disabled={!onPrev}
-              aria-label="Previous row"
+              aria-label={t('rowDrawer.previousRow')}
             >
               <Icon name="chevronLeft" />
             </button>
@@ -149,11 +155,16 @@ export function RowDrawer({
               className="icon-btn"
               onClick={onNext ?? undefined}
               disabled={!onNext}
-              aria-label="Next row"
+              aria-label={t('rowDrawer.nextRow')}
             >
               <Icon name="chevronRight" />
             </button>
-            <button type="button" className="icon-btn" onClick={copy} aria-label="Copy as JSON">
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={copy}
+              aria-label={t('rowDrawer.copyAsJson')}
+            >
               <Icon name="copy" />
             </button>
             <button
@@ -161,7 +172,7 @@ export function RowDrawer({
               type="button"
               className="icon-btn"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={tc('close')}
             >
               <Icon name="x" />
             </button>
@@ -171,13 +182,13 @@ export function RowDrawer({
         <div className="hub-drawer-body">
           {qa && (
             <section className="hub-qa-full">
-              <h3>Question</h3>
+              <h3>{t('rowDrawer.question')}</h3>
               <p className="hub-prose hub-qa-q">{String(values[qa.question] ?? '')}</p>
-              <h3>Answer</h3>
+              <h3>{t('rowDrawer.answer')}</h3>
               <p className="hub-prose">{String(values[qa.answer] ?? '')}</p>
               {qa.context && values[qa.context] != null && values[qa.context] !== '' && (
                 <>
-                  <h3>Context</h3>
+                  <h3>{t('rowDrawer.context')}</h3>
                   <p className="hub-prose hub-context">{String(values[qa.context])}</p>
                 </>
               )}

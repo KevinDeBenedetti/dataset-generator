@@ -168,12 +168,12 @@ describe('comparing the collections of one split', () => {
     )
     expect(caveats).toEqual({
       a: null,
-      column: 'Asked with title',
-      sample: 'Tested on 500 sampled rows',
-      k: 'Top 5',
-      trivial: 'question is embedded too: every row finds itself',
-      untested: 'Not tested yet',
-      building: 'Not built',
+      column: { key: 'askedWith', column: 'title' },
+      sample: { key: 'sampled', sample: 500 },
+      k: { key: 'topK', k: 5 },
+      trivial: { key: 'trivial', column: 'question' },
+      untested: { key: 'notTested' },
+      building: { key: 'notBuilt' },
     })
   })
 

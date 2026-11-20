@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { errorStatus, type HubRepoRef, type HubRowFilter } from '@/api/sdk'
 import type { HubColumnStats, HubDatasetDetail, HubNumericSummary } from '@/api/types'
 import { Icon } from '@/components/app/icon'
@@ -9,29 +10,32 @@ import { BarList, Histogram, HistogramTable } from './charts'
 import { formatCount, formatPercent, formatValue } from './format'
 import { resolveView } from './data-viewer'
 import type { HubViewState } from './url-state'
+import { rich } from '@/lib/rich'
 
 type Update = (patch: Partial<HubViewState>) => void
 
 function SummaryLine({ summary, unit }: { summary: HubNumericSummary; unit?: string }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const suffix = unit ? ` ${unit}` : ''
   return (
     <dl className="hub-summary">
       <div>
-        <dt>min</dt>
-        <dd>{formatValue(summary.min)}</dd>
+        <dt>{t('stats.min')}</dt>
+        <dd>{formatValue(summary.min, locale)}</dd>
       </div>
       <div>
-        <dt>median</dt>
-        <dd>{formatValue(summary.median)}</dd>
+        <dt>{t('stats.median')}</dt>
+        <dd>{formatValue(summary.median, locale)}</dd>
       </div>
       <div>
-        <dt>mean</dt>
-        <dd>{formatValue(summary.mean)}</dd>
+        <dt>{t('stats.mean')}</dt>
+        <dd>{formatValue(summary.mean, locale)}</dd>
       </div>
       <div>
-        <dt>max</dt>
+        <dt>{t('stats.max')}</dt>
         <dd>
-          {formatValue(summary.max)}
+          {formatValue(summary.max, locale)}
           {suffix}
         </dd>
       </div>
@@ -50,6 +54,7 @@ function Distribution({
   unit?: string
   integer: boolean
 }) {
+  const t = useTranslations('viewer')
   const [asTable, setAsTable] = useState(false)
   const bins = summary.histogram ?? []
   return (
@@ -64,7 +69,7 @@ function Distribution({
             aria-pressed={asTable}
           >
             <Icon name={asTable ? 'activity' : 'table'} className="ic-sm" />
-            {asTable ? 'Chart' : 'Table'}
+            {asTable ? t('stats.chart') : t('stats.table')}
           </button>
         )}
       </div>
@@ -87,6 +92,8 @@ function ColumnCard({
   rows: number
   onFilter: (filter: HubRowFilter) => void
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const categories = column.categories
   const listItems = column.kind === 'list'
   return (
@@ -101,14 +108,21 @@ function ColumnCard({
 
       {column.null_count > 0 && (
         <p className="hint">
-          {formatCount(column.null_count)} empty ({formatPercent(column.null_count, rows)})
+          {t('stats.emptyCount', {
+            count: formatCount(column.null_count, locale),
+            share: formatPercent(column.null_count, rows, locale),
+          })}
         </p>
       )}
 
       {categories && (
         <>
           <BarList
-            label={`${listItems ? 'Items' : 'Values'} of ${column.name}`}
+            label={
+              listItems
+                ? t('stats.itemsOf', { column: column.name })
+                : t('stats.valuesOf', { column: column.name })
+            }
             total={
               listItems
                 ? categories.values.reduce((s, v) => s + v.count, 0) + categories.other_count
@@ -119,7 +133,7 @@ function ColumnCard({
               label: String(v.value),
               count: v.count,
             }))}
-            selectHint="Show these rows"
+            selectHint={t('stats.showRows')}
             onSelect={(key) =>
               onFilter({
                 column: column.name,
@@ -129,9 +143,15 @@ function ColumnCard({
             }
           />
           <p className="hint">
-            {formatCount(categories.distinct)} distinct {listItems ? 'items' : 'values'}
+            {t(listItems ? 'stats.distinctItems' : 'stats.distinctValues', {
+              count: categories.distinct,
+              formatted: formatCount(categories.distinct, locale),
+            })}
             {categories.other_count > 0 &&
-              ` · ${formatCount(categories.other_count)} ${listItems ? 'items' : 'rows'} in the others`}
+              ` · ${t(listItems ? 'stats.othersItems' : 'stats.othersRows', {
+                count: categories.other_count,
+                formatted: formatCount(categories.other_count, locale),
+              })}`}
           </p>
         </>
       )}
@@ -139,29 +159,31 @@ function ColumnCard({
       {column.lengths && (
         <Distribution
           summary={column.lengths}
-          label={listItems ? 'Items per value' : 'Characters per value'}
-          unit={listItems ? 'items' : 'chars'}
+          label={listItems ? t('stats.itemsPerValue') : t('stats.charsPerValue')}
+          unit={listItems ? t('stats.unitItems') : t('stats.unitChars')}
           integer
         />
       )}
 
-      {column.number && <Distribution summary={column.number} label="Values" integer={false} />}
+      {column.number && (
+        <Distribution summary={column.number} label={t('stats.values')} integer={false} />
+      )}
 
       {column.booleans && (
         <BarList
-          label={`Values of ${column.name}`}
+          label={t('stats.valuesOf', { column: column.name })}
           total={column.booleans.true + column.booleans.false}
           items={[
             { key: 'true', label: 'true', count: column.booleans.true },
             { key: 'false', label: 'false', count: column.booleans.false },
           ]}
-          selectHint="Show these rows"
+          selectHint={t('stats.showRows')}
           onSelect={(key) => onFilter({ column: column.name, op: 'eq', value: key === 'true' })}
         />
       )}
 
       {!categories && !column.lengths && !column.number && !column.booleans && (
-        <p className="hint">No distribution for {column.kind} values.</p>
+        <p className="hint">{t('stats.noDistribution', { kind: column.kind })}</p>
       )}
     </section>
   )
@@ -178,6 +200,8 @@ export function StatsPanel({
   state: HubViewState
   update: Update
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const current = resolveView(detail.views, state.config, state.split)
   const statistics = useHubStatistics(
     repo,
@@ -186,13 +210,13 @@ export function StatsPanel({
   )
 
   if (!current) {
-    return <p className="muted">This revision has no data file to profile.</p>
+    return <p className="muted">{t('stats.noDataFile')}</p>
   }
   if (statistics.isPending) {
     return (
       <div className="card hub-loading" aria-busy="true">
         <Icon name="loader" className="animate-spin" />
-        Profiling the {current.split} split…
+        {t('stats.profiling', { split: current.split })}
       </div>
     )
   }
@@ -204,9 +228,7 @@ export function StatsPanel({
         </span>
         <div>
           <div className="card-title">
-            {errorStatus(statistics.error) === 413
-              ? 'Too large to profile in the app'
-              : "Couldn't compute the statistics"}
+            {errorStatus(statistics.error) === 413 ? t('stats.tooLarge') : t('stats.computeFailed')}
           </div>
           <p className="card-desc">{statistics.error.message}</p>
         </div>
@@ -231,36 +253,41 @@ export function StatsPanel({
     <div className="hub-stats-tab">
       <div className="stat-grid hub-stats">
         <div className="card stat">
-          <div className="stat-label">Rows</div>
-          <div className="stat-val">{formatCount(data.num_rows)}</div>
+          <div className="stat-label">{t('stats.rows')}</div>
+          <div className="stat-val">{formatCount(data.num_rows, locale)}</div>
         </div>
         <div className="card stat">
-          <div className="stat-label">Columns</div>
-          <div className="stat-val">{formatCount(data.num_columns)}</div>
+          <div className="stat-label">{t('stats.columns')}</div>
+          <div className="stat-val">{formatCount(data.num_columns, locale)}</div>
         </div>
         <div className="card stat">
-          <div className="stat-label">Empty cells</div>
-          <div className="stat-val">{formatCount(emptyCells)}</div>
-          <div className="stat-delta">{formatPercent(emptyCells, cells)} of all cells</div>
+          <div className="stat-label">{t('stats.emptyCells')}</div>
+          <div className="stat-val">{formatCount(emptyCells, locale)}</div>
+          <div className="stat-delta">
+            {t('stats.ofAllCells', { share: formatPercent(emptyCells, cells, locale) })}
+          </div>
         </div>
         {data.duplicates ? (
           <div className="card stat">
-            <div className="stat-label">Repeated {data.duplicates.column}s</div>
-            <div className="stat-val">{formatCount(data.duplicates.duplicate_rows)}</div>
-            <div className="stat-delta">case and spacing ignored</div>
+            <div className="stat-label">
+              {t('stats.repeated', { column: data.duplicates.column })}
+            </div>
+            <div className="stat-val">{formatCount(data.duplicates.duplicate_rows, locale)}</div>
+            <div className="stat-delta">{t('stats.caseIgnored')}</div>
           </div>
         ) : (
           <div className="card stat">
-            <div className="stat-label">Split</div>
+            <div className="stat-label">{t('stats.split')}</div>
             <div className="stat-val hub-stat-text">{current.split}</div>
           </div>
         )}
       </div>
 
       <p className="hint hub-stats-note">
-        Profile of the <b>{current.split}</b> split
-        {detail.views.length > 1 ? ' (switch splits on the Data tab)' : ''}. Click a value to see
-        its rows.
+        {t.rich(detail.views.length > 1 ? 'stats.profileNoteMulti' : 'stats.profileNote', {
+          split: current.split,
+          b: rich.b,
+        })}
       </p>
 
       <div className="hub-cols">

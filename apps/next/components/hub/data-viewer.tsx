@@ -1,6 +1,7 @@
 'use client'
 
 import { type FormEvent, useEffect, useId, useMemo, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import {
   errorStatus,
   type HubFilterOp,
@@ -32,6 +33,7 @@ import { RowDrawer } from './row-drawer'
 import { PAGE_SIZES, type HubViewState } from './url-state'
 
 type Update = (patch: Partial<HubViewState>) => void
+type Translate = ReturnType<typeof useTranslations<'viewer'>>
 
 // --- tables of the dataset -------------------------------------------------------
 
@@ -59,6 +61,8 @@ function SplitPicker({
   current: HubView
   update: Update
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const configs = [...new Set(views.map((v) => v.config))]
   const splits = views.filter((v) => v.config === current.config)
   if (views.length < 2) return null
@@ -67,7 +71,7 @@ function SplitPicker({
       {configs.length > 1 && (
         <select
           className="select hub-config"
-          aria-label="Config"
+          aria-label={t('dataViewer.config')}
           value={current.config}
           onChange={(e) => {
             const first = views.find((v) => v.config === e.target.value)
@@ -81,7 +85,7 @@ function SplitPicker({
           ))}
         </select>
       )}
-      <div className="tabs" role="tablist" aria-label="Split">
+      <div className="tabs" role="tablist" aria-label={t('dataViewer.split')}>
         {splits.map((v) => (
           <button
             key={`${v.config}/${v.split}`}
@@ -93,8 +97,10 @@ function SplitPicker({
             title={v.files.join('\n')}
           >
             {v.split}
-            {v.extra && <span className="hub-extra">extra</span>}
-            {v.num_bytes != null && <span className="mono muted">{formatBytes(v.num_bytes)}</span>}
+            {v.extra && <span className="hub-extra">{t('dataViewer.extra')}</span>}
+            {v.num_bytes != null && (
+              <span className="mono muted">{formatBytes(v.num_bytes, locale)}</span>
+            )}
           </button>
         ))}
       </div>
@@ -104,16 +110,14 @@ function SplitPicker({
 
 // --- filters --------------------------------------------------------------------------
 
-const OP_LABELS: Record<HubFilterOp, string> = {
-  eq: 'is',
-  ne: 'is not',
-  lt: '<',
-  lte: '≤',
-  gt: '>',
-  gte: '≥',
-  contains: 'contains',
-  null: 'is empty',
-  not_null: 'is not empty',
+// Comparisons read the same in every language; the other conditions are
+// messages (`dataViewer.ops.*`).
+const OP_SYMBOLS = { lt: '<', lte: '≤', gt: '>', gte: '≥' } as const
+type SymbolOp = keyof typeof OP_SYMBOLS
+
+function opLabel(op: HubFilterOp, t: Translate): string {
+  if (op in OP_SYMBOLS) return OP_SYMBOLS[op as SymbolOp]
+  return t(`dataViewer.ops.${op as Exclude<HubFilterOp, SymbolOp>}`)
 }
 
 const OPS_BY_KIND: Record<string, HubFilterOp[]> = {
@@ -127,9 +131,9 @@ function needsValue(op: HubFilterOp): boolean {
   return op !== 'null' && op !== 'not_null'
 }
 
-function describeFilter(filter: HubRowFilter): string {
+function describeFilter(filter: HubRowFilter, t: Translate): string {
   const value = needsValue(filter.op) ? ` ${String(filter.value)}` : ''
-  return `${filter.column} ${OP_LABELS[filter.op]}${value}`
+  return `${filter.column} ${opLabel(filter.op, t)}${value}`
 }
 
 function FilterForm({
@@ -143,6 +147,9 @@ function FilterForm({
   onAdd: (filter: HubRowFilter) => void
   onCancel: () => void
 }) {
+  const t = useTranslations('viewer')
+  const tc = useTranslations('common')
+  const locale = useLocale()
   const filterable = features.filter((f) => f.kind in OPS_BY_KIND)
   const [column, setColumn] = useState(filterable[0]?.name ?? '')
   const kind = filterable.find((f) => f.name === column)?.kind ?? 'string'
@@ -154,7 +161,7 @@ function FilterForm({
   const effectiveOp = ops.includes(op) ? op : (ops[0] ?? 'eq')
 
   if (filterable.length === 0) {
-    return <p className="hint">No column of this split can be filtered.</p>
+    return <p className="hint">{t('dataViewer.noFilterableColumn')}</p>
   }
 
   const submit = (event: FormEvent) => {
@@ -171,7 +178,7 @@ function FilterForm({
     <form className="hub-filter-form" onSubmit={submit}>
       <select
         className="select"
-        aria-label="Column"
+        aria-label={t('dataViewer.column')}
         value={column}
         onChange={(e) => {
           setColumn(e.target.value)
@@ -186,13 +193,13 @@ function FilterForm({
       </select>
       <select
         className="select"
-        aria-label="Condition"
+        aria-label={t('dataViewer.condition')}
         value={effectiveOp}
         onChange={(e) => setOp(e.target.value as HubFilterOp)}
       >
         {ops.map((o) => (
           <option key={o} value={o}>
-            {OP_LABELS[o]}
+            {opLabel(o, t)}
           </option>
         ))}
       </select>
@@ -200,11 +207,11 @@ function FilterForm({
         (kind === 'bool' ? (
           <select
             className="select"
-            aria-label="Value"
+            aria-label={t('dataViewer.value')}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           >
-            <option value="">Choose…</option>
+            <option value="">{t('dataViewer.choose')}</option>
             <option value="true">true</option>
             <option value="false">false</option>
           </select>
@@ -212,8 +219,8 @@ function FilterForm({
           <>
             <input
               className="input"
-              aria-label="Value"
-              placeholder="Value"
+              aria-label={t('dataViewer.value')}
+              placeholder={t('dataViewer.value')}
               type={kind === 'number' ? 'number' : 'text'}
               step="any"
               list={known.length ? listId : undefined}
@@ -224,7 +231,10 @@ function FilterForm({
               <datalist id={listId}>
                 {known.map((v) => (
                   <option key={String(v.value)} value={String(v.value)}>
-                    {formatCount(v.count)} rows
+                    {t('dataViewer.rowCount', {
+                      count: v.count,
+                      formatted: formatCount(v.count, locale),
+                    })}
                   </option>
                 ))}
               </datalist>
@@ -232,10 +242,10 @@ function FilterForm({
           </>
         ))}
       <button type="submit" className="btn btn-primary btn-sm">
-        Apply
+        {t('dataViewer.apply')}
       </button>
       <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
-        Cancel
+        {tc('cancel')}
       </button>
     </form>
   )
@@ -244,11 +254,13 @@ function FilterForm({
 // --- cells ------------------------------------------------------------------------------
 
 function Cell({ value, truncated }: { value: unknown; truncated: boolean }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   if (value === null || value === undefined) return <span className="hub-null">null</span>
   if (typeof value === 'boolean') return <span className="tag">{String(value)}</span>
-  if (typeof value === 'number') return <span className="mono">{formatValue(value)}</span>
+  if (typeof value === 'number') return <span className="mono">{formatValue(value, locale)}</span>
   if (typeof value === 'string') {
-    if (value === '') return <span className="hub-null">empty</span>
+    if (value === '') return <span className="hub-null">{t('dataViewer.empty')}</span>
     return (
       <span className={cn('hub-text', isHttpUrl(value) && 'hub-url')}>
         {value}
@@ -278,16 +290,21 @@ function Cell({ value, truncated }: { value: unknown; truncated: boolean }) {
 }
 
 function ColumnSummary({ stats, rows }: { stats?: HubColumnStats; rows: number }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   if (!stats) return null
   if (stats.categories) {
     const top = stats.categories.values[0]
     return (
       <span className="hub-th-sum">
-        {formatCount(stats.categories.distinct)} values
+        {t('dataViewer.valueCount', {
+          count: stats.categories.distinct,
+          formatted: formatCount(stats.categories.distinct, locale),
+        })}
         {top && (
           <span className="muted">
             {' '}
-            · {String(top.value)} {formatPercent(top.count, rows)}
+            · {String(top.value)} {formatPercent(top.count, rows, locale)}
           </span>
         )}
       </span>
@@ -295,13 +312,16 @@ function ColumnSummary({ stats, rows }: { stats?: HubColumnStats; rows: number }
   }
   const summary = stats.number ?? stats.lengths
   if (summary?.histogram?.length) {
+    const range = { min: formatValue(summary.min, locale), max: formatValue(summary.max, locale) }
     return (
       <span className="hub-th-sum">
         <MiniHistogram bins={summary.histogram} />
         <span className="muted">
-          {formatValue(summary.min)}–{formatValue(summary.max)}
-          {stats.lengths && stats.kind === 'string' ? ' chars' : ''}
-          {stats.lengths && stats.kind === 'list' ? ' items' : ''}
+          {stats.lengths && stats.kind === 'string'
+            ? t('dataViewer.rangeChars', range)
+            : stats.lengths && stats.kind === 'list'
+              ? t('dataViewer.rangeItems', range)
+              : `${range.min}–${range.max}`}
         </span>
       </span>
     )
@@ -309,7 +329,8 @@ function ColumnSummary({ stats, rows }: { stats?: HubColumnStats; rows: number }
   if (stats.booleans) {
     return (
       <span className="hub-th-sum muted">
-        true {formatPercent(stats.booleans.true, stats.booleans.true + stats.booleans.false)}
+        true{' '}
+        {formatPercent(stats.booleans.true, stats.booleans.true + stats.booleans.false, locale)}
       </span>
     )
   }
@@ -335,6 +356,7 @@ function RowsTable({
   update: Update
   onOpen: (rowIdx: number) => void
 }) {
+  const t = useTranslations('viewer')
   const cycleSort = (column: string) => {
     if (state.sort !== column) update({ sort: column, order: 'asc' })
     else if (state.order === 'asc') update({ order: 'desc' })
@@ -359,7 +381,7 @@ function RowsTable({
                       type="button"
                       className="hub-th"
                       onClick={() => cycleSort(f.name)}
-                      title={`Sort by ${f.name}`}
+                      title={t('dataViewer.sortBy', { column: f.name })}
                     >
                       <span className="hub-th-name">{f.name}</span>
                       <span className="hub-th-kind">{f.kind}</span>
@@ -389,7 +411,7 @@ function RowsTable({
                   type="button"
                   className="hub-row-open"
                   onClick={() => onOpen(r.row_idx)}
-                  aria-label={`Open row ${r.row_idx}`}
+                  aria-label={t('dataViewer.openRow', { index: r.row_idx })}
                 >
                   {r.row_idx}
                 </button>
@@ -431,6 +453,7 @@ function QACards({
   chips: HubFeature[]
   onOpen: (rowIdx: number) => void
 }) {
+  const locale = useLocale()
   return (
     <ol className="hub-qa-list">
       {rows.map((r) => {
@@ -446,7 +469,7 @@ function QACards({
                   return (
                     <span key={f.name} className="tag" title={f.name}>
                       {f.kind === 'number'
-                        ? `${f.name} ${formatValue(value as number)}`
+                        ? `${f.name} ${formatValue(value as number, locale)}`
                         : String(value)}
                     </span>
                   )
@@ -484,24 +507,41 @@ function Pager({
   total: number
   update: Update
 }) {
+  const t = useTranslations('viewer')
+  const tc = useTranslations('common')
+  const locale = useLocale()
+  const range = {
+    from: formatCount(from, locale),
+    to: formatCount(to, locale),
+    matched: formatCount(matched, locale),
+    total: formatCount(total, locale),
+  }
+  const filtered = matched !== total
   return (
     <div className="hub-pager">
       <span className="muted">
         {matched === 0
-          ? 'No rows'
-          : `Rows ${formatCount(from)}–${formatCount(to)} of ${formatCount(matched)}`}
-        {matched !== total && ` (filtered from ${formatCount(total)})`}
+          ? filtered
+            ? t('dataViewer.noRowsFiltered', { total: range.total })
+            : t('dataViewer.noRows')
+          : filtered
+            ? t('dataViewer.rowsRangeFiltered', range)
+            : t('dataViewer.rowsRange', {
+                from: range.from,
+                to: range.to,
+                matched: range.matched,
+              })}
       </span>
       <div className="hub-pager-nav">
         <select
           className="select hub-size"
-          aria-label="Rows per page"
+          aria-label={t('dataViewer.rowsPerPage')}
           value={size}
           onChange={(e) => update({ size: Number(e.target.value) })}
         >
           {PAGE_SIZES.map((s) => (
             <option key={s} value={s}>
-              {s} / page
+              {t('dataViewer.perPage', { size: s })}
             </option>
           ))}
         </select>
@@ -510,7 +550,7 @@ function Pager({
           className="btn btn-outline btn-sm"
           disabled={page <= 1}
           onClick={() => update({ page: 1, row: null })}
-          aria-label="First page"
+          aria-label={t('dataViewer.firstPage')}
         >
           «
         </button>
@@ -521,7 +561,7 @@ function Pager({
           onClick={() => update({ page: page - 1, row: null })}
         >
           <Icon name="chevronLeft" />
-          Previous
+          {tc('previous')}
         </button>
         <span className="mono muted">
           {page} / {Math.max(1, pages)}
@@ -532,7 +572,7 @@ function Pager({
           disabled={page >= pages}
           onClick={() => update({ page: page + 1, row: null })}
         >
-          Next
+          {tc('next')}
           <Icon name="chevronRight" />
         </button>
         <button
@@ -540,7 +580,7 @@ function Pager({
           className="btn btn-outline btn-sm"
           disabled={page >= pages}
           onClick={() => update({ page: pages, row: null })}
-          aria-label="Last page"
+          aria-label={t('dataViewer.lastPage')}
         >
           »
         </button>
@@ -562,6 +602,8 @@ export function DataViewer({
   state: HubViewState
   update: Update
 }) {
+  const t = useTranslations('viewer')
+  const locale = useLocale()
   const current = resolveView(detail.views, state.config, state.split)
   // Rows are read at the commit the page was loaded at, so the tables listed
   // above and the rows below always come from the same version.
@@ -608,11 +650,8 @@ export function DataViewer({
           <Icon name="fileJson" className="ic-lg" />
         </span>
         <div>
-          <div className="card-title">No data file to show</div>
-          <p className="card-desc">
-            This revision has no JSONL, JSON, CSV or Parquet file the viewer can read. The Files tab
-            lists what the repo holds.
-          </p>
+          <div className="card-title">{t('dataViewer.noDataTitle')}</div>
+          <p className="card-desc">{t('dataViewer.noDataDesc')}</p>
         </div>
       </div>
     )
@@ -640,7 +679,7 @@ export function DataViewer({
           <Icon name="search" />
           <input
             type="search"
-            placeholder="Search every text field…"
+            placeholder={t('dataViewer.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={200}
@@ -653,11 +692,11 @@ export function DataViewer({
           aria-expanded={adding}
         >
           <Icon name="filter" />
-          Filter
+          {t('dataViewer.filter')}
         </button>
         {qa && (
           <fieldset className="tabs">
-            <legend className="sr-only">Layout</legend>
+            <legend className="sr-only">{t('dataViewer.layout')}</legend>
             <button
               type="button"
               className={cn('tab', layout === 'cards' && 'active')}
@@ -665,7 +704,7 @@ export function DataViewer({
               onClick={() => update({ layout: 'cards' })}
             >
               <Icon name="list" />
-              Q/A
+              {t('dataViewer.layoutQa')}
             </button>
             <button
               type="button"
@@ -674,7 +713,7 @@ export function DataViewer({
               onClick={() => update({ layout: 'table' })}
             >
               <Icon name="table" />
-              Table
+              {t('dataViewer.layoutTable')}
             </button>
           </fieldset>
         )}
@@ -704,9 +743,9 @@ export function DataViewer({
               onClick={() =>
                 update({ filters: state.filters.filter((_, i) => i !== index), row: null })
               }
-              aria-label={`Remove filter ${describeFilter(filter)}`}
+              aria-label={t('dataViewer.removeFilter', { filter: describeFilter(filter, t) })}
             >
-              {describeFilter(filter)}
+              {describeFilter(filter, t)}
               <Icon name="x" className="ic-sm" />
             </button>
           ))}
@@ -715,9 +754,12 @@ export function DataViewer({
               type="button"
               className="hub-chip"
               onClick={() => update({ sort: null, order: 'asc' })}
-              aria-label="Remove sorting"
+              aria-label={t('dataViewer.removeSorting')}
             >
-              sorted by {state.sort} {state.order === 'asc' ? '↑' : '↓'}
+              {t('dataViewer.sortedBy', {
+                column: state.sort,
+                arrow: state.order === 'asc' ? '↑' : '↓',
+              })}
               <Icon name="x" className="ic-sm" />
             </button>
           )}
@@ -727,7 +769,7 @@ export function DataViewer({
               className="btn btn-ghost btn-sm"
               onClick={() => update({ filters: [], row: null })}
             >
-              Clear filters
+              {t('dataViewer.clearFilters')}
             </button>
           )}
         </div>
@@ -736,9 +778,12 @@ export function DataViewer({
       {rows.isPending && (
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Loading {current.split}
-          {current.num_bytes != null ? ` (${formatBytes(current.num_bytes)})` : ''} from Hugging
-          Face…
+          {current.num_bytes != null
+            ? t('dataViewer.loadingSized', {
+                split: current.split,
+                size: formatBytes(current.num_bytes, locale),
+              })
+            : t('dataViewer.loading', { split: current.split })}
         </div>
       )}
 
@@ -750,12 +795,12 @@ export function DataViewer({
           <div>
             <div className="card-title">
               {status === 413
-                ? 'Too large for the in-app viewer'
+                ? t('dataViewer.errors.tooLarge')
                 : status === 422
-                  ? "This split can't be read as a table"
+                  ? t('dataViewer.errors.notTabular')
                   : status === 400
-                    ? 'This filter does not apply'
-                    : "Couldn't load the rows"}
+                    ? t('dataViewer.errors.badFilter')
+                    : t('dataViewer.errors.loadFailed')}
             </div>
             <p className="card-desc">{rows.error.message}</p>
           </div>
@@ -767,7 +812,7 @@ export function DataViewer({
               rel="noopener noreferrer"
             >
               <Icon name="external" />
-              Open on Hugging Face
+              {t('dataViewer.openOnHub')}
             </a>
           ) : status === 400 ? (
             <button
@@ -775,12 +820,12 @@ export function DataViewer({
               className="btn btn-outline"
               onClick={() => update({ filters: [], sort: null, q: '' })}
             >
-              Clear filters
+              {t('dataViewer.clearFilters')}
             </button>
           ) : (
             <button type="button" className="btn btn-outline" onClick={() => rows.refetch()}>
               <Icon name="refresh" />
-              Try again
+              {t('dataViewer.tryAgain')}
             </button>
           )}
         </div>
@@ -794,11 +839,11 @@ export function DataViewer({
                 <Icon name="search" className="ic-lg" />
               </span>
               <div>
-                <div className="card-title">No row matches</div>
+                <div className="card-title">{t('dataViewer.noMatchTitle')}</div>
                 <p className="card-desc">
                   {total === 0
-                    ? 'This split is empty.'
-                    : `None of the ${formatCount(total)} rows matches the search and filters.`}
+                    ? t('dataViewer.emptySplit')
+                    : t('dataViewer.noMatchDesc', { total: formatCount(total, locale) })}
                 </p>
               </div>
               {total > 0 && (
@@ -807,7 +852,7 @@ export function DataViewer({
                   className="btn btn-outline"
                   onClick={() => update({ filters: [], q: '' })}
                 >
-                  Clear search and filters
+                  {t('dataViewer.clearSearchAndFilters')}
                 </button>
               )}
             </div>

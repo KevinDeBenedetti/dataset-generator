@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import type { HubDatasetDetail } from '@/api/types'
 import { Icon } from '@/components/app/icon'
 import { compactJson } from './format'
@@ -24,26 +25,20 @@ function MetadataValue({ value }: { value: unknown }) {
 }
 
 export function CardPanel({ detail }: { detail: HubDatasetDetail }) {
+  const t = useTranslations('datasets')
   const markdown = detail.card.markdown
   const metadata = Object.entries(detail.card.metadata ?? {})
   return (
     <div className="hub-card-tab">
       <article className="card hub-markdown">
-        {markdown ? (
-          <Markdown>{markdown}</Markdown>
-        ) : (
-          <p className="muted">
-            This dataset has no card (README.md). A card describes the data, its sources and its
-            license; the Hub shows it on the dataset page.
-          </p>
-        )}
+        {markdown ? <Markdown>{markdown}</Markdown> : <p className="muted">{t('card.empty')}</p>}
       </article>
       {metadata.length > 0 && (
         <details className="card hub-meta">
           <summary>
             <Icon name="fileJson" className="ic-sm" />
-            Card metadata
-            <span className="muted">{metadata.length} field(s), from the README front matter</span>
+            {t('card.metadata')}
+            <span className="muted">{t('card.metadataHint', { count: metadata.length })}</span>
           </summary>
           <dl className="hub-fields">
             {metadata.map(([key, value]) => (

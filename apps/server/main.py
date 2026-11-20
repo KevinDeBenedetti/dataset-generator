@@ -32,6 +32,9 @@ from server.services.auth import ensure_secret_is_safe, get_current_user
 from server.migrations.utils.db_utils import upgrade_db
 from server.core.database import SQLALCHEMY_DATABASE_URL, SessionLocal, database_ready
 from server.core.config import config
+from server.core.i18n import bind_locale
+from server.api.errors import translated_http_exception
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from server.core.http_security import (
     BodySizeLimitMiddleware,
     OriginCheckMiddleware,
@@ -193,6 +196,11 @@ def create_app() -> FastAPI:
     # request that never reaches a route handler was invisible in `docker
     # compose logs`. This runs before route-level auth, so it also catches auth
     # failures.
+    # The reader's language, for the texts a service serves (core/i18n.py),
+    # error details included.
+    app.middleware("http")(bind_locale)
+    app.add_exception_handler(StarletteHTTPException, translated_http_exception)
+
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         started = time.perf_counter()

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useModels } from '@/hooks/use-models'
 
 interface ModelSelectProps {
@@ -11,6 +12,7 @@ interface ModelSelectProps {
   allowDefault?: boolean
   disabled?: boolean
   id?: string
+  // Defaults to the translated "Model".
   ariaLabel?: string
   className?: string
 }
@@ -28,9 +30,10 @@ export function ModelSelect({
   allowDefault = true,
   disabled,
   id,
-  ariaLabel = 'Model',
+  ariaLabel,
   className = DEFAULT_CLASS,
 }: ModelSelectProps) {
+  const t = useTranslations('models.select')
   const { data, isPending } = useModels()
   const llm = data?.model
 
@@ -40,18 +43,24 @@ export function ModelSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled || isPending}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t('ariaLabel')}
       className={className}
     >
-      {allowDefault && <option value="">{llm ? `Your LLM (${llm})` : 'Your LLM'}</option>}
-      {!allowDefault && !value && <option value="">Pick a model…</option>}
+      {allowDefault && (
+        <option value="">{llm ? t('yourLlmNamed', { model: llm }) : t('yourLlm')}</option>
+      )}
+      {!allowDefault && !value && <option value="">{t('pick')}</option>}
       {(data?.providers ?? []).map((provider) => {
         const models = provider.models
         if (models.length === 0) return null
         return (
           <optgroup
             key={provider.name}
-            label={provider.configured ? provider.label : `${provider.label} (not configured)`}
+            label={
+              provider.configured
+                ? provider.label
+                : t('notConfigured', { provider: provider.label })
+            }
           >
             {models.map((m) => (
               <option key={m.ref} value={m.ref} disabled={!provider.configured}>

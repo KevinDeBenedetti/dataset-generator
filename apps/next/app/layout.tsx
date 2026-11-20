@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale } from 'next-intl/server'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import './globals.css'
@@ -22,8 +24,10 @@ export default async function RootLayout({
   // The CSP nonce set by proxy.ts (production only): our one inline script
   // must carry it or the browser refuses to run it.
   const nonce = (await headers()).get('x-nonce') ?? undefined
+  // The reader's language: their cookie, else their browser's (i18n/request.ts).
+  const locale = await getLocale()
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <script
           nonce={nonce}
@@ -35,10 +39,12 @@ export default async function RootLayout({
               "try{if(localStorage.getItem('dg-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}",
           }}
         />
-        <Providers>
-          <main className="min-h-screen">{children}</main>
-          <DevLogConsole />
-        </Providers>
+        <NextIntlClientProvider>
+          <Providers>
+            <main className="min-h-screen">{children}</main>
+            <DevLogConsole />
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   )

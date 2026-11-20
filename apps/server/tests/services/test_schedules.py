@@ -292,6 +292,16 @@ def test_a_skipped_schedule_keeps_the_reason_until_it_runs_or_is_saved(db, monke
     assert skipped["reason"].startswith("Unknown model 'openai:chat-default'")
     assert skipped["at"] == now.isoformat()
 
+    # Stored in English, shown in the reader's language.
+    from server.core.i18n import reset_locale, set_locale
+
+    token = set_locale("fr")
+    try:
+        french = schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"]
+    finally:
+        reset_locale(token)
+    assert french["reason"].startswith("Modèle inconnu")
+
     # The model is back: the next tick queues, and the reason goes.
     monkeypatch.setattr("server.services.jobs.validate_ref", lambda ref, creds: ref)
     row.next_run_at = now - timedelta(minutes=1)

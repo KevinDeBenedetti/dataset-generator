@@ -82,12 +82,21 @@ export interface ScheduleSkip {
   at: string
 }
 
-/** The line a schedule shows when its latest time started no run, or null. */
-export function skipNotice(
-  skipped: ScheduleSkip | null | undefined,
-  when: (at: string) => string = (at) => new Date(at).toLocaleString(),
-): string | null {
+/** The `jobs` message a schedule shows when its latest time started no run. */
+export interface SkipNotice {
+  key: 'schedule.skipped'
+  /** When the run was due (ISO): its picker formats it in the reader's locale. */
+  at: string
+  /** The server's reason, without its final full stop: the message adds one. */
+  reason: string
+}
+
+/** The message a schedule shows when its latest time started no run, or null. */
+export function skipNotice(skipped: ScheduleSkip | null | undefined): SkipNotice | null {
   if (!skipped?.reason) return null
-  const reason = skipped.reason.replace(/[.\s]+$/, '')
-  return `The run scheduled for ${when(skipped.at)} did not start: ${reason}. Fix it, then save the schedule again.`
+  return {
+    key: 'schedule.skipped',
+    at: skipped.at,
+    reason: skipped.reason.replace(/[.\s]+$/, ''),
+  }
 }

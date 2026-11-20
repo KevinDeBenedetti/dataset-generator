@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 from server.jobs.tech_stack import detect_technologies
 from server.services.github import GitHubService
@@ -144,7 +144,7 @@ class CorpusGitHubClient(GitHubService):
         self.rate_limited_until: Optional[str] = None
         self._branches: Dict[str, str] = {}
 
-    def _raise_for(self, resp: httpx.Response, what: str) -> None:
+    def _raise_for(self, resp: httpx2.Response, what: str) -> None:
         if resp.status_code == 404:
             raise GitHubAPIError(f"{what}: not found")
         if resp.status_code == 403 and resp.headers.get("x-ratelimit-remaining") == "0":
@@ -218,7 +218,7 @@ class CorpusGitHubClient(GitHubService):
         """Best effort: a repo without a README is normal, so failures give ''."""
         try:
             text = await self.get_readme(owner, repo) or ""
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return ""
         text = clean_readme(text)
         if len(text) > MAX_README_CHARS:
@@ -250,7 +250,7 @@ class CorpusGitHubClient(GitHubService):
         has its language and topics, so failures give []."""
         try:
             tree = await self.repo_tree(owner, repo, branch)
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             logger.warning("tech stack of %s/%s unavailable: %s", owner, repo, exc)
             return []
         return await detect_technologies(
@@ -279,7 +279,7 @@ class CorpusGitHubClient(GitHubService):
                     if resp.status_code == 200
                     else None
                 )
-            except httpx.HTTPError:
+            except httpx2.HTTPError:
                 branch = None
             self._branches[key] = branch or "main"
         return self._branches[key]
@@ -322,7 +322,7 @@ async def fetch_snapshot(
         owner, name = split_slug(slug, username)
         try:
             repos.append(await client.fetch_repo(owner, name))
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             errors.append(f"{slug}: {exc}")
 
     snapshot = GitHubSnapshot(
@@ -345,7 +345,7 @@ async def fetch_repo_docs(
     try:
         branch = await client.default_branch(owner, repo)
         tree = await client.repo_tree(owner, repo, branch)
-    except (GitHubAPIError, httpx.HTTPError) as exc:
+    except (GitHubAPIError, httpx2.HTTPError) as exc:
         logger.warning("docs/ tree for %s/%s unavailable: %s", owner, repo, exc)
         return []
 
@@ -362,7 +362,7 @@ async def fetch_repo_docs(
     for entry in candidates:
         try:
             content = await client.file_content(owner, repo, entry["path"])
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             logger.warning("skipping %s/%s/%s: %s", owner, repo, entry["path"], exc)
             continue
         if not content.strip():
@@ -390,7 +390,7 @@ async def fetch_docs_by_path(
     for path in paths:
         try:
             content = await client.file_content(owner, repo, path)
-        except (GitHubAPIError, httpx.HTTPError) as exc:
+        except (GitHubAPIError, httpx2.HTTPError) as exc:
             errors.append(f"{repo}/{path}: {exc}")
             continue
         if not content.strip():

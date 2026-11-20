@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import './quality.css'
 import { Icon } from '@/components/app/icon'
 import {
@@ -20,6 +21,7 @@ const DEFAULT_SIMILARITY_THRESHOLD = 0.8
 const DUPLICATES_PAGE_SIZE = 5
 
 export default function QualityPage() {
+  const t = useTranslations('quality')
   const { data: datasets, isPending: datasetsPending } = useDatasets()
   // The Hugging Face list only ever resolves client-side (no SSR hydration
   // boundary for it) — gating everything it feeds on `mounted` keeps the
@@ -100,9 +102,7 @@ export default function QualityPage() {
 
   const handleResolvePair = (removeId: string, question: string) => {
     if (!selectedDataset) return
-    const confirmed = window.confirm(
-      `Delete "${question}" and keep the other one? This can't be undone.`,
-    )
+    const confirmed = window.confirm(t('confirm.resolve', { question }))
     if (!confirmed) return
     resolvePairMutation.mutate(
       { datasetId: selectedDataset, removeId },
@@ -134,9 +134,7 @@ export default function QualityPage() {
 
   const handleClean = () => {
     if (!selectedDataset) return
-    const confirmed = window.confirm(
-      `Remove the lower-confidence item of every pair at or above ${threshold} similarity? This can't be undone.`,
-    )
+    const confirmed = window.confirm(t('confirm.clean', { threshold: String(threshold) }))
     if (!confirmed) return
 
     cleanMutation.mutate(
@@ -185,15 +183,13 @@ export default function QualityPage() {
       <div className="quality-page">
         <div className="page-head">
           <div>
-            <h1 className="page-title">Quality control</h1>
-            <p className="page-sub">
-              Detected duplicates, score distribution and pairs below the threshold — per dataset.
-            </p>
+            <h1 className="page-title">{t('title')}</h1>
+            <p className="page-sub">{t('subtitle')}</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body" style={{ paddingTop: 20 }}>
-            <p className="muted">No datasets available yet. Generate a dataset first.</p>
+            <p className="muted">{t('noDatasets')}</p>
           </div>
         </div>
       </div>
@@ -204,16 +200,14 @@ export default function QualityPage() {
     <div className="quality-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Quality control</h1>
-          <p className="page-sub">
-            Detected duplicates, score distribution and pairs below the threshold — per dataset.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
         <div className="page-actions">
           <select
             className="select"
             style={{ width: 'auto' }}
-            aria-label="Dataset"
+            aria-label={t('dataset.label')}
             value={selectedDataset}
             onChange={(e) => handleSelectDataset(e.target.value)}
             disabled={
@@ -228,7 +222,7 @@ export default function QualityPage() {
                 picking that option (e.g. the only Hugging Face repo) is not a
                 change, onChange never fires and nothing gets imported. */}
             <option value="" disabled>
-              Select a dataset…
+              {t('dataset.placeholder')}
             </option>
             {mounted &&
               datasets?.map((dataset) => (
@@ -237,7 +231,7 @@ export default function QualityPage() {
                 </option>
               ))}
             {importableHfDatasets.length > 0 && (
-              <optgroup label="Hugging Face (import to analyze)">
+              <optgroup label={t('dataset.hubGroup')}>
                 {importableHfDatasets.map((hfDataset) => (
                   <option key={hfDataset.id} value={`hf:${hfDataset.id}`}>
                     {hfDataset.id}
@@ -255,13 +249,13 @@ export default function QualityPage() {
               name={analyzeMutation.isPending ? 'loader' : 'play'}
               className={analyzeMutation.isPending ? 'animate-spin' : undefined}
             />
-            {analyzeMutation.isPending ? 'Analyzing…' : 'Re-run analysis'}
+            {analyzeMutation.isPending ? t('analysis.running') : t('analysis.rerun')}
           </button>
         </div>
       </div>
       {importHfMutation.isPending && (
         <p className="hint" style={{ marginTop: -8, marginBottom: 12 }}>
-          Importing from Hugging Face…
+          {t('import.pending')}
         </p>
       )}
       {importHfMutation.isError && (
@@ -271,14 +265,14 @@ export default function QualityPage() {
         >
           {importHfMutation.error instanceof Error
             ? importHfMutation.error.message
-            : 'Failed to import the Hugging Face dataset'}
+            : t('import.failed')}
         </p>
       )}
 
       <div className="stat-grid" style={{ marginBottom: 18 }}>
         <div className="card stat">
           <div className="stat-top">
-            <span className="stat-label">Average score</span>
+            <span className="stat-label">{t('stats.average')}</span>
             <span className="stat-ic">
               <Icon name="shield" />
             </span>
@@ -287,22 +281,28 @@ export default function QualityPage() {
             {scoreStats.avg !== null ? scoreStats.avg.toFixed(2) : '—'}
           </div>
           <div className="stat-delta muted">
-            {stats ? `${stats.scored_count} of ${stats.total_count} scored` : '—'}
+            {stats
+              ? t('stats.scored', { scored: stats.scored_count, total: stats.total_count })
+              : '—'}
           </div>
         </div>
         <div className="card stat">
           <div className="stat-top">
-            <span className="stat-label">Duplicates</span>
+            <span className="stat-label">{t('stats.duplicates')}</span>
             <span className="stat-ic">
               <Icon name="copyCheck" />
             </span>
           </div>
           <div className="stat-val">{analyzeMutation.data?.similar_pairs_found ?? 0}</div>
-          <div className="stat-delta muted">{pendingDuplicates.length} to arbitrate</div>
+          <div className="stat-delta muted">
+            {t('stats.toArbitrate', { count: pendingDuplicates.length })}
+          </div>
         </div>
         <div className="card stat">
           <div className="stat-top">
-            <span className="stat-label">Below {scoreThreshold.toFixed(2)} threshold</span>
+            <span className="stat-label">
+              {t('stats.below', { threshold: scoreThreshold.toFixed(2) })}
+            </span>
             <span className="stat-ic">
               <Icon name="alert" />
             </span>
@@ -311,13 +311,15 @@ export default function QualityPage() {
           <div className="stat-val">{scoreStats.total ? scoreStats.below : '—'}</div>
           <div className="stat-delta muted">
             {scoreStats.total
-              ? `${((scoreStats.below / scoreStats.total) * 100).toFixed(1)}% of the dataset`
-              : 'No scores'}
+              ? t('stats.shareOfDataset', {
+                  percent: ((scoreStats.below / scoreStats.total) * 100).toFixed(1),
+                })
+              : t('stats.noScores')}
           </div>
         </div>
         <div className="card stat">
           <div className="stat-top">
-            <span className="stat-label">Validated</span>
+            <span className="stat-label">{t('stats.validated')}</span>
             <span className="stat-ic">
               <Icon name="check" />
             </span>
@@ -325,8 +327,10 @@ export default function QualityPage() {
           <div className="stat-val">{scoreStats.total ? scoreStats.validated : '—'}</div>
           <div className="stat-delta muted">
             {scoreStats.total
-              ? `${((scoreStats.validated / scoreStats.total) * 100).toFixed(1)}%`
-              : 'No scores'}
+              ? t('stats.share', {
+                  percent: ((scoreStats.validated / scoreStats.total) * 100).toFixed(1),
+                })
+              : t('stats.noScores')}
           </div>
         </div>
       </div>
@@ -335,7 +339,7 @@ export default function QualityPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Score distribution</div>
+              <div className="card-title">{t('distribution.title')}</div>
             </div>
           </div>
           <div className="card-body" style={{ paddingTop: 6 }}>
@@ -343,17 +347,15 @@ export default function QualityPage() {
                 reports offline — still shows the loading line. It must be
                 gated on selectedDataset: while none is picked the query is
                 disabled, and a disabled query stays `pending` forever. */}
-            {selectedDataset && statsQuery.isPending && <p className="muted">Loading scores…</p>}
+            {selectedDataset && statsQuery.isPending && (
+              <p className="muted">{t('distribution.loading')}</p>
+            )}
             {!(selectedDataset && statsQuery.isPending) &&
               scoreStats.total === 0 &&
               (stats?.total_count ? (
-                <p className="muted">
-                  None of the {stats.total_count} pairs has a confidence score — datasets imported
-                  from Hugging Face usually don&apos;t carry one. Score them with the LLM to get a
-                  distribution.
-                </p>
+                <p className="muted">{t('distribution.unscored', { count: stats.total_count })}</p>
               ) : (
-                <p className="muted">No scored Q&amp;A items for this dataset yet.</p>
+                <p className="muted">{t('distribution.empty')}</p>
               ))}
             {!(selectedDataset && statsQuery.isPending) &&
               stats &&
@@ -378,8 +380,8 @@ export default function QualityPage() {
                       className={scoreMutation.isPending ? 'animate-spin' : undefined}
                     />
                     {scoreMutation.isPending
-                      ? 'Scoring…'
-                      : `Score ${stats.total_count - stats.scored_count} unscored pair(s) with the LLM`}
+                      ? t('scoring.running')
+                      : t('scoring.run', { count: stats.total_count - stats.scored_count })}
                   </button>
                 </div>
               )}
@@ -387,16 +389,17 @@ export default function QualityPage() {
               <p className="hint" style={{ color: 'var(--destructive)' }}>
                 {scoreMutation.error instanceof Error
                   ? scoreMutation.error.message
-                  : 'Scoring failed'}
+                  : t('scoring.failed')}
               </p>
             )}
             {scoreMutation.data?.dataset_name === selectedDataset && !scoreMutation.isPending && (
               <p className="hint">
-                Scored {scoreMutation.data.scored} of {scoreMutation.data.requested} pair(s) with{' '}
-                {scoreMutation.data.model}
-                {scoreMutation.data.failed > 0
-                  ? ` — ${scoreMutation.data.failed} left unscored, run it again to retry them.`
-                  : '.'}
+                {t(scoreMutation.data.failed > 0 ? 'scoring.partial' : 'scoring.done', {
+                  scored: scoreMutation.data.scored,
+                  requested: scoreMutation.data.requested,
+                  model: scoreMutation.data.model,
+                  failed: scoreMutation.data.failed,
+                })}
               </p>
             )}
             {scoreStats.buckets.map((bucket, i) => (
@@ -421,7 +424,7 @@ export default function QualityPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Quality rules</div>
+              <div className="card-title">{t('rules.title')}</div>
             </div>
           </div>
           <div
@@ -437,8 +440,8 @@ export default function QualityPage() {
               }}
             >
               <div>
-                <div className="label">Duplicate threshold</div>
-                <div className="hint">Text similarity used by analyze &amp; clean</div>
+                <div className="label">{t('rules.duplicateThreshold')}</div>
+                <div className="hint">{t('rules.duplicateThresholdHint')}</div>
               </div>
               <input
                 className="input"
@@ -462,8 +465,8 @@ export default function QualityPage() {
               }}
             >
               <div>
-                <div className="label">Quality rejection threshold</div>
-                <div className="hint">Minimum confidence kept as &quot;validated&quot;</div>
+                <div className="label">{t('rules.rejectionThreshold')}</div>
+                <div className="hint">{t('rules.rejectionThresholdHint')}</div>
               </div>
               <input
                 className="input"
@@ -472,7 +475,7 @@ export default function QualityPage() {
                 min={0}
                 max={1}
                 step={0.01}
-                aria-label="Quality rejection threshold"
+                aria-label={t('rules.rejectionThreshold')}
                 value={rules.reject_below_confidence}
                 onChange={(e) =>
                   setDraftRules({
@@ -492,8 +495,8 @@ export default function QualityPage() {
               }}
             >
               <div>
-                <div className="label">Min. answer length</div>
-                <div className="hint">Words (0 = no minimum)</div>
+                <div className="label">{t('rules.minAnswerLength')}</div>
+                <div className="hint">{t('rules.minAnswerLengthHint')}</div>
               </div>
               <input
                 className="input"
@@ -501,7 +504,7 @@ export default function QualityPage() {
                 type="number"
                 min={0}
                 step={1}
-                aria-label="Minimum answer length in words"
+                aria-label={t('rules.minAnswerLengthAria')}
                 value={rules.min_answer_words}
                 onChange={(e) =>
                   setDraftRules({
@@ -514,15 +517,15 @@ export default function QualityPage() {
             <hr className="sep" />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div className="label">Automatic rejection</div>
-                <div className="hint">Applied at generation</div>
+                <div className="label">{t('rules.autoReject')}</div>
+                <div className="hint">{t('rules.autoRejectHint')}</div>
               </div>
               <button
                 type="button"
                 className={`switch${rules.auto_reject_enabled ? ' on' : ''}`}
                 role="switch"
                 aria-checked={rules.auto_reject_enabled}
-                aria-label="Automatic rejection at generation"
+                aria-label={t('rules.autoRejectAria')}
                 onClick={() =>
                   setDraftRules({ ...rules, auto_reject_enabled: !rules.auto_reject_enabled })
                 }
@@ -538,14 +541,14 @@ export default function QualityPage() {
                   name={updateRulesMutation.isPending ? 'loader' : 'check'}
                   className={updateRulesMutation.isPending ? 'animate-spin' : undefined}
                 />
-                {updateRulesMutation.isPending ? 'Saving…' : 'Save rules'}
+                {updateRulesMutation.isPending ? t('rules.saving') : t('rules.save')}
               </button>
             )}
             {updateRulesMutation.isError && (
               <p className="hint" style={{ color: 'var(--destructive)' }}>
                 {updateRulesMutation.error instanceof Error
                   ? updateRulesMutation.error.message
-                  : 'Failed to save quality rules'}
+                  : t('rules.saveFailed')}
               </p>
             )}
             <hr className="sep" />
@@ -560,19 +563,21 @@ export default function QualityPage() {
                 name={cleanMutation.isPending ? 'loader' : 'trash'}
                 className={cleanMutation.isPending ? 'animate-spin' : undefined}
               />
-              {cleanMutation.isPending ? 'Cleaning…' : 'Clean duplicates now'}
+              {cleanMutation.isPending ? t('clean.running') : t('clean.run')}
             </button>
             {cleanMutation.isSuccess && cleanMutation.data && (
               <p className="hint">
-                Removed {cleanMutation.data.removed_records} of {cleanMutation.data.total_records}{' '}
-                records.
+                {t('clean.done', {
+                  removed: cleanMutation.data.removed_records,
+                  total: cleanMutation.data.total_records,
+                })}
               </p>
             )}
             {cleanMutation.isError && (
               <p className="hint" style={{ color: 'var(--destructive)' }}>
                 {cleanMutation.error instanceof Error
                   ? cleanMutation.error.message
-                  : 'Failed to clean duplicates'}
+                  : t('clean.failed')}
               </p>
             )}
           </div>
@@ -584,12 +589,12 @@ export default function QualityPage() {
           <div>
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Icon name="copyCheck" />
-              Duplicates to arbitrate
+              {t('duplicates.title')}
             </div>
             <div className="card-desc">
               {selectedDataset
-                ? `Semantically close pairs detected in ${selectedDataset}.`
-                : 'Select a dataset to detect duplicates.'}
+                ? t('duplicates.description', { dataset: selectedDataset })
+                : t('duplicates.selectDataset')}
             </div>
           </div>
           <div className="tabs">
@@ -597,30 +602,32 @@ export default function QualityPage() {
               className={`tab${activeTab === 'pending' ? ' active' : ''}`}
               onClick={() => setActiveTab('pending')}
             >
-              To handle <span className="muted">{pendingDuplicates.length}</span>
+              {t('duplicates.tabs.pending')}{' '}
+              <span className="muted">{pendingDuplicates.length}</span>
             </button>
             <button
               className={`tab${activeTab === 'resolved' ? ' active' : ''}`}
               onClick={() => setActiveTab('resolved')}
             >
-              Resolved <span className="muted">{resolvedDuplicates.length}</span>
+              {t('duplicates.tabs.resolved')}{' '}
+              <span className="muted">{resolvedDuplicates.length}</span>
             </button>
           </div>
         </div>
         <div className="card-body">
-          {analyzeMutation.isPending && <p className="muted">Analyzing similarities…</p>}
+          {analyzeMutation.isPending && <p className="muted">{t('duplicates.analyzing')}</p>}
           {resolvePairMutation.isError && (
             <p className="hint" style={{ color: 'var(--destructive)' }}>
               {resolvePairMutation.error instanceof Error
                 ? resolvePairMutation.error.message
-                : 'Failed to resolve the duplicate pair'}
+                : t('duplicates.resolveFailed')}
             </p>
           )}
           {analyzeMutation.isError && (
             <p className="hint" style={{ color: 'var(--destructive)' }}>
               {analyzeMutation.error instanceof Error
                 ? analyzeMutation.error.message
-                : 'Failed to analyze similarities'}
+                : t('duplicates.analyzeFailed')}
             </p>
           )}
           {!analyzeMutation.isPending &&
@@ -628,8 +635,8 @@ export default function QualityPage() {
             visibleDuplicates.length === 0 && (
               <p className="muted">
                 {activeTab === 'pending'
-                  ? 'No duplicate pairs above the threshold.'
-                  : 'Nothing kept yet.'}
+                  ? t('duplicates.emptyPending')
+                  : t('duplicates.emptyResolved')}
               </p>
             )}
 
@@ -641,9 +648,11 @@ export default function QualityPage() {
                   <span className="ic">
                     <Icon name="copyCheck" />
                   </span>
-                  <b style={{ fontSize: 13 }}>Duplicate #{index + 1}</b>
+                  <b style={{ fontSize: 13 }}>{t('duplicates.item', { index: index + 1 })}</b>
                   <span className="badge badge-warning">
-                    similarity {(pair.similarity * 100).toFixed(0)}%
+                    {t('duplicates.similarity', {
+                      percent: (pair.similarity * 100).toFixed(0),
+                    })}
                   </span>
                 </div>
                 <div className="dup-pair">
@@ -651,9 +660,11 @@ export default function QualityPage() {
                     <div className="q">{pair.question1}</div>
                   </div>
                   <div className="dup-mid">
-                    <span className="pct">{(pair.similarity * 100).toFixed(0)}%</span>
+                    <span className="pct">
+                      {t('stats.share', { percent: (pair.similarity * 100).toFixed(0) })}
+                    </span>
                     <span className="muted" style={{ fontSize: 10 }}>
-                      similar
+                      {t('duplicates.similar')}
                     </span>
                   </div>
                   <div className="dup-side">
@@ -666,7 +677,7 @@ export default function QualityPage() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setDismissedIds((prev) => new Set(prev).add(pairId))}
                     >
-                      Keep both
+                      {t('duplicates.keepBoth')}
                     </button>
                     <button
                       className="btn btn-outline btn-sm"
@@ -674,7 +685,7 @@ export default function QualityPage() {
                       onClick={() => handleResolvePair(pair.record2_id, pair.question2)}
                     >
                       <Icon name="check" />
-                      Keep left
+                      {t('duplicates.keepLeft')}
                     </button>
                     <button
                       className="btn btn-outline btn-sm"
@@ -682,7 +693,7 @@ export default function QualityPage() {
                       onClick={() => handleResolvePair(pair.record1_id, pair.question1)}
                     >
                       <Icon name="check" />
-                      Keep right
+                      {t('duplicates.keepRight')}
                     </button>
                   </div>
                 )}
@@ -698,8 +709,10 @@ export default function QualityPage() {
               >
                 <Icon name="chevronDown" />
                 {showAllDuplicates
-                  ? 'Show fewer'
-                  : `View the remaining ${visibleDuplicates.length - DUPLICATES_PAGE_SIZE} duplicates`}
+                  ? t('duplicates.showFewer')
+                  : t('duplicates.showRemaining', {
+                      count: visibleDuplicates.length - DUPLICATES_PAGE_SIZE,
+                    })}
               </button>
             </div>
           )}

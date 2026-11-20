@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from server.services import secret_validation as sv
@@ -13,7 +13,7 @@ KEY = "sk-canary-0123456789abcdef"
 
 
 class _Client:
-    """An ``httpx.AsyncClient`` stand-in answering one GET."""
+    """An ``httpx2.AsyncClient`` stand-in answering one GET."""
 
     def __init__(self, response=None, error=None):
         self.response, self.error = response, error
@@ -33,19 +33,19 @@ class _Client:
 
 
 def _patch_http(client):
-    return patch.object(sv.httpx, "AsyncClient", lambda **kw: client)
+    return patch.object(sv.httpx2, "AsyncClient", lambda **kw: client)
 
 
 async def test_github_token_ok_and_rejected():
-    ok = _Client(httpx.Response(200, json={}))
+    ok = _Client(httpx2.Response(200, json={}))
     with _patch_http(ok):
         result = await check_secret("github_token", "ghp_x" * 5, make_creds())
     assert result.ok and ok.seen[0] == "https://api.github.com/user"
     assert ok.seen[1]["Authorization"] == "Bearer " + "ghp_x" * 5
 
-    with _patch_http(_Client(httpx.Response(401))):
+    with _patch_http(_Client(httpx2.Response(401))):
         assert (await check_secret("github_token", "bad", make_creds())).ok is False
-    with _patch_http(_Client(error=httpx.ConnectError("down"))):
+    with _patch_http(_Client(error=httpx2.ConnectError("down"))):
         result = await check_secret("github_token", "bad", make_creds())
     assert not result.ok and "Could not reach" in result.message
 

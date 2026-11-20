@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { Icon } from '@/components/app/icon'
 import { usePrompts } from '@/hooks'
 import './prompts.css'
@@ -13,6 +14,8 @@ function detectVariables(content: string): string[] {
 }
 
 export default function PromptsPage() {
+  const t = useTranslations('prompts')
+  const tc = useTranslations('common')
   const promptsQuery = usePrompts()
   const prompts = promptsQuery.data?.prompts ?? []
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -36,11 +39,8 @@ export default function PromptsPage() {
     <div className="prompts-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">LLM Prompts</h1>
-          <p className="page-sub">
-            The prompts the app really sends to the models — cleaning, transcription and QA
-            generation. They live in the server code and change with a deploy.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
       </div>
 
@@ -49,7 +49,7 @@ export default function PromptsPage() {
       {promptsQuery.isPending && (
         <div className="card">
           <div className="card-body" style={{ paddingTop: 20 }}>
-            <p className="muted">Loading prompts…</p>
+            <p className="muted">{t('loading')}</p>
           </div>
         </div>
       )}
@@ -57,9 +57,7 @@ export default function PromptsPage() {
         <div className="card">
           <div className="card-body" style={{ paddingTop: 20 }}>
             <p className="hint" style={{ color: 'var(--destructive)' }}>
-              {promptsQuery.error instanceof Error
-                ? promptsQuery.error.message
-                : 'Failed to load prompts'}
+              {promptsQuery.error instanceof Error ? promptsQuery.error.message : t('loadFailed')}
             </p>
           </div>
         </div>
@@ -81,16 +79,16 @@ export default function PromptsPage() {
                   {p.active ? (
                     <span className="badge badge-success" style={{ height: '18px' }}>
                       <span className="dot"></span>
-                      active
+                      {t('active')}
                     </span>
                   ) : (
                     <span className="tag" style={{ fontSize: '11px' }}>
-                      legacy
+                      {t('legacy')}
                     </span>
                   )}
                 </div>
                 <div className="pm">
-                  {p.role} · {p.model || 'default model'}
+                  {p.role} · {p.model || t('defaultModel')}
                 </div>
               </button>
             ))}
@@ -111,7 +109,7 @@ export default function PromptsPage() {
                 <div className="page-actions">
                   <button className="btn btn-outline btn-sm" onClick={copyPrompt} type="button">
                     <Icon name={copied ? 'check' : 'copy'} />
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? tc('copied') : tc('copy')}
                   </button>
                 </div>
               </div>
@@ -121,7 +119,7 @@ export default function PromptsPage() {
               >
                 <div className="field">
                   <label htmlFor="prompt-content" className="label">
-                    Prompt ({selected.role})
+                    {t('promptLabel', { role: selected.role })}
                   </label>
                   <textarea
                     id="prompt-content"
@@ -130,15 +128,12 @@ export default function PromptsPage() {
                     readOnly
                     value={selected.content}
                   />
-                  <div className="hint">
-                    Read-only: prompts are versioned with the code (apps/server/services). Edit them
-                    there and redeploy.
-                  </div>
+                  <div className="hint">{t('readOnlyHint')}</div>
                 </div>
                 {variables.length > 0 && (
                   <div>
                     <div className="label" style={{ marginBottom: '8px' }}>
-                      Detected variables
+                      {t('variables')}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {variables.map((v) => (
@@ -155,13 +150,13 @@ export default function PromptsPage() {
             <div className="card">
               <div className="card-head">
                 <div>
-                  <div className="card-title">Default parameters</div>
-                  <div className="card-desc">From the server configuration (.env)</div>
+                  <div className="card-title">{t('parameters.title')}</div>
+                  <div className="card-desc">{t('parameters.description')}</div>
                 </div>
                 {selected.key === 'qa_agent' && (
                   <Link className="btn btn-outline btn-sm" href="/agent-test">
                     <Icon name="play" />
-                    Test on /agent-test
+                    {t('parameters.test')}
                   </Link>
                 )}
               </div>
@@ -172,15 +167,17 @@ export default function PromptsPage() {
                 <div
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <div className="label">Model</div>
-                  <span className="tag">{selected.model || 'default'}</span>
+                  <div className="label">{t('parameters.model')}</div>
+                  <span className="tag">{selected.model || t('parameters.default')}</span>
                 </div>
                 <hr className="sep" />
                 <div
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <div className="label">Sent as</div>
-                  <span className="tag">{selected.role} message</span>
+                  <div className="label">{t('parameters.sentAs')}</div>
+                  <span className="tag">
+                    {t('parameters.roleMessage', { role: selected.role })}
+                  </span>
                 </div>
               </div>
             </div>

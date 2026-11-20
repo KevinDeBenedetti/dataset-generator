@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { truncateText } from '@/lib/text-utils'
 import type { QaItem } from '@/api/types'
@@ -20,6 +21,8 @@ function groundingFlag(metadata: QaItem['metadata']): number | null {
 }
 
 export function QAItem({ qa, index, value }: QAItemProps) {
+  const t = useTranslations('generate.qa')
+  const locale = useLocale()
   const [expanded, setExpanded] = useState(false)
   const reviewScore = groundingFlag(qa.metadata)
 
@@ -32,27 +35,29 @@ export function QAItem({ qa, index, value }: QAItemProps) {
       <AccordionTrigger className="px-4 py-3 hover:bg-gray-50 text-left">
         <div className="flex-1 space-y-2">
           <div className="font-medium text-gray-900">
-            Q{index + 1}: {truncateText(qa.question, 80)}
+            {t('heading', { index: index + 1, question: truncateText(qa.question, 80) })}
           </div>
 
           <div className="flex flex-wrap gap-3 text-xs text-gray-500">
             {qa.confidence != null && (
               <span className="bg-blue-100 px-2 py-1 rounded">
-                Confidence: {(qa.confidence * 100).toFixed(1)}%
+                {t('confidence', { percent: (qa.confidence * 100).toFixed(1) })}
               </span>
             )}
             {reviewScore != null && (
               <span
                 className="bg-amber-100 text-amber-800 px-2 py-1 rounded"
-                title="The answer is far from the source text — check it before relying on it"
+                title={t('needsReviewHint')}
               >
-                Needs review · grounding {(reviewScore * 100).toFixed(0)}%
+                {t('needsReview', { percent: (reviewScore * 100).toFixed(0) })}
               </span>
             )}
-            <span className="bg-gray-100 px-2 py-1 rounded">ID: {qa.id.substring(0, 8)}...</span>
+            <span className="bg-gray-100 px-2 py-1 rounded">
+              {t('shortId', { id: qa.id.substring(0, 8) })}
+            </span>
             {qa.created_at && (
               <span className="bg-green-100 px-2 py-1 rounded">
-                {new Date(qa.created_at).toLocaleDateString('en-US')}
+                {new Date(qa.created_at).toLocaleDateString(locale)}
               </span>
             )}
           </div>
@@ -64,7 +69,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
           <div className="bg-blue-50 p-3 rounded-lg">
             <h4 className="font-medium text-blue-900 mb-2 flex items-center">
               <span className="w-2 h-2 bg-blue-500 rounded-full mr-2" />
-              Question
+              {t('question')}
             </h4>
             <p className="text-blue-800">{qa.question}</p>
           </div>
@@ -72,7 +77,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
           <div className="bg-green-50 p-3 rounded-lg">
             <h4 className="font-medium text-green-900 mb-2 flex items-center">
               <span className="w-2 h-2 bg-green-500 rounded-full mr-2" />
-              Answer
+              {t('answer')}
             </h4>
             <p className="text-green-800">{qa.answer}</p>
           </div>
@@ -81,7 +86,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
             <div className="bg-gray-50 p-3 rounded-lg">
               <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                 <span className="w-2 h-2 bg-gray-500 rounded-full mr-2" />
-                Context
+                {t('context')}
               </h4>
               <div className="relative">
                 <p
@@ -104,7 +109,7 @@ export function QAItem({ qa, index, value }: QAItemProps) {
                       className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
                       onClick={toggleContextExpansion}
                     >
-                      {expanded ? 'Show less' : 'Show more'}
+                      {expanded ? t('showLess') : t('showMore')}
                     </button>
                   </div>
                 )}
@@ -115,12 +120,12 @@ export function QAItem({ qa, index, value }: QAItemProps) {
           <div className="bg-yellow-50 p-3 rounded-lg">
             <h4 className="font-medium text-yellow-900 mb-2 flex items-center">
               <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2" />
-              Additional Information
+              {t('additionalInfo')}
             </h4>
             <div className="space-y-2 text-sm">
               {qa.source_url && (
                 <div className="flex items-start gap-2">
-                  <span className="font-medium text-yellow-800 min-w-0">Source:</span>
+                  <span className="font-medium text-yellow-800 min-w-0">{t('source')}</span>
                   <a
                     href={qa.source_url}
                     target="_blank"
@@ -132,12 +137,12 @@ export function QAItem({ qa, index, value }: QAItemProps) {
                 </div>
               )}
               <div className="flex gap-2">
-                <span className="font-medium text-yellow-800">Full ID:</span>
+                <span className="font-medium text-yellow-800">{t('fullId')}</span>
                 <span className="font-mono text-xs bg-white px-2 py-1 rounded border">{qa.id}</span>
               </div>
               {qa.metadata && (
                 <div className="flex gap-2">
-                  <span className="font-medium text-yellow-800">Metadata:</span>
+                  <span className="font-medium text-yellow-800">{t('metadata')}</span>
                   <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
                     {JSON.stringify(qa.metadata, null, 2)}
                   </pre>

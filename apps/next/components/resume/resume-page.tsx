@@ -1,5 +1,6 @@
 'use client'
 
+import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { errorStatus } from '@/api/sdk'
 import type { ResumeSummary } from '@/api/types'
@@ -11,18 +12,19 @@ import { ResumeView } from './resume-view'
 
 /** What the page says when it can't list the resumes. */
 function ResumeProblem({ error }: { error: Error }) {
+  const t = useTranslations('resume')
   const status = errorStatus(error)
   const title =
     status === 400
-      ? 'Connect Reactive Resume'
+      ? t('problem.connectTitle')
       : status === 403
-        ? 'Admins only'
-        : "Couldn't read Reactive Resume"
+        ? t('problem.adminsTitle')
+        : t('problem.readFailedTitle')
   const desc =
     status === 400
-      ? 'Set REACTIVE_RESUME_API_KEY on the server, and REACTIVE_RESUME_URL for a self-hosted instance (blank: rxresu.me), then reload this page.'
+      ? t('problem.connectDescription')
       : status === 403
-        ? 'The resumes are read with the server’s own Reactive Resume key: only an admin sees them.'
+        ? t('problem.adminsDescription')
         : error.message
   return (
     <div className="card hub-empty">
@@ -48,13 +50,13 @@ function ResumeList({
   open: string | null
   onOpen: (id: string) => void
 }) {
+  const t = useTranslations('resume')
+  const locale = useLocale()
   const [now] = useState(() => Date.now())
   return (
     <div className="card gh-repos">
       <div className="gh-repos-filters">
-        <span className="hint">
-          {resumes.length} on {instance}
-        </span>
+        <span className="hint">{t('list.count', { count: resumes.length, instance })}</span>
       </div>
       <ul className="gh-repo-list">
         {resumes.map((r) => (
@@ -67,15 +69,17 @@ function ResumeList({
             >
               <span className="gh-repo-name">
                 {r.name}
-                {r.is_public && <span className="tag">public</span>}
-                {r.is_locked && <span className="tag">locked</span>}
+                {r.is_public && <span className="tag">{t('list.public')}</span>}
+                {r.is_locked && <span className="tag">{t('list.locked')}</span>}
               </span>
               <span className="gh-repo-desc mono">{r.slug}</span>
               <span className="gh-repo-meta">
                 {(r.tags ?? []).map((tag) => (
                   <span key={tag}>#{tag}</span>
                 ))}
-                {r.updated_at && <span>updated {timeAgo(r.updated_at, now)}</span>}
+                {r.updated_at && (
+                  <span>{t('list.updated', { ago: timeAgo(r.updated_at, now, locale) })}</span>
+                )}
               </span>
             </button>
           </li>
@@ -86,6 +90,7 @@ function ResumeList({
 }
 
 export function ResumePage() {
+  const t = useTranslations('resume')
   const resumes = useResumes()
   const [openId, setOpenId] = useState<string | null>(null)
   const list = resumes.data?.resumes ?? []
@@ -95,11 +100,8 @@ export function ResumePage() {
     <div className="hub-page gh-page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Resume</h1>
-          <p className="page-sub">
-            Your resumes on Reactive Resume, read with the server&apos;s API key. Pick one to read
-            it as text: its sections and descriptions, hidden ones left out.
-          </p>
+          <h1 className="page-title">{t('title')}</h1>
+          <p className="page-sub">{t('subtitle')}</p>
         </div>
       </div>
 
@@ -108,7 +110,7 @@ export function ResumePage() {
       ) : !resumes.data ? (
         <div className="card hub-loading" aria-busy="true">
           <Icon name="loader" className="animate-spin" />
-          Listing your resumes…
+          {t('list.loading')}
         </div>
       ) : list.length === 0 ? (
         <div className="card hub-empty">
@@ -116,9 +118,9 @@ export function ResumePage() {
             <Icon name="fileText" className="ic-lg" />
           </span>
           <div>
-            <div className="card-title">No resume yet</div>
+            <div className="card-title">{t('list.emptyTitle')}</div>
             <p className="card-desc">
-              The API key&apos;s account on {resumes.data.instance} holds no resume.
+              {t('list.emptyDescription', { instance: resumes.data.instance })}
             </p>
           </div>
         </div>
