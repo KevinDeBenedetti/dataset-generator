@@ -102,6 +102,7 @@ def test_a_nested_session_leaves_the_outer_one_usable(monkeypatch, test_engine):
 
     from server.core import database
     from server.models.job_schedule import JobSchedule
+    from server.services.users import create_user
 
     monkeypatch.setattr(
         database,
@@ -112,7 +113,9 @@ def test_a_nested_session_leaves_the_outer_one_usable(monkeypatch, test_engine):
     )
 
     with database.get_scoped_db() as outer:
-        row = JobSchedule(owner_id="u1", job_id="resume-qa", scope="r1", options={})
+        # A schedule belongs to a user: Postgres enforces the foreign key.
+        owner = create_user(outer, email="owner@test.local", password="pw12345")
+        row = JobSchedule(owner_id=owner.id, job_id="resume-qa", scope="r1", options={})
         outer.add(row)
         outer.commit()
         row_id = row.id
