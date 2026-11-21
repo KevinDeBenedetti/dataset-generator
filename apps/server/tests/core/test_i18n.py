@@ -184,3 +184,32 @@ def test_an_operation_named_in_an_error_is_translated_too():
         translate_message("Reading the history of kevindb/x failed", "fr")
     ).replace("\u00a0", " ")
     assert named == "Échec de la lecture : l'historique de kevindb/x"
+
+
+def test_a_language_we_do_not_have_never_names_a_file(monkeypatch):
+    """Only the catalogs of our own languages are ever opened: the language
+    is looked up in a fixed table, never made into a path."""
+    from pathlib import Path
+
+    from server.core import i18n
+
+    opened = []
+    real = Path.read_text
+
+    def spy(self, *args, **kwargs):
+        opened.append(self.name)
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    i18n.catalog.cache_clear()
+    i18n._templates.cache_clear()
+
+    # The last one resolves to a real catalog file through a path.
+    for unknown in ("de", "../../../../etc/passwd", "", "../locales/fr"):
+        assert i18n.catalog(unknown) == {}
+        assert i18n.translate_message("Unknown user", unknown) == "Unknown user"
+        assert i18n.tr(unknown, "platform.allow_signup", "English") == "English"
+    assert opened == []
+
+    assert i18n.catalog("fr")["platform.allow_signup"]
+    assert set(opened) == {"fr.json"}

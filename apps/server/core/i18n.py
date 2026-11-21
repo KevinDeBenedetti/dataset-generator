@@ -26,6 +26,21 @@ DEFAULT_LOCALE = "en"
 LOCALE_COOKIE = "dg-locale"
 
 _CATALOGS = Path(__file__).parent / "locales"
+# The only files ever opened: one per language that has a catalog. A language
+# is looked up here, never made into a path — it comes from the request.
+_CATALOG_FILES: Dict[str, Path] = {
+    locale: _CATALOGS / f"{locale}.json"
+    for locale in LOCALES
+    if locale != DEFAULT_LOCALE
+}
+
+
+def _read_catalog(locale: str) -> Dict[str, Any]:
+    """The catalog file of one of our languages; empty for any other name."""
+    path = _CATALOG_FILES.get(locale)
+    if path is None or not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def pick_locale(cookie: Optional[str], accept_language: Optional[str]) -> str:
@@ -72,10 +87,7 @@ def _flatten(tree: Dict[str, Any], prefix: str = "") -> Dict[str, str]:
 @lru_cache(maxsize=None)
 def catalog(locale: str) -> Dict[str, str]:
     """The flat ``key -> text`` catalog of a language (none for English)."""
-    path = _CATALOGS / f"{locale}.json"
-    if locale == DEFAULT_LOCALE or not path.exists():
-        return {}
-    return _flatten(json.loads(path.read_text(encoding="utf-8")))
+    return _flatten(_read_catalog(locale))
 
 
 def tr(locale: str, key: str, english: str, **values: Any) -> str:
@@ -170,10 +182,7 @@ def metrics_display(
 def _templates(locale: str) -> List[tuple]:
     """``(pattern, french)`` for every message template of a language: the
     server's own errors and skip reasons, matched whole, placeholders captured."""
-    path = _CATALOGS / f"{locale}.json"
-    if locale == DEFAULT_LOCALE or not path.exists():
-        return []
-    messages = json.loads(path.read_text(encoding="utf-8")).get("messages", {})
+    messages = _read_catalog(locale).get("messages", {})
     compiled = []
     for english, translated in messages.items():
         pattern = ""
