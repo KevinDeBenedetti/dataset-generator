@@ -191,16 +191,16 @@ def create_app() -> FastAPI:
         cast(Any, SecurityHeadersMiddleware), hsts=config.auth_cookie_secure
     )
 
-    # Every request, with its outcome — the API had no access log at all
-    # (uvicorn's own is not configured), so a 401 from an expired session or a
-    # request that never reaches a route handler was invisible in `docker
-    # compose logs`. This runs before route-level auth, so it also catches auth
-    # failures.
     # The reader's language, for the texts a service serves (core/i18n.py),
     # error details included.
     app.middleware("http")(bind_locale)
     app.add_exception_handler(StarletteHTTPException, translated_http_exception)
 
+    # Every request, with its outcome — the API had no access log at all
+    # (uvicorn's own is not configured), so a 401 from an expired session or a
+    # request that never reaches a route handler was invisible in `docker
+    # compose logs`. This runs before route-level auth, so it also catches auth
+    # failures.
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         started = time.perf_counter()

@@ -113,14 +113,16 @@ English. Addresses carry no language prefix.
   in one language only, and the type check refuses a key missing from
   `en.json`.
 - A new language: its code in `LOCALES` (`apps/next/i18n/config.ts`), its
-  messages file and its name under `language` in every file.
+  messages file, its name under `language` in every file, and how it says
+  "N units ago" (`AGO_STYLE` in `apps/next/lib/utils.ts`).
   On the server: its code in `LOCALES` (`apps/server/core/i18n.py`) and its
   catalog `apps/server/core/locales/<code>.json`. Only the catalogs of the
   languages listed there are ever opened.
 
 Every page is translated. Dates, counts, sizes, percentages and relative times
 follow the language too: the formatters of `apps/next/components/hub/format.ts`
-take it as their last argument (`useLocale()`).
+and `relativeTime` in `apps/next/lib/utils.ts` take it as their last argument
+(`useLocale()`).
 
 The API answers in the same language: it reads the `dg-locale` cookie (else
 `Accept-Language`) in `apps/server/core/i18n.py`. English stays in the code;

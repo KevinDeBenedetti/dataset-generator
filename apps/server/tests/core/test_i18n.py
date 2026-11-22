@@ -213,3 +213,26 @@ def test_a_language_we_do_not_have_never_names_a_file(monkeypatch):
 
     assert i18n.catalog("fr")["platform.allow_signup"]
     assert set(opened) == {"fr.json"}
+
+
+def test_the_last_two_server_messages_have_french():
+    from server.core.i18n import translate_message
+
+    def fr(text):
+        return str(translate_message(text, "fr")).replace(" ", " ")
+
+    assert fr("The dataset 'kevindb/x' changed on Hugging Face since it was read.") == (
+        "Le jeu de données « kevindb/x » a changé sur Hugging Face depuis sa lecture."
+    )
+    assert fr("No LLM configured (set it on /models)") == (
+        "Aucun LLM configuré (choisissez-en un sur /models)"
+    )
+
+
+def test_several_missing_labels_are_joined_in_the_readers_language():
+    from server.core.i18n import translate_message
+
+    text = "your GitHub username or your Hugging Face token is required to run openai:x"
+    assert str(translate_message(text, "fr")).startswith(
+        "votre nom d'utilisateur GitHub ou votre jeton Hugging Face est requis"
+    )

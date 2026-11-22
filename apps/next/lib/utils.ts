@@ -13,6 +13,31 @@ export function initialsFor(email: string | undefined | null) {
 }
 
 // Coarse "time ago" label (today / Nd ago / Nw ago / Nmo ago / Ny ago).
+// How "N units ago" reads in each language: English keeps its compact form
+// ("5m ago"); French reads "il y a 5 min", with months and years spelled out
+// ("il y a 4 m." would be unclear).
+const AGO_STYLE: Record<
+  Locale,
+  (unit: Intl.RelativeTimeFormatUnit) => Intl.RelativeTimeFormatStyle
+> = {
+  en: () => 'narrow',
+  fr: (unit) => (unit === 'month' || unit === 'year' ? 'long' : 'short'),
+}
+
+/** "N units ago" in `locale`: 5m ago, il y a 5 min… */
+export function ago(amount: number, unit: Intl.RelativeTimeFormatUnit, locale: Locale): string {
+  return new Intl.RelativeTimeFormat(locale, {
+    style: AGO_STYLE[locale](unit),
+    numeric: 'always',
+  }).format(-amount, unit)
+}
+
+/** "just now" in `locale` (English keeps its own words; others: Intl's). */
+export function justNow(locale: Locale): string {
+  if (locale === 'en') return 'just now'
+  return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'second')
+}
+
 /** today / 3d ago / 2w ago / 4mo ago / 1y ago, day-granular (aujourd’hui /
  *  il y a 3 j / …) in the page's language (`useLocale()`; English if left out). */
 export function relativeTime(
@@ -29,17 +54,12 @@ export function relativeTime(
     return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'day')
   }
   const days = Math.floor(diff / day)
-  const ago = (amount: number, unit: Intl.RelativeTimeFormatUnit) => {
-    const long = locale !== 'en' && (unit === 'month' || unit === 'year')
-    const style = locale === 'en' ? 'narrow' : long ? 'long' : 'short'
-    return new Intl.RelativeTimeFormat(locale, { style, numeric: 'always' }).format(-amount, unit)
-  }
-  if (days < 7) return ago(days, 'day')
+  if (days < 7) return ago(days, 'day', locale)
   const weeks = Math.floor(days / 7)
-  if (weeks < 5) return ago(weeks, 'week')
+  if (weeks < 5) return ago(weeks, 'week', locale)
   const months = Math.floor(days / 30)
-  if (months < 12) return ago(months, 'month')
-  return ago(Math.floor(days / 365), 'year')
+  if (months < 12) return ago(months, 'month', locale)
+  return ago(Math.floor(days / 365), 'year', locale)
 }
 
 // Flips the `dark` class on <html> and persists the choice.
