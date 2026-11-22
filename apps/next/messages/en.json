@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "title": "Dataset Generator",
+    "description": "Generate and manage Q&A datasets from URLs"
+  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",

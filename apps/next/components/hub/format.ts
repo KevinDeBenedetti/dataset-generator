@@ -3,6 +3,7 @@
 // it is left out.
 
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/config'
+import { ago, justNow } from '../../lib/utils'
 
 const BYTE_UNITS: Record<Locale, string[]> = {
   en: ['B', 'KB', 'MB', 'GB', 'TB'],
@@ -85,10 +86,8 @@ export function shortSha(sha: string | null | undefined): string {
   return sha ? sha.slice(0, 7) : '—'
 }
 
-const JUST_NOW: Record<Locale, string> = { en: 'just now', fr: 'à l’instant' }
-
-/** just now / 5m ago / 3h ago / 2d ago / 3w ago / 4mo ago / 2y ago (à l’instant /
- *  il y a 5 min / il y a 3 h / … / il y a 4 mois / il y a 2 ans). */
+/** just now / 5m ago / 3h ago / 2d ago / 3w ago / 4mo ago / 2y ago, in `locale`
+ *  (lib/utils.ts `ago`). */
 export function timeAgo(
   value: string | null | undefined,
   now: number,
@@ -98,22 +97,15 @@ export function timeAgo(
   const time = new Date(value).getTime()
   if (Number.isNaN(time)) return '—'
   const minutes = Math.floor(Math.max(0, now - time) / 60_000)
-  if (minutes < 1) return JUST_NOW[locale]
-  // English keeps its compact form; French reads "il y a 5 min", with months
-  // and years spelled out ("il y a 4 m." would be unclear).
-  const ago = (amount: number, unit: Intl.RelativeTimeFormatUnit) => {
-    const long = locale !== 'en' && (unit === 'month' || unit === 'year')
-    const style = locale === 'en' ? 'narrow' : long ? 'long' : 'short'
-    return new Intl.RelativeTimeFormat(locale, { style, numeric: 'always' }).format(-amount, unit)
-  }
-  if (minutes < 60) return ago(minutes, 'minute')
+  if (minutes < 1) return justNow(locale)
+  if (minutes < 60) return ago(minutes, 'minute', locale)
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return ago(hours, 'hour')
+  if (hours < 24) return ago(hours, 'hour', locale)
   const days = Math.floor(hours / 24)
-  if (days < 7) return ago(days, 'day')
-  if (days < 35) return ago(Math.floor(days / 7), 'week')
-  if (days < 365) return ago(Math.floor(days / 30), 'month')
-  return ago(Math.floor(days / 365), 'year')
+  if (days < 7) return ago(days, 'day', locale)
+  if (days < 35) return ago(Math.floor(days / 7), 'week', locale)
+  if (days < 365) return ago(Math.floor(days / 30), 'month', locale)
+  return ago(Math.floor(days / 365), 'year', locale)
 }
 
 export function formatDateTime(value: string | null | undefined, locale?: Locale): string {

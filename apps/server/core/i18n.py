@@ -203,7 +203,7 @@ def _label(locale: str, value: str) -> str:
     labels = catalog(locale)
     parts = value.split(" or ")
     if all(f"missing.{part}" in labels for part in parts):
-        joiner = " ou " if locale == "fr" else " or "
+        joiner = labels.get("joiners.or", " or ")
         return joiner.join(labels[f"missing.{part}"] for part in parts)
     return value
 

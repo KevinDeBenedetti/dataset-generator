@@ -11,6 +11,7 @@ import {
   splitRepoId,
   timeAgo,
 } from './format'
+import { relativeTime } from '../../lib/utils'
 
 describe('formatBytes', () => {
   it.each([
@@ -108,12 +109,22 @@ describe('in French', () => {
   })
 
   it.each([
-    ['2026-11-04T11:59:40Z', 'à l’instant'],
+    ['2026-11-04T11:59:40Z', 'maintenant'],
     ['2026-11-04T11:55:00Z', 'il y a 5 min'],
     ['2026-11-02T12:00:00Z', 'il y a 2 j'],
     ['2026-07-04T12:00:00Z', 'il y a 4 mois'],
     ['2024-11-04T12:00:00Z', 'il y a 2 ans'],
   ])('%s → %s', (value, expected) => {
     expect(plain(timeAgo(value, now, 'fr'))).toBe(expected)
+  })
+})
+
+describe('relativeTime and timeAgo', () => {
+  const now = Date.parse('2026-11-04T12:00:00Z')
+
+  it('say "N days ago" the same way, in either language', () => {
+    expect(relativeTime('2026-11-01T12:00:00Z', now)).toBe(timeAgo('2026-11-01T12:00:00Z', now))
+    expect(plain(relativeTime('2026-11-01T12:00:00Z', now, 'fr'))).toBe('il y a 3 j')
+    expect(plain(relativeTime('2025-11-04T12:00:00Z', now, 'fr'))).toBe('il y a 1 an')
   })
 })

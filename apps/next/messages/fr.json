@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "title": "Dataset Generator",
+    "description": "Générez et gérez des jeux de données Q/R à partir d'URL"
+  },
   "common": {
     "cancel": "Annuler",
     "save": "Enregistrer",

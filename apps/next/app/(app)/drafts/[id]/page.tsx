@@ -35,10 +35,10 @@ function kindIcon(kind: string): string {
   return KIND_ICON[kind] ?? 'globe'
 }
 
-function formatDate(value?: string | null): string {
+function formatDate(locale: string, value?: string | null): string {
   if (!value) return '—'
   const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(locale)
 }
 
 // A source row links out only when it's a real URL — file:// and github://
@@ -375,7 +375,7 @@ export default function DraftDetailPage() {
                         {relativeTime(analysis.created_at, now, locale)}
                       </span>
                       <span className="muted" style={{ fontSize: 12 }}>
-                        {formatDate(analysis.created_at)}
+                        {formatDate(locale, analysis.created_at)}
                       </span>
                     </div>
                     <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>

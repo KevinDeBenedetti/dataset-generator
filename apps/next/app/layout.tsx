@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { NextIntlClientProvider } from 'next-intl'
-import { getLocale } from 'next-intl/server'
+import { getLocale, getTranslations } from 'next-intl/server'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import './globals.css'
@@ -11,9 +11,10 @@ import { DevLogConsole } from '@/components/app/dev-log-console'
 // Self-hosted (the `geist` package ships the font files): no build-time fetch
 // from Google, so builds are reproducible offline and the CSP needs no external
 // font origin. Same CSS variables as before.
-export const metadata: Metadata = {
-  title: 'Dataset Generator',
-  description: 'Generate and manage Q&A datasets from URLs',
+// The tab title and description, in the reader's language.
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('meta')
+  return { title: t('title'), description: t('description') }
 }
 
 export default async function RootLayout({
