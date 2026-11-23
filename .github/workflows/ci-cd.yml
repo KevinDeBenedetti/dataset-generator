@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@7290432f8bbb7754aca6192c282515299300969e # v0.56.1
     with:
       # A known high/critical vulnerability in the web UI's bun.lock, or any
       # known one in uv.lock (pip-audit), fails the pipeline before the build.
@@ -40,7 +40,7 @@ jobs:
   ci-python:
     name: CI Python (server)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@7290432f8bbb7754aca6192c282515299300969e # v0.56.1
     with:
       python-version: "3.14"
       working-directory: "."
@@ -54,7 +54,7 @@ jobs:
   ci-node:
     name: CI Node (next)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@7290432f8bbb7754aca6192c282515299300969e # v0.56.1
     with:
       node-version: "24.22.2"
       working-directory: apps/next
@@ -76,7 +76,7 @@ jobs:
     name: Workflow and Dockerfile linters
     permissions:
       contents: read
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@0ca5f46911f525a18f91a74b26443a91f717eae6 # v0.48.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@7290432f8bbb7754aca6192c282515299300969e # v0.56.1
     with:
       extra-args: --all-files hadolint-docker zizmor actionlint
       # The release the repo's own hooks run (pyproject.toml, dev group).
@@ -115,7 +115,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@7290432f8bbb7754aca6192c282515299300969e # v0.56.1
     with:
       # The config's extra-files keep pyproject.toml, apps/next/package.json,
       # apps/server/main.py and the committed OpenAPI schema (its info.version) on
