@@ -152,7 +152,7 @@ outdated:
 
 ## Upgrade every dependency within its declared constraints and rewrite both
 ## lockfiles. Releases younger than a week are skipped (`exclude-newer` in
-## pyproject.toml, `minimumReleaseAge` in apps/next/bunfig.toml: the dependabot
+## pyproject.toml, `minimumReleaseAge` in apps/next/bunfig.toml: the Renovate
 ## cooldown). Review the diff, then run `make lint test` before committing.
 upgrade:
 	uv lock --upgrade

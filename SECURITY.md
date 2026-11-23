@@ -63,7 +63,9 @@ attestation.
 These live outside the code and must be set in the repository settings:
 
 - [ ] **Private vulnerability reporting** enabled.
-- [ ] **Dependabot alerts** and **Dependabot security updates** enabled.
+- [ ] **Dependabot alerts** enabled, **Dependabot security updates** off:
+      Renovate (`.github/workflows/renovate.yml`) opens the security fixes,
+      from the OSV database, without waiting for its schedule.
 - [ ] **Code scanning**: CodeQL *default setup* off. `ci-cd.yml` uploads its
       own analysis (advanced setup), which GitHub rejects while default setup
       is on.

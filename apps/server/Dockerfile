@@ -6,7 +6,7 @@
 # =============================================================================
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS base
 
-# Pinned by tag and digest (dependabot bumps both); `latest` would change the
+# Pinned by tag and digest (Renovate bumps both); `latest` would change the
 # build under us.
 COPY --from=ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 /uv /uvx /bin/
 

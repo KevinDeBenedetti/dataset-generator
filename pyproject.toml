@@ -74,7 +74,7 @@ dev = [
 
 [tool.uv]
 package = false
-# The same week-long cooldown as .github/dependabot.yml: `uv lock --upgrade`
+# The same week-long cooldown as renovate.json (`minimumReleaseAge`): `uv lock --upgrade`
 # only takes a release once it is a week old, so a hijacked package is caught
 # upstream before it lands here.
 exclude-newer = "7 days"
