@@ -10,7 +10,8 @@ service) executes them, with the owner's own keys. Any number of workers can run
 older than a job (an old pod during a rolling deploy) leaves its runs queued for
 a newer one. In the local stack the worker restarts on every source change, like
 the API. A run whose worker dies becomes **interrupted** after two minutes and is
-never re-run on its own. SIGTERM drains for `WORKER_DRAIN_SECONDS`. Per-user quotas: `QUOTA_ACTIVE_RUNS`, `QUOTA_RUNS_PER_DAY`,
+never re-run on its own. A worker runs `WORKER_CONCURRENCY` runs at once
+(default `1`). SIGTERM drains for `WORKER_DRAIN_SECONDS`. Per-user quotas: `QUOTA_ACTIVE_RUNS`, `QUOTA_RUNS_PER_DAY`,
 `QUOTA_DATASETS` (`0` = unlimited). A file or web page draft is made in its
 request, without the worker: it does not count towards `QUOTA_RUNS_PER_DAY`.
 

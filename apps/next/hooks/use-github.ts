@@ -1,22 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  errorStatus,
-  getGitHubDoc,
-  getGitHubProfile,
-  getGitHubRepo,
-  getGitHubRepos,
-} from '@/api/sdk'
+import { getGitHubDoc, getGitHubProfile, getGitHubRepo, getGitHubRepos } from '@/api/sdk'
 
 export const GITHUB_QUERY_KEY = 'github'
-
-// No username, not found, rate limited: asking again changes nothing.
-const DEFINITIVE = new Set([400, 401, 403, 404, 429])
-
-// Typed on Error: React Query infers each query's error type from it.
-function retryTransient(failureCount: number, error: Error): boolean {
-  const status = errorStatus(error)
-  return !(status != null && DEFINITIVE.has(status)) && failureCount < 2
-}
 
 // The server caches GitHub answers for 5 minutes: no point asking sooner.
 const STALE = 5 * 60_000
@@ -26,7 +11,6 @@ export function useGitHubProfile() {
   return useQuery({
     queryKey: [GITHUB_QUERY_KEY, 'profile'],
     queryFn: getGitHubProfile,
-    retry: retryTransient,
     staleTime: 60_000,
   })
 }
@@ -36,7 +20,6 @@ export function useGitHubRepos() {
   return useQuery({
     queryKey: [GITHUB_QUERY_KEY, 'repos'],
     queryFn: getGitHubRepos,
-    retry: retryTransient,
     staleTime: STALE,
   })
 }
@@ -47,7 +30,6 @@ export function useGitHubRepo(owner: string | null, repo: string | null) {
     queryKey: [GITHUB_QUERY_KEY, 'repo', owner, repo],
     queryFn: () => getGitHubRepo(owner as string, repo as string),
     enabled: !!owner && !!repo,
-    retry: retryTransient,
     staleTime: STALE,
   })
 }
@@ -58,7 +40,6 @@ export function useGitHubDoc(owner: string | null, repo: string | null, path: st
     queryKey: [GITHUB_QUERY_KEY, 'doc', owner, repo, path],
     queryFn: () => getGitHubDoc(owner as string, repo as string, path as string),
     enabled: !!owner && !!repo && !!path,
-    retry: retryTransient,
     staleTime: STALE,
   })
 }

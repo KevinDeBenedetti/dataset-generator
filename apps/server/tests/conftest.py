@@ -123,7 +123,8 @@ def postgres_url() -> Generator[str, None, None]:
     # fills from the dev .env ("datasets") — a word that also appears in
     # migration messages, breaking the "never logs the password" assertion.
     with PostgresContainer(
-        "postgres:18-alpine",
+        # The dev stack's image (docker-compose.yml), pinned the same way.
+        "postgres:18.7-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71",
         username="test",
         password="test-only-pw-7f3a",
         dbname="test",
@@ -225,85 +226,22 @@ def datasets_db(monkeypatch, test_engine):
 def _build_test_app(
     test_db: Session, acting_user=None, real_credentials: bool = False
 ) -> FastAPI:
-    """The API without lifespan or the app-level auth gate.
+    """The real application (``main.create_app``) without its lifespan: the
+    same routers and middlewares, no migrations or seeding.
 
     With ``acting_user`` the request is authenticated as that (persisted) user:
     both ``get_current_user`` and ``require_admin`` resolve to it, as a valid
     session would. Without it the real ``get_current_user`` stays in place —
     what the auth tests exercise (cookies, refresh, 401s).
     """
-    from fastapi.middleware.cors import CORSMiddleware
-    from server.api import (
-        admin,
-        auth,
-        collections,
-        dataset,
-        generate,
-        github,
-        hub,
-        jobs,
-        models,
-        q_a,
-        prompts,
-        me,
-        quality_rules,
-        recipes,
-        resumes,
-    )
+    from server.main import create_app
     from server.services.auth import (
         get_current_user,
         require_admin,
         require_recent_login,
     )
 
-    # Create test app without lifespan to avoid migration issues
-    test_app = FastAPI(
-        title="Datasets Generator API",
-        description="API to generate datasets from web scraping",
-        version="0.0.1",
-    )
-
-    test_app.add_middleware(
-        CORSMiddleware,  # type: ignore[arg-type]
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    # As main.py: the reader's language, from the dg-locale cookie.
-    from starlette.exceptions import HTTPException as StarletteHTTPException
-
-    from server.api.errors import translated_http_exception
-    from server.core.i18n import bind_locale
-
-    test_app.middleware("http")(bind_locale)
-    test_app.add_exception_handler(StarletteHTTPException, translated_http_exception)
-
-    test_app.include_router(auth.router)
-    test_app.include_router(generate.router)
-    test_app.include_router(dataset.router)
-    test_app.include_router(q_a.router)
-    test_app.include_router(models.router)
-    test_app.include_router(quality_rules.router)
-    test_app.include_router(me.router)
-    test_app.include_router(admin.router)
-    test_app.include_router(prompts.router)
-    test_app.include_router(jobs.router)
-    test_app.include_router(hub.router)
-    test_app.include_router(github.router)
-    test_app.include_router(recipes.router)
-    test_app.include_router(resumes.router)
-    test_app.include_router(collections.router)
-
-    @test_app.get("/")
-    async def root():
-        from fastapi.responses import RedirectResponse
-
-        return RedirectResponse(url="/docs", status_code=302)
-
-    @test_app.get("/health")
-    async def health():
-        return {"status": "ok"}
+    test_app = create_app(with_lifespan=False)
 
     def override_get_db():
         try:

@@ -257,6 +257,16 @@ class Config:
         default_factory=lambda: _flag("SERVER_LLM_FOR_ADMINS", False)
     )
 
+    # --- The GitHub Q&A dataset's card (jobs/qa_dataset.py) ------------------
+    # The license it states (e.g. cc-by-4.0, or "other" with a link). The
+    # server's own setting: a user can't save it.
+    hf_qa_dataset_license: str = field(
+        default_factory=lambda: _env("HF_QA_DATASET_LICENSE", "")
+    )
+    hf_qa_dataset_license_link: str = field(
+        default_factory=lambda: _env("HF_QA_DATASET_LICENSE_LINK", "")
+    )
+
     # --- Reactive Resume (services/reactive_resume.py) ----------------------
     # The Resume page lists what this API key of the operator's account can
     # read, on this instance (its root; blank: the hosted https://rxresu.me).

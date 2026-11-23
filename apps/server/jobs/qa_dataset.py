@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from server.core.config import _env
+from server.core.config import config
 from server.services.credentials import GITHUB_TOKEN, Credentials
 import httpx2
 
@@ -967,8 +967,8 @@ def publish_qa_dataset(
         card=lambda foreign: dataset_card(
             dataset,
             username,
-            _env("HF_QA_DATASET_LICENSE"),
-            _env("HF_QA_DATASET_LICENSE_LINK"),
+            config.hf_qa_dataset_license,
+            config.hf_qa_dataset_license_link,
             foreign=foreign,
         ),
         commit_message=f"Export GitHub Q&A dataset ({len(dataset.pairs)} pairs)",

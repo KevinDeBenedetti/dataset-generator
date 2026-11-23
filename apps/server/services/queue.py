@@ -192,7 +192,15 @@ async def execute(run_id: str, worker: str) -> str:
         if task.done():
             break
         pending, latest["value"] = latest["value"], None
-        if await asyncio.to_thread(_beat, run_id, worker, pending):
+        try:
+            cancel = await asyncio.to_thread(_beat, run_id, worker, pending)
+        except Exception as exc:  # noqa: BLE001 — DB blip: the next beat retries
+            # Keep watching the run: leaving it here would let the stale-run
+            # sweep mark it interrupted while it still runs, and drop its result.
+            logger.warning("heartbeat of run %s failed: %s", run_id, exc)
+            latest["value"] = latest["value"] or pending
+            cancel = False
+        if cancel:
             task.cancel()
             try:
                 await task
@@ -262,7 +270,10 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         if loop.time() - last_sweep > config.worker_heartbeat_seconds:
-            await asyncio.to_thread(reap_stale)
+            try:
+                await asyncio.to_thread(reap_stale)
+            except Exception as exc:  # noqa: BLE001 — DB blip: retry next sweep
+                logger.warning("stale-run sweep failed: %s", exc)
             try:
                 await asyncio.to_thread(queue_due)
             except Exception as exc:  # noqa: BLE001 — DB blip: retry next sweep

@@ -56,7 +56,8 @@ venv
 ENV
 env
 
-# Tests Python
+# Tests Python (the dev containers bind-mount the source, tests included)
+apps/server/tests
 .pytest_cache
 .coverage
 htmlcov

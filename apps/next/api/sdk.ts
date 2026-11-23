@@ -4,6 +4,11 @@
 // these higher-level helpers (which unwrap responses, flatten errors and add the
 // SSE streaming endpoint) live here, in a file the generator never touches.
 import { client } from './gen/client.gen'
+import { ApiError, apiError, errorStatus, getErrorMessage } from './errors'
+import { fetchWithRefresh, needsNoRefresh, tryRefreshSession } from './refresh'
+
+// Callers import the error type from here, with the rest of the client.
+export { ApiError, errorStatus }
 
 // The auth cookie is httpOnly and set by the API (cross-origin in dev), so every
 // request must send/accept credentials for the session to work.
@@ -24,38 +29,11 @@ client.setConfig({
   baseUrl: API_BASE_URL,
 })
 
-// ── Silent session refresh ───────────────────────────────────────────────────
-// The access token is a short-lived httpOnly cookie; a long-lived refresh
-// cookie (rotated server-side on every use) can renew it. When any API call
-// comes back 401, try POST /auth/refresh once and replay the request, so an
-// expired access token never surfaces as a logout mid-session.
-
-// A 401 from these endpoints is a definitive answer — refreshing would either
-// loop (/auth/refresh) or mask a real credential failure.
-const NO_REFRESH_PATHS = ['/auth/login', '/auth/logout', '/auth/refresh', '/auth/providers']
-
-let refreshInFlight: Promise<boolean> | null = null
-
-// Concurrent 401s (e.g. several queries firing on a page load) share a single
-// refresh attempt — rotation makes the refresh cookie single-use, so parallel
-// calls would revoke each other's tokens.
-function tryRefreshSession(baseUrl: string): Promise<boolean> {
-  refreshInFlight ??= fetch(`${baseUrl}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-  })
-    .then((r) => r.ok)
-    .catch(() => false)
-    .finally(() => {
-      refreshInFlight = null
-    })
-  return refreshInFlight
-}
-
+// The silent session refresh (refresh.ts): an expired access token renewed
+// once, then the request sent again.
 client.interceptors.response.use(async (response, request, options) => {
   if (response.status !== 401) return response
-  const path = new URL(request.url).pathname
-  if (NO_REFRESH_PATHS.some((p) => path.endsWith(p))) return response
+  if (needsNoRefresh(request.url)) return response
 
   const baseUrl = new URL(request.url).origin
   if (!(await tryRefreshSession(baseUrl))) return response
@@ -116,7 +94,6 @@ import type {
   QaListResponse,
   QaAgentTestRequest,
   QaAgentTestResponse,
-  ValidationError,
   JobInfo,
   JobRunOut,
   JobScheduleIn,
@@ -131,39 +108,6 @@ import type {
   UrlGenerationRequest,
 } from './gen/types.gen'
 
-// Helper to extract a readable error message from an API error body.
-// FastAPI returns either { detail: string } (our ErrorResponse) or, on a 422,
-// { detail: ValidationError[] }. The array case must be flattened to a string,
-// otherwise it surfaces as "[object Object]" in the UI.
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (!error || typeof error !== 'object' || !('detail' in error)) {
-    return fallback
-  }
-
-  const detail = (error as { detail?: unknown }).detail
-
-  if (typeof detail === 'string') {
-    return detail || fallback
-  }
-
-  if (Array.isArray(detail)) {
-    const messages = (detail as ValidationError[])
-      .map((item) => {
-        const loc = Array.isArray(item?.loc)
-          ? item.loc.filter((part) => part !== 'body').join('.')
-          : ''
-        const msg = item?.msg ?? ''
-        return loc ? `${loc}: ${msg}` : String(msg)
-      })
-      .filter(Boolean)
-    if (messages.length) {
-      return messages.join('; ')
-    }
-  }
-
-  return fallback
-}
-
 // Dataset endpoints
 
 export async function getDatasets(): Promise<DatasetResponse[]> {
@@ -171,7 +115,7 @@ export async function getDatasets(): Promise<DatasetResponse[]> {
     url: '/dataset',
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch datasets'))
+    throw apiError(response, 'Failed to fetch datasets')
   }
   const data = response.data as DatasetResponse | DatasetResponse[] | undefined
   return Array.isArray(data) ? data : data ? [data] : []
@@ -204,10 +148,9 @@ export async function generateDatasetFromFile(
   if (params.targetRepo) form.append('target_repo', params.targetRepo)
 
   // No Content-Type header: the browser sets the multipart boundary itself.
-  const response = await fetch(`${baseUrl}/dataset/generate/file`, {
+  const response = await fetchWithRefresh(`${baseUrl}/dataset/generate/file`, {
     method: 'POST',
     body: form,
-    credentials: 'include',
   })
 
   if (!response.ok) {
@@ -217,7 +160,7 @@ export async function generateDatasetFromFile(
     } catch {
       // Non-JSON error body — keep the fallback message.
     }
-    throw new Error(message)
+    throw new ApiError(message, response.status)
   }
   return (await response.json()) as DatasetGenerationResponse
 }
@@ -233,7 +176,7 @@ export async function generateDatasetFromUrl(
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to generate dataset from URL'))
+    throw apiError(response, 'Failed to generate dataset from URL')
   }
   return response.data as unknown as DatasetGenerationResponse
 }
@@ -244,7 +187,7 @@ export async function deleteDataset(datasetName: string): Promise<DeleteDatasetR
     url: `/dataset/${encodeURIComponent(datasetName)}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to delete dataset'))
+    throw apiError(response, 'Failed to delete dataset')
   }
   return response.data as unknown as DeleteDatasetResponse
 }
@@ -257,7 +200,7 @@ export async function getDatasetSources(datasetName: string): Promise<DatasetSou
     url: `/dataset/${encodeURIComponent(datasetName)}/sources`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch the dataset sources'))
+    throw apiError(response, 'Failed to fetch the dataset sources')
   }
   return response.data as unknown as DatasetSourcesResponse
 }
@@ -278,7 +221,7 @@ export async function analyzeSimilarities(
     url,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to analyze similarities'))
+    throw apiError(response, 'Failed to analyze similarities')
   }
   return response.data as unknown as SimilarityAnalysisResponse
 }
@@ -299,7 +242,7 @@ export async function cleanSimilarities(
     url,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to clean similarities'))
+    throw apiError(response, 'Failed to clean similarities')
   }
   return response.data as unknown as CleanSimilarityResponse
 }
@@ -326,7 +269,7 @@ export async function resolvePair(
     },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to resolve the duplicate pair'))
+    throw apiError(response, 'Failed to resolve the duplicate pair')
   }
   return response.data as unknown as ResolvePairResponse
 }
@@ -339,7 +282,7 @@ export async function getModels(discover = false): Promise<ModelsResponse> {
     url: `/models${discover ? '?discover=true' : ''}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch models'))
+    throw apiError(response, 'Failed to fetch models')
   }
   return response.data as unknown as ModelsResponse
 }
@@ -352,7 +295,7 @@ export async function updateDefaultModel(model: string): Promise<ModelsResponse>
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to save your LLM'))
+    throw apiError(response, 'Failed to save your LLM')
   }
   return response.data as unknown as ModelsResponse
 }
@@ -376,7 +319,7 @@ export async function testModel(ref: string, prompt?: string): Promise<ModelTest
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to test the model'))
+    throw apiError(response, 'Failed to test the model')
   }
   return response.data as unknown as ModelTestResponse
 }
@@ -401,7 +344,7 @@ export interface PromptsResponse {
 export async function getPrompts(): Promise<PromptsResponse> {
   const response = await client.get<PromptsResponse>({ url: '/prompts' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch prompts'))
+    throw apiError(response, 'Failed to fetch prompts')
   }
   return response.data as unknown as PromptsResponse
 }
@@ -417,7 +360,7 @@ export async function testQaAgent(body: QaAgentTestRequest): Promise<QaAgentTest
     },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to run the QA agent'))
+    throw apiError(response, 'Failed to run the QA agent')
   }
   return response.data as unknown as QaAgentTestResponse
 }
@@ -440,7 +383,7 @@ export async function getQAByDataset(
     url,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch Q&A data'))
+    throw apiError(response, 'Failed to fetch Q&A data')
   }
   return response.data as unknown as QaListResponse
 }
@@ -479,7 +422,7 @@ export type QualityRulesUpdate = Partial<
 export async function getQualityRules(): Promise<QualityRules> {
   const response = await client.get<QualityRules>({ url: '/quality-rules' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch quality rules'))
+    throw apiError(response, 'Failed to fetch quality rules')
   }
   return response.data as unknown as QualityRules
 }
@@ -493,7 +436,7 @@ export async function updateQualityRules(body: QualityRulesUpdate): Promise<Qual
     },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to update quality rules'))
+    throw apiError(response, 'Failed to update quality rules')
   }
   return response.data as unknown as QualityRules
 }
@@ -509,7 +452,7 @@ export async function getQAStats(datasetId: string, scoreThreshold?: number): Pr
 
   const response = await client.get<QAStats>({ url })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch Q&A stats'))
+    throw apiError(response, 'Failed to fetch Q&A stats')
   }
   return response.data as unknown as QAStats
 }
@@ -533,7 +476,7 @@ export async function scoreQA(
     url: `/q_a/${encodeURIComponent(datasetId)}/score?only_unscored=${onlyUnscored}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to score the Q&A pairs'))
+    throw apiError(response, 'Failed to score the Q&A pairs')
   }
   return response.data as unknown as QAScoreResult
 }
@@ -565,7 +508,7 @@ export async function getDatasetVersions(datasetName: string): Promise<DatasetVe
     url: `/dataset/${encodeURIComponent(datasetName)}/versions`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch the dataset versions'))
+    throw apiError(response, 'Failed to fetch the dataset versions')
   }
   return response.data as unknown as DatasetVersionsResponse
 }
@@ -582,7 +525,7 @@ export async function exportDatasetToHuggingFace(
     url: `/dataset/${encodeURIComponent(datasetName)}/export/huggingface${params}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to export to Hugging Face'))
+    throw apiError(response, 'Failed to export to Hugging Face')
   }
   return response.data as unknown as HuggingFaceExportResponse
 }
@@ -590,23 +533,6 @@ export async function exportDatasetToHuggingFace(
 // ── Hub viewer (/hub/*): datasets read from Hugging Face ─────────────────────
 // Hugging Face is the source of truth for published datasets: these read
 // them through the API, with the user's own token, pinned to a commit.
-
-/** An API failure that keeps its HTTP status, so a page can tell "not
- * connected" (503) from "too large" (413) or "not found" (404). */
-export class ApiError extends Error {
-  readonly status: number | undefined
-
-  constructor(message: string, status?: number) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-  }
-}
-
-/** The HTTP status of an error thrown by these wrappers, if it had one. */
-export function errorStatus(error: unknown): number | undefined {
-  return error instanceof ApiError ? error.status : undefined
-}
 
 /** A dataset's address on the Hub: `owner/name`. */
 export interface HubRepoRef {
@@ -664,7 +590,7 @@ function toQuery(params: Record<string, string | number | null | undefined>): st
 async function hubGet<T>(url: string, fallback: string): Promise<T> {
   const response = await client.get<T>({ url })
   if (response.error) {
-    throw new ApiError(getErrorMessage(response.error, fallback), response.response?.status)
+    throw apiError(response, fallback)
   }
   return response.data as unknown as T
 }
@@ -757,7 +683,7 @@ async function apiSend<T>(
         ? await client.put<T>(options)
         : await client.delete<T>(options)
   if (response.error) {
-    throw new ApiError(getErrorMessage(response.error, fallback), response.response?.status)
+    throw apiError(response, fallback)
   }
   return response.data as unknown as T
 }
@@ -965,7 +891,7 @@ export async function importHuggingFaceDataset(
     url: `/dataset/huggingface/import?${params.toString()}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to import the Hugging Face dataset'))
+    throw apiError(response, 'Failed to import the Hugging Face dataset')
   }
   return response.data as unknown as HuggingFaceImportResponse
 }
@@ -988,7 +914,7 @@ export async function duplicateDataset(
     url: `/dataset/${encodeURIComponent(datasetName)}/duplicate${params}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to copy the dataset'))
+    throw apiError(response, 'Failed to copy the dataset')
   }
   return response.data as unknown as DuplicateDatasetResponse
 }
@@ -1009,7 +935,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Incorrect email or password'))
+    throw apiError(response, 'Incorrect email or password')
   }
   return response.data as unknown as AuthUser
 }
@@ -1017,7 +943,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 export async function logout(): Promise<void> {
   const response = await client.post<void>({ url: '/auth/logout' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Logout failed'))
+    throw apiError(response, 'Logout failed')
   }
 }
 
@@ -1032,7 +958,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (response.response?.status === 401) {
       return null
     }
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch the current user'))
+    throw apiError(response, 'Failed to fetch the current user')
   }
   return response.data as unknown as AuthUser
 }
@@ -1043,7 +969,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 export async function getJobs(): Promise<JobInfo[]> {
   const response = await client.get<{ jobs: JobInfo[] }>({ url: '/jobs' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch the jobs'))
+    throw apiError(response, 'Failed to fetch the jobs')
   }
   return (response.data as unknown as { jobs: JobInfo[] }).jobs
 }
@@ -1080,7 +1006,7 @@ export async function startJobRun(
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, `Failed to start the ${jobId} job`))
+    throw apiError(response, `Failed to start the ${jobId} job`)
   }
   return response.data as unknown as JobRunOut
 }
@@ -1090,7 +1016,7 @@ export async function getJobRun(runId: string): Promise<JobRunOut> {
     url: `/jobs/runs/${encodeURIComponent(runId)}`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to fetch the job run'))
+    throw apiError(response, 'Failed to fetch the job run')
   }
   return response.data as unknown as JobRunOut
 }
@@ -1101,7 +1027,7 @@ export async function cancelJobRun(runId: string): Promise<JobRunOut> {
     url: `/jobs/runs/${encodeURIComponent(runId)}/cancel`,
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to cancel the run'))
+    throw apiError(response, 'Failed to cancel the run')
   }
   return response.data as unknown as JobRunOut
 }
@@ -1123,7 +1049,7 @@ export async function publishJobRun(runId: string, selection: DraftSelection): P
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to publish to Hugging Face'))
+    throw apiError(response, 'Failed to publish to Hugging Face')
   }
   return response.data as unknown as JobRunOut
 }
@@ -1150,7 +1076,7 @@ export interface AuthProviders {
 export async function getAuthProviders(): Promise<AuthProviders> {
   const response = await client.get<AuthProviders>({ url: '/auth/providers' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to load the sign-in options'))
+    throw apiError(response, 'Failed to load the sign-in options')
   }
   return response.data as unknown as AuthProviders
 }
@@ -1159,7 +1085,7 @@ export async function getAuthProviders(): Promise<AuthProviders> {
 export async function logoutEverywhere(): Promise<void> {
   const response = await client.post<void>({ url: '/auth/logout-all' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to sign out everywhere'))
+    throw apiError(response, 'Failed to sign out everywhere')
   }
 }
 
@@ -1182,7 +1108,7 @@ export interface IdentitiesInfo {
 export async function getIdentities(): Promise<IdentitiesInfo> {
   const response = await client.get<IdentitiesInfo>({ url: '/me/identities' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to load your sign-in methods'))
+    throw apiError(response, 'Failed to load your sign-in methods')
   }
   return response.data as unknown as IdentitiesInfo
 }
@@ -1190,7 +1116,7 @@ export async function getIdentities(): Promise<IdentitiesInfo> {
 export async function unlinkIdentity(id: string): Promise<void> {
   const response = await client.delete({ url: `/me/identities/${encodeURIComponent(id)}` })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to unlink'))
+    throw apiError(response, 'Failed to unlink')
   }
 }
 
@@ -1224,7 +1150,7 @@ export interface SecretCheck {
 export async function getSecrets(): Promise<SecretStatus[]> {
   const response = await client.get<{ secrets: SecretStatus[] }>({ url: '/me/secrets' })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to load your keys'))
+    throw apiError(response, 'Failed to load your keys')
   }
   return (response.data as unknown as { secrets: SecretStatus[] }).secrets
 }
@@ -1242,7 +1168,7 @@ export async function saveSecret(
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to save the key'))
+    throw apiError(response, 'Failed to save the key')
   }
   return response.data as unknown as { secret: SecretStatus; check: SecretCheck }
 }
@@ -1250,7 +1176,7 @@ export async function saveSecret(
 export async function testSecret(kind: SecretKind): Promise<SecretCheck> {
   const response = await client.post<SecretCheck>({ url: `/me/secrets/${kind}/test` })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to test the key'))
+    throw apiError(response, 'Failed to test the key')
   }
   return response.data as unknown as SecretCheck
 }
@@ -1258,7 +1184,7 @@ export async function testSecret(kind: SecretKind): Promise<SecretCheck> {
 export async function deleteSecret(kind: SecretKind): Promise<void> {
   const response = await client.delete({ url: `/me/secrets/${kind}` })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to remove the key'))
+    throw apiError(response, 'Failed to remove the key')
   }
 }
 
@@ -1267,7 +1193,7 @@ export async function getSettings(): Promise<Record<SettingKey, string>> {
     url: '/me/settings',
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to load your settings'))
+    throw apiError(response, 'Failed to load your settings')
   }
   return (response.data as unknown as { settings: Record<SettingKey, string> }).settings
 }
@@ -1281,7 +1207,7 @@ export async function saveSettings(
     headers: { 'Content-Type': 'application/json' },
   })
   if (response.error) {
-    throw new Error(getErrorMessage(response.error, 'Failed to save your settings'))
+    throw apiError(response, 'Failed to save your settings')
   }
   return (response.data as unknown as { settings: Record<SettingKey, string> }).settings
 }
@@ -1342,7 +1268,7 @@ async function adminCall<T>(
     url,
     ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
   })
-  if (response.error) throw new Error(getErrorMessage(response.error, fallback))
+  if (response.error) throw apiError(response, fallback)
   return response.data as unknown as T
 }
 
@@ -1380,14 +1306,17 @@ export function exportUrl(): string {
   return `${API_BASE_URL}/me/export`
 }
 
+/** Renew an expired session, if it can be, before a plain link to the API
+ *  (the export): a link can't go through the refresh the client does. */
+export async function ensureFreshSession(): Promise<void> {
+  await getCurrentUser()
+}
+
 // A 403 means the session is older than the API allows for this: the user has
 // to sign in again first (apps/server/services/auth.py, require_recent_login).
 export async function deleteMyAccount(): Promise<void> {
   const response = await client.delete({ url: '/me' })
   if (response.error) {
-    throw new ApiError(
-      getErrorMessage(response.error, 'Failed to delete your account'),
-      response.response?.status,
-    )
+    throw apiError(response, 'Failed to delete your account')
   }
 }

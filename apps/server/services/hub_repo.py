@@ -79,12 +79,38 @@ class DatasetMoved(HubRepoError):
     """The repo changed since the version being published on top of was read."""
 
 
+class HubUnavailable(HubRepoError):
+    """The Hub answered with a server error, or could not be reached."""
+
+
 class DatasetUnreadable(HubRepoError):
     """A file of the dataset could not be read as what it should be."""
 
 
 class DatasetTooLarge(DatasetUnreadable):
     """The dataset's files exceed ``config.max_hub_import_bytes``."""
+
+
+_UNAVAILABLE = "The Hugging Face Hub didn't answer. Try again shortly."
+
+
+def _refused(exc: Exception) -> bool:
+    """Whether an HTTP error from the Hub is a refusal of the token itself."""
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status in (401, 403)
+
+
+_REFUSAL_MESSAGE = (
+    "Hugging Face rejected your token. Check it in Settings (it needs write access)."
+)
+
+
+def _hub_error(exc: Exception) -> HubRepoError:
+    """What a failed Hub call means for the user: a refused token, or a Hub
+    that is down (a server error, or no answer at all)."""
+    if _refused(exc):
+        return HubTokenRejected(_REFUSAL_MESSAGE)
+    return HubUnavailable(_UNAVAILABLE)
 
 
 # --- the seam ----------------------------------------------------------------
@@ -170,15 +196,12 @@ class HfHubBackend:
 
         try:
             name = self._api.whoami().get("name")
-        except HfHubHTTPError as exc:
-            raise HubTokenRejected(
-                "Hugging Face rejected your token. Check it in Settings "
-                "(it needs write access)."
-            ) from exc
+        except (HfHubHTTPError, OSError) as exc:  # OSError: DNS, refused, timeout
+            raise _hub_error(exc) from exc
         return str(name) if name else None
 
     def head(self, repo_id: str, paths: Sequence[str]) -> Optional[RepoHead]:
-        from huggingface_hub.errors import RepositoryNotFoundError
+        from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
         from huggingface_hub.hf_api import RepoFile
 
         try:
@@ -188,12 +211,18 @@ class HfHubBackend:
             )
         except RepositoryNotFoundError:
             return None
+        except (HfHubHTTPError, OSError) as exc:
+            raise _hub_error(exc) from exc
         sizes = {f.path: f.size for f in found if isinstance(f, RepoFile)}
         return RepoHead(str(info.sha), getattr(info, "private", None), sizes)
 
     def download(self, repo_id: str, path: str, commit: str, max_bytes: int) -> bytes:
         from huggingface_hub import hf_hub_download
-        from huggingface_hub.errors import EntryNotFoundError
+        from huggingface_hub.errors import (
+            EntryNotFoundError,
+            HfHubHTTPError,
+            RevisionNotFoundError,
+        )
 
         key = (self._cache_key, repo_id, commit, path)
         cached = _downloads.get(key)
@@ -216,6 +245,12 @@ class HfHubBackend:
                 raise DatasetUnreadable(
                     f"'{path}' is no longer in '{repo_id}'"
                 ) from exc
+            except RevisionNotFoundError as exc:  # rewritten or deleted on the Hub
+                raise DatasetUnreadable(
+                    f"'{repo_id}' no longer has the version being read"
+                ) from exc
+            except (HfHubHTTPError, OSError) as exc:
+                raise _hub_error(exc) from exc
             with open(local, "rb") as f:
                 data = f.read(max_bytes + 1)
         if len(data) > max_bytes:

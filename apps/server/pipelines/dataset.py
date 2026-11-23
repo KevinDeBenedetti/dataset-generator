@@ -15,10 +15,10 @@ from server.services.quality_rules import get_quality_rules
 from server.services.web import fetch_page, html_to_text
 from server.schemas.dataset import TargetLanguage
 
-# Question-similarity cut-off when the caller sends none — tuned for the
-# embedding comparison (see services/semantic.py), which is the default path.
 # How much of a failed transcription call's error an upload's refusal quotes.
 MAX_FAILURE_CHARS = 300
+# Question-similarity cut-off when the caller sends none — tuned for the
+# embedding comparison (see services/semantic.py), which is the default path.
 DEFAULT_SIMILARITY_THRESHOLD = 0.85
 
 ProgressFn = Callable[[Dict[str, Any]], None]

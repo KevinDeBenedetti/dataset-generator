@@ -1,64 +1,9 @@
-# TODO
+# TODO — history
 
-## 🔴 In progress
-
-- [ ] CHORE: Switch the images.yml call to GitHub's `$/` self-repository form once actionlint accepts it (.github/workflows/ci-cd.yml:130 carries `zizmor: ignore[self-repository]` for that reason; actionlint 1.7.12 is its latest release) — bump the prek `actionlint` hook and drop the suppression together. — BLOCKED 2026-11-16: waits for an actionlint release after v1.7.12 (still the latest on 2026-11-16).
-
-## 🟡 To do
-
-
-- [ ] CHORE: Retire the local dataset tables (phase 3, 4/4): an Alembic migration drops `datasets`, `qa_pairs` and `dataset_runs`, with the Drafts pages, the local export to Hugging Face and the import into local datasets — after the grace period the owner chose on 2026-11-04 (existing local drafts keep Publish and Delete meanwhile) — BLOCKED 2026-11-04: waits for the release with phase 3 to be deployed long enough for users to publish or delete their local drafts; remove this marker to start it.
-
-
-
-## 🖐 Manual — do it yourself, in order
-
-### 22. One LLM and one embedding model
-
-- [ ] 22.5 (remaining) Once the release with migration `a2b3c4d5e6f7` is deployed: check it. Success: the migration Job logs `a2b3c4d5e6f7`, the deployed **Models** page shows `chat-default`, and a PDF generation gives pairs.
-
-### 23. Resume datasets and schedules
-
-- [ ] 23.4 (remaining) Once the release with migration `a2b3c4d5e6f7` is deployed: **Generate a draft** on the deployed **Resume** page. Success: it ends with a draft, not "Reactive Resume isn't set up".
-
-### 24. Dataset quality
-
-- [ ] 24.2 On **Models**, pick your endpoint's embedding model and **Measure and use**. Success: the hint names it as yours with its measured thresholds, and how often each separates its examples (ideally 90% or more; a model far below that is a poor fit for the checks).
-- [ ] 24.3 Generate a resume draft with **Regenerate every section** and review it. Success: new pairs show a **grade**, any below 60% are held out with the grader's reason, about six `unanswerable` pairs are listed (none the resume answers), and no fact is flagged by the length rule.
-
-
-
-### 27. Reindex the portfolio after a corpus publish
-
-- [ ] 27.1 Production (infra repo): add `CORPUS_REINDEX_URL` (the portfolio's `…/api/collections/hf/sync`) to dataset-generator's configmap and `CORPUS_REINDEX_SECRET` (the portfolio's worker secret) to its Vault path, and let the worker reach the portfolio if a network policy stands in the way. Success: a published **Knowledge corpus** run shows **Reindex: asked**, and the portfolio's index holds the new corpus.
-
-### 28. Scheduled recipes
-
-- [ ] 28.1 On **GitHub**, pick a recipe and set **Regenerate** to **Every day** at a time a few minutes ahead (UTC), with the worker running. Success: the hint shows the next run; at that time a run starts by itself, publishes what passes (or reports "nothing changed on GitHub"), and the next run reads tomorrow at that time.
-- [ ] 28.2 On **GitHub**, set **Regenerate** on the **Knowledge corpus** card to **Every day** a few minutes ahead, its publish box ticked. Success: at that time a run starts by itself and publishes the corpus (and reports **Reindex: asked** once 🖐 27.1 is done); the card shows the next run.
-
-### 30. The request guard on httpx2
-
-- [ ] 30.1 `make test`. Success: every test passes on Postgres (1371 passed last time).
-- [ ] 30.2 With the stack running (`make dev`), generate a draft from a public web page with your own saved key. Success: pairs appear — the page fetch and the model calls both went through the pinned httpx2 clients; a private address (`http://169.254.169.254/`) is still refused with "non-public".
-
-### 31. The multilingual branch and its pull request
-
-- [ ] 31.1 Create the branch `feat/add-multilingue` from the current tree, commit the multilingual changes (see the commit plan), push it and open the pull request with `gh pr create --base main --head feat/add-multilingue`. Success: the PR's checks are green and its preview shows the homepage in French after a click on the language switch.
-
-### 34. Server texts in French, in the browser
-
-- [ ] 34.1 (remaining) On **GitHub** in French, run **Knowledge corpus** (à blanc is enough) and let it finish. Success: its figures read in French (« Points », « Réindexation »… or the corpus counts) without reloading the page, and switch back to English with the EN button.
-
-
-## 🟢 Ideas / backlog
-
-## 🤖 Agent recommendations
-
-- [ ] FIX: The homepage badge shows a fixed `v0.7.7` (apps/next/app/page.tsx:128) while the app is at 0.16.0 — read `package.json`'s version as the sidebar does (apps/next/components/app/app-sidebar.tsx), so a release never leaves it stale.
-- [ ] CHORE: Three shell controls do nothing — the top bar's search field and notifications button (apps/next/components/app/app-topbar.tsx) and the sidebar's "Legal notice" button (app-sidebar.tsx): wire them or remove them, so the translated shell offers no dead control.
-
-## 🔒 Security audit
+This file no longer tracks work: tasks, fixes, blocked chores and the owner's
+manual steps are GitHub issues (see `docs/agents/issue-tracker.md`), worked
+with `/next-issue`. What it held when it stopped moved there on 2026-11-23
+(#265). Below is the record of what was done before.
 
 ## ✅ Done
 

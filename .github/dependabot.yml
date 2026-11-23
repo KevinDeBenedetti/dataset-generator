@@ -40,6 +40,15 @@ updates:
     ignore:
       - dependency-name: "KevinDeBenedetti/github-workflows*"
 
+  # The development stack's images (postgres, redis, qdrant), pinned by tag
+  # and digest in docker-compose.yml.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-all"
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: "docker"
     directories: ["/apps/server", "/apps/next"]
     patterns: ["*"]

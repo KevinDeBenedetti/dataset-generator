@@ -404,3 +404,46 @@ class TestGenerationDrafts:
         )
         assert response.status_code == 422
         mock_url_pipeline.process_url.assert_not_called()
+
+
+class TestGenerateFailures:
+    """Both generate routes answer their failures the same way."""
+
+    def test_a_bad_input_is_a_400_on_either_route(
+        self, mock_file_pipeline, mock_url_pipeline
+    ):
+        mock_url_pipeline.process_url.side_effect = ValueError("Not a web page")
+        response = client.post(
+            "/dataset/generate/url",
+            json={"url": "https://docs.example.com/guide", "dataset_name": "web-ds"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Not a web page"
+
+    def test_an_unexpected_failure_says_so_and_logs_its_traceback(
+        self, mock_url_pipeline, monkeypatch
+    ):
+        import sys
+
+        from server.api import errors
+
+        # Read the API's logger directly: pytest's log capture can miss it.
+        logged = []
+        monkeypatch.setattr(
+            errors.logger,
+            "exception",
+            lambda message, *args: logged.append((message % args, sys.exc_info()[1])),
+        )
+        mock_url_pipeline.process_url.side_effect = RuntimeError("model exploded")
+        response = client.post(
+            "/dataset/generate/url",
+            json={"url": "https://docs.example.com/guide", "dataset_name": "web-ds"},
+        )
+
+        assert response.status_code == 500
+        assert response.json()["detail"].startswith("Generating the dataset failed.")
+        assert "model exploded" not in response.json()["detail"]
+        # logger.exception, inside the except: the traceback goes to the log.
+        assert [(m, str(e)) for m, e in logged] == [
+            ("Generating the dataset failed", "model exploded")
+        ]

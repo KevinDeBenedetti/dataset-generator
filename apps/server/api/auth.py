@@ -8,13 +8,14 @@ from typing import Annotated, List, Optional
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from server.core.config import config
 from server.core.database import get_db
+from server.core.i18n import translate_message
 from server.models.user import User
 from server.services.auth import (
     authenticate_user,
@@ -166,12 +167,24 @@ def login(
     return UserResponse.from_user(user)
 
 
+def _clear_session_cookies(response: Response) -> None:
+    """Delete both auth cookies (sign-out, or a session that can't be renewed)."""
+    for cookie_name in (config.auth_cookie_name, config.auth_refresh_cookie_name):
+        response.delete_cookie(
+            key=cookie_name,
+            path="/",
+            httponly=True,
+            secure=config.auth_cookie_secure,
+            samesite="lax",
+        )
+
+
 @router.post("/refresh", response_model=UserResponse)
 def refresh(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-) -> UserResponse:
+) -> UserResponse | JSONResponse:
     """Exchange the refresh cookie for a new access token + refresh token.
 
     Rotation: the presented refresh token is revoked and replaced. A missing,
@@ -182,10 +195,14 @@ def refresh(
     raw = request.cookies.get(config.auth_refresh_cookie_name)
     rotated = rotate_refresh_token(db, raw) if raw else None
     if not rotated:
-        raise HTTPException(
+        # The session can't be renewed: drop its cookies, or the browser keeps
+        # presenting them and the web app takes it for still signed in.
+        refused = JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            content={"detail": translate_message("Invalid or expired refresh token")},
         )
+        _clear_session_cookies(refused)
+        return refused
     user, new_refresh = rotated
     _set_auth_cookie(response, create_access_token(user))
     _set_refresh_cookie(response, new_refresh)
@@ -202,14 +219,7 @@ def logout(
     raw = request.cookies.get(config.auth_refresh_cookie_name)
     if raw:
         revoke_refresh_token(db, raw)
-    for cookie_name in (config.auth_cookie_name, config.auth_refresh_cookie_name):
-        response.delete_cookie(
-            key=cookie_name,
-            path="/",
-            httponly=True,
-            secure=config.auth_cookie_secure,
-            samesite="lax",
-        )
+    _clear_session_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
 

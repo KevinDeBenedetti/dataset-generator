@@ -105,8 +105,6 @@ services:
       context: .
       dockerfile: ./apps/server/Dockerfile
       target: dev
-      args:
-        APP_PORT: ${SERVER_PORT:-8020}
       # Enable BuildKit for optimizations
       x-bake:
         cache-from:
@@ -150,8 +148,6 @@ services:
       context: .
       dockerfile: ./apps/server/Dockerfile
       target: dev
-      args:
-        APP_PORT: ${SERVER_PORT:-8020}
     # Restarted on every source change, like the API's --reload (watchfiles,
     # which uvicorn's reloader uses too): a worker left on old code would not
     # know a job added since. SIGINT drains the run in progress first, for up
@@ -188,7 +184,7 @@ services:
   # start on a volume left at the old /var/lib/postgresql/data.
   postgres:
     container_name: postgres
-    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
+    image: ${POSTGRES_IMAGE:-postgres:18.7-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71}
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-datasets}
@@ -243,7 +239,7 @@ services:
   # Redis 8.8+ counts the attempts with INCREX (services/rate_limit.py).
   redis:
     container_name: redis
-    image: ${REDIS_IMAGE:-redis:8-alpine}
+    image: ${REDIS_IMAGE:-redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3}
     restart: always
     # REDIS_PASSWORD from .env: any local process could otherwise read or reset
     # the login limiter's counters. Empty, `requirepass ""` means no password,

@@ -1,10 +1,11 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { AppSidebar } from '@/components/app/app-sidebar'
 import { AppTopbar } from '@/components/app/app-topbar'
+import { useCurrentUser } from '@/hooks/use-auth'
 
 // Same width as the drawer breakpoint in app-shell.css: below it the sidebar
 // is an off-canvas drawer opened from the top bar's menu button.
@@ -17,6 +18,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const wasOpen = useRef(false)
+  const router = useRouter()
+  const { data: user } = useCurrentUser()
+
+  // The API answered "not signed in" (`null`, not an error): a session it
+  // refused to renew. Sign in again, back to this page afterwards.
+  useEffect(() => {
+    if (user !== null) return
+    const from = window.location.pathname + window.location.search
+    router.replace(`/login?from=${encodeURIComponent(from)}`)
+  }, [user, router])
 
   // Following a link from the drawer lands on another page: close it there.
   const [shownPath, setShownPath] = useState(pathname)

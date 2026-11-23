@@ -307,3 +307,19 @@ def test_the_sso_state_cookie_key_is_derived_never_the_jwt_key(monkeypatch):
     # Rotating AUTH_SECRET_KEY rotates it too.
     other = _config(monkeypatch, AUTH_SECRET_KEY="z" * 48)
     assert other.effective_session_secret != cfg.effective_session_secret
+
+
+def test_the_q_and_a_dataset_license_is_a_setting_of_the_config(monkeypatch):
+    """Read in one place with every other setting (core/config.py), not by the
+    job that writes the dataset card."""
+    from server.core.config import Config
+
+    monkeypatch.setenv("HF_QA_DATASET_LICENSE", "other")
+    monkeypatch.setenv("HF_QA_DATASET_LICENSE_LINK", "https://example.com/license")
+    settings = Config()
+    assert settings.hf_qa_dataset_license == "other"
+    assert settings.hf_qa_dataset_license_link == "https://example.com/license"
+
+    monkeypatch.delenv("HF_QA_DATASET_LICENSE")
+    monkeypatch.delenv("HF_QA_DATASET_LICENSE_LINK")
+    assert Config().hf_qa_dataset_license == ""

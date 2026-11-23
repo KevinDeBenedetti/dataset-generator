@@ -20,7 +20,9 @@ WORKDIR /app
 
 # =============================================================================
 # Stage: dependencies
-# Python packages only — no Chromium/Playwright or other browser stack needed.
+# Runtime packages only, no dev tools: the dev and the prod stages both copy
+# this virtualenv. The models run on the OpenAI-compatible endpoint, so there
+# is nothing to download into the image.
 # =============================================================================
 FROM base AS dependencies
 
@@ -68,17 +70,6 @@ EXPOSE ${APP_PORT}
 CMD ["sh", "-c", "uv sync --frozen --no-dev && exec uv run --no-sync uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server"]
 
 # =============================================================================
-# Stage: prod-dependencies
-# Runtime packages only, no dev tools. The models run on the OpenAI-compatible
-# endpoint: nothing to download into the image.
-# =============================================================================
-FROM base AS prod-dependencies
-
-COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-# =============================================================================
 # Stage: prod
 # What Kubernetes runs — the API (default command) and the job worker
 # (`python -m server.worker`), from one image. Non-root, no reload, tini as
@@ -106,7 +97,7 @@ ENV PATH=/app/.venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     WEB_CONCURRENCY=1
 
-COPY --from=prod-dependencies /app/.venv /app/.venv
+COPY --from=dependencies /app/.venv /app/.venv
 # The package lives at /app/server (PYTHONPATH=/app); alembic.ini's
 # script_location is relative to /app.
 COPY ./apps/server ./server
@@ -121,5 +112,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
 ENTRYPOINT ["tini", "--"]
 # --proxy-headers trusts X-Forwarded-* from FORWARDED_ALLOW_IPS (set it to the
 # ingress's address, or rate limits see the proxy's IP for every client).
-# Each uvicorn worker loads the ONNX model: keep WEB_CONCURRENCY small.
+# Each uvicorn worker is a process of its own: keep WEB_CONCURRENCY small.
 CMD ["sh", "-c", "exec uvicorn server.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers ${WEB_CONCURRENCY}"]

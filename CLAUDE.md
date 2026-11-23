@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues on KevinDeBenedetti/dataset-generator, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues on KevinDeBenedetti/dataset-generator, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`. `TODO.md` is history only: no task, fix or manual step is written there any more (work them with `/next-issue`, not `/next-task`).
 
 ### Triage labels
 

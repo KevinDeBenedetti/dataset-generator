@@ -1,12 +1,13 @@
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 
 from server.core.config import config
 from server.api.deps import get_credentials
+from server.api.errors import internal_error
 from server.pipelines.dataset import DatasetPipeline
 from server.services.credentials import Credentials
 from server.schemas.dataset import TargetLanguage
@@ -21,11 +22,15 @@ from server.models.user import User
 from server.services.auth import get_current_user
 from server.services.model_defaults import get_default_model
 from server.services.providers import validate_ref
-from server.services.web import WebFetchError
 
 from server.schemas.recipes import HF_REPO_PATTERN
 from server.services.drafts import create_generation_draft
-from server.services.hub_repo import HubTokenMissing, HubTokenRejected, open_repo
+from server.services.hub_repo import (
+    HubTokenMissing,
+    HubTokenRejected,
+    HubUnavailable,
+    open_repo,
+)
 
 router = APIRouter(
     prefix="/dataset",
@@ -169,10 +174,61 @@ async def _keep_draft(
             language=language.value,
             model_ref=model_ref,
         )
-    except (HubTokenMissing, HubTokenRejected) as e:
+    except (HubTokenMissing, HubTokenRejected, HubUnavailable) as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         ) from e
+
+
+async def _generate(
+    pipeline: Callable[[], Awaitable[Dict[str, Any]]],
+    *,
+    user: User,
+    creds: Credentials,
+    target_repo: Optional[str],
+    dataset_name: str,
+    similarity_threshold: float,
+    model_ref: str,
+    language: TargetLanguage,
+    started: float,
+    source: str,
+    kind: str,
+) -> DatasetGenerationResponse:
+    """Both generate routes' last steps: run the pipeline, build the answer and,
+    with a target repo, keep the pairs as a draft. A bad input (an unsupported
+    file, a page that can't be fetched: ``ValueError``) is a 400; anything else
+    is logged with its traceback and answered as a failed generation."""
+    try:
+        result = await pipeline()
+        response = _build_response(
+            result,
+            dataset_name,
+            similarity_threshold,
+            model_ref,
+            language,
+            time.time() - started,
+        )
+        if target_repo:
+            response.draft_run_id = await _keep_draft(
+                user,
+                creds,
+                target_repo,
+                result,
+                title=dataset_name,
+                source=source,
+                kind=kind,
+                language=language,
+                model_ref=model_ref,
+            )
+        return response
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+    except Exception:
+        raise internal_error("Generating the dataset") from None
 
 
 @router.post(
@@ -225,8 +281,8 @@ async def create_dataset_for_file(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
         )
 
-    try:
-        result = await DatasetPipeline(user.id, creds).process_file(
+    return await _generate(
+        lambda: DatasetPipeline(user.id, creds).process_file(
             content=content,
             filename=file.filename or "upload",
             content_type=file.content_type or "",
@@ -236,41 +292,18 @@ async def create_dataset_for_file(
             similarity_threshold=similarity_threshold,
             # A draft replaces the local dataset.
             persist=persist and not target_repo,
-        )
-        response = _build_response(
-            result,
-            dataset_name,
-            similarity_threshold,
-            model_ref,
-            language,
-            time.time() - start_time,
-        )
-        if target_repo:
-            response.draft_run_id = await _keep_draft(
-                user,
-                creds,
-                target_repo,
-                result,
-                title=dataset_name,
-                source=f"file://{file.filename or 'upload'}",
-                kind="file",
-                language=language,
-                model_ref=model_ref,
-            )
-        return response
-    except HTTPException:
-        raise
-    except ValueError as e:
-        # Unsupported/corrupt file surfaced by the ingestion layer → 400.
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
-    except Exception as e:
-        logging.error(f"Unexpected error in create_dataset_for_file: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while processing your request.",
-        ) from e
+        ),
+        user=user,
+        creds=creds,
+        target_repo=target_repo,
+        dataset_name=dataset_name,
+        similarity_threshold=similarity_threshold,
+        model_ref=model_ref,
+        language=language,
+        started=start_time,
+        source=f"file://{file.filename or 'upload'}",
+        kind="file",
+    )
 
 
 @router.post(
@@ -294,8 +327,8 @@ async def create_dataset_for_url(
     model_ref = await run_in_threadpool(_model, user.id, creds, request.model)
     target_repo = await _draft_target(creds, request.target_repo)
 
-    try:
-        result = await DatasetPipeline(user.id, creds).process_url(
+    return await _generate(
+        lambda: DatasetPipeline(user.id, creds).process_url(
             url=request.url,
             dataset_name=request.dataset_name,
             target_language=language,
@@ -303,37 +336,15 @@ async def create_dataset_for_url(
             similarity_threshold=request.similarity_threshold,
             # A draft replaces the local dataset.
             persist=request.persist and not target_repo,
-        )
-        response = _build_response(
-            result,
-            request.dataset_name,
-            request.similarity_threshold,
-            model_ref,
-            language,
-            time.time() - start_time,
-        )
-        if target_repo:
-            response.draft_run_id = await _keep_draft(
-                user,
-                creds,
-                target_repo,
-                result,
-                title=request.dataset_name,
-                source=request.url,
-                kind="web",
-                language=language,
-                model_ref=model_ref,
-            )
-        return response
-    except WebFetchError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Unexpected error in create_dataset_for_url: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while processing your request.",
-        ) from e
+        ),
+        user=user,
+        creds=creds,
+        target_repo=target_repo,
+        dataset_name=request.dataset_name,
+        similarity_threshold=request.similarity_threshold,
+        model_ref=model_ref,
+        language=language,
+        started=start_time,
+        source=request.url,
+        kind="web",
+    )

@@ -193,6 +193,22 @@ class TestRefresh:
     def test_refresh_without_cookie_is_401(self, client):
         assert client.post("/auth/refresh").status_code == 401
 
+    def test_a_refused_refresh_clears_both_auth_cookies(self, client):
+        """A refresh cookie the server refuses (revoked elsewhere, account
+        disabled, replay) is deleted with the access cookie, so the browser
+        stops presenting a session that can't be renewed."""
+        from server.core.config import config
+
+        client.cookies.set(config.auth_refresh_cookie_name, "revoked-or-garbage")
+        response = client.post("/auth/refresh")
+
+        assert response.status_code == 401
+        cleared = response.headers.get_list("set-cookie")
+        for name in (config.auth_cookie_name, config.auth_refresh_cookie_name):
+            assert any(
+                c.startswith(f"{name}=") and "Max-Age=0" in c for c in cleared
+            ), cleared
+
     def test_refresh_with_garbage_cookie_is_401(self, client):
         self._present(client, "not-a-real-token")
         assert client.post("/auth/refresh").status_code == 401
