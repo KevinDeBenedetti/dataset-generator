@@ -67,6 +67,28 @@ OPENAI_LLM_MODEL=chat-default
 OPENAI_EMBEDDING_MODEL=embed-default
 ```
 
+## Server keys (development fallback)
+
+In development, every key or setting a user hasn't saved in **Settings** comes
+from these variables. Outside development they serve no user: each saves their
+own, except that an admin with `SERVER_LLM_FOR_ADMINS=true` and no key of their
+own calls `OPENAI_BASE_URL` with `OPENAI_API_KEY`.
+
+| Variable                     | What it sets                                                               |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`             | The key of the OpenAI-compatible endpoint, sent only to `OPENAI_BASE_URL`  |
+| `OPENAI_BASE_URL`            | That endpoint (blank: OpenAI's)                                            |
+| `HF_TOKEN`                   | A Hugging Face token with write access; published repos are always private |
+| `HF_NAMESPACE`               | Completes a bare repo name (blank: the token's own account)                |
+| `HF_QA_DATASET_REPO`         | The GitHub Q&A dataset (`namespace/name` or `name`)                        |
+| `HF_DATASET_REPO`            | The knowledge corpus (`namespace/name` or `name`)                          |
+| `HF_QA_DATASET_LICENSE`      | The license written on the GitHub Q&A dataset's card, such as `cc-by-4.0`  |
+| `HF_QA_DATASET_LICENSE_LINK` | With the license `other`: the link to its text                             |
+| `GITHUB_USERNAME`            | The GitHub account the GitHub jobs read                                    |
+| `GITHUB_TOKEN`               | Optional: only raises the GitHub API quota                                 |
+
+The two license settings are the server's alone: a user can't save them.
+
 ## Local stack
 
 `make dev` runs Next, the API, a job worker, Postgres, Redis and Qdrant.

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getQAByDataset, getQAStats, scoreQA } from '@/api/sdk'
 import { useQAStore } from '@/stores/qa'
+import { invalidateDatasetQA, qaKey, qaStatsKey } from './qa-keys'
 
 export function useQAByDataset(
   datasetId: string,
@@ -9,7 +10,7 @@ export function useQAByDataset(
   const { setQaItems, setQaResponse, setLoading, setError } = useQAStore()
 
   return useQuery({
-    queryKey: ['qa', datasetId, options?.limit, options?.offset],
+    queryKey: qaKey(datasetId, options?.limit, options?.offset),
     queryFn: async () => {
       setLoading(true)
       setError(null)
@@ -40,7 +41,7 @@ export function useQAStats(
   options?: { scoreThreshold?: number; enabled?: boolean },
 ) {
   return useQuery({
-    queryKey: ['qa-stats', datasetId, options?.scoreThreshold],
+    queryKey: qaStatsKey(datasetId, options?.scoreThreshold),
     queryFn: () => getQAStats(datasetId, options?.scoreThreshold),
     enabled: options?.enabled !== false && !!datasetId,
   })
@@ -53,9 +54,6 @@ export function useScoreQA() {
 
   return useMutation({
     mutationFn: (datasetId: string) => scoreQA(datasetId),
-    onSuccess: (_result, datasetId) => {
-      queryClient.invalidateQueries({ queryKey: ['qa-stats', datasetId] })
-      queryClient.invalidateQueries({ queryKey: ['qa', datasetId] })
-    },
+    onSuccess: (_result, datasetId) => invalidateDatasetQA(queryClient, datasetId),
   })
 }

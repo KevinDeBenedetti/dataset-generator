@@ -57,13 +57,14 @@ export function proxy(request: NextRequest) {
   // The access cookie expires quickly (short max_age); the refresh cookie is
   // what marks a still-renewable session — the API client refreshes the access
   // token transparently on the first 401. Either one counts as signed in.
-  const isAuthenticated = Boolean(
-    request.cookies.get(AUTH_COOKIE)?.value || request.cookies.get(REFRESH_COOKIE)?.value,
-  )
+  const hasAccess = Boolean(request.cookies.get(AUTH_COOKIE)?.value)
+  const isAuthenticated = hasAccess || Boolean(request.cookies.get(REFRESH_COOKIE)?.value)
   const isPublic = PUBLIC_PATHS.has(pathname)
 
-  // Already signed in but heading to /login → send to the app.
-  if (pathname === '/login' && isAuthenticated) {
+  // Already signed in but heading to /login → send to the app. Only with a
+  // live access cookie: a refresh cookie alone may be one the API will refuse
+  // (revoked elsewhere, account disabled), and /login must stay reachable then.
+  if (pathname === '/login' && hasAccess) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

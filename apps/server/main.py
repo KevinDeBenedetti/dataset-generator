@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
             await worker_task
 
 
-def create_app() -> FastAPI:
+def create_app(*, with_lifespan: bool = True) -> FastAPI:
     """Build the application from the current ``config``.
 
     A factory (rather than module-level wiring) so tests can build the app under
@@ -144,7 +144,8 @@ def create_app() -> FastAPI:
         title="Datasets Generator API",
         description="API to generate datasets from web scraping",
         version="0.17.0",  # x-release-please-version
-        lifespan=lifespan,
+        # The tests build the same app without it: no migrations, no seeding.
+        lifespan=lifespan if with_lifespan else None,
         # The interactive docs advertise every route to anyone: development only.
         docs_url="/docs" if docs else None,
         redoc_url=None,

@@ -68,6 +68,20 @@ jobs:
       # next build needs no backend at build time; enable as a pre-merge gate on PRs.
       run-build: ${{ github.event_name == 'pull_request' }}
 
+  # The prek hooks no other job runs: hadolint (Dockerfiles), zizmor and
+  # actionlint (workflows). Locally they only guard a machine that ran
+  # `prek install`: a Renovate PR, a web edit or `--no-verify` skips them.
+  # ruff, ty, oxlint, gitleaks and the tests have their own jobs above.
+  prek:
+    name: Workflow and Dockerfile linters
+    permissions:
+      contents: read
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@0ca5f46911f525a18f91a74b26443a91f717eae6 # v0.48.0
+    with:
+      extra-args: --all-files hadolint-docker zizmor actionlint
+      # The release the repo's own hooks run (pyproject.toml, dev group).
+      prek-version: 0.5.10
+
   # apps/next/openapi.json is the committed API contract; the front-end client
   # is generated from it on every build (ci-node included). Dump it from the
   # app here and fail on any diff, so an endpoint or schema change can't ship

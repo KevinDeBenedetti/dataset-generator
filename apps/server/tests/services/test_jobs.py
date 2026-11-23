@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from server.jobs import qa_build
@@ -1030,3 +1031,66 @@ async def test_a_key_echoed_in_an_error_is_not_stored_on_the_run(db, monkeypatch
     assert done["status"] == "failed"
     assert leaked not in done["error"]
     assert "Incorrect API key provided" in done["error"]
+
+
+async def test_a_heartbeat_that_fails_once_leaves_the_run_supervised(db, monkeypatch):
+    """A database blip on one heartbeat: the worker keeps watching the run and
+    records how it ends, instead of abandoning it to the stale-run sweep."""
+    release = asyncio.Event()
+
+    async def runner(creds, options, model_ref, progress):
+        await release.wait()
+        return JobOutcome(JobResult(dry_run=True, metrics=[("Pairs", 3)]))
+
+    _patch_runner(monkeypatch, "github-personal", runner)
+    real_beat = queue._beat
+    failures = []
+
+    def beat(run_id, worker, progress):
+        if not failures:
+            failures.append(run_id)
+            raise OperationalError("UPDATE job_runs", {}, Exception("connection reset"))
+        return real_beat(run_id, worker, progress)
+
+    monkeypatch.setattr(queue, "_beat", beat)
+    run = await start_run(OWNER, FULL, "github-personal", {})
+    execute = asyncio.create_task(queue.run_once("worker-1"))
+    await _until(lambda: bool(failures))
+    await asyncio.sleep(0.1)  # a few more heartbeats
+    assert not execute.done()  # still supervising
+
+    release.set()
+    await asyncio.wait_for(execute, 2)
+    done = get_run(OWNER, run["id"])
+    assert done["status"] == "succeeded"
+    assert done["result"]["metrics"] == [["Pairs", 3]]
+
+
+async def test_a_stale_run_sweep_that_fails_once_keeps_the_worker_running(
+    db, monkeypatch
+):
+    """The sweep of stale runs fails on a database blip like the other sweeps
+    do: logged, tried again next time, and the loop goes on claiming."""
+    real_reap = queue.reap_stale
+    failures = []
+
+    def reap():
+        if not failures:
+            failures.append(True)
+            raise OperationalError("UPDATE job_runs", {}, Exception("connection reset"))
+        return real_reap()
+
+    monkeypatch.setattr(queue, "reap_stale", reap)
+    _patch_runner(
+        monkeypatch,
+        "github-personal",
+        AsyncMock(return_value=JobOutcome(JobResult(dry_run=True))),
+    )
+    run = await start_run(OWNER, FULL, "github-personal", {})
+    stop = asyncio.Event()
+    loop = asyncio.create_task(queue.run_forever(stop))
+    await _until(lambda: get_run(OWNER, run["id"])["status"] == "succeeded")
+
+    assert failures and not loop.done()
+    stop.set()
+    await asyncio.wait_for(loop, 2)

@@ -570,3 +570,31 @@ def test_a_file_is_downloaded_once_per_commit_and_capped(stub, monkeypatch, tmp_
         hub.download(REPO, ROOT_PAIRS_PATH, "a" * 40, 9)
     with pytest.raises(DatasetTooLarge):
         hub.download(REPO, ROOT_PAIRS_PATH, "b" * 40, 9)
+
+
+def test_a_hub_that_answers_a_server_error_is_unavailable_not_a_bad_token():
+    from server.services.hub_repo import HfHubBackend, HubTokenRejected, HubUnavailable
+
+    class DownHfApi(StubHfApi):
+        def __init__(self, status):
+            super().__init__()
+            self.status = status
+
+        def whoami(self):
+            raise _http_error(self.status)
+
+        def repo_info(self, repo_id, **kwargs):
+            raise _http_error(self.status)
+
+    down = HfHubBackend("hf_x", "k", client=DownHfApi(503))
+    with pytest.raises(HubUnavailable):
+        down.account()
+    with pytest.raises(HubUnavailable):
+        down.head("kevin/x", ["train.jsonl"])
+
+    refused = HfHubBackend("hf_x", "k", client=DownHfApi(401))
+    with pytest.raises(HubTokenRejected):
+        refused.account()
+    # A token the Hub refuses for this repo is not an outage either.
+    with pytest.raises(HubTokenRejected):
+        HfHubBackend("hf_x", "k", client=DownHfApi(403)).head("kevin/x", ["a"])

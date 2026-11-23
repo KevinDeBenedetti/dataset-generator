@@ -24,6 +24,7 @@ from server.services.hub_repo import (
     DatasetMoved,
     HubRepoError,
     HubTokenRejected,
+    HubUnavailable,
     open_repo,
 )
 
@@ -76,11 +77,16 @@ def create_generation_draft(
     kept = 0
     try:
         repo = open_repo(creds, target_repo)
-    except HubTokenRejected:
-        if "/" not in target_repo:
-            raise
+    except (HubTokenRejected, HubUnavailable) as exc:
+        # The pairs are paid for: the draft stands, and its publication will
+        # say what the Hub answers then. A bare name needs a namespace: the one
+        # saved in Settings, as open_repo would have used.
         repo_id = target_repo.strip()
-        logger.warning("Hugging Face refused the token: %s is not counted", repo_id)
+        if "/" not in repo_id:
+            if not creds.hf_namespace:
+                raise
+            repo_id = f"{creds.hf_namespace}/{repo_id}"
+        logger.warning("Hugging Face: %s is not counted (%s)", repo_id, exc)
     else:
         repo_id = repo.repo_id
         try:

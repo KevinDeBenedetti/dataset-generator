@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { Icon } from '@/components/app/icon'
-import { deleteMyAccount, errorStatus, exportUrl, logout } from '@/api/sdk'
+import { deleteMyAccount, ensureFreshSession, errorStatus, exportUrl, logout } from '@/api/sdk'
 
 export function YourData() {
   const t = useTranslations('settings')
@@ -44,7 +44,17 @@ export function YourData() {
         </div>
       </div>
       <div className="card-foot" style={{ gap: 8 }}>
-        <a className="btn btn-outline" href={exportUrl()}>
+        <a
+          className="btn btn-outline"
+          href={exportUrl()}
+          onClick={(event) => {
+            // A plain link can't renew an expired session: renew it, then go.
+            event.preventDefault()
+            void ensureFreshSession().finally(() => {
+              window.location.href = exportUrl()
+            })
+          }}
+        >
           <Icon name="download" />
           {t('data.export')}
         </a>

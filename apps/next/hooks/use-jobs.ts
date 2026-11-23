@@ -13,6 +13,8 @@ import {
   startJobRun,
 } from '@/api/sdk'
 import type { JobRunOut, JobScheduleIn, JobScheduleOut } from '@/api/types'
+import { ACTIVE_RUN, runEnded } from './run-state'
+import { HUB_QUERY_KEY } from './use-hub'
 
 export const JOBS_QUERY_KEY = ['jobs']
 export const DRAFTS_QUERY_KEY = ['drafts']
@@ -42,15 +44,25 @@ export function useJobs() {
   })
 }
 
-const ACTIVE = new Set(['queued', 'running', 'publishing'])
-
-// One run's state, polled every 2 s while it is queued or running.
+// One run's state, polled every 2 s while it is queued or running. When it
+// ends, what it made shows up elsewhere: the drafts (the sidebar's badge
+// included), the job cards' latest run, a dataset it published.
 export function useJobRun(runId: string | null | undefined) {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: [JOB_RUN_QUERY_KEY, runId],
-    queryFn: () => getJobRun(runId as string),
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<JobRunOut>([JOB_RUN_QUERY_KEY, runId])
+      const run = await getJobRun(runId as string)
+      if (runEnded(previous?.status, run.status)) {
+        void queryClient.invalidateQueries({ queryKey: DRAFTS_QUERY_KEY })
+        void queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
+        void queryClient.invalidateQueries({ queryKey: [HUB_QUERY_KEY] })
+      }
+      return run
+    },
     enabled: !!runId,
-    refetchInterval: (query) => (ACTIVE.has(query.state.data?.status ?? '') ? 2000 : false),
+    refetchInterval: (query) => (ACTIVE_RUN.has(query.state.data?.status ?? '') ? 2000 : false),
   })
 }
 

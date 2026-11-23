@@ -15,6 +15,7 @@ from server.services.hub_repo import (
     DatasetTooLarge,
     DatasetUnreadable,
     HubTokenRejected,
+    HubUnavailable,
     RepoHead,
 )
 
@@ -35,13 +36,15 @@ class _Repo:
 
 class InMemoryHub:
     """Dataset repos held in memory. ``account=None`` is a token naming nobody;
-    ``rejects_token=True`` is a token the Hub refuses."""
+    ``rejects_token=True`` is a token the Hub refuses; ``unavailable=True`` is
+    a Hub that is down (every call fails with a server or network error)."""
 
     def __init__(
         self, account: Optional[str] = "kevin", *, rejects_token: bool = False
     ) -> None:
         self._account = account
         self.rejects_token = rejects_token
+        self.unavailable = False
         # Called once each, oldest first, right before a commit is checked: a
         # test makes the repo move between a read and the publication with it.
         self.before_commit: List[Callable[[], None]] = []
@@ -85,12 +88,20 @@ class InMemoryHub:
 
     # --- HubBackend ----------------------------------------------------------
 
+    def _down(self) -> None:
+        if self.unavailable:
+            raise HubUnavailable(
+                "The Hugging Face Hub didn't answer. Try again shortly."
+            )
+
     def account(self) -> Optional[str]:
+        self._down()
         if self.rejects_token:
             raise HubTokenRejected("Hugging Face rejected your token.")
         return self._account
 
     def head(self, repo_id: str, paths: Sequence[str]) -> Optional[RepoHead]:
+        self._down()
         repo = self._repos.get(repo_id)
         if repo is None:
             return None
@@ -99,6 +110,7 @@ class InMemoryHub:
         return RepoHead(last.oid, repo.private, sizes)
 
     def download(self, repo_id: str, path: str, commit: str, max_bytes: int) -> bytes:
+        self._down()
         self.downloads.append(path)
         for known in self._repos[repo_id].commits:
             if known.oid == commit:

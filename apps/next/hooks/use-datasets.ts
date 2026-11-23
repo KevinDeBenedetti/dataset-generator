@@ -15,6 +15,7 @@ import { useDatasetStore } from '@/stores/dataset'
 import { useGenerateStore } from '@/stores/generate'
 import { DATASET_ALL_RUNS_QUERY_KEY } from './use-dataset-versions'
 import { HUB_QUERY_KEY } from './use-hub'
+import { invalidateDatasetQA } from './qa-keys'
 
 // The /generate form can mine two kinds of source; the mutation branches on it.
 // `model` is a "<provider>:<model>" reference; null = your LLM.
@@ -177,9 +178,12 @@ export function useAnalyzeDataset() {
 
 // Pair-level arbitration: deletes one record of a duplicate pair (admin only).
 export function useResolvePair() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ datasetId, removeId }: { datasetId: string; removeId: string }) =>
       resolvePair(datasetId, removeId),
+    // A record is gone: the Quality page's figures and pair lists change.
+    onSuccess: (_result, { datasetId }) => invalidateDatasetQA(queryClient, datasetId),
   })
 }
 
@@ -194,12 +198,14 @@ export function useCleanDataset() {
       setCleanStatus('pending')
       setError(null)
     },
-    onSuccess: (data) => {
+    onSuccess: (data, { datasetId }) => {
       setCleaningResult(data)
       setCleanStatus('success')
       queryClient.invalidateQueries({ queryKey: DATASETS_QUERY_KEY })
-      // Cleaning deletes items, so the per-source pair counts move too.
+      // Cleaning deletes items, so the per-source pair counts move too, and
+      // the Quality page's figures.
       queryClient.invalidateQueries({ queryKey: [DATASET_SOURCES_QUERY_KEY] })
+      void invalidateDatasetQA(queryClient, datasetId)
     },
     onError: (error) => {
       setError(error instanceof Error ? error.message : 'Failed to clean dataset')

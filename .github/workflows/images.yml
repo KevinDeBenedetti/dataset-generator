@@ -123,6 +123,41 @@ jobs:
             type=raw,value=latest,enable=${{ env.RELEASE_TAG != '' && github.event_name != 'workflow_dispatch' }}
             type=sha,prefix=sha-,enable=${{ env.RELEASE_TAG == '' }}
 
+      # The image as it will be pushed, kept on the runner for the scan below
+      # (the push step then reuses the layers from the cache). Single platform:
+      # a loaded image can't be multi-arch, and the code is the same on both.
+      - name: Build for the scan
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: prod
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: scan/dataset-generator-${{ matrix.image }}:candidate
+          cache-from: type=gha,scope=${{ matrix.image }}
+          provenance: false
+
+      # A release tagged before the scan existed has no ignore file: an empty
+      # one accepts nothing, and the scan below reads it either way.
+      - name: Ignore file for the scan
+        run: touch .trivyignore
+
+      # A fixable CRITICAL or HIGH vulnerability stops the release before
+      # anything reaches GHCR, where Renovate deploys it from. An accepted
+      # finding goes in .trivyignore, with its reason.
+      - name: Scan for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: scan/dataset-generator-${{ matrix.image }}:candidate
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

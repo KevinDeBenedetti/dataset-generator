@@ -2,7 +2,17 @@
 Tests for main application endpoints (health, root).
 """
 
+import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _docs_on(monkeypatch):
+    """The interactive docs exist in development only (core/config.py
+    ``docs_enabled``): these tests read them, so the app is built with them on."""
+    from server.core.config import config
+
+    monkeypatch.setattr(config, "docs_enabled", True)
 
 
 def test_health_endpoint(client: TestClient):

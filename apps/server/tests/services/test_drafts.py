@@ -132,6 +132,26 @@ def test_a_refused_token_does_not_cost_the_draft(db, memory_hub, owner):
     assert preview["repo_id"] == REPO and preview["kept"] == 0
 
 
+def test_a_hub_that_is_down_does_not_cost_the_draft(db, memory_hub, owner):
+    """A Hub outage after the generation: the pairs are paid for, so the draft
+    stands; publishing reports the outage later."""
+    memory_hub.unavailable = True
+    run_id = _make_draft(owner)
+    preview = get_run(owner.id, run_id)["preview"]
+    assert preview["repo_id"] == REPO and preview["kept"] == 0
+
+
+def test_a_hub_that_is_down_keeps_a_bare_names_draft_with_the_saved_namespace(
+    db, memory_hub, owner
+):
+    """A bare repo name completed with the namespace saved in Settings needs no
+    answer from the Hub: the draft stands while the Hub is down."""
+    memory_hub.unavailable = True
+    creds = make_creds(hf_token="hf_test_token", hf_namespace="kevin")
+    run_id = _make_draft(owner, target="docs-qa", creds=creds)
+    assert get_run(owner.id, run_id)["preview"]["repo_id"] == "kevin/docs-qa"
+
+
 def test_a_refused_token_cannot_complete_a_bare_repo_name(db, memory_hub, owner):
     memory_hub.rejects_token = True
     with pytest.raises(HubTokenRejected):

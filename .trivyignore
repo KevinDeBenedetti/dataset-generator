@@ -1,0 +1,5 @@
+# Vulnerabilities the release scan (.github/workflows/images.yml) accepts.
+# One CVE id per line, each with a comment saying why it is accepted and
+# when to look again, e.g.:
+#   # perl-base, not reachable from the app; drop with the next base image
+#   CVE-2026-00000

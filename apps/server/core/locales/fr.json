@@ -161,7 +161,9 @@
     "Hugging Face is not configured. Add your Hugging Face token (with write access) in Settings to use the Hub.": "Hugging Face n'est pas configuré. Ajoutez votre jeton Hugging Face (avec l'accès en écriture) dans les Paramètres pour utiliser le Hub.",
     "Hugging Face repo '{repo}' has no namespace and none could be determined. Use the full 'user/name' id, or set your namespace in Settings.": "Le dépôt Hugging Face « {repo} » n'a pas d'espace de noms et aucun n'a pu être déterminé. Utilisez l'identifiant complet « utilisateur/nom », ou indiquez votre espace de noms dans les Paramètres.",
     "The dataset '{repo}' changed on Hugging Face since it was read.": "Le jeu de données « {repo} » a changé sur Hugging Face depuis sa lecture.",
-    "No LLM configured (set it on /models)": "Aucun LLM configuré (choisissez-en un sur /models)"
+    "No LLM configured (set it on /models)": "Aucun LLM configuré (choisissez-en un sur /models)",
+    "Generating the dataset": "La génération du jeu de données",
+    "'{repo}' no longer has the version being read": "« {repo} » n'a plus la version en cours de lecture"
   },
   "joiners": {
     "or": " ou "
