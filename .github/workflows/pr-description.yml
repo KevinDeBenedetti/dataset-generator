@@ -2,7 +2,7 @@
 # on the owner's Claude subscription: on every push, Claude reads the commits
 # and the diff, rewrites the managed block of the description and the title.
 # Outside ci-cd.yml on purpose: a missing token or a model error never blocks a
-# merge. Bot (Dependabot, release-please) and fork pull requests are skipped by
+# merge. Bot (Renovate, release-please) and fork pull requests are skipped by
 # the called workflow.
 #
 # Needs the CLAUDE_CODE_OAUTH_TOKEN repository secret (`claude setup-token`).

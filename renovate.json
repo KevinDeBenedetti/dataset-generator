@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "This repository's own updates, on top of the shared preset KevinDeBenedetti/renovate-config (Monday-morning schedule, best practices, SHA-pinned actions, prek hook revs, labels, data-owning image majors held for approval).",
+  "extends": ["github>KevinDeBenedetti/renovate-config", "group:allNonMajor"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The hadolint image the prek hook runs (`entry = \"ghcr.io/hadolint/hadolint:<tag>@<digest> hadolint\"`): the hook's own entry would run `latest`, whatever its `rev` says.",
+      "managerFilePatterns": ["/^prek\\.toml$/"],
+      "matchStrings": [
+        "entry\\s*=\\s*\"(?<depName>ghcr\\.io/hadolint/hadolint):(?<currentValue>[^@\\s\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "A week, not the preset's 3 days: uv (`exclude-newer = \"7 days\"` in pyproject.toml) and bun (`minimumReleaseAge` in apps/next/bunfig.toml) refuse a younger release, so an earlier bump would fail its lock file update. Security updates do not wait.",
+      "matchPackageNames": ["*"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "The preset's exemptions again, since the rule above comes after them: these update types carry no release timestamp of their own.",
+      "matchUpdateTypes": ["lockFileMaintenance", "pin", "pinDigest", "replacement", "bump", "lockfileUpdate", "rollback"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Renovate gets a release date from Docker Hub only: the ghcr.io images (uv, hadolint) would never pass the soak.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/**"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      "description": "The hadolint hook's rev and the image its entry runs move together.",
+      "matchPackageNames": ["hadolint/hadolint", "ghcr.io/hadolint/hadolint"],
+      "groupName": "hadolint"
+    },
+    {
+      "description": "Capped below 2 in pyproject.toml until the Hub code (services/hub.py, huggingface.py) is checked against 2.x: drop this together with the cap.",
+      "matchPackageNames": ["huggingface-hub"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Python and Node runtime upgrades are deliberate (CI, the lockfiles and the images move together), not part of the weekly batch. Patches and digests still flow.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["python", "node"],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    }
+  ]
+}
