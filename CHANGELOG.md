@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.17.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.16.0...v0.17.0) (2026-11-23)
+
+
+### Features
+
+* **collections:** implement deployment ID management for Qdrant collections ([b0b35e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0b35e6b4b23c8262f86ae265d7cc7187baf2353))
+* **http:** migrate from httpx to httpx2 for improved transport handling ([5a320c4](https://github.com/KevinDeBenedetti/dataset-generator/commit/5a320c410e48bc9051ae0ee86470e53b9615706a))
+* **i18n:** add English and French for the web app and the server ([5878db4](https://github.com/KevinDeBenedetti/dataset-generator/commit/5878db434174011c9caa7e96e184385fd80bf68d))
+* **resumes:** add skipped reason to ResumeDatasetOut schema ([b0b35e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0b35e6b4b23c8262f86ae265d7cc7187baf2353))
+* **schedules:** enhance scheduling logic with skipped reasons and retry mechanism ([b0b35e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0b35e6b4b23c8262f86ae265d7cc7187baf2353))
+* **similarity:** create a new service for checking near-duplicate pairs ([b0b35e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0b35e6b4b23c8262f86ae265d7cc7187baf2353))
+
+
+### Bug Fixes
+
+* **i18n:** address the review of the multilingual branch ([19e933d](https://github.com/KevinDeBenedetti/dataset-generator/commit/19e933d52fa2578d89d2647906808ab24239df88))
+* **i18n:** open only our own language catalogs, and give the session test a real owner ([8ef4a00](https://github.com/KevinDeBenedetti/dataset-generator/commit/8ef4a00261c39f3fecf7aa7cd43214b06e3a9d4b))
+
+
+### Chores
+
+* **datasets:** replace internal similarity check with shared service ([b0b35e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b0b35e6b4b23c8262f86ae265d7cc7187baf2353))
+
 ## [0.16.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.15.2...v0.16.0) (2026-11-17)
 
 
