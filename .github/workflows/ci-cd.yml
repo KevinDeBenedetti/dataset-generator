@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@25f03b7fb1c141105b83b5da0c5c3daf9576afe3 # v0.55.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
     with:
       # A known high/critical vulnerability in the web UI's bun.lock, or any
       # known one in uv.lock (pip-audit), fails the pipeline before the build.
@@ -40,7 +40,7 @@ jobs:
   ci-python:
     name: CI Python (server)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@25f03b7fb1c141105b83b5da0c5c3daf9576afe3 # v0.55.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
     with:
       python-version: "3.14"
       working-directory: "."
@@ -54,7 +54,7 @@ jobs:
   ci-node:
     name: CI Node (next)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@25f03b7fb1c141105b83b5da0c5c3daf9576afe3 # v0.55.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
     with:
       node-version: "24.22.2"
       working-directory: apps/next
@@ -115,7 +115,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@25f03b7fb1c141105b83b5da0c5c3daf9576afe3 # v0.55.0
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@91e0486cf281ba5b353daff772ac04622392b45d # v0.56.0
     with:
       # The config's extra-files keep pyproject.toml, apps/next/package.json,
       # apps/server/main.py and the committed OpenAPI schema (its info.version) on
