@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.0...v0.17.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* address the 2026-11 audit issues ([7cc19e7](https://github.com/KevinDeBenedetti/dataset-generator/commit/7cc19e7339d456ee2522d60b0bf5995ab410eaf6)), closes [#253](https://github.com/KevinDeBenedetti/dataset-generator/issues/253) [#254](https://github.com/KevinDeBenedetti/dataset-generator/issues/254) [#255](https://github.com/KevinDeBenedetti/dataset-generator/issues/255) [#256](https://github.com/KevinDeBenedetti/dataset-generator/issues/256) [#257](https://github.com/KevinDeBenedetti/dataset-generator/issues/257) [#258](https://github.com/KevinDeBenedetti/dataset-generator/issues/258) [#259](https://github.com/KevinDeBenedetti/dataset-generator/issues/259) [#260](https://github.com/KevinDeBenedetti/dataset-generator/issues/260) [#261](https://github.com/KevinDeBenedetti/dataset-generator/issues/261) [#262](https://github.com/KevinDeBenedetti/dataset-generator/issues/262) [#263](https://github.com/KevinDeBenedetti/dataset-generator/issues/263) [#264](https://github.com/KevinDeBenedetti/dataset-generator/issues/264) [#265](https://github.com/KevinDeBenedetti/dataset-generator/issues/265) [#266](https://github.com/KevinDeBenedetti/dataset-generator/issues/266) [#267](https://github.com/KevinDeBenedetti/dataset-generator/issues/267) [#268](https://github.com/KevinDeBenedetti/dataset-generator/issues/268)
+
 ## [0.17.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.16.0...v0.17.0) (2026-11-23)
 
 
