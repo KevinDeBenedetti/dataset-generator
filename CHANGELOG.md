@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.17.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.0...v0.17.1) (2026-11-23)
+## [0.17.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.0...v0.17.1) (2026-11-24)
 
 
 ### Bug Fixes
