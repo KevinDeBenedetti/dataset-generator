@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.3](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.2...v0.17.3) (2026-11-24)
+
+
+### Bug Fixes
+
+* **images:** clear the release scan findings ([b9834e6](https://github.com/KevinDeBenedetti/dataset-generator/commit/b9834e6b4233ae250fb26113b214a82041742dc3))
+
 ## [0.17.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.1...v0.17.2) (2026-11-24)
 
 
