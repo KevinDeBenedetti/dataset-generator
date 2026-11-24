@@ -143,7 +143,7 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     app = FastAPI(
         title="Datasets Generator API",
         description="API to generate datasets from web scraping",
-        version="0.17.1",  # x-release-please-version
+        version="0.17.2",  # x-release-please-version
         # The tests build the same app without it: no migrations, no seeding.
         lifespan=lifespan if with_lifespan else None,
         # The interactive docs advertise every route to anyone: development only.
