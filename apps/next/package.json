@@ -1,5 +1,5 @@
 {
-  "name": "next",
+  "name": "dataset-generator-next",
   "version": "0.17.2",
   "private": true,
   "scripts": {
