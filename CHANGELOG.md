@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.2](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.1...v0.17.2) (2026-11-24)
+
+
+### Chores
+
+* **main:** release 0.17.1 ([05745a8](https://github.com/KevinDeBenedetti/dataset-generator/commit/05745a890f0efcbc5d3be670f07b126486e106cb))
+
 ## [0.17.1](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.0...v0.17.1) (2026-11-24)
 
 
