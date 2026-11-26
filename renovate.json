@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "This repository's own updates, on top of the shared preset KevinDeBenedetti/renovate-config (Monday-morning schedule, best practices, SHA-pinned actions, prek hook revs, labels, data-owning image majors held for approval).",
-  "extends": ["github>KevinDeBenedetti/renovate-config", "group:allNonMajor"],
+  "description": "This repository's own updates, on top of the shared preset KevinDeBenedetti/renovate-config (Monday-morning schedule, best practices, SHA-pinned actions, prek hook revs, labels, data-owning image majors held for approval, minors, patches and digests in one weekly pull request). prek's renovate-config-validator hook checks this file, in CI too.",
+  "extends": ["github>KevinDeBenedetti/renovate-config"],
   "customManagers": [
     {
       "customType": "regex",
