@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/security.yml@a1639087895b53759275161acf91a2571a50ca62 # v0.57.0
     with:
       # A known high/critical vulnerability in the web UI's bun.lock, or any
       # known one in uv.lock (pip-audit), fails the pipeline before the build.
@@ -40,7 +40,7 @@ jobs:
   ci-python:
     name: CI Python (server)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-python.yml@a1639087895b53759275161acf91a2571a50ca62 # v0.57.0
     with:
       python-version: "3.14"
       working-directory: "."
@@ -54,7 +54,7 @@ jobs:
   ci-node:
     name: CI Node (next)
     needs: security
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-node.yml@a1639087895b53759275161acf91a2571a50ca62 # v0.57.0
     with:
       node-version: "24.22.2"
       working-directory: apps/next
@@ -77,7 +77,7 @@ jobs:
     name: Workflow and Dockerfile linters
     permissions:
       contents: read
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@a1639087895b53759275161acf91a2571a50ca62 # v0.57.0
     with:
       extra-args: --all-files hadolint-docker zizmor actionlint renovate-config-validator
       # The release the repo's own hooks run (pyproject.toml, dev group).
@@ -116,7 +116,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
+    uses: KevinDeBenedetti/github-workflows/.github/workflows/release.yml@a1639087895b53759275161acf91a2571a50ca62 # v0.57.0
     with:
       # The config's extra-files keep pyproject.toml, apps/next/package.json,
       # apps/server/main.py and the committed OpenAPI schema (its info.version) on
