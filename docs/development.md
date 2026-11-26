@@ -47,7 +47,9 @@ environment to build, no `rev` to bump.
 
 Three security hooks run too: gitleaks on the staged changes (the version CI
 pins, reading `.gitleaks.toml`), and zizmor and actionlint on the GitHub
-workflows.
+workflows. `renovate-config-validator` checks `renovate.json` (`--strict`):
+Renovate stops every update on a config it refuses. CI's "Workflow and
+Dockerfile linters" job runs it, with hadolint, zizmor and actionlint.
 
 Every remote hook is pinned to a commit, with its tag in a `# frozen:` comment
 — a tag can be moved to other code, a commit can't — and hadolint's image by

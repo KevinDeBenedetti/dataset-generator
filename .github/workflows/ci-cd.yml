@@ -69,8 +69,9 @@ jobs:
       run-build: ${{ github.event_name == 'pull_request' }}
 
   # The prek hooks no other job runs: hadolint (Dockerfiles), zizmor and
-  # actionlint (workflows). Locally they only guard a machine that ran
-  # `prek install`: a Renovate PR, a web edit or `--no-verify` skips them.
+  # actionlint (workflows), renovate-config-validator (renovate.json). Locally
+  # they only guard a machine that ran `prek install`: a Renovate PR, a web
+  # edit or `--no-verify` skips them.
   # ruff, ty, oxlint, gitleaks and the tests have their own jobs above.
   prek:
     name: Workflow and Dockerfile linters
@@ -78,7 +79,7 @@ jobs:
       contents: read
     uses: KevinDeBenedetti/github-workflows/.github/workflows/ci-prek.yml@c3b092e3b28e798521c4506f033870f12dcbafdd # v0.56.2
     with:
-      extra-args: --all-files hadolint-docker zizmor actionlint
+      extra-args: --all-files hadolint-docker zizmor actionlint renovate-config-validator
       # The release the repo's own hooks run (pyproject.toml, dev group).
       prek-version: 0.5.10
 
