@@ -39,13 +39,14 @@ with *Dry Run* off. When the server is set up for it
 site that indexes the corpus to read it again, and the run reports **Reindex:
 asked** or why it failed.
 
-Each corpus commit is a complete snapshot. A split you left off is carried
-over from the published version, unchanged and checked against its hash. A
-data file the manifest no longer lists is deleted. A push lands only on the
-version it read: if the repo moved in between, the run fails with "run it
-again" instead of mixing the two. A published corpus with an older schema
-version than the build can't be mixed with it, so the first run after an
-upgrade needs every split switched on.
+Each corpus commit is a complete dataset version. A split you left off is
+carried over from the published version, unchanged and checked against its
+hash, and its manifest entry names the commit it was built in
+(`carried_from`). A data file the manifest no longer lists is deleted. A push
+lands only on the version it read: if the repo moved in between, the run fails
+with "run it again" instead of mixing the two. A published corpus with another
+schema version or other chunker settings than the build can't be mixed with
+it, so the first run after an upgrade needs every split switched on.
 
 The corpus layout is versioned (`schema_version` in `manifest.json`, now 2).
 The manifest also records:
@@ -65,7 +66,8 @@ How the corpus is chunked:
   on its own text, so code that only moved keeps its id.
 - **`docs/` sections** are keyed on their heading trail, so a new section does
   not renumber the ones after it.
-- **Skipped**: licences, changelogs, READMEs (already in the `github` split),
+- **Skipped**: licences, changelogs, the root README (already in the `github`
+  split; a README further down stays in the code split),
   lockfiles, minified or generated files, and files with almost no code.
 
 Each Q&A pair carries a `uuid`: the same point id the portfolio gives it in

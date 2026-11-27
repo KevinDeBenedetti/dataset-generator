@@ -15,6 +15,7 @@ from server.jobs.corpus import (
     build_github_snapshot_chunks,
     build_knowledge_profile_chunks,
     chunk_file,
+    dataset_card,
     doc_sections,
     export_corpus,
     is_code_indexable,
@@ -93,7 +94,10 @@ def test_readme_is_split_into_sections_after_the_card(snapshot):
     assert install.id == deterministic_id(
         "github:readme:https://github.com/kevin/portfolio:Portfolio > Install"
     )
-    assert {install.type, deploy.type, install.repo} == {"readme", "portfolio"}
+    assert [(c.type, c.repo) for c in (install, deploy)] == [
+        ("readme", "portfolio"),
+        ("readme", "portfolio"),
+    ]
 
 
 def test_snapshot_chunks_omit_empty_fields(snapshot):
@@ -182,6 +186,9 @@ def test_write_jsonl_is_sorted_compact_and_utf8():
         ("bun.lock", 10, False),
         ("src/big.py", 200_000, False),
         ("README.md", 10, False),
+        # Only the root README is in the github split: a package's own README
+        # is read nowhere else.
+        ("apps/web/README.md", 10, True),
         ("pkg/CHANGELOG.md", 10, False),
         ("LICENSE", 10, False),
         ("package-lock.json", 10, False),
@@ -388,6 +395,31 @@ async def test_export_refuses_truncated_split(github, tmp_path):
     assert not (tmp_path / "manifest.json").exists()
 
 
+@pytest.mark.parametrize(
+    "records,category",
+    [
+        (999, "n<1K"),
+        (150_000, "100K<n<1M"),
+        (1_500_000, "1M<n<10M"),
+        (25_000_000, "10M<n<100M"),
+    ],
+)
+def test_card_size_category_follows_the_record_count(records, category):
+    card = dataset_card(
+        {"files": [{"source": "github_code", "records": records, "path": "data/c"}]},
+        "ns/kb",
+        "kevin",
+    )
+    assert f"size_categories:\n  - {category}\n" in card
+
+
+def test_card_counts_an_entry_without_records_as_empty():
+    card = dataset_card(
+        {"files": [{"source": "github_code", "path": "data/c"}]}, "ns/kb", "kevin"
+    )
+    assert "num_examples: 0" in card
+
+
 def test_push_requires_a_complete_export(tmp_path):
     with pytest.raises(JobError, match="does not exist"):
         push_corpus(CREDS, tmp_path / "missing", "ns/kb")
@@ -444,7 +476,7 @@ def test_push_completes_a_bare_repo_name(tmp_path, memory_hub):
 # --- push: a complete snapshot, on the version that was read ----------------
 
 
-def _export_dir(tmp_path, sources=("profile",), version=SCHEMA_VERSION):
+def _export_dir(tmp_path, sources=("profile",), version=SCHEMA_VERSION, chunker=None):
     files = []
     (tmp_path / "data").mkdir(exist_ok=True)
     for source in sources:
@@ -460,11 +492,15 @@ def _export_dir(tmp_path, sources=("profile",), version=SCHEMA_VERSION):
             }
         )
     manifest = {"schema_version": version, "owner": "kevin", "files": files}
+    if chunker is not None:
+        manifest["chunker"] = chunker
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     return manifest
 
 
-def _hub_api(tmp_path, remote_files=None, remote_version=SCHEMA_VERSION):
+def _hub_api(
+    tmp_path, remote_files=None, remote_version=SCHEMA_VERSION, remote_chunker=None
+):
     """An HfApi whose repo is at commit `c0ffee` holding ``remote_files``."""
     from huggingface_hub.errors import EntryNotFoundError
 
@@ -484,9 +520,10 @@ def _hub_api(tmp_path, remote_files=None, remote_version=SCHEMA_VERSION):
                     "sha256": hashlib.sha256(body.encode()).hexdigest(),
                 }
             )
-        blobs["manifest.json"] = json.dumps(
-            {"schema_version": remote_version, "files": entries}
-        )
+        remote = {"schema_version": remote_version, "files": entries}
+        if remote_chunker is not None:
+            remote["chunker"] = remote_chunker
+        blobs["manifest.json"] = json.dumps(remote)
 
     def download(repo_id, filename, repo_type, revision):
         assert revision == "c0ffee"
@@ -528,7 +565,40 @@ def test_push_carries_forward_the_splits_it_did_not_build(tmp_path, memory_hub):
     ]
     manifest = json.loads((export / "manifest.json").read_text())
     assert [f["source"] for f in manifest["files"]] == ["github_code", "profile"]
+    # The manifest's chunker and inputs describe this build: a carried split
+    # says which published commit it was taken from instead.
+    assert [f.get("carried_from") for f in manifest["files"]] == ["c0ffee", None]
     assert "config_name: github_code" in (export / "README.md").read_text()
+
+
+def test_push_keeps_where_a_split_was_first_carried_from(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"])
+    api, blobs = _hub_api(tmp_path, {"github_code": "{}\n"})
+    remote = json.loads(blobs["manifest.json"])
+    remote["files"][0]["carried_from"] = "beef001"
+    blobs["manifest.json"] = json.dumps(remote)
+    with patch("server.services.huggingface._api", return_value=api):
+        push_corpus(CREDS, export, "ns/kb")
+
+    manifest = json.loads((export / "manifest.json").read_text())
+    assert manifest["files"][0]["carried_from"] == "beef001"
+
+
+def test_push_refuses_to_carry_a_split_cut_with_other_settings(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"], chunker={"code": {"max_chunk_chars": 2500}})
+    api, _ = _hub_api(
+        tmp_path,
+        {"github_code": "{}\n"},
+        remote_chunker={"code": {"max_chunk_chars": 4000}},
+    )
+    with patch("server.services.huggingface._api", return_value=api):
+        with pytest.raises(JobError, match="other chunker settings"):
+            push_corpus(CREDS, export, "ns/kb")
+    api.upload_folder.assert_not_called()
 
 
 def test_push_refuses_to_mix_schema_versions(tmp_path, memory_hub):

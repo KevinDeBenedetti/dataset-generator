@@ -4,7 +4,7 @@ Two steps, which the ``knowledge-corpus`` job (jobs/registry.py, started from
 the GitHub page) runs back to back: :func:`export_corpus` reads the GitHub API
 only and writes every split to a directory; :func:`push_corpus` commits that
 directory to the corpus repo in one commit, so every commit is a complete,
-self-consistent snapshot the portfolio can reindex from.
+self-consistent dataset version the portfolio can reindex from.
 
 Ported from portfolio-next (``scripts/export-dataset.ts``,
 ``scripts/push-hf-dataset.ts``, ``src/lib/rag/{chunks,github-code,github-docs,
@@ -419,14 +419,18 @@ def _ext(path: str) -> str:
     return base[dot:].lower() if dot > 0 else ""
 
 
-# Prose the github split already holds (README), or text that is not the
-# project's knowledge: licences, changelogs, contributor lists. Only as prose
-# files: `security.py` or `history.ts` is code like any other.
+# Text that is not the project's knowledge: licences, changelogs, contributor
+# lists. Only as prose files: `security.py` or `history.ts` is code like any
+# other.
+_PROSE_EXTENSIONS = r"(\.(md|markdown|rst|txt|adoc))?$"
 _BOILERPLATE_NAME = re.compile(
-    r"^(readme|changelog|changes|history|license|licence|copying|notice|authors|"
-    r"contributors|code_of_conduct|security)(\.(md|markdown|rst|txt|adoc))?$",
+    r"^(changelog|changes|history|license|licence|copying|notice|authors|"
+    r"contributors|code_of_conduct|security)" + _PROSE_EXTENSIONS,
     re.IGNORECASE,
 )
+# The root README is the github split's; a package's own README further down
+# is read nowhere else, so it stays in the code split.
+_ROOT_README = re.compile(r"^readme" + _PROSE_EXTENSIONS, re.IGNORECASE)
 # Generated or vendored files: lockfiles the extension list misses, minified
 # bundles, protobuf and snapshot output.
 GENERATED_NAMES = {"package-lock.json", "pnpm-lock.yaml", "npm-shrinkwrap.json"}
@@ -446,6 +450,7 @@ def is_boilerplate(path: str) -> bool:
     lower = base.lower()
     return (
         bool(_BOILERPLATE_NAME.match(base))
+        or bool(_ROOT_README.match(path))
         or lower in GENERATED_NAMES
         or lower.endswith(GENERATED_SUFFIXES)
     )
@@ -821,14 +826,22 @@ FEATURES = (
 )
 
 
+# The Hub's size_categories, each bound with the label of the range below it.
+_SIZE_CATEGORIES = (
+    (1_000, "n<1K"),
+    (10_000, "1K<n<10K"),
+    (100_000, "10K<n<100K"),
+    (1_000_000, "100K<n<1M"),
+    (10_000_000, "1M<n<10M"),
+    (100_000_000, "10M<n<100M"),
+)
+
+
 def _size_category(total: int) -> str:
-    if total < 1_000:
-        return "n<1K"
-    if total < 10_000:
-        return "1K<n<10K"
-    if total < 100_000:
-        return "10K<n<100K"
-    return "100K<n<1M"
+    for bound, label in _SIZE_CATEGORIES:
+        if total < bound:
+            return label
+    return "100M<n<1B"
 
 
 def dataset_card(manifest: dict, repo: str, username: str) -> str:
@@ -861,7 +874,9 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
         for name in FEATURES:
             lines.append(f"      - name: {name}\n        dtype: string")
         lines.append("    splits:")
-        lines.append(f"      - name: train\n        num_examples: {f['records']}")
+        lines.append(
+            f"      - name: train\n        num_examples: {f.get('records', 0)}"
+        )
     lines += ["---", ""]
     lines += ["# Portfolio knowledge base", ""]
     lines.append(
@@ -875,7 +890,7 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
     ]
     lines += ["## Splits", "", "| Config | File | Records |", "|---|---|---|"]
     for f in manifest["files"]:
-        lines.append(f"| `{f['source']}` | `{f['path']}` | {f['records']} |")
+        lines.append(f"| `{f['source']}` | `{f['path']}` | {f.get('records', 0)} |")
     lines += [
         "",
         "## Schema",
@@ -1060,11 +1075,14 @@ def _carry_forward(
     api, repo_id: str, parent: str, directory: Path, manifest: dict
 ) -> List[dict]:
     """Copy into ``directory`` the splits of the published corpus this export did
-    not rebuild, so the commit stays a complete snapshot; their manifest entries.
+    not rebuild, so the commit stays a complete version; their manifest entries.
 
-    A split is only carried from a corpus of the same schema version: mixing
-    two chunk layouts in one snapshot would make the manifest lie about half of
-    it. Each carried file is checked against the hash its manifest gives.
+    A split is only carried from a corpus of the same schema version and
+    chunker settings: mixing two chunk layouts in one commit would make the
+    manifest lie about half of it. Each carried file is checked against the
+    hash its manifest gives, and its entry names the published commit it was
+    first built in (``carried_from``): the manifest's ``inputs`` and
+    ``generated_at`` describe only the splits this build made.
     """
     remote = _remote_manifest(api, repo_id, parent)
     if not remote:
@@ -1087,6 +1105,12 @@ def _carry_forward(
             f"build is {manifest.get('schema_version')}: rebuild every source "
             f"once (missing here: {names})"
         )
+    if remote.get("chunker") != manifest.get("chunker"):
+        names = ", ".join(sorted(f["source"] for f in missing))
+        raise JobError(
+            "the published corpus was cut with other chunker settings than "
+            f"this build: rebuild every source once (missing here: {names})"
+        )
     carried = []
     for entry in missing:
         # The path is the Hub's, not ours: only the split's own file is read.
@@ -1102,7 +1126,9 @@ def _carry_forward(
             )
         (directory / path).parent.mkdir(parents=True, exist_ok=True)
         (directory / path).write_bytes(data)
-        carried.append({**entry, "path": path})
+        carried.append(
+            {**entry, "path": path, "carried_from": entry.get("carried_from") or parent}
+        )
         logger.info("push: carried %s forward from %s", path, parent[:7])
     return carried
 
@@ -1110,10 +1136,11 @@ def _carry_forward(
 def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
     """Commit the exported directory to a private HF dataset in one commit.
 
-    The commit is a complete snapshot: the splits this export did not build are
-    carried over from the published corpus, any other ``data/`` file is
-    deleted, and the commit only lands on the version that was read — a push
-    racing another one fails with :class:`CorpusMoved` instead of mixing them.
+    The commit is a complete dataset version: the splits this export did not
+    build are carried over from the published corpus, any other ``data/`` file
+    is deleted, and the commit only lands on the version that was read — a
+    push racing another one fails with :class:`CorpusMoved` instead of mixing
+    them.
     """
     from huggingface_hub.errors import HfHubHTTPError
 
@@ -1158,7 +1185,10 @@ def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
     description = "\n".join(
         [
             f"{total} records across {len(files)} splits.",
-            *(f"- {f['source']}: {f['records']} records ({f['path']})" for f in files),
+            *(
+                f"- {f['source']}: {f.get('records', 0)} records ({f['path']})"
+                for f in files
+            ),
             f"\nGenerated from {GENERATOR_NAME}@{sha}" if sha else "",
         ]
     )
