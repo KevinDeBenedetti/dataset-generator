@@ -493,3 +493,14 @@ async def test_a_first_version_is_never_the_same_as_published(memory_hub):
         creds, "kevin/new", own_topic_pair, make, missing_repo="-", complete=_echo
     )
     assert draft.same_as_published is False
+
+
+def test_pair_uuid_matches_the_portfolio_point_id():
+    from server.jobs.qa_build import QAPair, pair_uuid
+
+    # Golden vector shared with portfolio-next (chunks.test.ts): the portfolio
+    # names the pair's Qdrant point deterministicId("github:qa:" + id).
+    assert pair_uuid("github", "0123456789ab") == "bb751c6e-66f1-5cc3-846b-6c5bf5a568cb"
+    pair = QAPair(question="q?", answer="a", category="repo", id="0123456789ab")
+    assert pair.to_record()["uuid"] == pair_uuid("github", "0123456789ab")
+    assert "uuid" not in QAPair(question="q?", answer="a", category="repo").to_record()

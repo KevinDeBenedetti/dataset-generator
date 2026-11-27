@@ -58,6 +58,13 @@ def clean_readme(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
+def cap_readme(text: str) -> str:
+    """``text`` cut to MAX_README_CHARS, marked when it was."""
+    if len(text) > MAX_README_CHARS:
+        return f"{text[:MAX_README_CHARS]}\n\n[README truncated]"
+    return text
+
+
 def deterministic_id(key: str) -> str:
     """UUIDv5 (URL namespace) over an identity key.
 
@@ -81,6 +88,9 @@ class RepoData:
     homepage: str = ""
     url: str = ""
     readme: str = ""
+    # The whole cleaned README, uncapped: the corpus splits it into sections
+    # (jobs/corpus.py) where ``readme`` would lose everything past its cap.
+    readme_full: str = ""
     # Detected from the repo's dependency manifests (see jobs/tech_stack.py).
     technologies: List[str] = field(default_factory=list)
 
@@ -143,6 +153,9 @@ class CorpusGitHubClient(GitHubService):
         # fast with the reset time instead of a cascade of vague 403s.
         self.rate_limited_until: Optional[str] = None
         self._branches: Dict[str, str] = {}
+        # "owner/repo" -> (branch, tree sha) of every tree read: what a build
+        # was made from, for its manifest.
+        self.trees_read: Dict[str, Tuple[str, str]] = {}
 
     def _raise_for(self, resp: httpx2.Response, what: str) -> None:
         if resp.status_code == 404:
@@ -216,14 +229,15 @@ class CorpusGitHubClient(GitHubService):
 
     async def fetch_readme(self, owner: str, repo: str) -> str:
         """Best effort: a repo without a README is normal, so failures give ''."""
+        return cap_readme(await self.fetch_full_readme(owner, repo))
+
+    async def fetch_full_readme(self, owner: str, repo: str) -> str:
+        """The cleaned README, uncapped; '' when there is none or it can't be read."""
         try:
             text = await self.get_readme(owner, repo) or ""
         except httpx2.HTTPError:
             return ""
-        text = clean_readme(text)
-        if len(text) > MAX_README_CHARS:
-            return f"{text[:MAX_README_CHARS]}\n\n[README truncated]"
-        return text
+        return clean_readme(text)
 
     async def fetch_repo(self, owner: str, repo: str) -> RepoData:
         self._guard()
@@ -233,6 +247,7 @@ class CorpusGitHubClient(GitHubService):
         d = resp.json()
         branch = d.get("default_branch") or "main"
         self._branches[f"{owner}/{repo}"] = branch
+        readme = await self.fetch_full_readme(owner, repo)
         return RepoData(
             name=d.get("name") or repo,
             description=d.get("description") or "",
@@ -241,7 +256,8 @@ class CorpusGitHubClient(GitHubService):
             language=d.get("language") or "",
             homepage=d.get("homepage") or "",
             url=d.get("html_url") or "",
-            readme=await self.fetch_readme(owner, repo),
+            readme=cap_readme(readme),
+            readme_full=readme,
             technologies=await self.fetch_technologies(owner, repo, branch),
         )
 
@@ -293,7 +309,10 @@ class CorpusGitHubClient(GitHubService):
         )
         if resp.status_code != 200:
             self._raise_for(resp, f"github tree for {owner}/{repo}")
-        return resp.json().get("tree") or []
+        body = resp.json()
+        if body.get("sha"):
+            self.trees_read[f"{owner}/{repo}"] = (branch, str(body["sha"]))
+        return body.get("tree") or []
 
     async def file_content(self, owner: str, repo: str, path: str) -> str:
         self._guard()
