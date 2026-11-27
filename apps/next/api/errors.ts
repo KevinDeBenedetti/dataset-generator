@@ -14,6 +14,17 @@ export class ApiError extends Error {
   }
 }
 
+/** A refused sign-in: the API's reason ``code`` (auth/hf_token.py) besides its message. */
+export class SignInError extends ApiError {
+  readonly code: string | undefined
+
+  constructor(message: string, status?: number, code?: string) {
+    super(message, status)
+    this.name = 'SignInError'
+    this.code = code
+  }
+}
+
 /** The HTTP status of an error thrown by these wrappers, if it had one. */
 export function errorStatus(error: unknown): number | undefined {
   return error instanceof ApiError ? error.status : undefined

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import {
+  adminLogin,
+  hfLogin,
   getAuthProviders,
   getCurrentUser,
   getIdentities,
@@ -60,6 +62,49 @@ export function useLogin() {
       router.refresh()
     },
   })
+}
+
+export function useHfLogin() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
+  return useMutation({
+    mutationFn: ({ username, token }: { username: string; token: string }) =>
+      hfLogin(username, token),
+    onSuccess: (user) => {
+      queryClient.setQueryData(CURRENT_USER_QUERY_KEY, user)
+      router.replace(postLoginRedirect())
+      router.refresh()
+    },
+  })
+}
+
+export function useAdminLogin() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
+  return useMutation({
+    mutationFn: ({
+      username,
+      password,
+      otp,
+    }: {
+      username: string
+      password: string
+      otp?: string
+    }) => adminLogin(username, password, otp),
+    onSuccess: (user) => {
+      queryClient.setQueryData(CURRENT_USER_QUERY_KEY, user)
+      router.replace('/admin')
+      router.refresh()
+    },
+  })
+}
+
+// The admin signed in from the deployment's secrets: its keys are the server's.
+export function useIsSecretsAdmin(): boolean {
+  const { data: user } = useCurrentUser()
+  return user?.provider === 'secrets'
 }
 
 export function useLogout() {

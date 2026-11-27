@@ -223,6 +223,7 @@ def search_collection(
             body.limit,
             body.score_threshold,
             creds=creds,
+            filters=body.filters,
         ),
         "Searching the collection",
     )

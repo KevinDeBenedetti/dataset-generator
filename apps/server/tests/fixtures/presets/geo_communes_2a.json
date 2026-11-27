@@ -1,0 +1,43 @@
+[
+ {
+  "nom": "Afa",
+  "code": "2A001",
+  "codesPostaux": [
+   "20167"
+  ],
+  "codeDepartement": "2A",
+  "codeRegion": "94",
+  "population": 3350,
+  "surface": 1192.22,
+  "siren": "212000012",
+  "codeEpci": "242010056"
+ },
+ {
+  "nom": "Ajaccio",
+  "code": "2A004",
+  "codesPostaux": [
+   "20000",
+   "20090",
+   "20167"
+  ],
+  "codeDepartement": "2A",
+  "codeRegion": "94",
+  "population": 76320,
+  "surface": 8248.58,
+  "siren": "212000046",
+  "codeEpci": "242010056"
+ },
+ {
+  "nom": "Alata",
+  "code": "2A006",
+  "codesPostaux": [
+   "20167"
+  ],
+  "codeDepartement": "2A",
+  "codeRegion": "94",
+  "population": 3681,
+  "surface": 3058.18,
+  "siren": "212000061",
+  "codeEpci": "242010056"
+ }
+]

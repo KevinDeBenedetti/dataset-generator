@@ -326,6 +326,47 @@ def client_for(test_db: Session, datasets_db):
 
 
 @pytest.fixture(autouse=True)
+def _no_hub_token_checks(monkeypatch):
+    """The token re-checks (auth/hf_token.py) never reach the real Hub: the Hub
+    is "unavailable" to them, which lets every publication through unless a
+    test sets its own answers."""
+    from server.auth import hf_token
+
+    def unavailable(_token):
+        raise hf_token.HubUnavailable()
+
+    monkeypatch.setattr(hf_token, "whoami_fetcher", unavailable)
+    hf_token.clear_check_cache()
+    yield
+    hf_token.clear_check_cache()
+
+
+@pytest.fixture(autouse=True)
+def _draft_store(monkeypatch, tmp_path):
+    """Each test's draft store is a fresh temporary directory."""
+    from server.core.config import config
+
+    root = tmp_path / "drafts"
+    monkeypatch.setattr(config, "draft_store_url", f"file://{root}")
+    return root
+
+
+@pytest.fixture(autouse=True)
+def _no_secrets_admin(monkeypatch):
+    """No admin from deployment secrets unless a test sets one (a developer's
+    .env must not change what the suite sees)."""
+    from server.core.config import config
+
+    for name in (
+        "admin_username",
+        "admin_password_hash",
+        "admin_password",
+        "admin_totp_secret",
+    ):
+        monkeypatch.setattr(config, name, "")
+
+
+@pytest.fixture(autouse=True)
 def _plain_session_cookies(monkeypatch):
     """The suite talks to the app over plain http (TestClient): outside
     development the cookies would be Secure and ``__Host-`` prefixed, which an
@@ -349,6 +390,8 @@ def _reset_login_rate_limiter():
         rate_limit.refresh_rate_limiter,
         rate_limit.sso_rate_limiter,
         rate_limit.secrets_rate_limiter,
+        rate_limit.admin_login_rate_limiter,
+        rate_limit.hf_login_rate_limiter,
     )
     for limiter in limiters:
         limiter.clear()

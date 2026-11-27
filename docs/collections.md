@@ -42,6 +42,12 @@ that version in place. Outside the app, the name is an alias in Qdrant.
 rows, each with its cosine similarity and a link to the row in the dataset
 viewer, at the commit the collection was built from.
 
+A collection built from a corpus dataset (a recipe's
+[corpus documents](recipes.md#corpus-documents)) keeps each document's typed
+`metadata` in its points, and `POST /collections/{id}/search` takes
+`filters`: up to ten `metadata.<column>` fields with the value a hit must
+have, such as `{"query": "port", "filters": {"metadata.departement": "29"}}`.
+
 ## Test it
 
 **Retrieval test** samples rows of the split (50 to 500). Each one asks with

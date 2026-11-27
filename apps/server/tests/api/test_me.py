@@ -55,6 +55,8 @@ def test_saving_a_key_returns_status_only(alice, client_for, ok_check):
         "configured": True,
         "hint": CANARY[-4:],
         "updated_at": body["secret"]["updated_at"],
+        "last_checked_at": None,
+        "last_state": None,
     }
     assert CANARY not in response.text
     assert response.headers["cache-control"] == "no-store"

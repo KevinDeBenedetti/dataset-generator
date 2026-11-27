@@ -8,7 +8,7 @@ without patching anything.
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from server.services.hub_repo import (
     DatasetMoved,
@@ -129,20 +129,44 @@ class InMemoryHub:
         self._append(repo, repo_id, {".gitattributes": b""}, "initial commit")
 
     def commit(
-        self, repo_id: str, files: Mapping[str, bytes], parent: str, message: str
+        self,
+        repo_id: str,
+        files: Mapping[str, Any],
+        parent: str,
+        message: str,
+        delete: Sequence[str] = (),
     ) -> str:
+        from pathlib import Path
+
         if self.before_commit:
             self.before_commit.pop(0)()
         repo = self._repos[repo_id]
         if repo.commits[-1].oid != parent:
             raise DatasetMoved(f"The dataset '{repo_id}' changed since it was read.")
-        return self._append(repo, repo_id, files, message)
+        contents = {
+            path: value.read_bytes() if isinstance(value, Path) else value
+            for path, value in files.items()
+        }
+        return self._append(repo, repo_id, contents, message, delete)
+
+    def list_files(self, repo_id: str, commit: str) -> List[str]:
+        for known in self._repos[repo_id].commits:
+            if known.oid == commit:
+                return sorted(known.files)
+        raise DatasetUnreadable(f"'{repo_id}' has no commit {commit}")
 
     def _append(
-        self, repo: _Repo, repo_id: str, files: Mapping[str, bytes], message: str
+        self,
+        repo: _Repo,
+        repo_id: str,
+        files: Mapping[str, bytes],
+        message: str,
+        delete: Sequence[str] = (),
     ) -> str:
         previous = repo.commits[-1] if repo.commits else None
         merged = {**(previous.files if previous else {}), **files}
+        for path in delete:
+            merged.pop(path, None)
         seed = f"{repo_id}:{len(repo.commits)}:{message}".encode()
         oid = hashlib.sha1(seed, usedforsecurity=False).hexdigest()
         repo.commits.append(

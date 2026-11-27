@@ -24,10 +24,10 @@ read. A GitHub token saved in **Settings** only raises the API quota from 60 to
 Two jobs read all your public repos, forks and archived ones aside, and
 publish to the dataset repos saved in **Settings**:
 
-| Job                 | What it builds                                                         | Publishes to            |
-| ------------------- | ---------------------------------------------------------------------- | ----------------------- |
-| GitHub personal Q&A | Q&A pairs from your profile, the READMEs and the `docs/` folders       | The Q&A dataset repo    |
-| Knowledge corpus    | A retrieval corpus (profile, repos, code chunks, docs), with no model  | The corpus dataset repo |
+| Job                 | What it builds                                                        | Publishes to            |
+| ------------------- | --------------------------------------------------------------------- | ----------------------- |
+| GitHub personal Q&A | Q&A pairs from your profile, the READMEs and the `docs/` folders      | The Q&A dataset repo    |
+| Knowledge corpus    | A retrieval corpus (profile, repos, code chunks, docs), with no model | The corpus dataset repo |
 
 **GitHub personal Q&A** is incremental like a recipe, and stops at a draft
 reviewed on its card: untick the new pairs you don't want, tick the held-out
@@ -164,21 +164,21 @@ delete it at the next publication; fix it on the Hub, or use *Full Refresh*.
 
 ## API
 
-| Route                                  | Returns                                                       |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `GET /github/profile`                  | Your account and the API quota left                           |
-| `GET /github/repos`                    | Your public repos, with whether a generation takes them       |
-| `GET /github/repos/{owner}/{repo}`     | README, `docs/` files, detected stack and the overview text   |
-| `GET /github/repos/{owner}/{repo}/doc` | One `docs/` file (`path`), cut where a generation cuts it     |
-| `GET /recipes`, `POST /recipes`        | Your recipes; a new one                                       |
-| `GET/PUT/DELETE /recipes/{recipe_id}`  | One recipe (another user's answers 404)                       |
-| `POST /recipes/{recipe_id}/run`        | Queues a generation; follow it with `GET /jobs/runs/{run_id}` |
-| `…/recipes/{recipe_id}/schedule`       | `GET`, `PUT`, `DELETE`: when it regenerates by itself         |
-| `GET /jobs`                            | The whole-account jobs, with their options and latest run     |
-| `POST /jobs/{job_id}/run`              | Queues one of them (`options`, `model_ref`)                   |
-| `…/jobs/{job_id}/schedule`             | `GET`, `PUT`, `DELETE`: when one of them runs by itself       |
-| `POST /jobs/runs/{run_id}/publish`     | Publishes the reviewed draft: `exclude`, `promote`, `edits`   |
-| `GET /jobs/runs/{run_id}/checks`       | Near-duplicates and quality-rule failures of the draft        |
+| Route                                         | Returns                                                       |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `GET /github/profile`                         | Your account and the API quota left                           |
+| `GET /github/repos`                           | Your public repos, with whether a generation takes them       |
+| `GET /github/repos/{owner}/{repo}`            | README, `docs/` files, detected stack and the overview text   |
+| `GET /github/repos/{owner}/{repo}/doc`        | One `docs/` file (`path`), cut where a generation cuts it     |
+| `GET /github/recipes`, `POST /github/recipes` | Your recipes; a new one                                       |
+| `GET/PUT/DELETE /github/recipes/{recipe_id}`  | One recipe (another user's answers 404)                       |
+| `POST /github/recipes/{recipe_id}/run`        | Queues a generation; follow it with `GET /jobs/runs/{run_id}` |
+| `…/github/recipes/{recipe_id}/schedule`       | `GET`, `PUT`, `DELETE`: when it regenerates by itself         |
+| `GET /jobs`                                   | The whole-account jobs, with their options and latest run     |
+| `POST /jobs/{job_id}/run`                     | Queues one of them (`options`, `model_ref`)                   |
+| `…/jobs/{job_id}/schedule`                    | `GET`, `PUT`, `DELETE`: when one of them runs by itself       |
+| `POST /jobs/runs/{run_id}/publish`            | Publishes the reviewed draft: `exclude`, `promote`, `edits`   |
+| `GET /jobs/runs/{run_id}/checks`              | Near-duplicates and quality-rule failures of the draft        |
 
 GitHub answers are cached 5 minutes per account. Errors: `400` without a GitHub
 username in **Settings**, `404` outside your account or for a repo that isn't

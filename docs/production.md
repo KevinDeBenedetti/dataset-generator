@@ -65,7 +65,9 @@ its budget and revocation stay in the gateway. Other users always bring their
 own key.
 
 Required in the deployment's secrets/config: `DATABASE_URL`, `AUTH_SECRET_KEY`,
-`SECRETS_ENCRYPTION_KEYS`, `FRONTEND_URL` (https), and at least one SSO pair
+`SECRETS_ENCRYPTION_KEYS`, `FRONTEND_URL` (https), `ADMIN_USERNAME` and
+`ADMIN_PASSWORD_HASH` (optionally `ADMIN_TOTP_SECRET`, and `ADMIN_HF_TOKEN` for the
+admin's Hub token), and at least one SSO pair
 (`INFOMANIAK_CLIENT_ID`/`SECRET` or `GITHUB_CLIENT_ID`/`SECRET`); recommended:
 `ADMIN_EMAILS`, `REDIS_URL`, `FORWARDED_ALLOW_IPS`. The Next image
 needs only `API_INTERNAL_URL` (the API's in-cluster URL).

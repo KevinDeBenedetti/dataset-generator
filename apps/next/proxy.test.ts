@@ -27,6 +27,15 @@ describe('proxy', () => {
     expect(proxy(request('/login')).headers.get('location')).toBeNull()
   })
 
+  it("lets the admin's sign-in page through without a session", async () => {
+    const { proxy } = await gate()
+    expect(proxy(request('/admin/login')).headers.get('location')).toBeNull()
+    // The rest of /admin stays behind the gate.
+    expect(proxy(request('/admin')).headers.get('location')).toBe(
+      'http://localhost:3020/login?from=%2Fadmin',
+    )
+  })
+
   it('sends a protected page to /login, remembering where', async () => {
     const { proxy } = await gate()
     const location = proxy(request('/datasets')).headers.get('location')

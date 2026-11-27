@@ -27,7 +27,7 @@ function UserRow({ user, me }: { user: AdminUser; me?: string }) {
   return (
     <tr>
       <td data-label={t('account')}>
-        <div style={{ fontWeight: 500 }}>{user.email}</div>
+        <div style={{ fontWeight: 500 }}>{user.hf_username ?? user.email ?? user.id}</div>
         <div className="hint">
           {[...user.providers, user.has_password ? t('password') : null]
             .filter(Boolean)
@@ -82,9 +82,16 @@ function UserRow({ user, me }: { user: AdminUser; me?: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => {
-                  if (window.confirm(t('confirmDelete', { email: user.email }))) {
+                  if (
+                    window.confirm(
+                      t('confirmDelete', { email: user.hf_username ?? user.email ?? user.id }),
+                    )
+                  ) {
                     remove.mutate(user.id, {
-                      onSuccess: () => toast.success(t('deleted', { email: user.email })),
+                      onSuccess: () =>
+                        toast.success(
+                          t('deleted', { email: user.hf_username ?? user.email ?? user.id }),
+                        ),
                       onError: fail,
                     })
                   }

@@ -41,7 +41,7 @@ function contentSecurityPolicy(nonce: string): string {
 // shell: /dashboard, /datasets, /generate, /jobs, /quality, /sources, …) is
 // gated — new app routes are protected automatically, no per-route allowlist
 // to maintain.
-const PUBLIC_PATHS = new Set(['/', '/login'])
+const PUBLIC_PATHS = new Set(['/', '/login', '/admin/login'])
 
 // Proxy-level gate: presence of the auth cookie. The cookie is httpOnly and set
 // by the API on host `localhost` (shared across ports in dev), so the proxy can

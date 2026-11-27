@@ -293,3 +293,182 @@ class TestLocalLoginSwitch:
         )
         assert response.status_code == 404
         assert "access_token" not in response.headers.get("set-cookie", "")
+
+
+class TestAdminLogin:
+    """POST /auth/admin/login: the admin, from the deployment's secrets only."""
+
+    PASSWORD = "correct horse battery staple"
+    TOTP = "JBSWY3DPEHPK3PXPJBSWY3DP"
+
+    @pytest.fixture(autouse=True)
+    def admin_env(self, monkeypatch):
+        from server.auth.admin_secrets import hash_password
+
+        monkeypatch.setattr(config, "admin_username", "operator")
+        monkeypatch.setattr(config, "admin_password_hash", hash_password(self.PASSWORD))
+
+    def _login(self, client, **overrides):
+        body = {"username": "operator", "password": self.PASSWORD, **overrides}
+        return client.post("/auth/admin/login", json=body)
+
+    def test_signs_the_admin_in(self, client, test_db):
+        resp = self._login(client)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["role"] == "admin"
+        assert resp.json()["provider"] == "secrets"
+        assert client.get("/auth/me").json()["role"] == "admin"
+        # The admin's routes answer (the role is in the session).
+        assert client.get("/admin/users").status_code == 200
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [{"password": "wrong"}, {"username": "someone"}, {"otp": "000000"}],
+    )
+    def test_every_failure_looks_alike(self, client, overrides, monkeypatch):
+        if "otp" in overrides:
+            monkeypatch.setattr(config, "admin_totp_secret", self.TOTP)
+        resp = self._login(client, **overrides)
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Incorrect username, password or code"
+
+    def test_the_totp_code_is_asked_for_when_configured(self, client, monkeypatch):
+        import time
+
+        from server.auth.admin_secrets import totp_code
+
+        monkeypatch.setattr(config, "admin_totp_secret", self.TOTP)
+        assert client.get("/auth/providers").json()["admin_totp"] is True
+        assert self._login(client).status_code == 401
+        assert (
+            self._login(client, otp=totp_code(self.TOTP, time.time())).status_code
+            == 200
+        )
+
+    def test_five_failures_a_minute_then_429(self, client):
+        for _ in range(5):
+            assert self._login(client, password="wrong").status_code == 401
+        assert self._login(client).status_code == 429
+
+    def test_audits_without_the_submitted_values(self, client, test_db):
+        from server.models.identity import AuditLog
+
+        self._login(client, password="leaked-guess-123")
+        self._login(client)
+        entries = test_db.query(AuditLog).order_by(AuditLog.id).all()
+        actions = [e.action for e in entries]
+        assert "admin.login.failure" in actions and "admin.login.success" in actions
+        dumped = repr([(e.detail, e.actor_label, e.target_label) for e in entries])
+        assert "leaked-guess-123" not in dumped and self.PASSWORD not in dumped
+        failure = next(e for e in entries if e.action == "admin.login.failure")
+        assert failure.ip
+
+    def test_a_rotated_hash_refuses_the_old_password(self, client, monkeypatch):
+        from server.auth.admin_secrets import hash_password
+
+        assert self._login(client).status_code == 200
+        monkeypatch.setattr(
+            config, "admin_password_hash", hash_password("new-one-456789")
+        )
+        assert self._login(client).status_code == 401
+        # The session already open survives until "sign out everywhere".
+        assert client.get("/auth/me").status_code == 200
+
+    def test_not_found_without_secrets(self, client, monkeypatch):
+        monkeypatch.setattr(config, "admin_username", "")
+        assert self._login(client).status_code == 404
+
+    def test_the_admin_is_locked_in_the_backoffice(self, client, test_db):
+        admin_id = self._login(client).json()["id"]
+        resp = client.patch(f"/admin/users/{admin_id}", json={"is_active": False})
+        assert resp.status_code in (400, 409, 422)
+
+
+class TestHfLogin:
+    """POST /auth/hf: a user, with their Hugging Face username and token."""
+
+    TOKEN = "hf_" + "c" * 34
+
+    @pytest.fixture(autouse=True)
+    def hub(self, monkeypatch):
+        import json
+        from pathlib import Path
+
+        from server.auth import hf_token
+        from server.services import platform
+
+        fixtures = Path(__file__).resolve().parent.parent / "fixtures" / "hf_whoami"
+        self.answers = {
+            self.TOKEN: json.loads((fixtures / "write.json").read_text()),
+            "hf_" + "r" * 34: json.loads((fixtures / "read.json").read_text()),
+        }
+
+        def fetch(token):
+            if token not in self.answers:
+                raise hf_token.SignInRefused(
+                    "token_invalid", "Hugging Face rejected this token"
+                )
+            return self.answers[token]
+
+        monkeypatch.setattr(hf_token, "whoami_fetcher", fetch)
+        monkeypatch.setattr(platform, "signup_policy", lambda: "open")
+
+    def _login(self, client, username="alice", token=None):
+        return client.post(
+            "/auth/hf", json={"username": username, "token": token or self.TOKEN}
+        )
+
+    def test_signs_in_and_never_returns_the_token(self, client):
+        resp = self._login(client)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["name"] == "alice" and body["provider"] == "hf"
+        assert self.TOKEN not in resp.text
+        me = client.get("/auth/me")
+        assert me.status_code == 200 and self.TOKEN not in me.text
+        secrets = client.get("/me/secrets")
+        assert secrets.status_code == 200 and self.TOKEN not in secrets.text
+
+    @pytest.mark.parametrize(
+        "username,token,status,code",
+        [
+            ("bob", None, 401, "token_other_account"),
+            ("alice", "hf_" + "r" * 34, 403, "token_read_only"),
+            ("alice", "hf_" + "z" * 34, 401, "token_invalid"),
+            ("alice", "not-a-token", 401, "token_malformed"),
+        ],
+    )
+    def test_each_refusal_has_its_code(self, client, username, token, status, code):
+        resp = self._login(client, username, token)
+        assert resp.status_code == status
+        assert resp.json()["code"] == code
+
+    def test_refusals_are_translated(self, client):
+        resp = client.post(
+            "/auth/hf",
+            json={"username": "bob", "token": self.TOKEN},
+            headers={"Accept-Language": "fr"},
+        )
+        assert resp.json()["detail"] == "Ce jeton appartient à un autre compte"
+
+    def test_closed_sign_up_refuses_a_new_account(self, client, monkeypatch):
+        from server.services import platform
+
+        monkeypatch.setattr(platform, "signup_policy", lambda: "closed")
+        resp = self._login(client)
+        assert resp.status_code == 403 and resp.json()["code"] == "signup_closed"
+
+    def test_ten_failures_a_minute_then_429(self, client):
+        for _ in range(10):
+            assert self._login(client, token="hf_" + "z" * 34).status_code == 401
+        assert self._login(client).status_code == 429
+
+    def test_a_hub_outage_answers_503(self, client, monkeypatch):
+        from server.auth import hf_token
+
+        def down(_token):
+            raise hf_token.HubUnavailable()
+
+        monkeypatch.setattr(hf_token, "whoami_fetcher", down)
+        resp = self._login(client)
+        assert resp.status_code == 503 and resp.json()["code"] == "hub_unavailable"

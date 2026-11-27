@@ -4,7 +4,7 @@
 // these higher-level helpers (which unwrap responses, flatten errors and add the
 // SSE streaming endpoint) live here, in a file the generator never touches.
 import { client } from './gen/client.gen'
-import { ApiError, apiError, errorStatus, getErrorMessage } from './errors'
+import { ApiError, apiError, errorStatus, getErrorMessage, SignInError } from './errors'
 import { fetchWithRefresh, needsNoRefresh, tryRefreshSession } from './refresh'
 
 // Callers import the error type from here, with the rest of the client.
@@ -662,7 +662,7 @@ export function getHubCompare(repo: HubRepoRef, query: HubCompareQuery): Promise
   return hubGet(hubPath(repo, `/compare${params}`), 'Failed to compare the versions')
 }
 
-// ── GitHub browse (/github/*) and dataset recipes (/recipes) ─────────────────
+// ── GitHub browse (/github/*) and dataset recipes (/github/recipes) ─────────────────
 // What a GitHub-fed dataset is made of: your public GitHub data, and the
 // recipes that pick from it and name the Hugging Face repo they publish to.
 
@@ -750,27 +750,32 @@ export function runResumeDataset(id: string, body: ResumeRunRequest): Promise<Jo
 }
 
 export function getRecipes(): Promise<RecipesOut> {
-  return hubGet('/recipes', 'Failed to list your recipes')
+  return hubGet('/github/recipes', 'Failed to list your recipes')
 }
 
 export function createRecipe(recipe: RecipeIn): Promise<RecipeOut> {
-  return apiSend('POST', '/recipes', recipe, 'Failed to create the recipe')
+  return apiSend('POST', '/github/recipes', recipe, 'Failed to create the recipe')
 }
 
 export function updateRecipe(id: string, recipe: RecipeIn): Promise<RecipeOut> {
-  return apiSend('PUT', `/recipes/${encodeURIComponent(id)}`, recipe, 'Failed to save the recipe')
+  return apiSend(
+    'PUT',
+    `/github/recipes/${encodeURIComponent(id)}`,
+    recipe,
+    'Failed to save the recipe',
+  )
 }
 
 export function deleteRecipe(id: string): Promise<void> {
   return apiSend(
     'DELETE',
-    `/recipes/${encodeURIComponent(id)}`,
+    `/github/recipes/${encodeURIComponent(id)}`,
     undefined,
     'Failed to delete the recipe',
   )
 }
 
-const recipeSchedulePath = (id: string) => `/recipes/${encodeURIComponent(id)}/schedule`
+const recipeSchedulePath = (id: string) => `/github/recipes/${encodeURIComponent(id)}/schedule`
 
 /** The recipe's schedule, or null when it has none (404). */
 export async function getRecipeSchedule(id: string): Promise<RecipeScheduleOut | null> {
@@ -799,7 +804,7 @@ export function deleteRecipeSchedule(id: string): Promise<void> {
 export function runRecipe(id: string, request: RecipeRunRequest = {}): Promise<JobRunOut> {
   return apiSend(
     'POST',
-    `/recipes/${encodeURIComponent(id)}/run`,
+    `/github/recipes/${encodeURIComponent(id)}/run`,
     request,
     'Failed to start the generation',
   )
@@ -923,9 +928,13 @@ export async function duplicateDataset(
 
 export interface AuthUser {
   id: string
-  email: string
+  email: string | null
+  // The HF username, else the email: how the app names the account.
+  name: string
   role: 'user' | 'admin'
   provider: string
+  hf_username?: string | null
+  hf_avatar_url?: string | null
 }
 
 export async function login(email: string, password: string): Promise<AuthUser> {
@@ -936,6 +945,42 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   })
   if (response.error) {
     throw apiError(response, 'Incorrect email or password')
+  }
+  return response.data as unknown as AuthUser
+}
+
+// A user's sign-in with their Hugging Face username and token (POST /auth/hf).
+// A refusal carries the API's reason code (token_read_only, signup_closed…).
+export async function hfLogin(username: string, token: string): Promise<AuthUser> {
+  const response = await client.post<AuthUser>({
+    url: '/auth/hf',
+    body: { username, token },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    const body = response.error as { code?: unknown }
+    throw new SignInError(
+      getErrorMessage(response.error, 'Sign-in failed'),
+      response.response?.status,
+      typeof body?.code === 'string' ? body.code : undefined,
+    )
+  }
+  return response.data as unknown as AuthUser
+}
+
+// The admin's sign-in, against the deployment's secrets (POST /auth/admin/login).
+export async function adminLogin(
+  username: string,
+  password: string,
+  otp?: string,
+): Promise<AuthUser> {
+  const response = await client.post<AuthUser>({
+    url: '/auth/admin/login',
+    body: { username, password, otp: otp || null },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) {
+    throw apiError(response, 'Incorrect username, password or code')
   }
   return response.data as unknown as AuthUser
 }
@@ -1071,6 +1116,7 @@ export interface AuthProviders {
   providers: { name: string; label: string; configured: boolean }[]
   local_login: boolean
   signup_open: boolean
+  admin_totp: boolean
 }
 
 export async function getAuthProviders(): Promise<AuthProviders> {
@@ -1138,6 +1184,9 @@ export interface SecretStatus {
   configured: boolean
   hint?: string | null
   updated_at?: string | null
+  // The provider's last answer about it (the Hugging Face token's re-checks).
+  last_checked_at?: string | null
+  last_state?: 'ok' | 'revoked' | 'read_only' | null
 }
 
 export interface SecretCheck {
@@ -1218,7 +1267,8 @@ export async function saveSettings(
 
 export interface AdminUser {
   id: string
-  email: string
+  email: string | null
+  hf_username?: string | null
   role: 'user' | 'admin'
   is_active: boolean
   locked: boolean
@@ -1248,6 +1298,8 @@ export interface PlatformSwitch {
   label: string
   value: unknown
   overridden: boolean
+  // The values a choice switch takes (the sign-up policy); null otherwise.
+  choices?: string[] | null
 }
 
 export interface AdminUsage {
@@ -1319,4 +1371,519 @@ export async function deleteMyAccount(): Promise<void> {
   if (response.error) {
     throw apiError(response, 'Failed to delete your account')
   }
+}
+
+// ── Tabular drafts (/runs/{id}/draft, /runs/{id}/review) ─────────────────────
+// Hand-written: mirrors apps/server/api/runs.py.
+
+export interface TabularColumn {
+  name: string
+  type: string
+  original?: string
+}
+
+export interface PiiCandidate {
+  column: string
+  kind: string
+  share: number | null
+  sampled: number
+  reason: string
+  masked: boolean
+  suggested_step: Record<string, unknown>
+}
+
+export interface QualityRuleResult {
+  rule: string
+  status: 'pass' | 'warn' | 'block'
+  message: string
+  column?: string
+}
+
+export interface TabularQualityReport {
+  pii?: PiiCandidate[]
+  structure?: {
+    rows: number
+    empty_columns: string[]
+    constant_columns: string[]
+    mostly_empty_columns: { column: string; share: number }[]
+    duplicated_rows: number
+    previous_rows: number | null
+    rows_change: number | null
+  }
+  rules?: QualityRuleResult[]
+  blocking?: QualityRuleResult[]
+}
+
+export interface ColumnProfile {
+  type: string
+  nb_missing_values: number
+  nb_distinct: number
+  min?: unknown
+  max?: unknown
+  mean?: number | null
+  std?: number | null
+  tops?: { value: unknown; count: number }[]
+  samples?: unknown[]
+}
+
+export interface TabularDraft {
+  run_id: string
+  status: string
+  // 'table', or 'corpus' for a corpus recipe's documents.
+  kind: string
+  recipe_id: string | null
+  data_source_id: string | null
+  target_repo: string | null
+  visibility: string | null
+  provenance: Record<string, unknown>
+  rows: number
+  source_rows: number
+  schema: TabularColumn[]
+  profile: { rows?: number; columns?: Record<string, ColumnProfile> }
+  quality_report: TabularQualityReport
+  blocking: QualityRuleResult[]
+  step_rows: number[]
+  steps: Record<string, unknown>[]
+  // What stopped the fetch early (a REST API's max_pages…), if anything.
+  warnings?: string[]
+  changes: {
+    added: string[]
+    removed: string[]
+    retyped: { column: string; from: string; to: string }[]
+    rows_before: number | null
+    rows_after: number | null
+  } | null
+  review: { decision: string; comment: string | null; created_at: string | null } | null
+  published_url: string | null
+  // Why the draft can't be public (its licence), when it can't.
+  public_refusal?: string | null
+}
+
+export interface DraftRows {
+  total: number
+  offset: number
+  limit: number
+  columns: string[]
+  rows: Record<string, unknown>[]
+}
+
+export interface DraftRowsQuery {
+  offset?: number
+  limit?: number
+  sort?: string | null
+  desc?: boolean
+  filter_column?: string | null
+  filter_value?: string | null
+}
+
+export function getTabularDraft(runId: string): Promise<TabularDraft> {
+  return hubGet(`/runs/${encodeURIComponent(runId)}/draft`, 'Failed to load the draft')
+}
+
+export function getDraftRows(runId: string, query: DraftRowsQuery): Promise<DraftRows> {
+  return hubGet(
+    `/runs/${encodeURIComponent(runId)}/draft/rows${toQuery({
+      offset: query.offset,
+      limit: query.limit,
+      sort: query.sort ?? undefined,
+      desc: query.desc ? 'true' : undefined,
+      filter_column: query.filter_value ? (query.filter_column ?? undefined) : undefined,
+      filter_value: query.filter_value || undefined,
+    })}`,
+    'Failed to load the rows',
+  )
+}
+
+export function reviewTabularDraft(
+  runId: string,
+  decision: 'approved' | 'rejected',
+  comment?: string,
+): Promise<{ decision: string; status: string | null; published_url?: string | null }> {
+  return apiSend(
+    'POST',
+    `/runs/${encodeURIComponent(runId)}/review`,
+    { decision, comment: comment || null },
+    'Failed to record the review',
+  )
+}
+
+// A recipe of the open-data path (/recipes): only what the review changes.
+export function appendRecipeStep(
+  recipeId: string,
+  steps: Record<string, unknown>[],
+): Promise<unknown> {
+  return client
+    .patch({
+      url: `/recipes/${encodeURIComponent(recipeId)}`,
+      body: { steps },
+      headers: { 'Content-Type': 'application/json' },
+    })
+    .then((response) => {
+      if (response.error) throw apiError(response, 'Failed to save the recipe')
+      return response.data
+    })
+}
+
+// ── Data sources, recipes and their runs (/data-sources, /recipes, /runs) ────
+// Hand-written: mirrors apps/server/api/data_sources.py and runs.py.
+
+export interface ConnectorSpec {
+  kind: string
+  title: string
+  description: string
+  config_schema: Record<string, unknown>
+  secret_kind?: string | null
+  created_by_upload?: boolean
+}
+
+export interface DataSource {
+  id: string
+  name: string
+  connector: string
+  config: Record<string, unknown>
+  secret_kind?: string | null
+  licence?: string | null
+  last_fingerprint?: string | null
+  last_fetched_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RecipeStep {
+  op: string
+  [field: string]: unknown
+}
+
+export interface SourceRecipe {
+  id: string
+  name: string
+  data_source_id: string
+  steps: RecipeStep[]
+  output_kind: 'table' | 'qa' | 'corpus'
+  output_options: Record<string, unknown>
+  target_repo: string
+  visibility: 'private' | 'public'
+  model_ref?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SchemaColumn {
+  name: string
+  type: string
+}
+
+export interface RecipePreview {
+  source_rows: number
+  rows: number
+  schema: SchemaColumn[]
+  step_rows: number[]
+  source_schema: SchemaColumn[]
+  step_schemas: SchemaColumn[][]
+  sample: Record<string, unknown>[]
+  // A facts recipe: the pairs of the first 20 rows (or the template error).
+  pairs?: { question?: string; answer?: string; error?: string }[] | null
+  // A model recipe: groups, the tokens a full run spends, the limit, the
+  // first group's text, and the setting it misses (no model key…).
+  llm?: {
+    groups?: number
+    estimated_tokens?: number
+    limit?: number
+    first_source?: string
+    missing?: string
+    error?: string
+  } | null
+  error: { step: number | null; message: string } | null
+}
+
+export interface RecipeRun {
+  run_id: string
+  status: string
+  recipe_id: string | null
+  recipe_name: string | null
+  rows: number | null
+  started_at: string | null
+  error: string | null
+  published_url: string | null
+  to_review: boolean
+  // table → /runs/{id}/review; qa → /drafts/runs/{id}.
+  kind?: string | null
+}
+
+export interface UploadSourceParams {
+  file: File
+  name: string
+  licence?: string
+  format?: string
+  delimiter?: string
+  encoding?: string
+  sheet?: string
+}
+
+async function send<T>(
+  method: 'post' | 'patch' | 'delete',
+  url: string,
+  body: unknown,
+  fallback: string,
+): Promise<T> {
+  const response = await client[method]<T>({
+    url,
+    ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
+  })
+  if (response.error) throw apiError(response, fallback)
+  return response.data as unknown as T
+}
+
+export function listConnectors(): Promise<{ connectors: ConnectorSpec[] }> {
+  return hubGet('/connectors', 'Failed to list the connectors')
+}
+
+export function listDataSources(): Promise<{ data_sources: DataSource[] }> {
+  return hubGet('/data-sources', 'Failed to list your data sources')
+}
+
+export function deleteDataSource(id: string): Promise<void> {
+  return send('delete', `/data-sources/${encodeURIComponent(id)}`, undefined, 'Failed to delete')
+}
+
+// Multipart upload with progress (fetch can't report it): one retry after a
+// refreshed session, like fetchWithRefresh.
+export function uploadDataSource(
+  params: UploadSourceParams,
+  onProgress?: (done: number, total: number) => void,
+): Promise<DataSource> {
+  const form = new FormData()
+  form.append('file', params.file)
+  form.append('name', params.name)
+  for (const key of ['licence', 'format', 'delimiter', 'encoding', 'sheet'] as const) {
+    const value = params[key]
+    if (value) form.append(key, value)
+  }
+  const base = (client.getConfig().baseUrl ?? '').replace(/\/$/, '')
+  const url = `${base}/data-sources/upload`
+  const attempt = () =>
+    new Promise<{ status: number; body: unknown }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', url)
+      xhr.withCredentials = true
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress?.(e.loaded, e.total)
+      })
+      xhr.addEventListener('load', () => {
+        let body: unknown = null
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {
+          body = null
+        }
+        resolve({ status: xhr.status, body })
+      })
+      xhr.addEventListener('error', () => reject(new ApiError('Network error during the upload')))
+      xhr.send(form)
+    })
+  return attempt().then(async (first) => {
+    let result = first
+    const origin = new URL(url, window.location.href).origin
+    if (result.status === 401 && (await tryRefreshSession(origin))) {
+      result = await attempt()
+    }
+    if (result.status >= 400) {
+      throw new ApiError(getErrorMessage(result.body, 'Upload failed'), result.status)
+    }
+    return result.body as DataSource
+  })
+}
+
+export function listSourceRecipes(): Promise<{ recipes: SourceRecipe[] }> {
+  return hubGet('/recipes', 'Failed to list your recipes')
+}
+
+export function getSourceRecipe(id: string): Promise<SourceRecipe> {
+  return hubGet(`/recipes/${encodeURIComponent(id)}`, 'Failed to load the recipe')
+}
+
+export function createSourceRecipe(body: {
+  name: string
+  data_source_id: string
+  target_repo: string
+  steps?: RecipeStep[]
+}): Promise<SourceRecipe> {
+  return send('post', '/recipes', body, 'Failed to create the recipe')
+}
+
+export function updateSourceRecipe(id: string, body: Partial<SourceRecipe>): Promise<SourceRecipe> {
+  return send('patch', `/recipes/${encodeURIComponent(id)}`, body, 'Failed to save the recipe')
+}
+
+export function deleteSourceRecipe(id: string): Promise<void> {
+  return send('delete', `/recipes/${encodeURIComponent(id)}`, undefined, 'Failed to delete')
+}
+
+export function previewSourceRecipe(id: string, steps?: RecipeStep[]): Promise<RecipePreview> {
+  return send(
+    'post',
+    `/recipes/${encodeURIComponent(id)}/preview`,
+    { steps: steps ?? null },
+    'Failed to preview the recipe',
+  )
+}
+
+export function runSourceRecipe(id: string): Promise<JobRunOut> {
+  return send('post', `/recipes/${encodeURIComponent(id)}/run`, undefined, 'Failed to run')
+}
+
+export function listRecipeRuns(): Promise<{ runs: RecipeRun[] }> {
+  return hubGet('/runs', 'Failed to list your runs')
+}
+
+export interface ConnectorCandidate {
+  title: string
+  description: string
+  config: Record<string, unknown>
+  extra: Record<string, unknown>
+}
+
+export interface DatagouvResource {
+  id: string
+  title: string | null
+  format: string
+  filesize: number | null
+  last_modified: string | null
+  tabular_api: boolean
+  hosted: boolean
+}
+
+export function discoverConnector(
+  kind: string,
+  q: string,
+): Promise<{ candidates: ConnectorCandidate[] }> {
+  return hubGet(
+    `/connectors/${encodeURIComponent(kind)}/discover${toQuery({ q })}`,
+    'The search failed',
+  )
+}
+
+export function getDatagouvProfile(resourceId: string): Promise<Record<string, unknown>> {
+  return hubGet(
+    `/connectors/datagouv/resources/${encodeURIComponent(resourceId)}/profile`,
+    'Failed to load the profile',
+  )
+}
+
+export function updateDataSource(
+  id: string,
+  body: { name?: string; config?: Record<string, unknown>; licence?: string | null },
+): Promise<DataSource> {
+  return send(
+    'patch',
+    `/data-sources/${encodeURIComponent(id)}`,
+    body,
+    'Failed to save the data source',
+  )
+}
+
+export function createDataSource(body: {
+  name: string
+  connector: string
+  config: Record<string, unknown>
+  licence?: string | null
+}): Promise<DataSource> {
+  return send('post', '/data-sources', body, 'Failed to add the data source')
+}
+
+export function saveDataSourceSecret(id: string, value: string): Promise<{ configured: boolean }> {
+  return client
+    .put({
+      url: `/data-sources/${encodeURIComponent(id)}/secret`,
+      body: { value },
+      headers: { 'Content-Type': 'application/json' },
+    })
+    .then((response) => {
+      if (response.error) throw apiError(response, 'Failed to save the secret')
+      return response.data as unknown as { configured: boolean }
+    })
+}
+
+// A ready-made REST data source of a French public API (#320).
+export interface RestPreset {
+  id: string
+  title: string
+  description: string
+  producer: string
+  licence: string
+  docs_url: string
+  rate_limit_per_s: number
+  max_records: number | null
+  needs_key: boolean
+  key_url: string | null
+  form_schema: {
+    properties?: Record<string, PresetField>
+    required?: string[]
+  }
+  steps: Record<string, unknown>[]
+}
+
+export interface PresetField {
+  type?: string
+  enum?: string[]
+  anyOf?: { type?: string; enum?: string[] }[]
+  default?: unknown
+  description?: string
+  title?: string
+}
+
+export function listRestPresets(): Promise<{ presets: RestPreset[] }> {
+  return hubGet('/connectors/rest/presets', 'Failed to load the presets')
+}
+
+export function restPresetConfig(
+  id: string,
+  params: Record<string, unknown>,
+): Promise<{ name: string; licence: string; config: Record<string, unknown>; needs_key: boolean }> {
+  return send(
+    'post',
+    `/connectors/rest/presets/${encodeURIComponent(id)}`,
+    params,
+    'Failed to fill the preset',
+  )
+}
+
+export function testDataSource(
+  id: string,
+): Promise<{ records: number; columns: string[]; sample: Record<string, unknown>[] }> {
+  return send('post', `/data-sources/${encodeURIComponent(id)}/test`, undefined, 'The test failed')
+}
+
+const sourceRecipeSchedulePath = (id: string) => `/recipes/${encodeURIComponent(id)}/schedule`
+
+export async function getSourceRecipeSchedule(id: string): Promise<RecipeScheduleOut | null> {
+  try {
+    return await hubGet<RecipeScheduleOut>(
+      sourceRecipeSchedulePath(id),
+      "Failed to read the recipe's schedule",
+    )
+  } catch (error) {
+    if (errorStatus(error) === 404) return null
+    throw error
+  }
+}
+
+export async function saveSourceRecipeSchedule(
+  id: string,
+  schedule: RecipeScheduleIn | null,
+): Promise<RecipeScheduleOut | null> {
+  if (schedule === null) {
+    const response = await client.delete({ url: sourceRecipeSchedulePath(id) })
+    if (response.error && response.response?.status !== 404) {
+      throw apiError(response, "Failed to remove the recipe's schedule")
+    }
+    return null
+  }
+  const response = await client.put<RecipeScheduleOut>({
+    url: sourceRecipeSchedulePath(id),
+    body: schedule,
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (response.error) throw apiError(response, "Failed to save the recipe's schedule")
+  return response.data as unknown as RecipeScheduleOut
 }

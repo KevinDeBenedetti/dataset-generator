@@ -213,7 +213,24 @@ def _may_run(db: Session, row: JobSchedule) -> Optional[str]:
         return "its owner's account is disabled"
     if spec.admin_only and owner.role != UserRole.ADMIN:
         return "its owner is no longer an admin"
+    if _hf_token_unusable(db, owner.id):
+        return "its owner's Hugging Face token no longer works"
+    if row.job_id == "recipe":
+        from server.services.recipe_runs import unchanged_reason
+
+        return unchanged_reason(db, owner.id, row.scope)
     return None
+
+
+def _hf_token_unusable(db: Session, owner_id: str) -> bool:
+    """The owner's Hugging Face token was last found revoked or read-only
+    (auth/hf_token.py): the schedule waits until they replace it."""
+    from server.auth.hf_token import UNUSABLE_STATES
+    from server.models.user_secret import UserSecret
+    from server.services.credentials import HF_TOKEN
+
+    row = db.get(UserSecret, {"user_id": owner_id, "kind": HF_TOKEN})
+    return row is not None and row.last_state in UNUSABLE_STATES
 
 
 # How much of a reason a schedule keeps (a model list can be long).
@@ -276,6 +293,8 @@ def queue_due(now: Optional[datetime] = None) -> List[str]:
                 _skip(db, row, reason, now)
                 continue
             options = {**(row.options or {}), "publish": row.publish}
+            if row.job_id == "recipe":
+                options["scheduled"] = True
             try:
                 creds = resolve_credentials(row.owner_id)
                 run = queue_run(row.owner_id, creds, row.job_id, options, row.model_ref)

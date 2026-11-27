@@ -1,0 +1,35 @@
+{
+ "data": [
+  {
+   "__id": 4,
+   "code": 29001,
+   "libelle": "Argol",
+   "population_annuelle_2019": 998,
+   "categorie_population": "a. < 1 000",
+   "centroid": "48.249860637, -4.299018623",
+   "epci": "CC Presqu'île de Crozon-Aulne maritime",
+   "canton": "Crozon"
+  },
+  {
+   "__id": 5,
+   "code": 29002,
+   "libelle": "Arzano",
+   "population_annuelle_2019": 1376,
+   "categorie_population": "b. 1 000 - 3 500",
+   "centroid": "47.893174019, -3.442755537",
+   "epci": "CA Quimperlé Communauté",
+   "canton": "Quimperlé"
+  }
+ ],
+ "links": {
+  "profile": "https://tabular-api.data.gouv.fr/api/resources/984916d0-18e3-439e-a795-352f10389e4f/profile/",
+  "swagger": "https://tabular-api.data.gouv.fr/api/resources/984916d0-18e3-439e-a795-352f10389e4f/swagger/",
+  "next": null,
+  "prev": "https://tabular-api.data.gouv.fr/api/resources/984916d0-18e3-439e-a795-352f10389e4f/data/?page=2&page_size=3"
+ },
+ "meta": {
+  "page": 2,
+  "page_size": 3,
+  "total": 277
+ }
+}

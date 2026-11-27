@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { datasetHref } from '@/components/hub'
 import { useDatasets, useHubDatasets } from '@/hooks'
+import { useRecipeRuns } from '@/hooks/use-data-sources'
+import { reviewHref } from '@/components/recipes/recipe-state'
 import { Sparkline } from './sparkline'
 import { cn } from '@/lib/utils'
 
@@ -70,6 +72,9 @@ export function DashboardOverview() {
   const t = useTranslations('dashboard')
   const hub = useHubDatasets()
   const drafts = useDatasets()
+  // Recipe runs whose table waits for a review (the open-data journey).
+  const { data: recipeRuns } = useRecipeRuns()
+  const toReview = (recipeRuns?.runs ?? []).filter((r) => r.to_review)
   // Capture a single render-stable "now" so derived times stay deterministic.
   const [now] = useState(() => Date.now())
   const hubStatus = errorStatus(hub.error)
@@ -216,11 +221,20 @@ export function DashboardOverview() {
         </div>
         <div className="flex flex-col gap-2">
           <Button asChild variant="secondary" className="w-full justify-between">
-            <Link href="/generate">
-              {t('actions.generate')}
+            <Link href="/sources">
+              {t('actions.addSource')}
               <ArrowRight className="size-4" />
             </Link>
           </Button>
+          {toReview.length > 0 && (
+            <Link
+              href={reviewHref(toReview[0].run_id, toReview[0].kind)}
+              className="-mx-2 inline-flex items-center gap-1.5 px-2 py-2 text-sm text-primary-foreground/80 hover:text-primary-foreground"
+            >
+              <FileClock className="size-4" />
+              {t('actions.toReview', { count: toReview.length })}
+            </Link>
+          )}
           <Link
             href="/datasets"
             className="-mx-2 inline-flex items-center gap-1.5 px-2 py-2 text-sm text-primary-foreground/80 hover:text-primary-foreground"
@@ -254,8 +268,8 @@ export function DashboardOverview() {
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <p className="text-sm text-muted-foreground">{t('recent.empty')}</p>
             <Button asChild size="sm">
-              <Link href="/generate">
-                {t('recent.generate')}
+              <Link href="/sources">
+                {t('recent.addSource')}
                 <ArrowRight className="size-4" />
               </Link>
             </Button>

@@ -66,6 +66,8 @@ class JobOutcome:
     result: JobResult
     # JSON-safe unpublished output, for jobs with a publisher.
     draft: Optional[Dict[str, Any]] = None
+    # The run's final status when not "succeeded" (a run that published itself).
+    status: Optional[str] = None
 
 
 # --- github-personal ----------------------------------------------------------
@@ -561,6 +563,118 @@ class JobSpec:
         return [label for label, present in self.requires if not present(creds)]
 
 
+# --- recipe (a data source's rows, through the engine) -------------------------
+
+
+class TabularRecipeOptions(BaseModel):
+    recipe_id: str = Field(..., min_length=1, max_length=64)
+    publish: bool = SCHEDULED_PUBLISH
+    # Set by the schedule sweep: the run was queued by itself.
+    scheduled: bool = False
+
+
+async def _run_tabular_recipe(
+    creds: Credentials,
+    options: BaseModel,
+    model_ref: Optional[str],
+    progress: ProgressFn,
+) -> JobOutcome:
+    from server.services.queue import current_run_id
+    from server.services.recipe_runs import run_recipe
+
+    from server.services.recipe_runs import publish_scheduled
+
+    opts = TabularRecipeOptions.model_validate(options.model_dump())
+    run_id = current_run_id() or ""
+    draft = await run_recipe(creds, opts.recipe_id, run_id, progress)
+    if opts.scheduled and draft.get("fingerprint") == draft.get("previous_fingerprint"):
+        # Fetched, and the same as last time (a source with no cheap check):
+        # nothing to review, nothing to publish.
+        return JobOutcome(
+            result=JobResult(
+                dry_run=True,
+                metrics=[("Unchanged", "the data source has not changed")],
+            )
+        )
+    if opts.scheduled and opts.publish and draft.get("kind") in ("table", "corpus"):
+        published = await publish_scheduled(creds, run_id, draft)
+        if published:
+            return JobOutcome(
+                result=JobResult(
+                    dry_run=False,
+                    url=published["url"],
+                    metrics=[
+                        ("Rows", draft["rows"]),
+                        ("Published", published["commit"][:7]),
+                    ],
+                ),
+                draft=draft,
+                status="published",
+            )
+    return JobOutcome(
+        result=JobResult(
+            dry_run=True,
+            metrics=[
+                ("Rows", draft["rows"]),
+                ("Source rows", draft["source_rows"]),
+                ("Columns", len(draft["schema"])),
+                *([("New", len(draft["pairs"]))] if draft.get("kind") == "qa" else []),
+                *(
+                    [("Model calls", draft["model_calls"]), ("Groups", draft["groups"])]
+                    if draft.get("kind") == "qa_llm"
+                    else []
+                ),
+            ],
+        ),
+        draft=draft,
+    )
+
+
+def _preview_recipe_draft(data: Dict[str, Any]) -> Dict[str, Any]:
+    """A recipe's Q&A draft reviews like a file draft (facts) or a GitHub Q&A
+    draft (LLM); a table has its own page."""
+    if data.get("kind") == "qa_llm":
+        return _preview_github_personal(data)
+    return _preview_generation(data)
+
+
+async def _publish_recipe_draft(
+    creds: Credentials,
+    data: Dict[str, Any],
+    exclude: Sequence[str],
+    promote: Sequence[str],
+    edits: Dict[str, Dict[str, str]],
+) -> JobResult:
+    if data.get("kind") == "qa_llm":
+        from server.generators.qa_llm import dataset_card, own_recipe_pair
+
+        draft = _draft_from_dict(data)
+        draft.dataset = draft.dataset.with_selection(exclude, promote, edits)
+        result = await run_in_threadpool(
+            qa_build.publish_dataset,
+            creds,
+            draft.dataset,
+            draft.repo_id,
+            own=own_recipe_pair(str(data.get("recipe_id"))),
+            card=lambda foreign: dataset_card(
+                draft.dataset,
+                str(data.get("title") or draft.repo_id),
+                data.get("provenance") or {},
+                foreign,
+            ),
+            commit_message=f"Publish {len(draft.dataset.pairs)} Q&A pairs from rows",
+            base_commit=draft.base_commit,
+        )
+        return JobResult(
+            dry_run=False, url=result["url"], metrics=_qa_metrics(draft.stats())
+        )
+    if data.get("kind") != "qa":
+        raise qa_build.JobError(
+            "A table is approved on its review page (/runs/{id}/review)"
+        )
+    return await _publish_generation(creds, data, exclude, promote, edits)
+
+
 JOBS: Dict[str, JobSpec] = {
     spec.id: spec
     for spec in (
@@ -631,6 +745,19 @@ JOBS: Dict[str, JobSpec] = {
             runner=_run_generation_draft,
             publisher=_publish_generation,
             preview=_preview_generation,
+            listed=False,
+        ),
+        JobSpec(
+            id="recipe",
+            title="Recipe",
+            description="A data source's rows, through the recipe's steps, into a "
+            "table to review. Started from the recipe's page.",
+            requires=(),
+            uses_model=False,
+            options=TabularRecipeOptions,
+            runner=_run_tabular_recipe,
+            publisher=_publish_recipe_draft,
+            preview=_preview_recipe_draft,
             listed=False,
         ),
         JobSpec(

@@ -161,6 +161,22 @@ def test_the_cli_reports_and_uses_a_nonzero_exit_on_error(
     assert "No account" in capsys.readouterr().err
 
 
+def test_without_an_email_the_cli_gives_it_to_the_secrets_admin(
+    monkeypatch, test_db, system, capsys
+):
+    from server.core.config import config
+
+    _legacy_rows(test_db, system)
+    monkeypatch.setattr("server.cli.SessionLocal", lambda: _Borrowed(test_db))
+    assert main(["claim-legacy"]) == 1  # no ADMIN_USERNAME: nobody to give it to
+    assert "no ADMIN_USERNAME" in capsys.readouterr().err
+
+    monkeypatch.setattr(config, "admin_username", "operator")
+    monkeypatch.setattr(config, "admin_password_hash", "$argon2id$v=19$m=8,t=1,p=1$x$y")
+    assert main(["claim-legacy"]) == 0
+    assert "operator@secrets-admin.invalid" in capsys.readouterr().out
+
+
 def test_gen_key_prints_a_ring_entry_that_parses(capsys):
     from server.core.crypto import parse_ring
 

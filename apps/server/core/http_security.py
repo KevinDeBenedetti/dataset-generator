@@ -7,7 +7,7 @@ console's SSE — pass through untouched.
 
 import json
 import re
-from typing import Any, Awaitable, Callable, Iterable, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional
 from urllib.parse import urlsplit
 
 from starlette.exceptions import HTTPException
@@ -147,20 +147,28 @@ class BodySizeLimitMiddleware:
     re-raises from body parsing and turns into the response.
     """
 
-    def __init__(self, app: Any, max_body_bytes: int) -> None:
+    def __init__(
+        self,
+        app: Any,
+        max_body_bytes: int,
+        per_path: Optional[Dict[str, int]] = None,
+    ) -> None:
         self.app = app
         self.max_body_bytes = max_body_bytes
-        self._detail = f"Request body too large (over {max_body_bytes} bytes)"
+        # Paths allowed a larger body (a data source upload).
+        self.per_path = dict(per_path or {})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        limit = self.per_path.get(scope.get("path", ""), self.max_body_bytes)
+        detail = f"Request body too large (over {limit} bytes)"
         declared = _header(scope, b"content-length")
         if declared is not None and declared.isdigit():
-            if int(declared) > self.max_body_bytes:
-                await _send_json(send, 413, {"detail": self._detail})
+            if int(declared) > limit:
+                await _send_json(send, 413, {"detail": detail})
                 return
 
         received = 0
@@ -170,8 +178,8 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_body_bytes:
-                    raise HTTPException(status_code=413, detail=self._detail)
+                if received > limit:
+                    raise HTTPException(status_code=413, detail=detail)
             return message
 
         await self.app(scope, limited_receive, send)

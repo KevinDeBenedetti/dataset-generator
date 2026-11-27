@@ -1,0 +1,19 @@
+{
+  "type": "user",
+  "id": "64f1c0ffee0000000000aaaa",
+  "name": "alice",
+  "fullname": "Alice Example",
+  "email": "alice@example.com",
+  "emailVerified": true,
+  "canPay": false,
+  "periodEnd": null,
+  "isPro": false,
+  "avatarUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/alice.png",
+  "orgs": [
+    {"type": "org", "id": "650000000000000000000001", "name": "open-data-lab", "fullname": "Open Data Lab", "roleInOrg": "write"}
+  ],
+  "auth": {
+    "type": "access_token",
+    "accessToken": {"displayName": "datasetgen", "role": "write", "createdAt": "2026-11-01T10:00:00.000Z"}
+  }
+}

@@ -2,10 +2,15 @@
 
 | key                     | type  | default (no row)                 |
 | ----------------------- | ----- | -------------------------------- |
-| ``allow_signup``         | bool  | true in development, false elsewhere — a first SSO sign-in creates an account |
-| ``allowed_email_domains``| [str] | [] — any domain                  |
+| ``signup_policy``        | str   | ``open`` in development, ``closed`` elsewhere: who a first sign-in may create an account for |
+| ``signup_orgs``          | [str] | [] — the HF organisations of the ``orgs`` policy |
+| ``signup_usernames``     | [str] | [] — HF usernames that may always sign up (invitations) |
 | ``allowed_llm_hosts``    | [str] | [] — api.openai.com only         |
 | ``allow_custom_base_url``| bool  | false                            |
+| ``allowed_sql_hosts``    | [str] | [] — no remote database at all   |
+
+The sign-up policy is applied once, at the first sign-in of an account
+(:func:`check_signup`); existing accounts are not re-checked.
 
 Values are cached for a few seconds per process (they are read on every model
 call); a change made on one replica reaches the others within that delay.
@@ -55,21 +60,59 @@ def _names(kind: str) -> Callable[[Any], List[str]]:
     return check
 
 
+_HF_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,95}$")
+
+
+def _hf_names(value: Any) -> List[str]:
+    """Hugging Face account or organisation names (compared in lower case)."""
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise ValueError("must be a list of names")
+    cleaned = [v.strip().lower().lstrip("@") for v in value if v.strip()]
+    bad = [v for v in cleaned if not _HF_NAME.match(v)]
+    if bad:
+        raise ValueError(f"not a valid Hugging Face name: {', '.join(bad)}")
+    return list(dict.fromkeys(cleaned))
+
+
+# Who a first sign-in may create an account for.
+SIGNUP_CLOSED = "closed"
+SIGNUP_ORGS = "orgs"
+SIGNUP_OPEN = "open"
+SIGNUP_POLICIES = (SIGNUP_CLOSED, SIGNUP_ORGS, SIGNUP_OPEN)
+
+
+def _policy(value: Any) -> str:
+    if value not in SIGNUP_POLICIES:
+        raise ValueError(f"must be one of {', '.join(SIGNUP_POLICIES)}")
+    return value
+
+
 @dataclass(frozen=True)
 class Switch:
     label: str
     default: Callable[[], Any]
     validate: Callable[[Any], Any]
+    # The values a choice switch takes (None: a bool or a list).
+    choices: Optional[tuple] = None
 
 
 SWITCHES: Dict[str, Switch] = {
-    "allow_signup": Switch(
-        "A first sign-in creates an account", lambda: config.allow_signup, _bool
+    "signup_policy": Switch(
+        "Who can sign up: nobody new, members of the organisations below, or any "
+        "Hugging Face account",
+        lambda: SIGNUP_OPEN if config.allow_signup else SIGNUP_CLOSED,
+        _policy,
+        choices=SIGNUP_POLICIES,
     ),
-    "allowed_email_domains": Switch(
-        "Sign-ups limited to these email domains (empty: any)",
-        lambda: config.allowed_email_domains,
-        _names("domain"),
+    "signup_orgs": Switch(
+        "Hugging Face organisations whose members may sign up (the orgs policy)",
+        list,
+        _hf_names,
+    ),
+    "signup_usernames": Switch(
+        "Hugging Face usernames that may always sign up (invitations)",
+        list,
+        _hf_names,
     ),
     "allowed_llm_hosts": Switch(
         "Extra hosts a user's OpenAI-compatible base URL may use (besides api.openai.com)",
@@ -80,6 +123,11 @@ SWITCHES: Dict[str, Switch] = {
         "Users may point at any public https endpoint",
         lambda: config.allow_custom_base_url,
         _bool,
+    ),
+    "allowed_sql_hosts": Switch(
+        "PostgreSQL hosts a remote database data source may read (none: the connector is off)",
+        list,
+        _names("host"),
     ),
 }
 
@@ -123,6 +171,7 @@ def snapshot(locale: str = DEFAULT_LOCALE) -> List[Dict[str, Any]]:
             "label": tr(locale, f"platform.{key}", switch.label),
             "value": stored[key] if key in stored else switch.default(),
             "overridden": key in stored,
+            "choices": list(switch.choices) if switch.choices else None,
         }
         for key, switch in SWITCHES.items()
     ]
@@ -145,6 +194,7 @@ def update(
             validated[key] = None if value is None else SWITCHES[key].validate(value)
         except ValueError as exc:
             raise ValueError(f"{key}: {exc}") from None
+    before = {key: get(key) for key in validated}
     for key, value in validated.items():
         row = db.get(PlatformSetting, key)
         if value is None:
@@ -158,7 +208,11 @@ def update(
         row.updated_at = datetime.now(timezone.utc)
         row.updated_by = actor.id
     audit.record(
-        db, "platform.updated", actor=actor, ip=ip, detail={"changes": validated}
+        db,
+        "platform.updated",
+        actor=actor,
+        ip=ip,
+        detail={"changes": validated, "before": before},
     )
     clear_cache()
     return snapshot(locale)
@@ -167,12 +221,48 @@ def update(
 # --- typed accessors used across the app ---------------------------------------
 
 
+def signup_policy() -> str:
+    value = get("signup_policy")
+    return value if value in SIGNUP_POLICIES else SIGNUP_CLOSED
+
+
 def allow_signup() -> bool:
-    return bool(get("allow_signup"))
+    """Whether anyone at all may sign up: the login page's "a first sign-in
+    creates your account" (and the SSO sign-ups', which know no organisation)."""
+    return signup_policy() == SIGNUP_OPEN
 
 
-def allowed_email_domains() -> List[str]:
-    return list(get("allowed_email_domains") or [])
+def signup_possible() -> bool:
+    """Whether some new account may still be created (an invitation, an org)."""
+    return signup_policy() != SIGNUP_CLOSED or bool(get("signup_usernames"))
+
+
+def check_signup(
+    username: str, orgs: List[str], *, fine_grained: bool = False
+) -> Optional[tuple[str, str]]:
+    """Why a first sign-in of HF account ``username`` (member of ``orgs``, as
+    its token's ``whoami`` lists them) may not create an account, as
+    ``(code, message)``; None when it may."""
+    if username.lower() in (get("signup_usernames") or []):
+        return None
+    policy = signup_policy()
+    if policy == SIGNUP_OPEN:
+        return None
+    if policy == SIGNUP_ORGS:
+        allowed = set(get("signup_orgs") or [])
+        if allowed & {o.lower() for o in orgs}:
+            return None
+        if fine_grained and not orgs:
+            return (
+                "signup_orgs_hidden",
+                "Your token doesn't show your organisations: give it the "
+                "permission to read your organisation memberships, then retry",
+            )
+        return (
+            "signup_not_member",
+            "Sign-up is limited to members of certain organisations",
+        )
+    return ("signup_closed", "Sign-up is closed on this server")
 
 
 def allowed_llm_hosts() -> List[str]:
@@ -180,6 +270,11 @@ def allowed_llm_hosts() -> List[str]:
         "api.openai.com",
         *[h for h in get("allowed_llm_hosts") or [] if h != "api.openai.com"],
     ]
+
+
+def allowed_sql_hosts() -> List[str]:
+    """The database hosts a ``sql_remote`` data source may connect to."""
+    return list(get("allowed_sql_hosts") or [])
 
 
 def allow_custom_base_url() -> bool:

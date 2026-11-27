@@ -209,43 +209,54 @@ def test_platform_switches_override_and_reset_the_env(app, root, test_db, monkey
     monkeypatch.setattr(config, "allow_signup", True)
     client = _as(app, root)
     switches = {s["key"]: s for s in client.get("/admin/platform").json()["settings"]}
-    assert switches["allow_signup"] == {
-        "key": "allow_signup",
-        "label": switches["allow_signup"]["label"],
-        "value": True,
+    assert switches["signup_policy"] == {
+        "key": "signup_policy",
+        "label": switches["signup_policy"]["label"],
+        "value": "open",
         "overridden": False,
+        "choices": ["closed", "orgs", "open"],
     }
 
     saved = client.put(
         "/admin/platform",
         json={
             "settings": {
-                "allow_signup": False,
-                "allowed_email_domains": ["@Corp.Example"],
+                "signup_policy": "orgs",
+                "signup_orgs": ["@Open-Data-Lab"],
+                "signup_usernames": ["Alice"],
             }
         },
     )
     assert saved.status_code == 200
     by_key = {s["key"]: s for s in saved.json()["settings"]}
-    assert (
-        by_key["allow_signup"]["value"] is False
-        and by_key["allow_signup"]["overridden"]
-    )
-    assert by_key["allowed_email_domains"]["value"] == ["corp.example"]
+    assert by_key["signup_policy"]["value"] == "orgs"
+    assert by_key["signup_policy"]["overridden"]
+    assert by_key["signup_orgs"]["value"] == ["open-data-lab"]
+    assert by_key["signup_usernames"]["value"] == ["alice"]
     assert platform.allow_signup() is False
-    assert _as(app, None).get("/auth/providers").json()["signup_open"] is False
+    providers = _as(app, None).get("/auth/providers").json()
+    assert providers["signup_open"] is True  # members and invitations may still
 
-    reset = client.put("/admin/platform", json={"settings": {"allow_signup": None}})
-    assert {s["key"]: s for s in reset.json()["settings"]}["allow_signup"][
+    entry = test_db.scalar(
+        select(AuditLog)
+        .where(AuditLog.action == "platform.updated")
+        .order_by(AuditLog.created_at.desc())
+    )
+    assert entry.detail["before"]["signup_policy"] == "open"
+    assert entry.detail["changes"]["signup_policy"] == "orgs"
+
+    reset = client.put("/admin/platform", json={"settings": {"signup_policy": None}})
+    assert {s["key"]: s for s in reset.json()["settings"]}["signup_policy"][
         "overridden"
     ] is False
-    assert test_db.scalar(select(AuditLog).where(AuditLog.action == "platform.updated"))
 
 
 @pytest.mark.parametrize(
     "settings",
     [
-        {"allow_signup": "yes"},
+        {"signup_policy": "anyone"},
+        {"signup_orgs": ["not an org!"]},
+        {"allow_signup": True},
         {"allowed_llm_hosts": ["not a host"]},
         {"allowed_llm_hosts": "gateway.example.com"},
         {"nope": True},

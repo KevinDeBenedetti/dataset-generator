@@ -5,7 +5,9 @@ import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { AppSidebar } from '@/components/app/app-sidebar'
 import { AppTopbar } from '@/components/app/app-topbar'
+import Link from 'next/link'
 import { useCurrentUser } from '@/hooks/use-auth'
+import { useSecrets } from '@/hooks/use-integrations'
 
 // Same width as the drawer breakpoint in app-shell.css: below it the sidebar
 // is an off-canvas drawer opened from the top bar's menu button.
@@ -20,6 +22,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const wasOpen = useRef(false)
   const router = useRouter()
   const { data: user } = useCurrentUser()
+  // The stored Hugging Face token was found revoked or read-only by a re-check:
+  // nothing can be published until it is replaced.
+  const { data: secrets } = useSecrets()
+  const hfState = secrets?.find((s) => s.kind === 'hf_token')?.last_state
+  const hfBroken = hfState === 'revoked' || hfState === 'read_only'
 
   // The API answered "not signed in" (`null`, not an error): a session it
   // refused to renew. Sign in again, back to this page afterwards.
@@ -82,7 +89,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           navOpen={navOpen}
           onOpenNav={() => setNavOpen(true)}
         />
-        <div className="content">{children}</div>
+        <div className="content">
+          {hfBroken && (
+            <div className="card" role="alert" style={{ marginBottom: 16 }}>
+              <div className="card-head">
+                <div>
+                  <div className="card-title">
+                    <span className="badge badge-warning">{t('hfTokenBroken.badge')}</span>{' '}
+                    {t('hfTokenBroken.title')}
+                  </div>
+                  <div className="card-desc">
+                    {t('hfTokenBroken.description')}{' '}
+                    <Link href="/settings" className="underline">
+                      {t('hfTokenBroken.replace')}
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
     </div>
   )

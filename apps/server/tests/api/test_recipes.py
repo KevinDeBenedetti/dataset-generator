@@ -35,7 +35,7 @@ def client(alice, client_for):
 
 
 def test_create_read_update_delete(client):
-    created = client.post("/recipes", json=RECIPE)
+    created = client.post("/github/recipes", json=RECIPE)
     assert created.status_code == 201, created.text
     recipe = created.json()
     assert recipe["name"] == "Portfolio Q&A"
@@ -43,31 +43,33 @@ def test_create_read_update_delete(client):
     assert recipe["sources"][0]["docs"] == ["docs/guide.md"]
     assert recipe["sources"][1] == {"repo": "beta", "readme": False, "docs": None}
 
-    assert client.get(f"/recipes/{recipe['id']}").json()["id"] == recipe["id"]
-    assert [r["id"] for r in client.get("/recipes").json()["recipes"]] == [recipe["id"]]
+    assert client.get(f"/github/recipes/{recipe['id']}").json()["id"] == recipe["id"]
+    assert [r["id"] for r in client.get("/github/recipes").json()["recipes"]] == [
+        recipe["id"]
+    ]
 
     changed = client.put(
-        f"/recipes/{recipe['id']}",
+        f"/github/recipes/{recipe['id']}",
         json={**RECIPE, "include_profile": False, "sources": []},
     )
     assert changed.status_code == 200, changed.text
     assert changed.json()["include_profile"] is False
     assert changed.json()["sources"] == []
 
-    assert client.delete(f"/recipes/{recipe['id']}").status_code == 204
-    assert client.get(f"/recipes/{recipe['id']}").status_code == 404
-    assert client.get("/recipes").json() == {"recipes": []}
+    assert client.delete(f"/github/recipes/{recipe['id']}").status_code == 204
+    assert client.get(f"/github/recipes/{recipe['id']}").status_code == 404
+    assert client.get("/github/recipes").json() == {"recipes": []}
 
 
 def test_names_are_unique_per_user(client, client_for, test_db):
-    assert client.post("/recipes", json=RECIPE).status_code == 201
-    assert client.post("/recipes", json=RECIPE).status_code == 409
+    assert client.post("/github/recipes", json=RECIPE).status_code == 201
+    assert client.post("/github/recipes", json=RECIPE).status_code == 409
     # A renaming onto an existing name is refused too.
-    other = client.post("/recipes", json={**RECIPE, "name": "Other"}).json()
-    assert client.put(f"/recipes/{other['id']}", json=RECIPE).status_code == 409
+    other = client.post("/github/recipes", json={**RECIPE, "name": "Other"}).json()
+    assert client.put(f"/github/recipes/{other['id']}", json=RECIPE).status_code == 409
 
     bob = create_user(test_db, email="bob@test.local", password="pw12345")
-    assert client_for(bob).post("/recipes", json=RECIPE).status_code == 201
+    assert client_for(bob).post("/github/recipes", json=RECIPE).status_code == 201
 
 
 @pytest.mark.parametrize(
@@ -84,24 +86,26 @@ def test_names_are_unique_per_user(client, client_for, test_db):
     ],
 )
 def test_invalid_recipes_are_refused(client, change):
-    assert client.post("/recipes", json={**RECIPE, **change}).status_code == 422
+    assert client.post("/github/recipes", json={**RECIPE, **change}).status_code == 422
 
 
 def test_a_bare_repo_name_is_accepted(client):
-    response = client.post("/recipes", json={**RECIPE, "target_repo": "github-qa"})
+    response = client.post(
+        "/github/recipes", json={**RECIPE, "target_repo": "github-qa"}
+    )
     assert response.status_code == 201
 
 
 def test_the_quota_holds(client, monkeypatch):
     monkeypatch.setattr(config, "quota_recipes", 1)
-    assert client.post("/recipes", json=RECIPE).status_code == 201
-    response = client.post("/recipes", json={**RECIPE, "name": "Second"})
+    assert client.post("/github/recipes", json=RECIPE).status_code == 201
+    response = client.post("/github/recipes", json={**RECIPE, "name": "Second"})
     assert response.status_code == 429
     assert "limit 1" in response.json()["detail"]
 
 
 def test_the_export_holds_the_recipes(client):
-    client.post("/recipes", json=RECIPE)
+    client.post("/github/recipes", json=RECIPE)
 
     response = client.get("/me/export")
 
@@ -129,12 +133,14 @@ def test_running_a_recipe_queues_it_as_it_is_now(client, monkeypatch):
     from unittest.mock import AsyncMock
 
     recipe = client.post(
-        "/recipes", json={**RECIPE, "model_ref": "openai:gpt-x"}
+        "/github/recipes", json={**RECIPE, "model_ref": "openai:gpt-x"}
     ).json()
     start = AsyncMock(return_value=_queued())
     monkeypatch.setattr("server.api.recipes.start_run", start)
 
-    response = client.post(f"/recipes/{recipe['id']}/run", json={"full_refresh": True})
+    response = client.post(
+        f"/github/recipes/{recipe['id']}/run", json={"full_refresh": True}
+    )
 
     assert response.status_code == 202, response.text
     assert response.json()["id"] == "run-1"
@@ -145,18 +151,18 @@ def test_running_a_recipe_queues_it_as_it_is_now(client, monkeypatch):
     assert options["full_refresh"] is True
     # The recipe's own model, unless the request names another.
     assert model_ref == "openai:gpt-x"
-    client.post(f"/recipes/{recipe['id']}/run", json={"model_ref": "claude:m"})
+    client.post(f"/github/recipes/{recipe['id']}/run", json={"model_ref": "claude:m"})
     assert start.call_args.args[4] == "claude:m"
 
 
 def test_running_an_unknown_recipe_is_not_found(client):
-    assert client.post("/recipes/nope/run", json={}).status_code == 404
+    assert client.post("/github/recipes/nope/run", json={}).status_code == 404
 
 
 def test_a_recipe_shows_its_latest_run(client, alice, test_db):
     from server.models.job_run import JobRun
 
-    recipe = client.post("/recipes", json=RECIPE).json()
+    recipe = client.post("/github/recipes", json=RECIPE).json()
     assert recipe["latest_run"] is None
     test_db.add(
         JobRun(
@@ -169,11 +175,11 @@ def test_a_recipe_shows_its_latest_run(client, alice, test_db):
     )
     test_db.commit()
 
-    assert client.get(f"/recipes/{recipe['id']}").json()["latest_run"] == {
+    assert client.get(f"/github/recipes/{recipe['id']}").json()["latest_run"] == {
         "id": "run-9",
         "status": "succeeded",
     }
-    listed = client.get("/recipes").json()["recipes"][0]
+    listed = client.get("/github/recipes").json()["recipes"][0]
     assert listed["latest_run"]["id"] == "run-9"
 
 
@@ -187,8 +193,8 @@ def test_the_recipe_job_stays_off_the_jobs_page(client):
 
 
 def test_a_recipe_can_be_scheduled_rescheduled_and_unscheduled(client):
-    recipe = client.post("/recipes", json=RECIPE).json()
-    url = f"/recipes/{recipe['id']}/schedule"
+    recipe = client.post("/github/recipes", json=RECIPE).json()
+    url = f"/github/recipes/{recipe['id']}/schedule"
     assert client.get(url).status_code == 404  # none yet
 
     saved = client.put(url, json={"every": "day", "at_hour": 4, "at_minute": 30})
@@ -212,17 +218,18 @@ def test_a_recipe_can_be_scheduled_rescheduled_and_unscheduled(client):
 
 def test_only_an_existing_recipe_of_yours_can_be_scheduled(client, client_for, test_db):
     assert (
-        client.put("/recipes/nope/schedule", json={"every": "day"}).status_code == 404
+        client.put("/github/recipes/nope/schedule", json={"every": "day"}).status_code
+        == 404
     )
-    recipe = client.post("/recipes", json=RECIPE).json()
+    recipe = client.post("/github/recipes", json=RECIPE).json()
     assert (
         client.put(
-            f"/recipes/{recipe['id']}/schedule", json={"every": "hourly"}
+            f"/github/recipes/{recipe['id']}/schedule", json={"every": "hourly"}
         ).status_code
         == 422
     )
     bob = client_for(create_user(test_db, email="bob@test.local", password="pw12345"))
-    url = f"/recipes/{recipe['id']}/schedule"
+    url = f"/github/recipes/{recipe['id']}/schedule"
     assert bob.put(url, json={"every": "day"}).status_code == 404
     assert bob.get(url).status_code == 404
 
@@ -233,8 +240,8 @@ def test_a_schedule_follows_its_recipe(client, alice, test_db):
     recipe deletes the schedule."""
     from server.models.job_schedule import JobSchedule
 
-    recipe = client.post("/recipes", json=RECIPE).json()
-    client.put(f"/recipes/{recipe['id']}/schedule", json={"every": "week"})
+    recipe = client.post("/github/recipes", json=RECIPE).json()
+    client.put(f"/github/recipes/{recipe['id']}/schedule", json={"every": "week"})
 
     def row():
         test_db.expire_all()
@@ -248,8 +255,10 @@ def test_a_schedule_follows_its_recipe(client, alice, test_db):
     }
     assert row().model_ref is None
 
-    client.put(f"/recipes/{recipe['id']}", json={**RECIPE, "model_ref": "openai:m"})
+    client.put(
+        f"/github/recipes/{recipe['id']}", json={**RECIPE, "model_ref": "openai:m"}
+    )
     assert row().model_ref == "openai:m"
 
-    assert client.delete(f"/recipes/{recipe['id']}").status_code == 204
+    assert client.delete(f"/github/recipes/{recipe['id']}").status_code == 204
     assert row() is None

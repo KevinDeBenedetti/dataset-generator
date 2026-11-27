@@ -15,6 +15,7 @@ from server.api import (
     agent,
     auth,
     collections,
+    data_sources,
     dataset,
     generate,
     github,
@@ -27,6 +28,7 @@ from server.api import (
     me,
     quality_rules,
     resumes,
+    runs,
 )
 from server.services.auth import ensure_secret_is_safe, get_current_user
 from server.migrations.utils.db_utils import upgrade_db
@@ -44,6 +46,10 @@ from server.core.log_stream import broadcaster
 
 logger_module.setup_logging()
 logger = logging.getLogger(__name__)
+
+# The app's version (release-please updates the marked line), also written in
+# the manifest of every dataset it publishes (hub/provenance.py).
+APP_VERSION = "0.17.3"  # x-release-please-version
 logger.setLevel(logging.INFO)
 
 
@@ -55,6 +61,21 @@ def _seed_dev_users() -> None:
     try:
         created = seed_dev_users(db)
         logger.info("Dev user seeding: %d account(s) created", created)
+    finally:
+        db.close()
+
+
+def _ensure_admin_account() -> None:
+    """Create or update the secrets admin. Runs in a worker thread."""
+    from server.auth.admin_secrets import ensure_admin_account
+
+    db = SessionLocal()
+    try:
+        admin = ensure_admin_account(db)
+        if admin is None:
+            logger.info("No admin from the deployment's secrets (ADMIN_USERNAME unset)")
+        else:
+            logger.info("Admin from the deployment's secrets: %s", admin.id)
     finally:
         db.close()
 
@@ -96,6 +117,12 @@ async def lifespan(app: FastAPI):
             "Startup migrations skipped (RUN_MIGRATIONS_ON_STARTUP=false): "
             "the schema is migrated by the deployment before the pods start."
         )
+
+    # The admin's row, from the deployment's secrets (auth/admin_secrets.py).
+    try:
+        await asyncio.to_thread(_ensure_admin_account)
+    except Exception:
+        logger.exception("Creating the admin from ADMIN_USERNAME failed")
 
     # Optionally seed the local dev accounts (opt-in via SEED_DEV_USERS).
     if config.seed_dev_users:
@@ -143,7 +170,7 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     app = FastAPI(
         title="Datasets Generator API",
         description="API to generate datasets from web scraping",
-        version="0.17.3",  # x-release-please-version
+        version=APP_VERSION,
         # The tests build the same app without it: no migrations, no seeding.
         lifespan=lifespan if with_lifespan else None,
         # The interactive docs advertise every route to anyone: development only.
@@ -165,6 +192,11 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     app.add_middleware(
         cast(Any, BodySizeLimitMiddleware),
         max_body_bytes=config.max_request_body_bytes,
+        per_path={
+            "/data-sources/upload": config.data_upload_max_bytes
+            + config.max_request_body_bytes
+            - config.max_upload_bytes,
+        },
     )
 
     # The session is carried by cookies, so CORS is credentialed and must name
@@ -255,6 +287,10 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     app.include_router(collections.router, dependencies=auth_required)
     app.include_router(github.router, dependencies=auth_required)
     app.include_router(recipes.router, dependencies=auth_required)
+    app.include_router(data_sources.sources_router, dependencies=auth_required)
+    app.include_router(data_sources.recipes_router, dependencies=auth_required)
+    app.include_router(data_sources.connectors_router, dependencies=auth_required)
+    app.include_router(runs.router, dependencies=auth_required)
     app.include_router(resumes.router, dependencies=auth_required)
     app.include_router(q_a.router, dependencies=auth_required)
     app.include_router(models.router, dependencies=auth_required)

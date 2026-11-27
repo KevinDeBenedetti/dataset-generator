@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 from urllib.parse import urlsplit
+import base64
+import binascii
 import hashlib
 import ipaddress
 import hmac
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -79,6 +82,56 @@ def _reindex_problems(url: str, secret: str) -> List[str]:
         "CORPUS_REINDEX_URL must be https, or http to an address inside the "
         f"network (a cluster Service): it carries CORPUS_REINDEX_SECRET (got '{url}')"
     ]
+
+
+_ADMIN_USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def _admin_problems(cfg: "Config") -> List[str]:
+    """What's wrong with the admin's deployment secrets, outside development."""
+    problems: List[str] = []
+    if cfg.admin_password:
+        problems.append(
+            "ADMIN_PASSWORD (in clear) is for development only: set "
+            "ADMIN_PASSWORD_HASH instead (`python -m server.cli hash-password`)"
+        )
+    if not cfg.admin_username:
+        problems.append(
+            "ADMIN_USERNAME is required: the admin signs in with it and "
+            "ADMIN_PASSWORD_HASH at /admin/login"
+        )
+        return problems
+    if not _ADMIN_USERNAME_RE.match(cfg.admin_username):
+        problems.append(
+            "ADMIN_USERNAME may only hold letters, digits, '.', '_' and '-' "
+            "(64 characters at most)"
+        )
+    if not cfg.admin_password_hash:
+        problems.append(
+            "ADMIN_PASSWORD_HASH is required with ADMIN_USERNAME (generate it "
+            "with `python -m server.cli hash-password`)"
+        )
+    elif not cfg.admin_password_hash.startswith("$argon2id$"):
+        problems.append(
+            "ADMIN_PASSWORD_HASH must be an argon2id hash ($argon2id$…), as "
+            "`python -m server.cli hash-password` prints"
+        )
+    if cfg.admin_totp_secret and not _is_base32(cfg.admin_totp_secret):
+        problems.append("ADMIN_TOTP_SECRET must be base32 (A–Z, 2–7)")
+    return problems
+
+
+def _is_base32(value: str) -> bool:
+    try:
+        decoded = base64.b32decode(_pad_base32(value), casefold=True)
+    except (binascii.Error, ValueError):
+        return False
+    return len(decoded) >= 10  # 80 bits, RFC 4226's floor
+
+
+def _pad_base32(value: str) -> str:
+    value = value.replace(" ", "").upper()
+    return value + "=" * (-len(value) % 8)
 
 
 def _is_dev_env() -> bool:
@@ -175,6 +228,23 @@ class Config:
     enable_local_login: bool = field(
         default_factory=lambda: _flag("ENABLE_LOCAL_LOGIN", _is_dev_env())
     )
+    # The admin signs in at /admin/login with these deployment secrets only
+    # (auth/admin_secrets.py, ADR 0002): the account is created from them at
+    # startup. The hash is an argon2id PHC string (`python -m server.cli
+    # hash-password`); the TOTP secret (base32) is optional. ADMIN_PASSWORD, in
+    # clear, is accepted in development only.
+    admin_username: str = field(
+        default_factory=lambda: _env("ADMIN_USERNAME", "").strip()
+    )
+    admin_password_hash: str = field(
+        default_factory=lambda: _env("ADMIN_PASSWORD_HASH", "").strip(), repr=False
+    )
+    admin_password: str = field(
+        default_factory=lambda: _env("ADMIN_PASSWORD", ""), repr=False
+    )
+    admin_totp_secret: str = field(
+        default_factory=lambda: _env("ADMIN_TOTP_SECRET", "").strip(), repr=False
+    )
     # Accounts whose verified email is listed are always admins (promoted at
     # sign-in, locked in the backoffice) and receive the pre-multi-user data.
     admin_emails_raw: str = field(default_factory=lambda: _env("ADMIN_EMAILS", ""))
@@ -185,7 +255,6 @@ class Config:
     # first SSO sign-in must not create an account until an admin opens it
     # (ADMIN_EMAILS can always sign up).
     allow_signup: bool = field(default_factory=_is_dev_env)
-    allowed_email_domains_raw: str = ""
     allowed_llm_hosts_raw: str = ""
     allow_custom_base_url: bool = False
 
@@ -326,6 +395,46 @@ class Config:
         default_factory=lambda: _flag("PERSIST_DATASETS", True)
     )
 
+    # --- Tabular drafts (services/draft_store.py) ----------------------------
+    # Where recipe runs keep their fetched files and draft Parquet: a local
+    # directory (file:///path — a volume in compose, a persistent volume in a
+    # cluster). Only file:// is supported.
+    draft_store_url: str = field(
+        default_factory=lambda: _env("DRAFT_STORE_URL", "file:///data/drafts")
+    )
+    # Bytes of drafts and fetched files one user may hold.
+    quota_draft_bytes: int = field(
+        default_factory=lambda: int(
+            _env("QUOTA_DRAFT_BYTES_PER_USER", str(2 * 1024**3))
+        )
+    )
+    # Unpublished drafts older than this are deleted by the worker's sweep.
+    draft_retention_days: int = field(
+        default_factory=lambda: int(_env("DRAFT_RETENTION_DAYS", "14"))
+    )
+    # Data sources per user (services/data_sources.py).
+    quota_data_sources: int = 50
+    # The tabular engine (apps/server/engine): one DuckDB connection per run,
+    # bounded in memory, threads and wall-clock time.
+    engine_memory_limit: str = field(
+        default_factory=lambda: _env("ENGINE_MEMORY_LIMIT", "1GB")
+    )
+    engine_threads: int = field(
+        default_factory=lambda: max(1, int(_env("ENGINE_THREADS", "2")))
+    )
+    engine_timeout_s: float = field(
+        default_factory=lambda: float(_env("ENGINE_TIMEOUT_S", "300"))
+    )
+    # The tokens one LLM Q&A recipe run may spend at most (generators/qa_llm.py
+    # estimates them before calling the model).
+    quota_tokens_per_run: int = field(
+        default_factory=lambda: int(_env("QUOTA_TOKENS_PER_RUN", "2000000"))
+    )
+    # The largest file a data source upload takes (POST /data-sources/upload).
+    data_upload_max_bytes: int = field(
+        default_factory=lambda: int(_env("UPLOAD_MAX_BYTES", str(200 * 1024**2)))
+    )
+
     # --- Embedding checks (services/semantic.py) ----------------------------
     # Semantic dedup, the "don't ask these again" list, uncovered sections and
     # the answer grounding check, on OPENAI_EMBEDDING_MODEL; without it the
@@ -454,6 +563,11 @@ class Config:
                 "No sign-in method: set INFOMANIAK_CLIENT_ID/SECRET or "
                 "GITHUB_CLIENT_ID/SECRET (or ENABLE_LOCAL_LOGIN=true)"
             )
+        problems += _admin_problems(self)
+        if not self.draft_store_url.startswith("file:///"):
+            problems.append(
+                f"DRAFT_STORE_URL must be a file:/// directory (got '{self.draft_store_url}')"
+            )
         if not self.frontend_url.lower().startswith("https://"):
             problems.append(
                 f"FRONTEND_URL must be the public https URL (got '{self.frontend_url}')"
@@ -478,10 +592,6 @@ class Config:
     @property
     def admin_emails(self) -> List[str]:
         return self._csv(self.admin_emails_raw)
-
-    @property
-    def allowed_email_domains(self) -> List[str]:
-        return [d.lstrip("@") for d in self._csv(self.allowed_email_domains_raw)]
 
     @property
     def sso_trusted_email_providers(self) -> List[str]:

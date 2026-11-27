@@ -118,6 +118,8 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - server_venv:/app/.venv
+      # Recipe runs' fetched files and draft Parquet (services/draft_store.py).
+      - drafts:/data/drafts
     restart: always
     # Source is bind-mounted above for uvicorn --reload; watch rebuilds the image
     # when Python dependencies change.
@@ -170,6 +172,8 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - server_venv:/app/.venv
+      # Recipe runs' fetched files and draft Parquet (services/draft_store.py).
+      - drafts:/data/drafts
     restart: always
     stop_grace_period: 30s
 
@@ -266,6 +270,7 @@ services:
 volumes:
   next_node_modules:
   server_venv:
+  drafts:
   postgres18_data:
   qdrant_storage:
   redis_data:

@@ -96,7 +96,7 @@ def test_providers_lists_only_switches(web):
         "configured": True,
     }
     assert by_name["infomaniak"]["configured"] is False
-    assert set(body) == {"providers", "local_login", "signup_open"}
+    assert set(body) == {"providers", "local_login", "signup_open", "admin_totp"}
     assert "gh-secret" not in str(body)
 
 

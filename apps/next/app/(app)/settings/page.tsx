@@ -35,10 +35,10 @@ export default function SettingsPage() {
           <div className="card-body" style={{ paddingTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
               <span className="avatar" style={{ width: 52, height: 52, fontSize: 17 }}>
-                {initialsFor(user?.email)}
+                {initialsFor(user?.name)}
               </span>
               <div>
-                <div style={{ fontWeight: 500 }}>{user?.email ?? tc('loading')}</div>
+                <div style={{ fontWeight: 500 }}>{user?.name ?? tc('loading')}</div>
                 <div className="hint" style={{ marginTop: 4 }}>
                   {user
                     ? t(user.role === 'admin' ? 'profile.admin' : 'profile.user', {
@@ -51,18 +51,35 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <LinkedAccounts />
-
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">{t('keys.title')}</div>
-              <div className="card-desc">{t.rich('keys.description', { strong: rich.strong })}</div>
+        {/* The admin of the deployment's secrets acts with the server's keys:
+            nothing to link or save here. */}
+        {user?.provider === 'secrets' ? (
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="card-title">{t('keys.title')}</div>
+                <div className="card-desc">{t('keys.managedByDeployment')}</div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <LinkedAccounts />
 
-        <Integrations />
+            <div className="card">
+              <div className="card-head">
+                <div>
+                  <div className="card-title">{t('keys.title')}</div>
+                  <div className="card-desc">
+                    {t.rich('keys.description', { strong: rich.strong })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Integrations />
+          </>
+        )}
 
         <div className="card">
           <div className="card-head">

@@ -2,6 +2,7 @@
 # SQLAlchemy's Base.metadata is fully populated (used by Alembic migrations).
 from server.models import (  # noqa: F401
     dataset,
+    data_source,
     dataset_recipe,
     embedding_calibration,
     identity,

@@ -72,7 +72,7 @@ def test_protected_routes_reject_anonymous(test_db):
     assert client.get("/hub/datasets").status_code == 401
     assert client.get("/hub/datasets/kevin/qa/rows").status_code == 401
     assert client.get("/github/repos").status_code == 401
-    assert client.get("/recipes").status_code == 401
+    assert client.get("/github/recipes").status_code == 401
     assert client.get("/collections").status_code == 401
     assert client.post("/collections/c1/search", json={"query": "q"}).status_code == 401
     assert client.get("/resumes").status_code == 401

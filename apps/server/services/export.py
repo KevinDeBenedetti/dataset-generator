@@ -67,6 +67,9 @@ def build_export(db: Session, user: User) -> bytes:
                 }
             ),
         )
+        from server.services.data_sources import export_rows
+
+        archive.writestr("data_sources.json", _json(export_rows(db, user.id)))
         archive.writestr(
             "settings.json",
             _json(

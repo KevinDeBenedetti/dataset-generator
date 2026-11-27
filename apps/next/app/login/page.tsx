@@ -9,8 +9,33 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { postLoginRedirect, useAuthProviders, useLogin } from '@/hooks/use-auth'
+import { postLoginRedirect, useAuthProviders, useHfLogin, useLogin } from '@/hooks/use-auth'
 import { API_BASE_URL, ssoUrl } from '@/api/sdk'
+import { SignInError } from '@/api/errors'
+
+// The Hub's token page, on its "write" preset: the token the app needs.
+const WRITE_TOKEN_URL = 'https://huggingface.co/settings/tokens/new?preset=write'
+
+// The API's refusal codes of POST /auth/hf (apps/server/auth/hf_token.py), each
+// with its message under `login.hf.errors`.
+const HF_ERRORS = [
+  'token_malformed',
+  'token_invalid',
+  'token_other_account',
+  'token_read_only',
+  'signup_closed',
+  'signup_not_member',
+  'signup_orgs_hidden',
+  'account_disabled',
+  'hub_unavailable',
+  'rate_limited',
+] as const
+type HfError = (typeof HF_ERRORS)[number]
+
+function hfError(error: unknown): HfError | null {
+  if (!(error instanceof SignInError)) return null
+  return HF_ERRORS.find((known) => known === error.code) ?? null
+}
 
 // The API's `?error=` codes (see apps/server/services/identities.py), each
 // with its message under `login.errors`.
@@ -39,6 +64,10 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error] = useState(ssoError)
+  const [hfUsername, setHfUsername] = useState('')
+  const [hfToken, setHfToken] = useState('')
+  const hfMutation = useHfLogin()
+  const hfRefusal = hfError(hfMutation.error)
   const loginMutation = useLogin()
   const {
     data: options,
@@ -49,6 +78,11 @@ export default function LoginPage() {
     refetch,
   } = useAuthProviders()
   const providers = (options?.providers ?? []).filter((p) => p.configured)
+
+  const handleHfSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    hfMutation.mutate({ username: hfUsername.trim(), token: hfToken.trim() })
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,6 +137,85 @@ export default function LoginPage() {
             </div>
           )}
 
+          <form onSubmit={handleHfSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="hf-username" className="text-sm font-medium">
+                {t('hf.username')}
+              </label>
+              <Input
+                id="hf-username"
+                autoComplete="username"
+                required
+                value={hfUsername}
+                onChange={(e) => setHfUsername(e.target.value)}
+                disabled={hfMutation.isPending}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="hf-token" className="text-sm font-medium">
+                {t('hf.token')}
+              </label>
+              <Input
+                id="hf-token"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                required
+                placeholder="hf_…"
+                value={hfToken}
+                onChange={(e) => setHfToken(e.target.value)}
+                disabled={hfMutation.isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('hf.tokenHelp')}{' '}
+                <a
+                  href={WRITE_TOKEN_URL}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="underline"
+                >
+                  {t('hf.createToken')}
+                </a>
+              </p>
+            </div>
+
+            {hfMutation.isError && (
+              <p className="text-sm text-red-600" role="alert">
+                {hfRefusal
+                  ? t(`hf.errors.${hfRefusal}`)
+                  : hfMutation.error instanceof Error
+                    ? hfMutation.error.message
+                    : t('failed')}
+                {hfRefusal === 'token_read_only' && (
+                  <>
+                    {' '}
+                    <a
+                      href={WRITE_TOKEN_URL}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="underline"
+                    >
+                      {t('hf.createToken')}
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+
+            <Button type="submit" disabled={hfMutation.isPending}>
+              {hfMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+              {t('hf.submit')}
+            </Button>
+          </form>
+
+          {(providers.length > 0 || options?.local_login) && (
+            <div className="my-2 flex items-center gap-2">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">{t('or')}</span>
+              <Separator className="flex-1" />
+            </div>
+          )}
+
           {providers.map((provider) => (
             <Button
               key={provider.name}
@@ -115,9 +228,6 @@ export default function LoginPage() {
               {t('continueWith', { provider: provider.label })}
             </Button>
           ))}
-          {options && providers.length === 0 && !options.local_login && (
-            <p className="text-sm text-muted-foreground">{t('noMethod')}</p>
-          )}
 
           {options?.local_login && (
             <>

@@ -13,6 +13,13 @@ class SecretStatus(BaseModel):
         None, description="Last four characters of an API key, when it is safe to show"
     )
     updated_at: Optional[datetime] = None
+    last_checked_at: Optional[datetime] = Field(
+        None, description="When the provider last confirmed or refused it"
+    )
+    last_state: Optional[str] = Field(
+        None,
+        description="That check's answer: ok, revoked or read_only (Hugging Face)",
+    )
 
 
 class SecretsResponse(BaseModel):

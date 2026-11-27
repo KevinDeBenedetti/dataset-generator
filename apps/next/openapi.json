@@ -48,6 +48,130 @@
         }
       }
     },
+    "/auth/hf": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Hf Login",
+        "description": "Sign in with a Hugging Face username and token (auth/hf_token.py).\n\nThe token is checked with the Hub's ``whoami``: it must belong to that\nusername and be able to write to its namespace. The first sign-in creates\nthe account (if the sign-up policy allows it); the token is stored\nencrypted, never returned. 10 failures a minute per IP or per username,\nthen 429.",
+        "operationId": "hf_login_auth_hf_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HfLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInRefusal"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInRefusal"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInRefusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/admin/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Admin Login",
+        "description": "The admin's sign-in, checked against the deployment's secrets only\n(auth/admin_secrets.py). 5 failures a minute per client IP, then 429; every\nattempt is audited, never with the submitted values.",
+        "operationId": "admin_login_auth_admin_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/refresh": {
       "post": {
         "tags": [
@@ -2239,14 +2363,14 @@
         }
       }
     },
-    "/recipes": {
+    "/github/recipes": {
       "get": {
         "tags": [
           "recipes"
         ],
         "summary": "Your dataset recipes",
         "description": "Your recipes, most recently edited first.",
-        "operationId": "get_recipes_recipes_get",
+        "operationId": "get_recipes_github_recipes_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2265,7 +2389,7 @@
           "recipes"
         ],
         "summary": "Create a recipe",
-        "operationId": "post_recipe_recipes_post",
+        "operationId": "post_recipe_github_recipes_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2300,13 +2424,13 @@
         }
       }
     },
-    "/recipes/{recipe_id}": {
+    "/github/recipes/{recipe_id}": {
       "get": {
         "tags": [
           "recipes"
         ],
         "summary": "One recipe",
-        "operationId": "get_recipe_recipes__recipe_id__get",
+        "operationId": "get_recipe_github_recipes__recipe_id__get",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2347,7 +2471,7 @@
         ],
         "summary": "Replace a recipe",
         "description": "Saves the whole recipe: the GitHub page sends it after every toggle.",
-        "operationId": "put_recipe_recipes__recipe_id__put",
+        "operationId": "put_recipe_github_recipes__recipe_id__put",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2398,7 +2522,7 @@
         ],
         "summary": "Delete a recipe",
         "description": "Deletes the recipe only: its Hugging Face dataset stays.",
-        "operationId": "delete_recipe_recipes__recipe_id__delete",
+        "operationId": "delete_recipe_github_recipes__recipe_id__delete",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2427,14 +2551,14 @@
         }
       }
     },
-    "/recipes/{recipe_id}/run": {
+    "/github/recipes/{recipe_id}/run": {
       "post": {
         "tags": [
           "recipes"
         ],
         "summary": "Generate a draft from a recipe",
         "description": "Queue a generation of the recipe as it is now (a worker runs it): poll\nGET /jobs/runs/{id}, review the draft, then POST /jobs/runs/{id}/publish.",
-        "operationId": "run_recipe_recipes__recipe_id__run_post",
+        "operationId": "run_recipe_github_recipes__recipe_id__run_post",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2480,14 +2604,14 @@
         }
       }
     },
-    "/recipes/{recipe_id}/schedule": {
+    "/github/recipes/{recipe_id}/schedule": {
       "get": {
         "tags": [
           "recipes"
         ],
         "summary": "The recipe's schedule",
         "description": "When the recipe's dataset regenerates by itself, with the next and the\nlatest scheduled run. 404 for an unknown recipe, and until one is saved.",
-        "operationId": "get_recipe_schedule_recipes__recipe_id__schedule_get",
+        "operationId": "get_recipe_schedule_github_recipes__recipe_id__schedule_get",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2528,7 +2652,7 @@
         ],
         "summary": "Save the recipe's schedule",
         "description": "Each scheduled run generates from the recipe as it is then — its\nselection, its dataset, its model — incrementally, so a day nothing\nchanged on GitHub costs no model call. A preset set or moved runs first\nat its next time. Only one recipe run goes at a time: give recipes\ndifferent times.",
-        "operationId": "put_recipe_schedule_recipes__recipe_id__schedule_put",
+        "operationId": "put_recipe_schedule_github_recipes__recipe_id__schedule_put",
         "parameters": [
           {
             "name": "recipe_id",
@@ -2579,6 +2703,770 @@
         ],
         "summary": "Remove the recipe's schedule",
         "description": "The recipe stops regenerating by itself; it and its dataset stay.",
+        "operationId": "delete_recipe_schedule_github_recipes__recipe_id__schedule_delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Your data sources",
+        "operationId": "list_sources_data_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourcesOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Add a data source",
+        "operationId": "create_source_data_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataSourceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources/upload": {
+      "post": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Add a data source from a file",
+        "description": "The file is streamed into your storage (at most ``UPLOAD_MAX_BYTES``) and\nrecognised: format by its first bytes (a file that contradicts its name is\nrefused), encoding and delimiter for text. The form's values override what\nwas detected.",
+        "operationId": "upload_source_data_sources_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_source_data_sources_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources/{source_id}/secret": {
+      "put": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Save the data source's secret",
+        "description": "The header value or API key the connector sends: stored encrypted,\nwrite-only (no route returns it).",
+        "operationId": "put_source_secret_data_sources__source_id__secret_put",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceSecretIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSecretOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Forget the data source's secret",
+        "operationId": "delete_source_secret_data_sources__source_id__secret_delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources/{source_id}/test": {
+      "post": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Try a data source's first page",
+        "description": "The first page of a REST data source: the records and columns found.",
+        "operationId": "test_source_data_sources__source_id__test_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources/{source_id}": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Get Source",
+        "operationId": "get_source_data_sources__source_id__get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Patch Source",
+        "operationId": "patch_source_data_sources__source_id__patch",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataSourcePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Delete Source",
+        "operationId": "delete_source_data_sources__source_id__delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Your recipes",
+        "operationId": "list_recipes_recipes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipesOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Create a recipe",
+        "operationId": "create_recipe_recipes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRecipeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Get Recipe",
+        "operationId": "get_recipe_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Patch Recipe",
+        "operationId": "patch_recipe_recipes__recipe_id__patch",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRecipePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Delete Recipe",
+        "operationId": "delete_recipe_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}/preview": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "The recipe's first rows",
+        "description": "The first 100 rows after the steps (the body's, to try them before\nsaving), the output schema, the rows after each step, and the first\nfailing step. 30 previews a minute.",
+        "operationId": "preview_recipe_recipes__recipe_id__preview_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}/run": {
+      "post": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Run a recipe into a draft",
+        "description": "Queue a run (a worker fetches, loads and applies the steps): follow it\nwith GET /jobs/runs/{id}; its draft is reviewed before publication.",
+        "operationId": "run_recipe_recipes__recipe_id__run_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{recipe_id}/schedule": {
+      "get": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "The recipe's schedule",
+        "description": "When the recipe refreshes by itself; 404 until one is saved.",
+        "operationId": "get_recipe_schedule_recipes__recipe_id__schedule_get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Save the recipe's schedule",
+        "description": "At each due time the data source's fingerprint is checked first: an\nunchanged source starts no run (the schedule says so); a changed one runs\nthe recipe, and publishes when ``publish`` is on and no blocking rule\nfails — else the draft waits for review.",
+        "operationId": "put_recipe_schedule_recipes__recipe_id__schedule_put",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeScheduleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recipes"
+        ],
+        "summary": "Remove the recipe's schedule",
         "operationId": "delete_recipe_schedule_recipes__recipe_id__schedule_delete",
         "parameters": [
           {
@@ -2594,6 +3482,444 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "The connector kinds",
+        "description": "What a data source can be: each connector's form, in your language.",
+        "operationId": "list_connectors_connectors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/discover": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "Search a connector",
+        "description": "What a connector finds for ``q`` (data.gouv.fr: datasets and their\nreadable resources). 30 searches a minute.",
+        "operationId": "discover_connectors__kind__discover_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidatesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/rest/presets": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "French public API presets",
+        "description": "Ready-made REST data sources (Géo API, API Adresse, Annuaire de\nl'administration, Sirene): their form, licence and rate limit.",
+        "operationId": "list_presets_connectors_rest_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/rest/presets/{preset_id}": {
+      "post": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "A preset's REST config",
+        "description": "The ``rest`` config, name and licence a preset makes of its form's\nvalues; ``POST /data-sources`` then adds it (nothing is saved here).",
+        "operationId": "preset_config_connectors_rest_presets__preset_id__post",
+        "parameters": [
+          {
+            "name": "preset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Params"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/datagouv/resources/{resource_id}/profile": {
+      "get": {
+        "tags": [
+          "data sources"
+        ],
+        "summary": "A data.gouv.fr resource's profile",
+        "description": "The tabular API's profile of a resource (header, column formats,\nencoding, separator), shown before the data source is made.",
+        "operationId": "datagouv_profile_connectors_datagouv_resources__resource_id__profile_get",
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Your recipe runs",
+        "description": "Your 50 latest recipe runs; ``to_review`` marks the drafts that wait.",
+        "operationId": "list_runs_runs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeRunsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/draft": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "A tabular draft, to review",
+        "description": "Provenance, schema (with the original names), profile, quality report,\nrow counts, the changes against the published version, the last review.",
+        "operationId": "get_draft_runs__run_id__draft_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TabularDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/draft/rows": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "A page of rows",
+        "description": "Rows read from the draft's Parquet file (500 at most a page), sorted by\none column, filtered on one column containing some text.",
+        "operationId": "get_rows_runs__run_id__draft_rows_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "desc",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Desc"
+            }
+          },
+          {
+            "name": "filter_column",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Column"
+            }
+          },
+          {
+            "name": "filter_value",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Value"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRowsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/review": {
+      "post": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Approve or reject",
+        "description": "An approval publishes the draft to its Hub dataset repo (one commit:\nParquet, app card, manifest), then records the review. It is refused (409)\nwhile a blocking rule of the quality report fails, or for a public draft\nwhose licence doesn't allow it; a rejection marks the run rejected.",
+        "operationId": "post_review_runs__run_id__review_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4530,6 +5856,41 @@
   },
   "components": {
     "schemas": {
+      "AdminLoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "otp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otp",
+            "description": "The authenticator code, when TOTP is on"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AdminLoginRequest"
+      },
       "AdminUser": {
         "properties": {
           "id": {
@@ -4537,8 +5898,27 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "hf_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hf Username",
+            "description": "The Hugging Face account it signs in with"
           },
           "role": {
             "type": "string",
@@ -4551,7 +5931,7 @@
           "locked": {
             "type": "boolean",
             "title": "Locked",
-            "description": "Listed in ADMIN_EMAILS: role and status fixed"
+            "description": "Set by the deployment (ADMIN_EMAILS or ADMIN_USERNAME): role and status fixed"
           },
           "providers": {
             "items": {
@@ -4613,7 +5993,6 @@
         "type": "object",
         "required": [
           "id",
-          "email",
           "role",
           "is_active",
           "locked",
@@ -4846,6 +6225,101 @@
         ],
         "title": "Body_create_dataset_for_file_dataset_generate_file_post"
       },
+      "Body_upload_source_data_sources_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "CSV, TSV, JSON, JSONL, Parquet, XLSX, or a .sql / .sql.gz dump"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(csv|tsv|json|jsonl|parquet|xlsx)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "delimiter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delimiter"
+          },
+          "encoding": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encoding"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet"
+          },
+          "json_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "name"
+        ],
+        "title": "Body_upload_source_data_sources_upload_post"
+      },
       "CalibrationCheck": {
         "properties": {
           "threshold": {
@@ -4923,6 +6397,51 @@
           "uncovered"
         ],
         "title": "CalibrationOut"
+      },
+      "CandidateOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "config"
+        ],
+        "title": "CandidateOut"
+      },
+      "CandidatesOut": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidates"
+        ],
+        "title": "CandidatesOut"
       },
       "CleanSimilarityPair": {
         "properties": {
@@ -5258,6 +6777,19 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Fields"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "A corpus dataset's typed metadata, what filters match"
           }
         },
         "type": "object",
@@ -5638,6 +7170,32 @@
               }
             ],
             "title": "Score Threshold"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "object",
+                "maxProperties": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filters",
+            "description": "Payload field → value the hits must have (metadata.code: '29019')"
           }
         },
         "type": "object",
@@ -5680,6 +7238,252 @@
           "collections"
         ],
         "title": "CollectionsOut"
+      },
+      "ConnectorSpec": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "config_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config Schema"
+          },
+          "secret_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Kind"
+          },
+          "created_by_upload": {
+            "type": "boolean",
+            "title": "Created By Upload",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "description",
+          "config_schema"
+        ],
+        "title": "ConnectorSpec",
+        "description": "What the web shows to configure a data source of this kind."
+      },
+      "ConnectorsOut": {
+        "properties": {
+          "connectors": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorSpec"
+            },
+            "type": "array",
+            "title": "Connectors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connectors"
+        ],
+        "title": "ConnectorsOut"
+      },
+      "DataSourceIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "connector": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Connector"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence",
+            "description": "The licence the data comes with"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "connector"
+        ],
+        "title": "DataSourceIn"
+      },
+      "DataSourceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "connector": {
+            "type": "string",
+            "title": "Connector"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "secret_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Kind"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence"
+          },
+          "last_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fingerprint"
+          },
+          "last_fetched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fetched At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "connector",
+          "config",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DataSourceOut"
+      },
+      "DataSourcePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence"
+          }
+        },
+        "type": "object",
+        "title": "DataSourcePatch"
+      },
+      "DataSourcesOut": {
+        "properties": {
+          "data_sources": {
+            "items": {
+              "$ref": "#/components/schemas/DataSourceOut"
+            },
+            "type": "array",
+            "title": "Data Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_sources"
+        ],
+        "title": "DataSourcesOut"
       },
       "DatasetAnalysis": {
         "properties": {
@@ -6377,6 +8181,46 @@
         ],
         "title": "DraftPreview"
       },
+      "DraftRowsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "columns",
+          "rows"
+        ],
+        "title": "DraftRowsOut"
+      },
       "DraftSummary": {
         "properties": {
           "id": {
@@ -7025,6 +8869,28 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HfLoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 96,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 216,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "token"
+        ],
+        "title": "HfLoginRequest"
       },
       "HubBooleanCounts": {
         "properties": {
@@ -9286,6 +11152,21 @@
             "type": "boolean",
             "title": "Overridden",
             "description": "Set from the backoffice (else the env default)"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices",
+            "description": "The values a choice switch takes"
           }
         },
         "type": "object",
@@ -9311,6 +11192,294 @@
           "settings"
         ],
         "title": "PlatformUpdate"
+      },
+      "PresetConfigOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "licence": {
+            "type": "string",
+            "title": "Licence"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "licence",
+          "config",
+          "needs_key"
+        ],
+        "title": "PresetConfigOut"
+      },
+      "PresetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "producer": {
+            "type": "string",
+            "title": "Producer"
+          },
+          "licence": {
+            "type": "string",
+            "title": "Licence"
+          },
+          "docs_url": {
+            "type": "string",
+            "title": "Docs Url"
+          },
+          "rate_limit_per_s": {
+            "type": "number",
+            "title": "Rate Limit Per S"
+          },
+          "max_records": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Records"
+          },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key"
+          },
+          "key_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Url"
+          },
+          "form_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form Schema"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "producer",
+          "licence",
+          "docs_url",
+          "rate_limit_per_s",
+          "needs_key",
+          "form_schema",
+          "steps"
+        ],
+        "title": "PresetOut"
+      },
+      "PresetsOut": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "presets"
+        ],
+        "title": "PresetsOut"
+      },
+      "PreviewError": {
+        "properties": {
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step",
+            "description": "The failing step (0-based), if one"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "PreviewError"
+      },
+      "PreviewOut": {
+        "properties": {
+          "source_rows": {
+            "type": "integer",
+            "title": "Source Rows"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "schema": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Schema"
+          },
+          "step_rows": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Step Rows"
+          },
+          "source_schema": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Source Schema",
+            "description": "The data source's columns, before any step"
+          },
+          "step_schemas": {
+            "items": {
+              "items": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Step Schemas",
+            "description": "The columns after each step"
+          },
+          "sample": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Sample"
+          },
+          "pairs": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pairs",
+            "description": "A facts recipe: the pairs of the first 20 rows"
+          },
+          "llm": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm",
+            "description": "A model recipe: groups, estimated tokens, the token limit, the first source's text, and the missing setting if any"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviewError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_rows",
+          "rows",
+          "schema",
+          "step_rows",
+          "sample"
+        ],
+        "title": "PreviewOut"
+      },
+      "PreviewRequest": {
+        "properties": {
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps",
+            "description": "Draft steps to try; null = the recipe's own"
+          }
+        },
+        "type": "object",
+        "title": "PreviewRequest"
       },
       "PromptInfo": {
         "properties": {
@@ -9483,6 +11652,12 @@
           "signup_open": {
             "type": "boolean",
             "title": "Signup Open"
+          },
+          "admin_totp": {
+            "type": "boolean",
+            "title": "Admin Totp",
+            "description": "The admin sign-in (/admin/login) asks for a TOTP code",
+            "default": false
           }
         },
         "type": "object",
@@ -9934,6 +12109,17 @@
             "title": "Auto Reject Enabled",
             "description": "Whether the rules are applied at generation"
           },
+          "tabular": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TabularRules"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tabular draft rules (null: the defaults)"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -9994,6 +12180,16 @@
               }
             ],
             "title": "Auto Reject Enabled"
+          },
+          "tabular": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TabularRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -10128,6 +12324,108 @@
         ],
         "title": "RecipeOut"
       },
+      "RecipeRunOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "recipe_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Name"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "published_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Url"
+          },
+          "to_review": {
+            "type": "boolean",
+            "title": "To Review"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "table or qa: which review page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "to_review"
+        ],
+        "title": "RecipeRunOut"
+      },
       "RecipeRunRequest": {
         "properties": {
           "full_refresh": {
@@ -10152,6 +12450,22 @@
         },
         "type": "object",
         "title": "RecipeRunRequest"
+      },
+      "RecipeRunsOut": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeRunOut"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "RecipeRunsOut"
       },
       "RecipeScheduleIn": {
         "properties": {
@@ -10918,6 +13232,93 @@
         ],
         "title": "ResumesOut"
       },
+      "ReviewIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "ReviewIn"
+      },
+      "ReviewOut": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "published_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "ReviewOut"
+      },
       "ScheduleSkip": {
         "properties": {
           "reason": {
@@ -11037,6 +13438,31 @@
               }
             ],
             "title": "Updated At"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At",
+            "description": "When the provider last confirmed or refused it"
+          },
+          "last_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last State",
+            "description": "That check's answer: ok, revoked or read_only (Hugging Face)"
           }
         },
         "type": "object",
@@ -11101,6 +13527,25 @@
           "settings"
         ],
         "title": "SettingsUpdate"
+      },
+      "SignInRefusal": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "SignInRefusal",
+        "description": "Why a sign-in was refused: ``code`` for the login page, ``detail`` in\nthe request's language."
       },
       "SimilarityAnalysisResponse": {
         "properties": {
@@ -11175,6 +13620,580 @@
           "question2"
         ],
         "title": "SimilarityPair"
+      },
+      "SourceRecipeIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "data_source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Data Source Id"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Steps"
+          },
+          "output_kind": {
+            "type": "string",
+            "enum": [
+              "table",
+              "qa",
+              "corpus"
+            ],
+            "title": "Output Kind",
+            "default": "table"
+          },
+          "output_options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Output Options"
+          },
+          "target_repo": {
+            "type": "string",
+            "maxLength": 193,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Target Repo"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "title": "Visibility",
+            "default": "private"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "data_source_id",
+          "target_repo"
+        ],
+        "title": "SourceRecipeIn",
+        "description": "A recipe: what to do with one data source."
+      },
+      "SourceRecipeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "data_source_id": {
+            "type": "string",
+            "title": "Data Source Id"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "output_kind": {
+            "type": "string",
+            "title": "Output Kind"
+          },
+          "output_options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Output Options"
+          },
+          "target_repo": {
+            "type": "string",
+            "title": "Target Repo"
+          },
+          "visibility": {
+            "type": "string",
+            "title": "Visibility"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "data_source_id",
+          "steps",
+          "output_kind",
+          "output_options",
+          "target_repo",
+          "visibility",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SourceRecipeOut"
+      },
+      "SourceRecipePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "output_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "table",
+                  "qa",
+                  "corpus"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Kind"
+          },
+          "output_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Options"
+          },
+          "target_repo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 193,
+                "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,95}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Repo"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          },
+          "model_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Ref"
+          }
+        },
+        "type": "object",
+        "title": "SourceRecipePatch"
+      },
+      "SourceRecipesOut": {
+        "properties": {
+          "recipes": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRecipeOut"
+            },
+            "type": "array",
+            "title": "Recipes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "title": "SourceRecipesOut"
+      },
+      "SourceSecretIn": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "SourceSecretIn"
+      },
+      "SourceSecretOut": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "title": "SourceSecretOut"
+      },
+      "SourceTestOut": {
+        "properties": {
+          "records": {
+            "type": "integer",
+            "title": "Records"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "sample": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Sample"
+          }
+        },
+        "type": "object",
+        "required": [
+          "records",
+          "columns",
+          "sample"
+        ],
+        "title": "SourceTestOut"
+      },
+      "TabularDraftOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "table"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "data_source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Source Id"
+          },
+          "target_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Repo"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Provenance"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "source_rows": {
+            "type": "integer",
+            "title": "Source Rows"
+          },
+          "schema": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Schema"
+          },
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "quality_report": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Quality Report"
+          },
+          "blocking": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Blocking"
+          },
+          "step_rows": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Step Rows"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changes"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Url"
+          },
+          "public_refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Refusal",
+            "description": "Why the draft can't be public (its licence), if so"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "provenance",
+          "rows",
+          "source_rows",
+          "schema",
+          "profile",
+          "quality_report",
+          "blocking",
+          "step_rows",
+          "steps"
+        ],
+        "title": "TabularDraftOut"
+      },
+      "TabularRules": {
+        "properties": {
+          "min_rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rows",
+            "description": "Fewest rows a draft has"
+          },
+          "max_null_share": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Null Share",
+            "description": "Largest empty share of any column"
+          },
+          "required_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Required Columns"
+          },
+          "unmasked_pii": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "block",
+              "warn",
+              "off"
+            ],
+            "title": "Unmasked Pii",
+            "description": "Unmasked personal data; auto: block e-mails, phones and NIR in a public dataset, warn otherwise",
+            "default": "auto"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warn",
+              "block"
+            ],
+            "title": "Severity",
+            "description": "What a failed row, empty-share or column rule does",
+            "default": "warn"
+          }
+        },
+        "type": "object",
+        "title": "TabularRules",
+        "description": "The rules of tabular drafts (review/tabular_quality.py)."
       },
       "ThresholdsOut": {
         "properties": {
@@ -11349,8 +14368,20 @@
             "title": "Id"
           },
           "email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The HF username, else the email"
           },
           "role": {
             "type": "string",
@@ -11359,12 +14390,34 @@
           "provider": {
             "type": "string",
             "title": "Provider"
+          },
+          "hf_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hf Username"
+          },
+          "hf_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hf Avatar Url"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "email",
+          "name",
           "role",
           "provider"
         ],

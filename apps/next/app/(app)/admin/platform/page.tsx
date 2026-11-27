@@ -6,11 +6,17 @@ import { toast } from 'sonner'
 import { usePlatform, useUpdatePlatform } from '@/hooks/use-admin'
 import type { PlatformSwitch } from '@/api/sdk'
 
+// The values of the choice switches, each with its label under `choices`.
+const CHOICES = ['closed', 'orgs', 'open'] as const
+type Choice = (typeof CHOICES)[number]
+const isChoice = (value: string): value is Choice => (CHOICES as readonly string[]).includes(value)
+
 function SwitchRow({ item }: { item: PlatformSwitch }) {
   const save = useUpdatePlatform()
   const t = useTranslations('admin.platform')
   const tc = useTranslations('common')
   const isList = Array.isArray(item.value)
+  const choices = item.choices ?? null
   const [text, setText] = useState(isList ? (item.value as string[]).join(', ') : '')
 
   const submit = (value: unknown) =>
@@ -28,7 +34,21 @@ function SwitchRow({ item }: { item: PlatformSwitch }) {
         </span>
       </label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {isList ? (
+        {choices ? (
+          <select
+            id={`switch-${item.key}`}
+            className="input"
+            value={String(item.value)}
+            disabled={save.isPending}
+            onChange={(e) => submit(e.target.value)}
+          >
+            {choices.map((choice) => (
+              <option key={choice} value={choice}>
+                {isChoice(choice) ? t(`choices.${choice}`) : choice}
+              </option>
+            ))}
+          </select>
+        ) : isList ? (
           <>
             <input
               id={`switch-${item.key}`}

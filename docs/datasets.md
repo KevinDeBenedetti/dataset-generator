@@ -9,6 +9,14 @@ app keeps no copy of them: every page is read from the Hub with your own token,
 at one precise commit. Generated data that is not published yet is listed under
 **Drafts** instead (see [Getting Started](./getting-started.md)).
 
+## Token permissions
+
+Publishing creates and updates dataset repos with your own Hugging Face token:
+a `write` token, or a fine-grained token with **Write access to contents and
+settings of repos** (`repo.write`) on your account, and on each organisation you
+publish to. A fine-grained token without it on an organisation signs you in, but
+can't publish there.
+
 ## The list
 
 The list shows the dataset repos of the namespace saved in **Settings**, or of
@@ -108,3 +116,42 @@ Errors: `503` without a Hugging Face token, `404` for an unknown repo, revision,
 split or row, `413` for a split above the size limit, `400` for a filter or
 sort that doesn't apply, `422` for data files that don't read as a table, `502`
 when the Hub fails.
+
+## Tabular datasets
+
+A table built by a [recipe](./recipes.md) is published when its draft is
+approved, in one commit on top of the repo's latest one (a repo that changed in
+between is refused, nothing is overwritten):
+
+```text
+data/train-00000-of-0000N.parquet   the rows, in files of at most 500 MB
+README.md                           the app card
+manifest.json                       provenance, recipe, run, rows, SHA-256 of each file
+```
+
+The card's front matter gives the licence, the `dataset-generator`,
+`open-data` and `tabular` tags, the `configs` the Hub's viewer reads and the
+features of the schema; its body gives the source and its attribution
+(`Source: <producer> — <dataset> — <date>`, as the Licence Ouverte / Etalab
+2.0 asks), the schema, the recipe's steps in plain words and how to load the
+dataset with `datasets` or `pandas`. A repo whose card the app didn't write is
+never overwritten.
+
+A dataset is **private** by default. It is public only when its recipe asks
+for it and the data source's licence allows redistribution:
+
+| Licence (data.gouv.fr id, or as stated)  | Hub `license`  | Public allowed |
+| ---------------------------------------- | -------------- | -------------- |
+| `lov2`, `fr-lo`, Licence Ouverte, Etalab | `etalab-2.0`   | yes            |
+| `odc-odbl`, ODbL                         | `odbl`         | yes            |
+| `odc-by`                                 | `odc-by`       | yes            |
+| `cc-by`                                  | `cc-by-4.0`    | yes            |
+| `cc-by-sa`                               | `cc-by-sa-4.0` | yes            |
+| `cc-zero`, `odc-pddl`, public domain     | `cc0-1.0`      | yes            |
+| `notspecified`, none                     | `unknown`      | no             |
+| anything else (`other-*`…)               | `other`        | no             |
+
+A blocking rule of the quality report (unmasked e-mails, phone numbers or NIR in
+a public dataset, by default) stops the approval too. A new repo is created
+private and made public only once the commit is in; a private publication
+needs a repo the Hub confirms private.

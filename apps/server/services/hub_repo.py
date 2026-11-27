@@ -33,7 +33,7 @@ import logging
 import re
 import tempfile
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from server.core.config import config
 from server.core.lru import WeightedLRU
@@ -73,6 +73,10 @@ class HubTokenRejected(HubRepoError):
 
 class RepoNotPrivate(HubRepoError):
     """The repo exists and is not confirmed private: publishing would leak."""
+
+
+class RepoNotOurs(HubRepoError):
+    """The repo holds a dataset the app didn't make: it is not overwritten."""
 
 
 class DatasetMoved(HubRepoError):
@@ -145,12 +149,26 @@ class HubBackend(Protocol):
         ...
 
     def commit(
-        self, repo_id: str, files: Mapping[str, bytes], parent: str, message: str
+        self,
+        repo_id: str,
+        files: Mapping[str, Any],
+        parent: str,
+        message: str,
+        delete: Sequence[str] = (),
     ) -> str:
-        """Write ``files`` in one commit on ``parent``; the new commit's id.
+        """Write ``files`` (bytes, or a local ``Path`` streamed from disk) and
+        remove ``delete`` in one commit on ``parent``; the new commit's id.
 
         Raises :class:`DatasetMoved` when the repo's head is no longer ``parent``.
         """
+        ...
+
+    def list_files(self, repo_id: str, commit: str) -> List[str]:
+        """Every file path of the repo at ``commit``."""
+        ...
+
+    def set_private(self, repo_id: str, private: bool) -> None:
+        """Make the repo private or public."""
         ...
 
 
@@ -262,18 +280,31 @@ class HfHubBackend:
         self._api.create_repo(repo_id, repo_type="dataset", private=True, exist_ok=True)
 
     def commit(
-        self, repo_id: str, files: Mapping[str, bytes], parent: str, message: str
+        self,
+        repo_id: str,
+        files: Mapping[str, Any],
+        parent: str,
+        message: str,
+        delete: Sequence[str] = (),
     ) -> str:
-        from huggingface_hub import CommitOperationAdd
+        from pathlib import Path
+
+        from huggingface_hub import CommitOperationAdd, CommitOperationDelete
         from huggingface_hub.errors import HfHubHTTPError
 
+        # A Path is streamed by huggingface_hub (LFS/Xet), never read whole.
+        operations: List[Any] = [
+            CommitOperationAdd(
+                path, str(content) if isinstance(content, Path) else content
+            )
+            for path, content in files.items()
+        ]
+        operations += [CommitOperationDelete(path) for path in delete]
         try:
             info = self._api.create_commit(
                 repo_id=repo_id,
                 repo_type="dataset",
-                operations=[
-                    CommitOperationAdd(path, content) for path, content in files.items()
-                ],
+                operations=operations,
                 commit_message=message,
                 parent_commit=parent,
             )
@@ -285,6 +316,26 @@ class HfHubBackend:
                 raise _moved(repo_id) from exc
             raise
         return str(info.oid)
+
+    def list_files(self, repo_id: str, commit: str) -> List[str]:
+        from huggingface_hub.errors import HfHubHTTPError
+
+        try:
+            return list(
+                self._api.list_repo_files(repo_id, repo_type="dataset", revision=commit)
+            )
+        except (HfHubHTTPError, OSError) as exc:
+            raise _hub_error(exc) from exc
+
+    def set_private(self, repo_id: str, private: bool) -> None:
+        from huggingface_hub.errors import HfHubHTTPError
+
+        try:
+            self._api.update_repo_settings(
+                repo_id, repo_type="dataset", private=private
+            )
+        except (HfHubHTTPError, OSError) as exc:
+            raise _hub_error(exc) from exc
 
 
 # --- a dataset version -------------------------------------------------------
@@ -452,10 +503,18 @@ def mark_app_card(card: str) -> str:
 class HubDatasetRepo:
     """One Hub dataset repo, opened for one user. Made by :func:`open_repo`."""
 
-    def __init__(self, backend: HubBackend, repo_id: str, new_pairs_path: str) -> None:
+    def __init__(
+        self,
+        backend: HubBackend,
+        repo_id: str,
+        new_pairs_path: str,
+        before_publish: Optional[Callable[[], None]] = None,
+    ) -> None:
         self._backend = backend
         self.repo_id = repo_id
         self._new_pairs_path = new_pairs_path
+        # Run before anything is written (open_repo: the token's re-check).
+        self._before_publish = before_publish
 
     def read(self) -> DatasetVersion:
         """The dataset as it is now. A repo that does not exist is an empty version.
@@ -544,6 +603,8 @@ class HubDatasetRepo:
             raise ValueError(
                 f"a version of '{base.repo_id}' cannot be published to '{self.repo_id}'"
             )
+        if self._before_publish is not None:
+            self._before_publish()
         if base.commit is None:
             self._backend.create_private(self.repo_id)
         head = self._backend.head(self.repo_id, _KNOWN_PATHS)
@@ -598,6 +659,75 @@ class HubDatasetRepo:
             app_card=base.app_card,
         )
 
+    # --- tabular datasets (ADR 0005) ------------------------------------------
+
+    def publish_table(
+        self,
+        shards: Mapping[str, Any],
+        *,
+        card: str,
+        manifest: bytes,
+        message: str,
+        public: bool = False,
+    ) -> Dict[str, Any]:
+        """Publish a tabular dataset's next version in one commit: its Parquet
+        shards (``data/…parquet`` → local ``Path``), the app card and the
+        manifest; the shards of the previous version that are not rewritten
+        are removed in the same commit.
+
+        A new repo is created private, and made public only once the commit
+        is in, when ``public`` is asked. An existing repo must be the app's (an
+        app card, or empty) and, for a private publication, confirmed private.
+        Raises :class:`DatasetMoved` when the repo changes in between.
+        """
+        if self._before_publish is not None:
+            self._before_publish()
+        head = self._backend.head(self.repo_id, [CARD_PATH, MANIFEST_PATH])
+        if head is None:
+            self._backend.create_private(self.repo_id)
+            head = self._backend.head(self.repo_id, [CARD_PATH, MANIFEST_PATH])
+            if head is None:  # pragma: no cover — created a moment ago
+                raise _moved(self.repo_id)
+        elif CARD_PATH in head.sizes:
+            existing = self._backend.download(
+                self.repo_id, CARD_PATH, head.commit, 1024 * 1024
+            ).decode("utf-8", errors="replace")
+            if not is_app_card(existing, has_manifest=MANIFEST_PATH in head.sizes):
+                raise RepoNotOurs(
+                    f"The Hugging Face repo '{self.repo_id}' has a card the app "
+                    "didn't write: publish to another repo"
+                )
+        if not public and head.private is not True:
+            state = (
+                "is public" if head.private is False else "has an unknown visibility"
+            )
+            raise RepoNotPrivate(
+                f"The Hugging Face repo '{self.repo_id}' {state}. Publishing would "
+                "expose this dataset: make the repo private on the Hub, or "
+                "publish to a different repo."
+            )
+        old = [
+            path
+            for path in self._backend.list_files(self.repo_id, head.commit)
+            if path.startswith("data/") and path not in shards
+        ]
+        files: Dict[str, Any] = {
+            **shards,
+            CARD_PATH: card.encode("utf-8"),
+            MANIFEST_PATH: manifest,
+        }
+        commit = self._backend.commit(
+            self.repo_id, files, head.commit, message, delete=old
+        )
+        if public and head.private is not False:
+            self._backend.set_private(self.repo_id, False)
+        return {
+            "repo_id": self.repo_id,
+            "commit": commit,
+            "url": f"https://huggingface.co/datasets/{self.repo_id}",
+            "visibility": "public" if public else "private",
+        }
+
 
 def backend_for(creds: Credentials) -> HubBackend:
     """The real Hub, as the caller's token sees it.
@@ -634,8 +764,10 @@ def open_repo(
             "Hugging Face is not configured. Add your Hugging Face token "
             "(with write access) in Settings to use the Hub."
         )
+    before_publish = None
     if backend is None:
         backend = backend_for(creds)
+        before_publish = _token_check(creds)
     account = backend.account()
     repo_id = repo_id.strip()
     if "/" not in repo_id:
@@ -647,4 +779,19 @@ def open_repo(
                 "namespace in Settings."
             )
         repo_id = f"{namespace}/{repo_id}"
-    return HubDatasetRepo(backend, repo_id, new_pairs_path)
+    return HubDatasetRepo(backend, repo_id, new_pairs_path, before_publish)
+
+
+def _token_check(creds: Credentials) -> Callable[[], None]:
+    """The re-check of the token before a publication (auth/hf_token.py): a
+    revoked or read-only token is refused before anything is written."""
+
+    def check() -> None:
+        from server.auth.hf_token import TokenUnusable, ensure_can_publish
+
+        try:
+            ensure_can_publish(creds)
+        except TokenUnusable as exc:
+            raise HubTokenRejected(str(exc)) from None
+
+    return check

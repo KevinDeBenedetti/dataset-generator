@@ -56,6 +56,22 @@ dependencies = [
     # Parquet files into a columnar table, then searches, filters, sorts and
     # profiles it without turning every row into a Python dict.
     "pyarrow>=26.0.1",
+    # The admin's password hash from the deployment's secrets
+    # (auth/admin_secrets.py): argon2id.
+    "argon2-cffi>=25.1.0",
+    # The tabular engine (apps/server/engine, ADR 0003): reads, profiles,
+    # transforms and writes Parquet. Capped below 2.0 until checked against it.
+    "duckdb>=1.4.0,<2.0.0",
+    # XLSX data sources: DuckDB's excel extension is not bundled (it would be
+    # downloaded at runtime), so a sheet is read with openpyxl — which parses
+    # the untrusted workbook XML through defusedxml once it is installed.
+    "openpyxl>=3.1.5",
+    "defusedxml>=0.7.1",
+    # The front matter of a tabular dataset's card (hub/card.py).
+    "pyyaml>=6.0.3",
+    # SQL dump data sources (connectors/sql_dump.py): each statement is parsed
+    # in the dump's dialect and written back as DuckDB SQL, never run as sent.
+    "sqlglot>=30.0.0",
 ]
 
 [dependency-groups]
@@ -104,6 +120,12 @@ extend-immutable-calls = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, and sign in with fake passwords.
-"apps/server/tests/**" = ["S101", "S105", "S106", "S107"]
+"apps/server/tests/**" = ["S101", "S105", "S106", "S107", "S608"]
 # Migrations build their SQL from fixed identifiers, never from input.
 "apps/server/migrations/**" = ["S608"]
+# The tabular engine builds DuckDB SQL in one place, every identifier through
+# quote_ident and every literal through quote_literal (engine/session.py,
+# ADR 0003); the connection is sandboxed to the run's folder.
+"apps/server/engine/**" = ["S608"]
+"apps/server/review/tabular_quality.py" = ["S608"]
+"apps/server/connectors/sql_dump.py" = ["S608"]

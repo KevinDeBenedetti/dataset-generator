@@ -93,6 +93,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends tini \
     && useradd --system --uid 10001 --create-home --home-dir /home/app app \
+    && install -d -o 10001 -g 10001 /data/drafts \
     && python -m pip uninstall --yes --root-user-action=ignore pip
 
 ENV PATH=/app/.venv/bin:$PATH \
