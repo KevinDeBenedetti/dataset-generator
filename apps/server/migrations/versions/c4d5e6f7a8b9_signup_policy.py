@@ -10,7 +10,6 @@ longer the identity (ADR 0002); the domains dropped are logged. Without a row,
 nothing changes: the default still follows ENVIRONMENT.
 """
 
-import json
 import logging
 from typing import Sequence, Union
 
@@ -37,10 +36,8 @@ def _value(conn, key):
     row = conn.execute(
         sa.select(_settings.c.value).where(_settings.c.key == key)
     ).first()
-    if row is None:
-        return None
-    value = row[0]
-    return json.loads(value) if isinstance(value, str) else value
+    # The JSON column hands back the decoded value: "open" is already a str.
+    return None if row is None else row[0]
 
 
 def _replace(conn, old: str, new: str, value) -> None:
