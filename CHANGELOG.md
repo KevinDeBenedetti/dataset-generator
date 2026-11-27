@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.3...v0.18.0) (2026-11-27)
+
+
+### Features
+
+* **corpus:** publish complete, versioned snapshots with content hashes ([f3eb003](https://github.com/KevinDeBenedetti/dataset-generator/commit/f3eb00300063cad1407ca5de1bdf100d7177076d))
+
+
+### Bug Fixes
+
+* **corpus:** keep nested READMEs, refuse splits cut with other chunker settings, label cards above 1M ([5e8890b](https://github.com/KevinDeBenedetti/dataset-generator/commit/5e8890b37eb8544dbc3e7167141137bbf5674b85))
+
 ## [0.17.3](https://github.com/KevinDeBenedetti/dataset-generator/compare/v0.17.2...v0.17.3) (2026-11-24)
 
 
