@@ -44,6 +44,12 @@ from server.jobs.tech_stack import format_stack_entries, rank_stack, repo_techno
 logger = logging.getLogger(__name__)
 
 GENERATOR_NAME = "dataset-generator/server.jobs.corpus"
+
+# The corpus layout the manifest declares. 2: every record carries a
+# ``content_hash``; READMEs are split into sections; code is split rather than
+# truncated, keyed by its content, and ids no longer move when a file grows.
+# A reader must refuse a version above the one it knows.
+SCHEMA_VERSION = 2
 KNOWN_SOURCES = ("profile", "github", "github_code", "github_docs")
 
 # Refuse to publish an implausibly small split: the ingest side clean-replaces
@@ -56,6 +62,26 @@ SPLIT_FILES = {name: f"data/{name}.jsonl" for name in KNOWN_SOURCES}
 
 class JobError(RuntimeError):
     pass
+
+
+def content_hash(text: str) -> str:
+    """SHA-256 of a chunk's text: what an indexer compares to skip re-embedding."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _occurrence_keys(keys: Sequence[str]) -> List[str]:
+    """``keys`` made unique in order: the second ``k`` is ``k#1``, the third ``k#2``.
+
+    A key alone stays as it is, so an id only depends on the chunks that share
+    its key, never on how many other chunks come before it.
+    """
+    seen: Dict[str, int] = {}
+    out: List[str] = []
+    for key in keys:
+        n = seen.get(key, 0)
+        seen[key] = n + 1
+        out.append(key if n == 0 else f"{key}#{n}")
+    return out
 
 
 @dataclass
@@ -80,6 +106,7 @@ class Chunk:
             value = getattr(self, key)
             if value:
                 rec[key] = value
+        rec["content_hash"] = content_hash(self.content)
         return rec
 
 
@@ -126,7 +153,19 @@ def build_github_profile_chunks(p: GitHubProfile) -> List[Chunk]:
     ]
 
 
-def build_github_repo_chunk(d: RepoData) -> Chunk:
+def _section_text(section: "Section") -> str:
+    return f"# {section.heading}\n{section.body}" if section.heading else section.body
+
+
+def build_github_repo_chunks(d: RepoData) -> List[Chunk]:
+    """The repo's card, then one chunk per further README section.
+
+    The card holds the metadata and the README's first section (its title and
+    introduction), so "what is <repo>?" still finds one chunk that answers it.
+    The rest of the README is cut like ``docs/`` (heading trail kept, short
+    sections merged, long ones split at paragraphs) instead of being truncated
+    at a character cap.
+    """
     parts = [f"GitHub Repository: {d.name}"]
     _line(parts, "Description", d.description)
     _line(parts, "Primary Language", d.language)
@@ -137,26 +176,50 @@ def build_github_repo_chunk(d: RepoData) -> Chunk:
     _line(parts, "Homepage", d.homepage)
     _line(parts, "URL", d.url)
 
+    readme = d.readme_full or d.readme
+    sections = doc_sections(RepoDoc(path="README.md", content=readme)) if readme else []
     content = "\n".join(parts)
-    if d.readme:
-        content += f"\n\nREADME:\n{d.readme}"
-    return Chunk(
-        id=deterministic_id(f"github:repo:{d.url}"),
-        content=content.strip(),
-        source="github",
-        type="readme",
-        # The name, like every other split: the portfolio lists repos from
-        # this field, and a URL here showed each repo twice in that list.
-        repo=d.name,
-        url=d.url,
-    )
+    if sections:
+        content += f"\n\nREADME:\n{_section_text(sections[0])}"
+    chunks = [
+        Chunk(
+            id=deterministic_id(f"github:repo:{d.url}"),
+            content=content.strip(),
+            source="github",
+            type="readme",
+            # The name, like every other split: the portfolio lists repos from
+            # this field, and a URL here showed each repo twice in that list.
+            repo=d.name,
+            url=d.url,
+        )
+    ]
+    rest = sections[1:]
+    keys = _occurrence_keys([f"github:readme:{d.url}:{s.heading}" for s in rest])
+    for key, section in zip(keys, rest, strict=True):
+        title = (
+            f"{d.name} README — {section.heading}"
+            if section.heading
+            else (f"{d.name} README")
+        )
+        chunks.append(
+            Chunk(
+                id=deterministic_id(key),
+                content=f"# {title}\n\n{section.body}",
+                source="github",
+                type="readme",
+                repo=d.name,
+                url=d.url,
+            )
+        )
+    return chunks
 
 
 def build_github_snapshot_chunks(snap: GitHubSnapshot) -> List[Chunk]:
     chunks: List[Chunk] = []
     if snap.profile:
         chunks.extend(build_github_profile_chunks(snap.profile))
-    chunks.extend(build_github_repo_chunk(r) for r in snap.repos)
+    for repo in snap.repos:
+        chunks.extend(build_github_repo_chunks(repo))
     return chunks
 
 
@@ -243,6 +306,10 @@ def build_knowledge_profile_chunks(snap: GitHubSnapshot) -> List[Chunk]:
 MAX_FILE_BYTES = 100 * 1024
 MAX_CODE_CHUNK_CHARS = 2500
 SPLIT_LINES = 150
+WINDOW_LINES = 120
+# A file with less code than this (``package main``, an empty ``__init__.py``)
+# answers no question and only crowds the retrieval budget.
+MIN_CODE_CHARS = 40
 MAX_FILE_CONCURRENT = 10
 
 LANGUAGE_MAP = {
@@ -352,13 +419,45 @@ def _ext(path: str) -> str:
     return base[dot:].lower() if dot > 0 else ""
 
 
+# Prose the github split already holds (README), or text that is not the
+# project's knowledge: licences, changelogs, contributor lists. Only as prose
+# files: `security.py` or `history.ts` is code like any other.
+_BOILERPLATE_NAME = re.compile(
+    r"^(readme|changelog|changes|history|license|licence|copying|notice|authors|"
+    r"contributors|code_of_conduct|security)(\.(md|markdown|rst|txt|adoc))?$",
+    re.IGNORECASE,
+)
+# Generated or vendored files: lockfiles the extension list misses, minified
+# bundles, protobuf and snapshot output.
+GENERATED_NAMES = {"package-lock.json", "pnpm-lock.yaml", "npm-shrinkwrap.json"}
+GENERATED_SUFFIXES = (
+    ".min.js",
+    ".min.css",
+    ".bundle.js",
+    ".pb.go",
+    "_pb2.py",
+    ".generated.ts",
+    ".gen.go",
+)
+
+
+def is_boilerplate(path: str) -> bool:
+    base = _base(path)
+    lower = base.lower()
+    return (
+        bool(_BOILERPLATE_NAME.match(base))
+        or lower in GENERATED_NAMES
+        or lower.endswith(GENERATED_SUFFIXES)
+    )
+
+
 def is_code_indexable(path: str, size: int) -> bool:
     if size > MAX_FILE_BYTES:
         return False
     for prefix in SKIP_DIR_PREFIXES:
         if path.startswith(prefix) or f"/{prefix}" in path:
             return False
-    if _base(path).startswith("."):
+    if _base(path).startswith(".") or is_boilerplate(path):
         return False
     return _ext(path) not in SKIP_EXTENSIONS
 
@@ -386,54 +485,95 @@ def _split_points(lines: List[str], language: str) -> List[int]:
         if lines[i - 1] == "" and pattern and pattern.match(lines[i]):
             points.append(i)
             continue
-        if i % 120 == 0:
+        if i % WINDOW_LINES == 0:
             points.append(i)
     points.append(len(lines))
     return points
 
 
-def _code_content(f: RawFile, lines: List[str], start: int, end: int) -> str:
-    result = f"// File: {f.path} ({f.language}) lines {start}-{end}\n" + "\n".join(
-        lines
-    )
-    if len(result) > MAX_CODE_CHUNK_CHARS:
-        return f"{result[:MAX_CODE_CHUNK_CHARS]}\n// [truncated]"
-    return result
+def _code_header(f: RawFile) -> str:
+    # No line numbers: the URL anchor carries them, and keeping them out of the
+    # text means code that only moved keeps its text, its id and its vector.
+    return f"// File: {f.path} ({f.language})\n"
 
 
-def _code_chunk(f: RawFile, owner: str, content: str, start: int, end: int) -> Chunk:
-    return Chunk(
-        id=deterministic_id(f"github_code:{owner}/{f.repo}:{f.path}:{start}"),
-        content=content,
-        source="github_code",
-        type="code",
-        repo=f.repo,
-        url=f"{f.url}#L{start}-L{end}",
-        path=f.path,
-        language=f.language,
-    )
+def _fit(lines: List[str], start: int, budget: int) -> List[Tuple[int, int, str]]:
+    """``lines`` (the first is line ``start``) as (first, last, text) pieces of at
+    most ``budget`` characters, cut between lines; a single longer line (a
+    minified one) is cut inside it. Nothing is dropped."""
+    pieces: List[Tuple[int, int, str]] = []
+    buf: List[str] = []
+    first = start
+    size = 0
+    for offset, line in enumerate(lines):
+        number = start + offset
+        while len(line) > budget:
+            if buf:
+                pieces.append((first, number - 1, "\n".join(buf)))
+                buf, size = [], 0
+            pieces.append((number, number, line[:budget]))
+            line = line[budget:]
+        if buf and size + 1 + len(line) > budget:
+            pieces.append((first, number - 1, "\n".join(buf)))
+            buf, size = [], 0
+        if not buf:
+            first = number
+            size = len(line)
+        else:
+            size += 1 + len(line)
+        buf.append(line)
+    if buf:
+        pieces.append((first, start + len(lines) - 1, "\n".join(buf)))
+    return pieces
+
+
+def _segments(lines: List[str], language: str) -> List[Tuple[int, List[str]]]:
+    """Whole file up to SPLIT_LINES, else split on function/class boundaries
+    (falling back to every WINDOW_LINES lines): (first line, lines) pairs."""
+    if len(lines) <= SPLIT_LINES:
+        return [(1, lines)]
+    out: List[Tuple[int, List[str]]] = []
+    start = 0
+    for end in _split_points(lines, language):
+        if end > start:
+            out.append((start + 1, lines[start:end]))
+            start = end
+    return out
 
 
 def chunk_file(f: RawFile, owner: str) -> List[Chunk]:
-    """Whole file up to SPLIT_LINES, else split on function/class boundaries
-    (falling back to every 120 lines)."""
-    lines = f.content.split("\n")
-    if len(lines) <= SPLIT_LINES:
-        content = _code_content(f, lines, 1, len(lines))
-        return (
-            [_code_chunk(f, owner, content, 1, len(lines))] if content.strip() else []
+    """The file's segments, each cut to MAX_CODE_CHUNK_CHARS without losing any
+    of it. A chunk's id is keyed on its text, so a chunk only gets a new id when
+    its own code changes."""
+    if len(f.content.strip()) < MIN_CODE_CHARS:
+        return []
+    header = _code_header(f)
+    budget = MAX_CODE_CHUNK_CHARS - len(header)
+    pieces = [
+        piece
+        for first, seg in _segments(f.content.split("\n"), f.language)
+        for piece in _fit(seg, first, budget)
+        if piece[2].strip()
+    ]
+    keys = _occurrence_keys(
+        [
+            f"github_code:{owner}/{f.repo}:{f.path}:{content_hash(text)[:16]}"
+            for _, _, text in pieces
+        ]
+    )
+    return [
+        Chunk(
+            id=deterministic_id(key),
+            content=header + text,
+            source="github_code",
+            type="code",
+            repo=f.repo,
+            url=f"{f.url}#L{first}-L{last}",
+            path=f.path,
+            language=f.language,
         )
-
-    chunks: List[Chunk] = []
-    start = 0
-    for end in _split_points(lines, f.language):
-        if end <= start:
-            continue
-        content = _code_content(f, lines[start:end], start + 1, end)
-        if content.strip():
-            chunks.append(_code_chunk(f, owner, content, start + 1, end))
-        start = end
-    return chunks
+        for key, (first, last, text) in zip(keys, pieces, strict=True)
+    ]
 
 
 async def _fetch_repo_files(
@@ -570,11 +710,11 @@ def doc_sections(doc: RepoDoc) -> List[Section]:
 
 
 def _doc_chunk(
-    owner: str, repo: str, branch: str, doc: RepoDoc, section: Section, index: int
+    owner: str, repo: str, branch: str, doc: RepoDoc, section: Section, key: str
 ) -> Chunk:
     title = f"{doc.path} — {section.heading}" if section.heading else doc.path
     return Chunk(
-        id=deterministic_id(f"github_docs:{owner}/{repo}:{doc.path}:{index}"),
+        id=deterministic_id(key),
         content=f"# {title}\n\n{section.body}",
         source="github_docs",
         type="docs",
@@ -600,9 +740,18 @@ async def build_github_docs_chunks(
                 continue
             branch = await client.default_branch(repo_owner, repo_name)
             for doc in docs:
-                for i, section in enumerate(doc_sections(doc)):
+                sections = doc_sections(doc)
+                # Keyed on the heading trail, not the position: adding a
+                # section no longer renumbers every section after it.
+                keys = _occurrence_keys(
+                    [
+                        f"github_docs:{repo_owner}/{repo_name}:{doc.path}:{s.heading}"
+                        for s in sections
+                    ]
+                )
+                for key, section in zip(keys, sections, strict=True):
                     chunks.append(
-                        _doc_chunk(repo_owner, repo_name, branch, doc, section, i)
+                        _doc_chunk(repo_owner, repo_name, branch, doc, section, key)
                     )
         except (GitHubAPIError, httpx2.HTTPError) as exc:
             errors.append(f"{slug}: {exc}")
@@ -637,13 +786,64 @@ def _git_commit() -> str:
         return ""
 
 
+def chunker_settings() -> dict:
+    """The parameters the chunks were cut with, recorded in the manifest: two
+    builds with different settings are different corpora even from one input."""
+    return {
+        "code": {
+            "max_chunk_chars": MAX_CODE_CHUNK_CHARS,
+            "split_lines": SPLIT_LINES,
+            "window_lines": WINDOW_LINES,
+            "min_code_chars": MIN_CODE_CHARS,
+            "max_file_bytes": MAX_FILE_BYTES,
+        },
+        "docs": {
+            "max_chunk_chars": MAX_DOC_CHUNK_CHARS,
+            "min_section_chars": MIN_SECTION_CHARS,
+            "max_docs_per_repo": MAX_INDEXED_DOCS_PER_REPO,
+        },
+        "readme": {"max_chunk_chars": MAX_DOC_CHUNK_CHARS},
+    }
+
+
+# Every record's columns, for the Hub's viewer and ``datasets.load_dataset``.
+# An optional field absent from a record reads as null.
+FEATURES = (
+    "id",
+    "content",
+    "source",
+    "type",
+    "repo",
+    "url",
+    "path",
+    "language",
+    "content_hash",
+)
+
+
+def _size_category(total: int) -> str:
+    if total < 1_000:
+        return "n<1K"
+    if total < 10_000:
+        return "1K<n<10K"
+    if total < 100_000:
+        return "10K<n<100K"
+    return "100K<n<1M"
+
+
 def dataset_card(manifest: dict, repo: str, username: str) -> str:
+    total = sum(f.get("records", 0) for f in manifest["files"])
     lines = [
         "---",
+        "pretty_name: Portfolio knowledge base",
         "license: other",
         "language:",
         "  - en",
         "  - fr",
+        "size_categories:",
+        f"  - {_size_category(total)}",
+        "task_categories:",
+        "  - text-retrieval",
         "tags:",
         "  - portfolio",
         "  - rag",
@@ -654,6 +854,14 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
         lines.append(f"  - config_name: {f['source']}")
         lines.append("    data_files:")
         lines.append(f"      - split: train\n        path: {f['path']}")
+    lines.append("dataset_info:")
+    for f in manifest["files"]:
+        lines.append(f"  - config_name: {f['source']}")
+        lines.append("    features:")
+        for name in FEATURES:
+            lines.append(f"      - name: {name}\n        dtype: string")
+        lines.append("    splits:")
+        lines.append(f"      - name: train\n        num_examples: {f['records']}")
     lines += ["---", ""]
     lines += ["# Portfolio knowledge base", ""]
     lines.append(
@@ -679,13 +887,15 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
         "| `id` | Deterministic UUIDv5 — stable across runs for unchanged content |",
         "| `content` | The text passed to the model as context |",
         "| `source` | Partition: `profile`, `github`, `github_code`, `github_docs` |",
-        "| `type` | `bio`, `skills`, `project`, `experience`, `education`, "
-        "`contact`, `readme`, `code`, `docs`, … |",
+        "| `type` | `bio`, `skills`, `project` (`profile`); `bio`, `contact`, "
+        "`readme` (`github`); `code`; `docs` |",
         "| `repo` | Repository name, when applicable |",
         "| `url` | Source URL; for code, a permalink with a line anchor |",
         "| `path` | File path within the repository (`github_code`, `github_docs`) |",
         "| `language` | Programming language (`github_code`); `Markdown` for "
         "`github_docs` |",
+        "| `content_hash` | SHA-256 of `content`: an indexer that already holds "
+        "this hash can keep its vector |",
         "",
         "Records are sorted by `id`, so a week-to-week diff shows only what "
         "actually changed.",
@@ -694,8 +904,9 @@ def dataset_card(manifest: dict, repo: str, username: str) -> str:
         "",
         "## Provenance",
         "",
-        f"- Generated at: `{manifest['generated_at']}`",
-        f"- Generator: `{manifest['generator']}`",
+        f"- Schema version: `{manifest.get('schema_version', 1)}`",
+        f"- Generated at: `{manifest.get('generated_at', '')}`",
+        f"- Generator: `{manifest.get('generator', GENERATOR_NAME)}`",
     ]
     if manifest.get("source_commit"):
         lines.append(f"- Source commit: `{manifest['source_commit']}`")
@@ -740,6 +951,9 @@ async def export_corpus(
         return slugs
 
     manifest: dict = {
+        "schema_version": SCHEMA_VERSION,
+        # Whose corpus this is: the card names them, also when a push rewrites it.
+        "owner": username,
         "generated_at": datetime.now(timezone.utc)
         .isoformat(timespec="milliseconds")
         .replace("+00:00", "Z"),
@@ -796,21 +1010,113 @@ async def export_corpus(
     finally:
         await client.close()
 
+    manifest["chunker"] = chunker_settings()
+    # What the build read: each repo's branch and tree sha, so two manifests
+    # tell whether a difference comes from the inputs or from the generator.
+    manifest["inputs"] = {
+        slug: {"branch": branch, "tree": tree}
+        for slug, (branch, tree) in sorted(client.trees_read.items())
+    }
     manifest["files"] = sorted(files, key=lambda f: f["path"])
+    write_manifest(out, manifest, hf_repo, username)
+    return manifest
+
+
+def write_manifest(out: Path, manifest: dict, hf_repo: str, username: str) -> None:
+    """``manifest.json`` and the card that describes it."""
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     (out / "README.md").write_text(
         dataset_card(manifest, hf_repo, username), encoding="utf-8"
     )
-    return manifest
 
 
 # --- push --------------------------------------------------------------------
 
 
+class CorpusMoved(JobError):
+    """The corpus repo got a commit between this push's read and its commit."""
+
+
+def _remote_manifest(api, repo_id: str, revision: str) -> Optional[dict]:
+    """The manifest at ``revision``, or None when that commit has none."""
+    from huggingface_hub.errors import EntryNotFoundError
+
+    try:
+        local = api.hf_hub_download(
+            repo_id, "manifest.json", repo_type="dataset", revision=revision
+        )
+    except EntryNotFoundError:
+        return None
+    try:
+        manifest = json.loads(Path(local).read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise JobError(f"manifest.json in {repo_id} is not valid JSON: {exc}") from exc
+    return manifest if isinstance(manifest, dict) else None
+
+
+def _carry_forward(
+    api, repo_id: str, parent: str, directory: Path, manifest: dict
+) -> List[dict]:
+    """Copy into ``directory`` the splits of the published corpus this export did
+    not rebuild, so the commit stays a complete snapshot; their manifest entries.
+
+    A split is only carried from a corpus of the same schema version: mixing
+    two chunk layouts in one snapshot would make the manifest lie about half of
+    it. Each carried file is checked against the hash its manifest gives.
+    """
+    remote = _remote_manifest(api, repo_id, parent)
+    if not remote:
+        return []
+    built = {f["source"] for f in manifest.get("files") or []}
+    missing = [
+        f
+        for f in remote.get("files") or []
+        if isinstance(f, dict)
+        and f.get("source") in KNOWN_SOURCES
+        and f["source"] not in built
+    ]
+    if not missing:
+        return []
+    remote_version = remote.get("schema_version", 1)
+    if remote_version != manifest.get("schema_version"):
+        names = ", ".join(sorted(f["source"] for f in missing))
+        raise JobError(
+            f"the published corpus is schema version {remote_version} and this "
+            f"build is {manifest.get('schema_version')}: rebuild every source "
+            f"once (missing here: {names})"
+        )
+    carried = []
+    for entry in missing:
+        # The path is the Hub's, not ours: only the split's own file is read.
+        path = SPLIT_FILES[entry["source"]]
+        local = Path(
+            api.hf_hub_download(repo_id, path, repo_type="dataset", revision=parent)
+        )
+        data = local.read_bytes()
+        if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
+            raise JobError(
+                f"{path} in {repo_id} does not match its manifest hash; "
+                "rebuild that source"
+            )
+        (directory / path).parent.mkdir(parents=True, exist_ok=True)
+        (directory / path).write_bytes(data)
+        carried.append({**entry, "path": path})
+        logger.info("push: carried %s forward from %s", path, parent[:7])
+    return carried
+
+
 def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
-    """Commit the exported directory to a private HF dataset in one commit."""
+    """Commit the exported directory to a private HF dataset in one commit.
+
+    The commit is a complete snapshot: the splits this export did not build are
+    carried over from the published corpus, any other ``data/`` file is
+    deleted, and the commit only lands on the version that was read — a push
+    racing another one fails with :class:`CorpusMoved` instead of mixing them.
+    """
+    from huggingface_hub.errors import HfHubHTTPError
+
     from server.services.hub_repo import HubRepoError, open_repo
     from server.services.huggingface import _api, ensure_private_dataset_repo
 
@@ -832,6 +1138,18 @@ def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
         raise JobError(str(exc)) from exc
     api = _api(creds)
     ensure_private_dataset_repo(api, repo_id)
+    parent = getattr(api.repo_info(repo_id, repo_type="dataset"), "sha", None)
+    parent = parent if isinstance(parent, str) and parent else None
+
+    if parent:
+        carried = _carry_forward(api, repo_id, parent, directory, manifest)
+        if carried:
+            manifest["files"] = sorted(
+                [*(manifest.get("files") or []), *carried], key=lambda f: f["path"]
+            )
+            write_manifest(
+                directory, manifest, repo_id, str(manifest.get("owner") or "")
+            )
 
     files = manifest.get("files") or []
     total = sum(f.get("records", 0) for f in files)
@@ -846,13 +1164,25 @@ def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
     )
 
     logger.info("uploading %s to %s", directory, repo_id)
-    api.upload_folder(
-        folder_path=str(directory),
-        repo_id=repo_id,
-        repo_type="dataset",
-        commit_message=title,
-        commit_description=description,
-    )
+    try:
+        api.upload_folder(
+            folder_path=str(directory),
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=title,
+            commit_description=description,
+            # Every data file the manifest no longer lists goes: the uploaded
+            # files themselves are never deleted by these patterns.
+            delete_patterns=["data/*"],
+            **({"parent_commit": parent} if parent else {}),
+        )
+    except HfHubHTTPError as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status in (409, 412):
+            raise CorpusMoved(
+                f"{repo_id} changed while the corpus was being pushed; run it again"
+            ) from exc
+        raise
     return f"https://huggingface.co/datasets/{repo_id}"
 
 

@@ -386,6 +386,29 @@ def _card_tags(card: str) -> List[str]:
     return tags
 
 
+_CONFIGS_LINE = re.compile(r"^configs:", re.MULTILINE)
+
+
+def with_pairs_config(card: str, pairs_path: str) -> str:
+    """``card`` with a ``configs`` block naming ``pairs_path`` as the train split,
+    added when its front matter has none.
+
+    Without it the Hub guesses the splits from file names, and a pairs file
+    under another name, or ``review.jsonl`` beside it, would be read as data.
+    """
+    front = _front_matter(card)
+    block = (
+        "configs:\n- config_name: default\n  data_files:\n"
+        f"  - split: train\n    path: {pairs_path}\n"
+    )
+    if front is None:
+        return f"---\n{block}---\n\n{card}"
+    if _CONFIGS_LINE.search(front):
+        return card
+    end = card.index("\n") + 1 + len(front)
+    return f"{card[:end]}{block}{card[end:]}"
+
+
 def is_app_card(card: Optional[str], *, has_manifest: bool = False) -> bool:
     """Whether the app wrote this card, and may therefore replace it.
 
@@ -559,7 +582,7 @@ class HubDatasetRepo:
             ).encode("utf-8")
         new_card = base.card
         if card is not None and base.app_card:
-            new_card = mark_app_card(card)
+            new_card = with_pairs_config(mark_app_card(card), base.pairs_path)
             files[CARD_PATH] = new_card.encode("utf-8")
 
         commit = self._backend.commit(self.repo_id, files, parent, message)

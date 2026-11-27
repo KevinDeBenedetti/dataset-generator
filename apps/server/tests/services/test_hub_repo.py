@@ -598,3 +598,19 @@ def test_a_hub_that_answers_a_server_error_is_unavailable_not_a_bad_token():
     # A token the Hub refuses for this repo is not an outage either.
     with pytest.raises(HubTokenRejected):
         HfHubBackend("hf_x", "k", client=DownHfApi(403)).head("kevin/x", ["a"])
+
+
+def test_with_pairs_config_points_the_viewer_at_the_pairs_file():
+    from server.services.hub_repo import with_pairs_config
+
+    card = "---\nlanguage:\n- en\n---\n\n# Title\n"
+    out = with_pairs_config(card, "train.jsonl")
+    assert out == (
+        "---\nlanguage:\n- en\nconfigs:\n- config_name: default\n  data_files:\n"
+        "  - split: train\n    path: train.jsonl\n---\n\n# Title\n"
+    )
+    # A card that declares its own configs is left as it is.
+    assert with_pairs_config(out, "data/train.jsonl") == out
+    assert with_pairs_config("# Bare\n", "data/train.jsonl").startswith(
+        "---\nconfigs:\n- config_name: default\n"
+    )
