@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from server.core.config import config
 from server.core.database import get_db
 from server.core.i18n import translate_message
+from server.auth import admin_secrets, hf_token
 from server.models.user import User
 from server.services.auth import (
     authenticate_user,
@@ -37,6 +38,8 @@ from server.services.sso import (
 )
 from server.services.sso import get_provider as get_sso_provider
 from server.services.rate_limit import (
+    admin_login_rate_limiter,
+    hf_login_rate_limiter,
     login_rate_limiter,
     refresh_rate_limiter,
     sso_rate_limiter,
@@ -80,13 +83,24 @@ class LoginRequest(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
-    email: str
+    email: Optional[str] = None
+    name: str = Field(description="The HF username, else the email")
     role: str
     provider: str
+    hf_username: Optional[str] = None
+    hf_avatar_url: Optional[str] = None
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
-        return cls(id=user.id, email=user.email, role=user.role, provider=user.provider)
+        return cls(
+            id=user.id,
+            email=user.email,
+            name=user.display_name,
+            role=user.role,
+            provider=user.provider,
+            hf_username=user.hf_username,
+            hf_avatar_url=user.hf_avatar_url,
+        )
 
 
 def _set_auth_cookie(response: Response, token: str) -> None:
@@ -167,6 +181,134 @@ def login(
     return UserResponse.from_user(user)
 
 
+class HfLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=96)
+    token: str = Field(..., min_length=1, max_length=hf_token.TOKEN_MAX_CHARS + 16)
+
+
+class SignInRefusal(BaseModel):
+    """Why a sign-in was refused: ``code`` for the login page, ``detail`` in
+    the request's language."""
+
+    code: str
+    detail: str
+
+
+def _refused(code: str, detail: str, status_code: int, **headers: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"code": code, "detail": translate_message(detail)},
+        headers=headers or None,
+    )
+
+
+@router.post(
+    "/hf",
+    response_model=UserResponse,
+    responses={
+        401: {"model": SignInRefusal},
+        403: {"model": SignInRefusal},
+        429: {"model": SignInRefusal},
+        503: {"model": SignInRefusal},
+    },
+)
+def hf_login(
+    body: HfLoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> UserResponse | JSONResponse:
+    """Sign in with a Hugging Face username and token (auth/hf_token.py).
+
+    The token is checked with the Hub's ``whoami``: it must belong to that
+    username and be able to write to its namespace. The first sign-in creates
+    the account (if the sign-up policy allows it); the token is stored
+    encrypted, never returned. 10 failures a minute per IP or per username,
+    then 429.
+    """
+    ip = _client_ip(request)
+    user_key = "user:" + body.username.strip().lower()
+    wait = max(
+        hf_login_rate_limiter.retry_after(ip),
+        hf_login_rate_limiter.retry_after(user_key),
+    )
+    if wait > 0:
+        return _refused(
+            "rate_limited",
+            "Too many failed login attempts. Please try again later.",
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            **{"Retry-After": str(int(wait) + 1)},
+        )
+    try:
+        user = hf_token.sign_in(db, body.username, body.token, ip=ip)
+    except hf_token.HubUnavailable:
+        return _refused(
+            "hub_unavailable",
+            "Hugging Face could not be reached. Try again in a moment.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except hf_token.SignInRefused as exc:
+        hf_login_rate_limiter.register_failure(ip)
+        hf_login_rate_limiter.register_failure(user_key)
+        audit.record(db, "user.login.hf_refused", ip=ip, detail={"code": exc.code})
+        return _refused(exc.code, exc.message, exc.status)
+    hf_login_rate_limiter.reset(ip)
+    hf_login_rate_limiter.reset(user_key)
+    _set_session_cookies(response, db, user)
+    return UserResponse.from_user(user)
+
+
+class AdminLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=1024)
+    otp: Optional[str] = Field(
+        None, max_length=16, description="The authenticator code, when TOTP is on"
+    )
+
+
+# One message for every failure: it must not say which value was wrong.
+_ADMIN_LOGIN_FAILED = "Incorrect username, password or code"
+
+
+@router.post("/admin/login", response_model=UserResponse)
+def admin_login(
+    body: AdminLoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """The admin's sign-in, checked against the deployment's secrets only
+    (auth/admin_secrets.py). 5 failures a minute per client IP, then 429; every
+    attempt is audited, never with the submitted values."""
+    if not admin_secrets.configured():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin sign-in is not configured",
+        )
+    ip = _client_ip(request)
+    retry_after = admin_login_rate_limiter.retry_after(ip)
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+    if not admin_secrets.verify_admin(body.username, body.password, body.otp):
+        admin_login_rate_limiter.register_failure(ip)
+        audit.record(db, "admin.login.failure", ip=ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=_ADMIN_LOGIN_FAILED
+        )
+    admin_login_rate_limiter.reset(ip)
+    admin = admin_secrets.ensure_admin_account(db)
+    if admin is None:  # pragma: no cover — configured() was checked above
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    admin.last_login_at = datetime.now(timezone.utc)
+    audit.record(db, "admin.login.success", actor=admin, target=admin, ip=ip)
+    _set_session_cookies(response, db, admin)
+    return UserResponse.from_user(admin)
+
+
 def _clear_session_cookies(response: Response) -> None:
     """Delete both auth cookies (sign-out, or a session that can't be renewed)."""
     for cookie_name in (config.auth_cookie_name, config.auth_refresh_cookie_name):
@@ -242,6 +384,9 @@ class ProvidersResponse(BaseModel):
     providers: List[ProviderInfo]
     local_login: bool
     signup_open: bool
+    admin_totp: bool = Field(
+        False, description="The admin sign-in (/admin/login) asks for a TOTP code"
+    )
 
 
 @router.get("/providers", response_model=ProvidersResponse)
@@ -250,7 +395,8 @@ def providers() -> ProvidersResponse:
     return ProvidersResponse(
         providers=[ProviderInfo(**p) for p in list_providers()],
         local_login=config.enable_local_login,
-        signup_open=platform.allow_signup(),
+        signup_open=platform.signup_possible(),
+        admin_totp=admin_secrets.totp_enabled(),
     )
 
 

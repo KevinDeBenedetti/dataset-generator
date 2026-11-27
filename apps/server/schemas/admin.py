@@ -11,10 +11,16 @@ class AdminUser(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    email: str
+    email: Optional[str] = None
+    hf_username: Optional[str] = Field(
+        None, description="The Hugging Face account it signs in with"
+    )
     role: str
     is_active: bool
-    locked: bool = Field(description="Listed in ADMIN_EMAILS: role and status fixed")
+    locked: bool = Field(
+        description="Set by the deployment (ADMIN_EMAILS or ADMIN_USERNAME): "
+        "role and status fixed"
+    )
     providers: List[str]
     has_password: bool
     created_at: Optional[datetime] = None
@@ -57,6 +63,9 @@ class PlatformSwitch(BaseModel):
     value: Any
     overridden: bool = Field(
         description="Set from the backoffice (else the env default)"
+    )
+    choices: Optional[List[str]] = Field(
+        None, description="The values a choice switch takes"
     )
 
 

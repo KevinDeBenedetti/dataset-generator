@@ -26,7 +26,7 @@ from server.services.auth import get_current_user
 from server.services.credentials import Credentials
 from server.services.jobs import QuotaExceededError, RunConflictError, start_run
 
-router = APIRouter(prefix="/recipes", tags=["recipes"])
+router = APIRouter(prefix="/github/recipes", tags=["recipes"])
 
 
 def _not_found(exc: recipes.RecipeNotFoundError) -> HTTPException:

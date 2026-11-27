@@ -228,9 +228,25 @@ def count(name: str) -> int:
 
 
 def search(
-    name: str, vector: np.ndarray, limit: int, score_threshold: Optional[float] = None
+    name: str,
+    vector: np.ndarray,
+    limit: int,
+    score_threshold: Optional[float] = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> List[Tuple[int, float, Dict[str, Any]]]:
-    """The ``limit`` points closest to ``vector``, with their payloads."""
+    """The ``limit`` points closest to ``vector``, with their payloads; only
+    those whose payload ``key`` (dotted for a nested field) equals each
+    ``filters`` value."""
+    from qdrant_client import models
+
+    query_filter = None
+    if filters:
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(key=key, match=models.MatchValue(value=value))
+                for key, value in filters.items()
+            ]
+        )
     response = _call(
         "searching",
         lambda c: c.query_points(
@@ -239,6 +255,7 @@ def search(
             limit=limit,
             score_threshold=score_threshold,
             with_payload=True,
+            query_filter=query_filter,
         ),
     )
     return [(int(p.id), float(p.score), dict(p.payload or {})) for p in response.points]

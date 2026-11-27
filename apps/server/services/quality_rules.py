@@ -20,6 +20,7 @@ DEFAULT_RULES: Dict[str, Any] = {
     "min_answer_words": 12,
     "reject_below_confidence": 0.8,
     "auto_reject_enabled": False,
+    "tabular": None,
     "updated_at": None,
 }
 
@@ -29,6 +30,7 @@ def _to_dict(row: QualityRules) -> Dict[str, Any]:
         "min_answer_words": row.min_answer_words,
         "reject_below_confidence": row.reject_below_confidence,
         "auto_reject_enabled": row.auto_reject_enabled,
+        "tabular": row.tabular,
         "updated_at": row.updated_at,
     }
 
@@ -57,6 +59,7 @@ def update_quality_rules(
     min_answer_words: Optional[int] = None,
     reject_below_confidence: Optional[float] = None,
     auto_reject_enabled: Optional[bool] = None,
+    tabular: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Upsert ``user_id``'s row, changing only the provided fields."""
     from datetime import datetime, timezone
@@ -72,6 +75,8 @@ def update_quality_rules(
             row.reject_below_confidence = reject_below_confidence
         if auto_reject_enabled is not None:
             row.auto_reject_enabled = auto_reject_enabled
+        if tabular is not None:
+            row.tabular = tabular
         row.updated_at = datetime.now(timezone.utc)
         db.commit()
         return _to_dict(row)

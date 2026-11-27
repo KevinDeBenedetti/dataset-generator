@@ -22,6 +22,8 @@ type NavItem = {
   // A key of the `nav` messages.
   label:
     | 'overview'
+    | 'sources'
+    | 'recipes'
     | 'datasets'
     | 'collections'
     | 'drafts'
@@ -38,13 +40,24 @@ type NavItem = {
   adminOnly?: boolean
 }
 
-const NAV: { label: 'platform' | 'quality' | 'configuration'; items: NavItem[] }[] = [
+const NAV: {
+  label: 'platform' | 'otherGenerators' | 'quality' | 'configuration'
+  items: NavItem[]
+}[] = [
   {
     label: 'platform',
     items: [
       { icon: 'dashboard', label: 'overview', href: '/dashboard' },
+      { icon: 'upload', label: 'sources', href: '/sources' },
+      { icon: 'filter', label: 'recipes', href: '/recipes' },
       { icon: 'database', label: 'datasets', href: '/datasets' },
       { icon: 'boxes', label: 'collections', href: '/collections' },
+    ],
+  },
+  {
+    // Today's generators, until they run as connectors and recipes (#318).
+    label: 'otherGenerators',
+    items: [
       { icon: 'fileText', label: 'drafts', href: '/drafts' },
       { icon: 'github', label: 'github', href: '/github' },
       { icon: 'user', label: 'resume', href: '/resume', adminOnly: true },
@@ -209,9 +222,9 @@ export function AppSidebar({
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger className="sb-user">
-            <span className="avatar">{initialsFor(user?.email)}</span>
+            <span className="avatar">{initialsFor(user?.name)}</span>
             <span className="meta">
-              <span className="nm">{user?.email ?? t('shell.loading')}</span>
+              <span className="nm">{user?.name ?? t('shell.loading')}</span>
               <span className="em">
                 {user?.role === 'admin' || user?.role === 'user'
                   ? t(`shell.roles.${user.role}`)

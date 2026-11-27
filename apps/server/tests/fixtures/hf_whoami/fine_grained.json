@@ -1,0 +1,28 @@
+{
+  "type": "user",
+  "id": "64f1c0ffee0000000000aaaa",
+  "name": "alice",
+  "fullname": "Alice Example",
+  "emailVerified": false,
+  "avatarUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/alice.png",
+  "orgs": [
+    {"type": "org", "id": "650000000000000000000001", "name": "open-data-lab", "fullname": "Open Data Lab", "roleInOrg": "write"},
+    {"type": "org", "id": "650000000000000000000002", "name": "other-org", "fullname": "Other Org", "roleInOrg": "read"}
+  ],
+  "auth": {
+    "type": "access_token",
+    "accessToken": {
+      "displayName": "datasetgen-fine",
+      "role": "fineGrained",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "fineGrained": {
+        "canReadGatedRepos": false,
+        "global": ["discussion.write"],
+        "scoped": [
+          {"entity": {"_id": "64f1c0ffee0000000000aaaa", "type": "user", "name": "alice"}, "permissions": ["repo.content.read", "repo.write"]},
+          {"entity": {"_id": "650000000000000000000001", "type": "org", "name": "open-data-lab"}, "permissions": ["repo.content.read", "repo.write", "org.read"]}
+        ]
+      }
+    }
+  }
+}

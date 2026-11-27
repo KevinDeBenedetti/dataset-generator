@@ -11,7 +11,7 @@ def test_the_readers_pick_then_their_browser_then_english():
 
 def test_french_falls_back_to_english_and_fills_values():
     assert tr("fr", "no.such.key", "Hello {name}", name="Ada") == "Hello Ada"
-    assert tr("en", "platform.allow_signup", "English") == "English"
+    assert tr("en", "platform.signup_policy", "English") == "English"
 
 
 def test_every_listed_job_and_switch_has_french():
@@ -208,10 +208,10 @@ def test_a_language_we_do_not_have_never_names_a_file(monkeypatch):
     for unknown in ("de", "../../../../etc/passwd", "", "../locales/fr"):
         assert i18n.catalog(unknown) == {}
         assert i18n.translate_message("Unknown user", unknown) == "Unknown user"
-        assert i18n.tr(unknown, "platform.allow_signup", "English") == "English"
+        assert i18n.tr(unknown, "platform.signup_policy", "English") == "English"
     assert opened == []
 
-    assert i18n.catalog("fr")["platform.allow_signup"]
+    assert i18n.catalog("fr")["platform.signup_policy"]
     assert set(opened) == {"fr.json"}
 
 

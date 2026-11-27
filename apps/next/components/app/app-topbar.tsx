@@ -127,9 +127,9 @@ export function AppTopbar({
       {user && (
         <div className="topbar-user">
           <div className="vsep" style={{ height: 22 }} />
-          <span className="crumb-muted" title={`${user.email} (${user.role})`}>
+          <span className="crumb-muted" title={`${user.name} (${user.role})`}>
             <Icon name="user" className="ic-sm" />
-            {user.email}
+            {user.name}
           </span>
           <button
             className="icon-btn"

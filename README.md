@@ -8,6 +8,11 @@
 
 ## Features
 
+- **Open data to the Hub**: upload a CSV, TSV, JSON, Parquet or Excel file,
+  shape it with recipe steps (select, rename, cast, filter, dedup, mask) and a
+  live preview, review the table's schema, profile and personal-data report,
+  then publish it as Parquet with its licence and attribution — public when
+  the licence allows it
 - **Hugging Face as the source of truth**: the **Datasets** section reads every
   published dataset from the Hub with your own token — data table, rendered
   card, per-column statistics, files and version history with row-level diffs
@@ -66,6 +71,7 @@ It is generated from the `docs/` directory and published by the docs hub, which 
 - [Production](https://kevindebenedetti.github.io/dataset-generator/production) — one public host, encryption keys, images and deployment
 - [Accounts, roles and keys](https://kevindebenedetti.github.io/dataset-generator/accounts) — SSO sign-in, admins, per-user keys
 - [Jobs](https://kevindebenedetti.github.io/dataset-generator/jobs) and [Storage](https://kevindebenedetti.github.io/dataset-generator/storage)
+- [Data sources](https://kevindebenedetti.github.io/dataset-generator/sources) and [Recipes](https://kevindebenedetti.github.io/dataset-generator/recipes) — files to tables, steps, quality report
 - [Datasets on Hugging Face](https://kevindebenedetti.github.io/dataset-generator/datasets) and [GitHub datasets](https://kevindebenedetti.github.io/dataset-generator/github)
 - [Vector collections](https://kevindebenedetti.github.io/dataset-generator/collections) — Qdrant collections built from a dataset's split, searched and tested
 

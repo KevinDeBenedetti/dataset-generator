@@ -1,0 +1,14 @@
+{
+  "type": "user",
+  "id": "64f1c0ffee0000000000aaaa",
+  "name": "alice",
+  "fullname": "Alice Example",
+  "email": "alice@example.com",
+  "emailVerified": true,
+  "avatarUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/alice.png",
+  "orgs": [],
+  "auth": {
+    "type": "access_token",
+    "accessToken": {"displayName": "read-only", "role": "read", "createdAt": "2026-11-01T10:00:00.000Z"}
+  }
+}

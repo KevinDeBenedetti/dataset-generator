@@ -225,6 +225,8 @@ LOGIN_SCOPE = "login"
 REFRESH_SCOPE = "refresh"
 SSO_SCOPE = "sso"
 SECRETS_SCOPE = "secrets"
+ADMIN_LOGIN_SCOPE = "admin_login"
+HF_LOGIN_SCOPE = "hf_login"
 
 
 def build_rate_limiter(
@@ -308,3 +310,11 @@ login_rate_limiter, refresh_rate_limiter, sso_rate_limiter = _limiters()
 # Saving/testing a key makes an outbound call with it: keep that from becoming a
 # key-guessing oracle. Keyed by user id, 30 a minute.
 secrets_rate_limiter = build_rate_limiter(SECRETS_SCOPE, 30, 60)
+
+# The admin's sign-in (POST /auth/admin/login): failures only, stricter than the
+# users' — 5 a minute per client IP.
+admin_login_rate_limiter = build_rate_limiter(ADMIN_LOGIN_SCOPE, 5, 60)
+
+# A user's sign-in with their Hugging Face token (POST /auth/hf): failures only,
+# 10 a minute, counted per client IP and per username.
+hf_login_rate_limiter = build_rate_limiter(HF_LOGIN_SCOPE, 10, 60)

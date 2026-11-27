@@ -25,10 +25,13 @@ function viewLabel(view: HubView, locale: Locale): string {
 export function CreateCollectionForm({
   models,
   initialRepo,
+  initialColumns = null,
   onCancel,
 }: {
   models: EmbeddingModelOut[]
   initialRepo: string | null
+  // Columns the link asked for (a corpus: its text, found by its title).
+  initialColumns?: { text: string[]; query: string | null } | null
   onCancel: () => void
 }) {
   const t = useTranslations('collections')
@@ -56,7 +59,14 @@ export function CreateCollectionForm({
   )
   const strings = (rows.data?.features ?? []).filter((f) => f.kind === 'string').map((f) => f.name)
   const columnsKey = view ? `${repoId}\u0000${viewKey(view)}` : ''
-  const defaults = defaultColumns({ strings, qa: rows.data?.qa })
+  const asked =
+    initialColumns &&
+    initialColumns.text.length > 0 &&
+    [...initialColumns.text, ...(initialColumns.query ? [initialColumns.query] : [])].every((c) =>
+      strings.includes(c),
+    )
+  const defaults =
+    asked && initialColumns ? initialColumns : defaultColumns({ strings, qa: rows.data?.qa })
   // The user's picks hold for the split they were made on; another split
   // starts again from its own defaults.
   const [picked, setPicked] = useState<{

@@ -33,6 +33,9 @@ def put_quality_rules(
                 min_answer_words=body.min_answer_words,
                 reject_below_confidence=body.reject_below_confidence,
                 auto_reject_enabled=body.auto_reject_enabled,
+                tabular=(
+                    body.tabular.model_dump() if body.tabular is not None else None
+                ),
             )
         )
     except Exception:

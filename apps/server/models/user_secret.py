@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,6 +28,10 @@ class UserSecret(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+    # The last live check of the secret with its provider (auth/hf_token.py for
+    # the Hugging Face token): when, and what it said (ok, revoked, read_only).
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_state: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 
 class UserSettings(Base):

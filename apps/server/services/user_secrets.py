@@ -6,6 +6,7 @@ plaintext happens only in :func:`load_credentials`, which builds the
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -47,14 +48,41 @@ def _hint(kind: str, value: str) -> Optional[str]:
     return value[-4:] if kind in HINT_KINDS and len(value) >= 12 else None
 
 
+# A data source's own secret (connectors/url.py, rest.py): "<prefix><source_id>".
+SOURCE_SECRET_PREFIXES = (
+    "source_http_header:",
+    "source_api_key:",
+    "source_db_password:",
+)
+_SOURCE_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+def is_source_kind(kind: str) -> bool:
+    for prefix in SOURCE_SECRET_PREFIXES:
+        if kind.startswith(prefix) and _SOURCE_ID.match(kind[len(prefix) :]):
+            return True
+    return False
+
+
+def _known_kind(kind: str) -> bool:
+    return kind in SECRET_KINDS or is_source_kind(kind)
+
+
 def set_secret(user_id: str, kind: str, value: str) -> Dict[str, Any]:
     """Store (or replace) ``user_id``'s secret of ``kind``. Returns its status."""
-    if kind not in SECRET_KINDS:
+    if not _known_kind(kind):
         raise SecretError(f"Unknown secret '{kind}'")
     value = (value or "").strip()
     if not value:
         raise SecretError("The value is empty")
-    if len(value) > MAX_SECRET_LENGTH or any(c.isspace() for c in value):
+    # A data source's header value may hold spaces ("Bearer …"), never a line
+    # break (it would end the header); other keys and tokens hold neither.
+    unfit = (
+        any(c in "\r\n\t\x00" for c in value)
+        if is_source_kind(kind)
+        else any(c.isspace() for c in value)
+    )
+    if len(value) > MAX_SECRET_LENGTH or unfit:
         raise SecretError("That does not look like a valid key or token")
     ciphertext, key_id = get_box().encrypt(value, aad_for(user_id, kind))
     with get_scoped_db() as db:
@@ -65,12 +93,45 @@ def set_secret(user_id: str, kind: str, value: str) -> Dict[str, Any]:
         row.ciphertext, row.key_id = ciphertext, key_id
         row.hint = _hint(kind, value)
         row.updated_at = datetime.now(timezone.utc)
+        # A new value: what was said of the old one no longer holds.
+        row.last_checked_at = None
+        row.last_state = None
         db.commit()
         return _status(row)
 
 
+def get_source_secret(user_id: str, kind: str) -> Optional[str]:
+    """A data source's secret, decrypted at the point of use (None when unset)."""
+    if not is_source_kind(kind):
+        raise SecretError(f"Unknown secret '{kind}'")
+    with get_scoped_db() as db:
+        row = db.get(UserSecret, {"user_id": user_id, "kind": kind})
+        if row is None:
+            return None
+        return get_box().decrypt(row.ciphertext, row.key_id, aad_for(user_id, kind))
+
+
+def has_secret(user_id: str, kind: str) -> bool:
+    with get_scoped_db() as db:
+        return db.get(UserSecret, {"user_id": user_id, "kind": kind}) is not None
+
+
+def record_check(user_id: str, kind: str, state: str) -> Optional[str]:
+    """Keep a live check's result on the secret; the previous state (None when
+    never checked, or no such secret)."""
+    with get_scoped_db() as db:
+        row = db.get(UserSecret, {"user_id": user_id, "kind": kind})
+        if row is None:
+            return None
+        previous = row.last_state
+        row.last_state = state
+        row.last_checked_at = datetime.now(timezone.utc)
+        db.commit()
+        return previous
+
+
 def delete_secret(user_id: str, kind: str) -> bool:
-    if kind not in SECRET_KINDS:
+    if not _known_kind(kind):
         raise SecretError(f"Unknown secret '{kind}'")
     with get_scoped_db() as db:
         row = db.get(UserSecret, {"user_id": user_id, "kind": kind})
@@ -87,6 +148,8 @@ def _status(row: UserSecret) -> Dict[str, Any]:
         "configured": True,
         "hint": row.hint,
         "updated_at": row.updated_at,
+        "last_checked_at": row.last_checked_at,
+        "last_state": row.last_state,
     }
 
 
@@ -160,6 +223,17 @@ def user_is_admin(user_id: str) -> bool:
     with get_scoped_db() as db:
         user = db.get(User, user_id)
         return bool(user is not None and user.is_active and user.is_admin)
+
+
+def user_is_secrets_admin(user_id: str) -> bool:
+    """Whether ``user_id`` is the active admin of the deployment's secrets."""
+    from server.auth.admin_secrets import is_current_secrets_admin
+
+    with get_scoped_db() as db:
+        user = db.get(User, user_id)
+        return bool(
+            user is not None and user.is_active and is_current_secrets_admin(user)
+        )
 
 
 def rewrap_all(db: Session, box: Optional[SecretBox] = None) -> Dict[str, int]:

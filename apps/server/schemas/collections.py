@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -139,6 +139,11 @@ class CollectionSearchRequest(BaseModel):
     ]
     limit: int = Field(10, ge=1, le=50)
     score_threshold: Optional[float] = Field(None, ge=-1, le=1)
+    filters: Optional[Dict[str, Union[str, int, bool]]] = Field(
+        None,
+        max_length=10,
+        description="Payload field → value the hits must have (metadata.code: '29019')",
+    )
 
 
 class CollectionHit(BaseModel):
@@ -146,6 +151,9 @@ class CollectionHit(BaseModel):
     score: float = Field(..., description="Cosine similarity to the query")
     text: str = Field(..., description="The embedded text")
     fields: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = Field(
+        None, description="A corpus dataset's typed metadata, what filters match"
+    )
 
 
 class CollectionSearchOut(BaseModel):

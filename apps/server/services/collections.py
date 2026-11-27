@@ -687,11 +687,16 @@ def _texts(
 def _payload(
     i: int, text: str, values: Dict[str, List[Any]], fields: Sequence[str]
 ) -> Dict[str, Any]:
-    return {
+    payload: Dict[str, Any] = {
         "row_idx": i,
         "text": text[:MAX_PAYLOAD_CHARS],
         "fields": {c: _cell(values[c][i])[:MAX_PAYLOAD_CHARS] for c in fields},
     }
+    # A corpus dataset's metadata stays typed, for the search's filters
+    # ("metadata.code": "29019").
+    if "metadata" in fields and isinstance(values["metadata"][i], dict):
+        payload["metadata"] = hub.jsonable(values["metadata"][i])
+    return payload
 
 
 async def _build(
@@ -712,7 +717,9 @@ async def _build(
             + " at this commit."
         )
     qa = hub.qa_columns(table) or {}
-    fields = list(dict.fromkeys([*wanted, *(c for c in qa.values() if c)]))
+    # A corpus dataset's typed metadata rides in the payload, for filters.
+    extra = ["metadata"] if "metadata" in present and "metadata" not in wanted else []
+    fields = list(dict.fromkeys([*wanted, *(c for c in qa.values() if c), *extra]))
     values = {c: table.column(c).to_pylist() for c in fields}
     texts = _texts(values, spec.text_columns, table.num_rows)
     ids = [i for i, text in enumerate(texts) if text]
@@ -806,6 +813,7 @@ def _hit(point_id: int, score: float, payload: Dict[str, Any]) -> Dict[str, Any]
         "score": score,
         "text": payload.get("text") or "",
         "fields": payload.get("fields") or {},
+        "metadata": payload.get("metadata"),
     }
 
 
@@ -826,9 +834,11 @@ def search(
     limit: int = 10,
     score_threshold: Optional[float] = None,
     creds: Optional[Credentials] = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """The points closest to ``query``, embedded with the collection's model
-    (an endpoint one on ``creds``)."""
+    (an endpoint one on ``creds``); ``filters`` keep the points whose payload
+    field (``metadata.code``, a field of the collection) equals the value."""
     row = _owned(db, owner_id, collection_id)
     _require_ready(db, row)
     query = query.strip()
@@ -837,7 +847,14 @@ def search(
     started = time.perf_counter()
     name = _vectors_name(row)
     vector = _embedder(row.model, creds or Credentials()).embed_queries([query])[0]
-    hits = qdrant.search(name, vector, limit, score_threshold)
+    known = set(row.fields or [])
+    for key in filters or {}:
+        head, _, rest = key.partition(".")
+        if head != "metadata" or not rest or "metadata" not in known:
+            raise CollectionInputError(
+                f"No field '{key}' to filter on (filters take metadata.<column>)"
+            )
+    hits = qdrant.search(name, vector, limit, score_threshold, filters=filters)
     return {
         "query": query,
         "took_ms": round((time.perf_counter() - started) * 1000),

@@ -111,8 +111,12 @@ def _config(monkeypatch, **env) -> Config:
         "SECRETS_ENCRYPTION_KEYS": f"k1:{generate_key()}",
         "GITHUB_CLIENT_ID": "gh",
         "GITHUB_CLIENT_SECRET": "gh-secret",
+        "ADMIN_USERNAME": "operator",
+        "ADMIN_PASSWORD_HASH": _ARGON2_HASH,
     }
     for key in (
+        "ADMIN_PASSWORD",
+        "ADMIN_TOTP_SECRET",
         "INFOMANIAK_CLIENT_ID",
         "INFOMANIAK_CLIENT_SECRET",
         "API_PUBLIC_URL",
@@ -125,6 +129,49 @@ def _config(monkeypatch, **env) -> Config:
         else:
             monkeypatch.setenv(key, value)
     return Config()
+
+
+_ARGON2_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$aGFzaGhhc2hoYXNo"
+
+
+class TestAdminSecrets:
+    """The admin's deployment secrets (auth/admin_secrets.py) are checked at start."""
+
+    def test_admin_username_is_required(self, monkeypatch):
+        problems = _config(monkeypatch, ADMIN_USERNAME=None).production_problems()
+        assert any("ADMIN_USERNAME is required" in p for p in problems)
+
+    def test_a_username_without_a_hash_is_refused(self, monkeypatch):
+        problems = _config(monkeypatch, ADMIN_PASSWORD_HASH=None).production_problems()
+        assert any("ADMIN_PASSWORD_HASH is required" in p for p in problems)
+
+    def test_a_hash_that_is_not_argon2id_is_refused(self, monkeypatch):
+        bcrypt_hash = "$2b$12$" + "a" * 53
+        cfg = _config(monkeypatch, ADMIN_PASSWORD_HASH=bcrypt_hash)
+        assert any("argon2id" in p for p in cfg.production_problems())
+
+    def test_a_password_in_clear_is_refused(self, monkeypatch):
+        cfg = _config(monkeypatch, ADMIN_PASSWORD="hunter2hunter2")
+        assert any("development only" in p for p in cfg.production_problems())
+
+    def test_a_username_with_odd_characters_is_refused(self, monkeypatch):
+        cfg = _config(monkeypatch, ADMIN_USERNAME="admin@example.com")
+        assert any("letters, digits" in p for p in cfg.production_problems())
+
+    def test_a_totp_secret_must_be_base32(self, monkeypatch):
+        bad = _config(monkeypatch, ADMIN_TOTP_SECRET="not base32 !!")
+        assert any("base32" in p for p in bad.production_problems())
+        good = _config(monkeypatch, ADMIN_TOTP_SECRET="JBSWY3DPEHPK3PXPJBSWY3DP")
+        assert good.production_problems() == []
+
+    def test_development_needs_none_of_it(self, monkeypatch):
+        cfg = _config(
+            monkeypatch,
+            ENVIRONMENT="development",
+            ADMIN_USERNAME=None,
+            ADMIN_PASSWORD="x",
+        )
+        assert cfg.production_problems() == []
 
 
 class TestProductionHardening:

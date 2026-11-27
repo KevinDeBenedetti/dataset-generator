@@ -1,0 +1,439 @@
+{
+ "profile": {
+  "header": [
+   "code",
+   "libelle",
+   "population_annuelle_2019",
+   "categorie_population",
+   "centroid",
+   "epci",
+   "canton"
+  ],
+  "columns": {
+   "code": {
+    "score": 1.0,
+    "format": "int",
+    "python_type": "int"
+   },
+   "epci": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "canton": {
+    "score": 1.5,
+    "format": "insee_canton",
+    "python_type": "string"
+   },
+   "libelle": {
+    "score": 1.0,
+    "format": "commune",
+    "python_type": "string"
+   },
+   "centroid": {
+    "score": 1.0,
+    "format": "latlon_wgs",
+    "python_type": "string"
+   },
+   "categorie_population": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "population_annuelle_2019": {
+    "score": 1.0,
+    "format": "float",
+    "python_type": "float"
+   }
+  },
+  "formats": {
+   "int": [
+    "code"
+   ],
+   "float": [
+    "population_annuelle_2019"
+   ],
+   "string": [
+    "categorie_population",
+    "epci"
+   ],
+   "commune": [
+    "libelle"
+   ],
+   "latlon_wgs": [
+    "centroid"
+   ],
+   "insee_canton": [
+    "canton"
+   ]
+  },
+  "profile": {
+   "code": {
+    "max": "29302",
+    "min": "29001",
+    "std": 88.52077446063456,
+    "mean": 29150.91335740072,
+    "tops": [
+     {
+      "count": 1,
+      "value": "29001"
+     },
+     {
+      "count": 1,
+      "value": "29201"
+     },
+     {
+      "count": 1,
+      "value": "29208"
+     },
+     {
+      "count": 1,
+      "value": "29207"
+     },
+     {
+      "count": 1,
+      "value": "29206"
+     },
+     {
+      "count": 1,
+      "value": "29205"
+     },
+     {
+      "count": 1,
+      "value": "29204"
+     },
+     {
+      "count": 1,
+      "value": "29202"
+     },
+     {
+      "count": 1,
+      "value": "29199"
+     },
+     {
+      "count": 1,
+      "value": "29190"
+     }
+    ],
+    "nb_distinct": 277,
+    "nb_missing_values": 0
+   },
+   "epci": {
+    "tops": [],
+    "nb_distinct": 0,
+    "nb_missing_values": 0
+   },
+   "canton": {
+    "tops": [
+     {
+      "count": 23,
+      "value": "Carhaix-Plouguer"
+     },
+     {
+      "count": 19,
+      "value": "Landivisiau"
+     },
+     {
+      "count": 18,
+      "value": "Crozon"
+     },
+     {
+      "count": 18,
+      "value": "Briec"
+     },
+     {
+      "count": 17,
+      "value": "Lesneven"
+     },
+     {
+      "count": 17,
+      "value": "Pont-de-Buis-lès-Quimerch"
+     },
+     {
+      "count": 17,
+      "value": "Saint-Renan"
+     },
+     {
+      "count": 16,
+      "value": "Douarnenez"
+     },
+     {
+      "count": 16,
+      "value": "Plouigneau"
+     },
+     {
+      "count": 16,
+      "value": "Plonéour-Lanvern"
+     }
+    ],
+    "nb_distinct": 25,
+    "nb_missing_values": 0
+   },
+   "libelle": {
+    "tops": [
+     {
+      "count": 1,
+      "value": "Argol"
+     },
+     {
+      "count": 1,
+      "value": "Plourin"
+     },
+     {
+      "count": 1,
+      "value": "Plouzévédé"
+     },
+     {
+      "count": 1,
+      "value": "Plouzané"
+     },
+     {
+      "count": 1,
+      "value": "Plouyé"
+     },
+     {
+      "count": 1,
+      "value": "Plouvorn"
+     },
+     {
+      "count": 1,
+      "value": "Plouvien"
+     },
+     {
+      "count": 1,
+      "value": "Plourin-lès-Morlaix"
+     },
+     {
+      "count": 1,
+      "value": "Plounévézel"
+     },
+     {
+      "count": 1,
+      "value": "Plouhinec"
+     }
+    ],
+    "nb_distinct": 277,
+    "nb_missing_values": 0
+   },
+   "centroid": {
+    "tops": [
+     {
+      "count": 1,
+      "value": "47.79449354, -3.566706716"
+     },
+     {
+      "count": 1,
+      "value": "48.466358742, -4.634546977"
+     },
+     {
+      "count": 1,
+      "value": "48.481678221, -3.99708811"
+     },
+     {
+      "count": 1,
+      "value": "48.478849478, -4.362548193"
+     },
+     {
+      "count": 1,
+      "value": "48.47710363, -4.322689802"
+     },
+     {
+      "count": 1,
+      "value": "48.47572349, -4.092367277"
+     },
+     {
+      "count": 1,
+      "value": "48.473430798, -4.19458795"
+     },
+     {
+      "count": 1,
+      "value": "48.471187173, -4.687140619"
+     },
+     {
+      "count": 1,
+      "value": "48.465048219, -4.567909406"
+     },
+     {
+      "count": 1,
+      "value": "48.44826592, -4.000249304"
+     }
+    ],
+    "nb_distinct": 277,
+    "nb_missing_values": 0
+   },
+   "categorie_population": {
+    "tops": [],
+    "nb_distinct": 0,
+    "nb_missing_values": 0
+   },
+   "population_annuelle_2019": {
+    "max": 139926.0,
+    "min": 114.0,
+    "std": 9454.129032755403,
+    "mean": 3303.5740072202166,
+    "tops": [
+     {
+      "count": 2,
+      "value": "998.0"
+     },
+     {
+      "count": 2,
+      "value": "959.0"
+     },
+     {
+      "count": 2,
+      "value": "821.0"
+     },
+     {
+      "count": 2,
+      "value": "861.0"
+     },
+     {
+      "count": 2,
+      "value": "1114.0"
+     },
+     {
+      "count": 2,
+      "value": "957.0"
+     },
+     {
+      "count": 2,
+      "value": "795.0"
+     },
+     {
+      "count": 1,
+      "value": "3503.0"
+     },
+     {
+      "count": 1,
+      "value": "5092.0"
+     },
+     {
+      "count": 1,
+      "value": "433.0"
+     }
+    ],
+    "nb_distinct": 270,
+    "nb_missing_values": 0
+   }
+  },
+  "encoding": "UTF-8-SIG",
+  "separator": ";",
+  "categorical": [
+   "categorie_population",
+   "epci",
+   "canton"
+  ],
+  "total_lines": 277,
+  "nb_duplicates": 0,
+  "unique_values": {
+   "canton": [
+    "Brest-1",
+    "Brest-3",
+    "Brest-4",
+    "Briec",
+    "Carhaix-Plouguer",
+    "Concarneau",
+    "Crozon",
+    "Douarnenez",
+    "Fouesnant",
+    "Guipavas",
+    "Landerneau",
+    "Landivisiau",
+    "Lesneven",
+    "Morlaix",
+    "Moëlan-sur-Mer",
+    "Plabennec",
+    "Plonéour-Lanvern",
+    "Plouigneau",
+    "Pont-de-Buis-lès-Quimerch",
+    "Pont-l'Abbé",
+    "Quimper-1",
+    "Quimper-2",
+    "Quimperlé",
+    "Saint-Pol-de-Léon",
+    "Saint-Renan"
+   ]
+  },
+  "columns_fields": {
+   "code": {
+    "score": 1.0,
+    "format": "longitude_l93",
+    "python_type": "float"
+   },
+   "epci": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "canton": {
+    "score": 1.0,
+    "format": "insee_canton",
+    "python_type": "string"
+   },
+   "libelle": {
+    "score": 1.0,
+    "format": "commune",
+    "python_type": "string"
+   },
+   "centroid": {
+    "score": 1.0,
+    "format": "latlon_wgs",
+    "python_type": "string"
+   },
+   "categorie_population": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "population_annuelle_2019": {
+    "score": 1.0,
+    "format": "longitude_l93",
+    "python_type": "float"
+   }
+  },
+  "columns_labels": {
+   "code": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "epci": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "canton": {
+    "score": 1.0,
+    "format": "insee_canton",
+    "python_type": "string"
+   },
+   "libelle": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "centroid": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "categorie_population": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   },
+   "population_annuelle_2019": {
+    "score": 1.0,
+    "format": "string",
+    "python_type": "string"
+   }
+  },
+  "header_row_idx": 0,
+  "heading_columns": 0,
+  "trailing_columns": 0
+ },
+ "deleted_at": null,
+ "dataset_id": "62b25c51ea3141106f538362",
+ "indexes": null
+}

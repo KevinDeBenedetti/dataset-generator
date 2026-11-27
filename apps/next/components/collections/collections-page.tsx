@@ -146,6 +146,10 @@ export function CollectionsPage() {
   const router = useRouter()
   const params = useSearchParams()
   const initialRepo = params.get('repo')
+  const textParam = params.get('text')
+  const initialColumns = textParam
+    ? { text: textParam.split(',').filter(Boolean), query: params.get('query') }
+    : null
   const collections = useCollections()
   const [creating, setCreating] = useState(Boolean(initialRepo))
   const [now] = useState(() => Date.now())
@@ -218,7 +222,12 @@ export function CollectionsPage() {
       )}
 
       {data?.qdrant_configured && creating && (
-        <CreateCollectionForm models={data.models} initialRepo={initialRepo} onCancel={closeForm} />
+        <CreateCollectionForm
+          models={data.models}
+          initialRepo={initialRepo}
+          initialColumns={initialColumns}
+          onCancel={closeForm}
+        />
       )}
 
       {data && list.length === 0 && data.qdrant_configured && !creating && (

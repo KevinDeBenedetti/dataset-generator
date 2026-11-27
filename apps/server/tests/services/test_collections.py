@@ -913,3 +913,54 @@ def test_the_first_sweep_claims_the_prefix_for_this_deployment(
 def test_the_sweep_needs_qdrant(monkeypatch):
     monkeypatch.setattr(config, "qdrant_url", "")
     assert collections.drop_orphans() == []
+
+
+def test_a_corpus_from_rows_is_searched_and_filtered_on_its_metadata(
+    db, vectors, embedder, fake_hub, queued
+):
+    """A recipe's corpus documents (generators/corpus.py) become a collection
+    whose search finds the right row and filters on ``metadata.<column>``."""
+    from server.generators.corpus import CorpusOptions, documents
+
+    rows = [
+        {
+            "code": "29019",
+            "nom": "Brest",
+            "texte": "Brest is a port city of Brittany.",
+            "dep": "29",
+        },
+        {
+            "code": "56121",
+            "nom": "Lorient",
+            "texte": "Lorient is a port with a festival.",
+            "dep": "56",
+        },
+        {
+            "code": "29232",
+            "nom": "Quimper",
+            "texte": "Quimper has a cathedral and faience.",
+            "dep": "29",
+        },
+    ]
+    options = CorpusOptions(
+        text_template="{texte}",
+        title_template="{nom}",
+        metadata_columns=["code", "dep"],
+        id_column="code",
+    )
+    docs = list(documents(options, rows))
+    fake_hub.tables[SHA] = pa.Table.from_pylist(docs)
+    ready = _ready(
+        db, embedder, fake_hub, queued, text_columns=["text"], query_column="title"
+    )
+    assert "metadata" in ready["fields"]
+
+    found = collections.search(db, OWNER, ready["id"], "cathedral faience", limit=1)
+    assert found["hits"][0]["metadata"]["code"] == "29232"
+
+    ports = collections.search(
+        db, OWNER, ready["id"], "port city", limit=3, filters={"metadata.dep": "56"}
+    )
+    assert [h["metadata"]["code"] for h in ports["hits"]] == ["56121"]
+    with pytest.raises(collections.CollectionInputError, match="No field"):
+        collections.search(db, OWNER, ready["id"], "x", filters={"secret": "1"})

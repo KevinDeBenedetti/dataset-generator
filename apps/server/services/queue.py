@@ -17,6 +17,7 @@
 """
 
 import asyncio
+from contextvars import ContextVar
 import logging
 import os
 import socket
@@ -157,6 +158,15 @@ def _load(run_id: str) -> Tuple[str, str, Dict[str, Any], Optional[str]]:
         return row.owner_id, row.job_id, dict(row.options or {}), row.model_ref
 
 
+# The run a job's runner is executing (a runner gets no run id: the recipe job
+# names its draft store folder after it). Set by :func:`execute`.
+_current_run: ContextVar[Optional[str]] = ContextVar("current_run", default=None)
+
+
+def current_run_id() -> Optional[str]:
+    return _current_run.get()
+
+
 async def execute(run_id: str, worker: str) -> str:
     """Run one claimed run to its end; returns the final status.
 
@@ -180,6 +190,7 @@ async def execute(run_id: str, worker: str) -> str:
         latest["value"] = {"done": done, "total": total, "label": label}
 
     async def work():
+        _current_run.set(run_id)
         # The owner's own keys, read now — never carried in the queue row.
         creds = await asyncio.to_thread(resolve_credentials, owner_id)
         parsed = spec.options.model_validate(options)
@@ -228,14 +239,23 @@ async def execute(run_id: str, worker: str) -> str:
         _finish,
         run_id,
         worker,
-        status="succeeded",
+        status=outcome.status or "succeeded",
         result=outcome.result.model_dump(mode="json"),
         draft=outcome.draft,
         progress=None,
-        published_url=None if outcome.draft else outcome.result.url,
-        published_at=None if outcome.draft or not outcome.result.url else _now(),
+        published_url=(
+            outcome.result.url
+            if outcome.status == "published" or not outcome.draft
+            else None
+        ),
+        published_at=(
+            _now()
+            if outcome.result.url
+            and (outcome.status == "published" or not outcome.draft)
+            else None
+        ),
     )
-    return "succeeded"
+    return outcome.status or "succeeded"
 
 
 async def run_once(worker: Optional[str] = None) -> Optional[str]:
@@ -251,6 +271,9 @@ async def run_once(worker: Optional[str] = None) -> Optional[str]:
 # How often a worker drops the Qdrant collections no row names any more
 # (services/collections.py drop_orphans): left by a deletion during an outage.
 ORPHAN_SWEEP_SECONDS = 3600.0
+# How often a worker re-checks a batch of the stored Hugging Face tokens not
+# checked for a day (auth/hf_token.py recheck_stale_tokens).
+TOKEN_SWEEP_SECONDS = 3600.0
 
 
 async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) -> None:
@@ -258,6 +281,8 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
     then, drop orphaned vector collections; claim,
     execute — until ``stop`` is set, then drain the runs in progress for
     ``WORKER_DRAIN_SECONDS``."""
+    from server.auth.hf_token import recheck_stale_tokens
+    from server.services.draft_store import sweep as sweep_drafts
     from server.services.collections import drop_orphans  # jobs -> queue: lazy
     from server.services.schedules import queue_due  # jobs -> queue: lazy
 
@@ -267,6 +292,7 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
     logger.info("worker %s started (%d slot(s))", worker, slots)
     last_sweep = 0.0
     last_orphans = 0.0
+    last_tokens = 0.0
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         if loop.time() - last_sweep > config.worker_heartbeat_seconds:
@@ -285,6 +311,16 @@ async def run_forever(stop: asyncio.Event, concurrency: Optional[int] = None) ->
                 await asyncio.to_thread(drop_orphans)
             except Exception as exc:  # noqa: BLE001 — Qdrant down: next sweep
                 logger.warning("orphaned collections sweep failed: %s", exc)
+        if loop.time() - last_tokens > TOKEN_SWEEP_SECONDS:
+            last_tokens = loop.time()
+            try:
+                await asyncio.to_thread(recheck_stale_tokens)
+            except Exception as exc:  # noqa: BLE001 — DB blip: next sweep
+                logger.warning("Hugging Face token sweep failed: %s", exc)
+            try:
+                await asyncio.to_thread(sweep_drafts)
+            except Exception as exc:  # noqa: BLE001 — disk or DB blip: next sweep
+                logger.warning("draft store sweep failed: %s", exc)
         claimed = None
         if len(running) < slots:
             try:

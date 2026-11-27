@@ -1,0 +1,69 @@
+{
+ "id": "62b25c51ea3141106f538362",
+ "title": "Population des communes du Finistère",
+ "slug": "population-des-communes-du-finistere",
+ "page": "https://www.data.gouv.fr/datasets/population-des-communes-du-finistere",
+ "license": "lov2",
+ "last_update": "2025-01-03T15:27:04.140000+00:00",
+ "organization": {
+  "id": "5a86b30588ee38553adbaa6e",
+  "name": "Conseil départemental du Finistère",
+  "slug": "conseil-departemental-du-finistere",
+  "page": "https://www.data.gouv.fr/organizations/conseil-departemental-du-finistere"
+ },
+ "owner": null,
+ "description": "Table de population 2019 des communes du Finistère",
+ "resources": [
+  {
+   "id": "984916d0-18e3-439e-a795-352f10389e4f",
+   "title": "population-des-communes-du-finistere.csv",
+   "format": "csv",
+   "url": "https://static.data.gouv.fr/resources/population-des-communes-du-finistere/20250103-152649/population-des-communes-du-finistere.csv",
+   "filesize": 29531,
+   "last_modified": "2025-01-03T15:27:04.140000+00:00",
+   "checksum": {
+    "type": "sha1",
+    "value": "36bd88c553cb33a4d468ec1d509acca00bc69b79"
+   },
+   "mime": "text/csv",
+   "extras": {
+    "analysis:parsing:finished_at": "2026-11-06T17:55:59.893207+00:00",
+    "analysis:parsing:parsing_table": "4d8e4ad661886226e5f16ff4439033c1",
+    "analysis:parsing:started_at": "2026-11-06T17:55:59.715956+00:00"
+   }
+  },
+  {
+   "id": "545f8df2-5705-4797-99ae-483d56837461",
+   "title": "population-des-communes-du-finistere.xlsx",
+   "format": "xlsx",
+   "url": "https://static.data.gouv.fr/resources/population-des-communes-du-finistere/20250103-152636/population-des-communes-du-finistere.xlsx",
+   "filesize": 11730,
+   "last_modified": "2025-01-03T15:26:38.406000+00:00",
+   "checksum": {
+    "type": "sha1",
+    "value": "3dec178d1464aebc455bd11ce7c2c62098abda96"
+   },
+   "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+   "extras": {
+    "analysis:parsing:error": "copy_records_to_table:invalid literal for int() with base 10: '998.0'",
+    "analysis:parsing:finished_at": "2026-11-07T16:55:32.714973+00:00",
+    "analysis:parsing:started_at": "2026-11-07T16:55:32.099045+00:00"
+   }
+  },
+  {
+   "id": "6e325b51-4159-4417-bf55-a12d8942bfdd",
+   "title": "population-des-communes-du-finistere.parquet",
+   "format": "parquet",
+   "url": "https://static.data.gouv.fr/resources/population-des-communes-du-finistere/20250103-152548/population-des-communes-du-finistere.parquet",
+   "filesize": 16368,
+   "last_modified": "2025-01-03T15:25:50.649000+00:00",
+   "checksum": {
+    "type": "sha1",
+    "value": "ae2eab38d4977499b415835de5375f35dfb15c16"
+   },
+   "mime": "application/octet-stream",
+   "extras": {}
+  }
+ ],
+ "frequency": "punctual"
+}

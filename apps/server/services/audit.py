@@ -1,7 +1,8 @@
 """The security audit trail (``audit_log``): sign-ups, links, role changes…
 
-Entries name accounts by id plus a short hash of the email (so the trail still
-reads after a deletion, without keeping the address). ``detail`` holds small,
+Entries name accounts by id plus a short hash of the email, or of the Hugging
+Face account id (so the trail still reads after a deletion, without keeping the
+address). ``detail`` holds small,
 non-sensitive facts — never content, keys or tokens.
 """
 
@@ -20,7 +21,11 @@ logger = logging.getLogger(__name__)
 def label_for(user: Optional[User]) -> Optional[str]:
     if user is None:
         return None
-    return "email:" + hashlib.sha256(user.email.lower().encode()).hexdigest()[:16]
+    if user.email:
+        return "email:" + hashlib.sha256(user.email.lower().encode()).hexdigest()[:16]
+    if user.hf_id:
+        return "hf:" + hashlib.sha256(user.hf_id.encode()).hexdigest()[:16]
+    return None
 
 
 def record(

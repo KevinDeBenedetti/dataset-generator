@@ -1,0 +1,23 @@
+{
+  "type": "user",
+  "id": "64f1c0ffee0000000000aaaa",
+  "name": "alice",
+  "fullname": "Alice Example",
+  "emailVerified": false,
+  "orgs": [],
+  "auth": {
+    "type": "access_token",
+    "accessToken": {
+      "displayName": "datasetgen-fine-read",
+      "role": "fineGrained",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "fineGrained": {
+        "canReadGatedRepos": true,
+        "global": [],
+        "scoped": [
+          {"entity": {"_id": "64f1c0ffee0000000000aaaa", "type": "user", "name": "alice"}, "permissions": ["repo.content.read"]}
+        ]
+      }
+    }
+  }
+}

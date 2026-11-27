@@ -69,6 +69,7 @@ def _view(user: User, counts: Dict[str, int], providers: List[str], keys: List[s
     return {
         "id": user.id,
         "email": user.email,
+        "hf_username": user.hf_username,
         "role": user.role,
         "is_active": user.is_active,
         "locked": is_locked_admin(user),
@@ -81,12 +82,21 @@ def _view(user: User, counts: Dict[str, int], providers: List[str], keys: List[s
     }
 
 
+def _not_system():
+    """Every account but the inactive ``system`` owner (an account without an
+    email included: ``email != X`` alone is NULL for it)."""
+    return or_(User.email.is_(None), User.email != SYSTEM_EMAIL)
+
+
 def list_users(
     db: Session, q: str = "", limit: int = 50, offset: int = 0
 ) -> Dict[str, Any]:
-    query = select(User).where(User.email != SYSTEM_EMAIL)
+    query = select(User).where(_not_system())
     if q:
-        query = query.where(User.email.ilike(f"%{q.strip().lower()}%"))
+        needle = f"%{q.strip().lower()}%"
+        query = query.where(
+            or_(User.email.ilike(needle), User.hf_username.ilike(needle))
+        )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     users = list(
         db.scalars(
@@ -171,7 +181,7 @@ def update_user(
     changes_active = is_active is not None and is_active != user.is_active
     if (changes_role or changes_active) and is_locked_admin(user):
         raise AdminError(
-            "This account is listed in ADMIN_EMAILS: change that setting instead."
+            "This account is set by the deployment (ADMIN_EMAILS or ADMIN_USERNAME): change that setting instead."
         )
     deactivating = changes_active and is_active is False
     if (changes_role and role != UserRole.ADMIN) or deactivating:
@@ -217,7 +227,7 @@ def delete_account(
 
     if is_locked_admin(user):
         raise AdminError(
-            "This account is listed in ADMIN_EMAILS: remove it there first."
+            "This account is set by the deployment (ADMIN_EMAILS or ADMIN_USERNAME): remove it there first."
         )
     if (
         user.role == UserRole.ADMIN
@@ -239,12 +249,20 @@ def delete_account(
         commit=False,
     )
     db.flush()
+    user_id = user.id
     db.delete(user)
     db.commit()
     # Best effort: the account is gone either way. A build still running drops
     # what it writes next (services/collections.py `_write_batch`).
     for name in vectors:
         drop(name)
+    # And the draft store's files: fetched data, uploads, draft Parquet.
+    try:
+        from server.services.draft_store import get_store
+
+        get_store().delete_owner(user_id)
+    except Exception:  # noqa: BLE001 — best effort, like the vectors
+        logger.exception("Could not delete the draft files of %s", user_id)
 
 
 def delete_user(db: Session, actor: User, user_id: str, ip=None) -> None:
@@ -262,7 +280,7 @@ def usage(db: Session) -> Dict[str, Any]:
             func.count().filter(User.is_active.is_(True)),
             func.count().filter(User.role == UserRole.ADMIN),
             func.count().filter(User.last_login_at >= since),
-        ).where(User.email != SYSTEM_EMAIL)
+        ).where(_not_system())
     ).one()
     runs: Dict[str, int] = {
         status: count
@@ -308,13 +326,14 @@ def list_audit(
         query.order_by(AuditLog.created_at.desc()).limit(limit).offset(offset)
     )
     entries = list(rows)
-    emails: Dict[str, str] = {}
+    emails: Dict[str, Optional[str]] = {}
     ids = {e.actor_id for e in entries if e.actor_id} | {
         e.target_user_id for e in entries if e.target_user_id
     }
     if ids:
         emails = {
-            u.id: u.email for u in db.scalars(select(User).where(User.id.in_(ids)))
+            u.id: u.display_name
+            for u in db.scalars(select(User).where(User.id.in_(ids)))
         }
     return {
         "total": total,

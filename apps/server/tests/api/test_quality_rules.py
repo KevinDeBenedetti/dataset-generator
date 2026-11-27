@@ -62,6 +62,7 @@ def test_update_quality_rules_success(client: TestClient, owner):
         min_answer_words=5,
         reject_below_confidence=0.6,
         auto_reject_enabled=True,
+        tabular=None,
     )
 
 
@@ -77,6 +78,7 @@ def test_update_quality_rules_partial(client: TestClient, owner):
         min_answer_words=3,
         reject_below_confidence=None,
         auto_reject_enabled=None,
+        tabular=None,
     )
 
 
@@ -94,3 +96,17 @@ def test_update_quality_rules_service_error(client: TestClient):
     ):
         response = client.put("/quality-rules", json={"min_answer_words": 1})
     assert response.status_code == 500
+
+
+def test_tabular_rules_are_saved_and_read_back(client, owner, datasets_db):
+    body = {"tabular": {"min_rows": 10, "unmasked_pii": "block"}}
+    resp = client.put("/quality-rules", json=body)
+    assert resp.status_code == 200, resp.text
+    saved = client.get("/quality-rules").json()["tabular"]
+    assert saved["min_rows"] == 10 and saved["unmasked_pii"] == "block"
+    assert (
+        client.put(
+            "/quality-rules", json={"tabular": {"unmasked_pii": "maybe"}}
+        ).status_code
+        == 422
+    )

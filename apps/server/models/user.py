@@ -25,6 +25,17 @@ class AuthProvider:
     INFOMANIAK = "infomaniak"
     GITHUB = "github"
     SYSTEM = "system"  # the inactive owner of pre-multi-user data (see below)
+    SECRETS = "secrets"  # the admin, signed in from deployment secrets only
+    HF = "hf"  # a Hugging Face username + token (auth/hf_token.py)
+
+
+# The secrets admin's email: a reserved address derived from ADMIN_USERNAME, the
+# stable key of its row (auth/admin_secrets.py). ``.invalid`` never receives mail.
+SECRETS_ADMIN_DOMAIN = "secrets-admin.invalid"
+
+
+def secrets_admin_email(username: str) -> str:
+    return f"{username.lower()}@{SECRETS_ADMIN_DOMAIN}"
 
 
 # Owns the datasets/runs/settings that predate per-user ownership when there was
@@ -42,7 +53,18 @@ class User(Base):
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    email: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    # Null for a Hugging Face account whose email the Hub didn't give (or that
+    # another account already holds). Unique when set.
+    email: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
+    # The Hugging Face account a user signs in with (auth/hf_token.py): keyed on
+    # the Hub's stable id, never the username, which can change.
+    hf_id: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
+    hf_username: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    hf_avatar_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Null for OIDC-only accounts that never set a local password.
     hashed_password: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(
@@ -72,6 +94,11 @@ class User(Base):
     @property
     def is_admin(self) -> bool:
         return self.role == UserRole.ADMIN
+
+    @property
+    def display_name(self) -> str:
+        """How the app names the account: its HF username, else its email."""
+        return self.hf_username or self.email or self.id
 
 
 class RefreshToken(Base):

@@ -92,6 +92,10 @@ class Credentials:
         secrets: Dict[str, Any] = {
             kind: _secret(_env(name)) for kind, name in _SECRET_ENV.items()
         }
+        # The secrets admin's own Hub token may be named apart from HF_TOKEN.
+        admin_hf = _secret(_env("ADMIN_HF_TOKEN"))
+        if admin_hf is not None:
+            secrets[HF_TOKEN] = admin_hf
         return cls(
             **secrets,
             **settings,
@@ -145,8 +149,18 @@ def resolve_credentials(user_id: str, is_admin: Optional[bool] = None) -> Creden
     and only when ``SERVER_LLM_FOR_ADMINS`` is on. The role is read at each
     resolution, so a demoted admin loses it at their next request or run.
     """
-    from server.services.user_secrets import load_credentials, user_is_admin
+    from server.services.user_secrets import (
+        load_credentials,
+        user_is_admin,
+        user_is_secrets_admin,
+    )
 
+    # The admin signed in from the deployment's secrets acts with the server's
+    # own keys (ADMIN_HF_TOKEN or HF_TOKEN, OPENAI_*, GITHUB_*): nothing to save.
+    from server.auth import admin_secrets
+
+    if admin_secrets.configured() and user_is_secrets_admin(user_id):
+        return replace(Credentials.from_env(), user_id=user_id)
     creds = load_credentials(user_id)
     if config.allow_env_credentials:
         creds = creds.filled_from(Credentials.from_env())

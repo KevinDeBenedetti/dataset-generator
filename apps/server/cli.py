@@ -1,8 +1,9 @@
 """Operator commands, run inside the deployment (``kubectl exec``, ``docker exec``):
 
     python -m server.cli migrate            # apply the database migrations (a deploy step)
+    python -m server.cli claim-legacy       # to the admin of ADMIN_USERNAME
     python -m server.cli claim-legacy --email you@example.com
-    python -m server.cli promote-admin you@example.com
+    python -m server.cli hash-password      # an ADMIN_PASSWORD_HASH value
     python -m server.cli gen-key            # a new SECRETS_ENCRYPTION_KEYS entry
     python -m server.cli rewrap-secrets     # after rotating that key ring
 
@@ -17,11 +18,22 @@ from typing import List, Optional
 from server.core.database import SessionLocal
 
 
-def _claim_legacy(email: str) -> int:
+def _claim_legacy(email: Optional[str]) -> int:
     from server.services.legacy import claim_legacy_rows
 
     db = SessionLocal()
     try:
+        if not email:
+            from server.auth.admin_secrets import ensure_admin_account
+
+            admin = ensure_admin_account(db)
+            if admin is None:
+                print(
+                    "error: no --email and no ADMIN_USERNAME admin to give it to",
+                    file=sys.stderr,
+                )
+                return 1
+            email = admin.email or ""
         try:
             counts = claim_legacy_rows(db, email)
         except ValueError as exc:
@@ -75,26 +87,21 @@ def _rewrap_secrets() -> int:
     return 1 if counts["failed"] else 0
 
 
-def _promote_admin(email: str) -> int:
-    """Break-glass: make an account admin from inside the deployment."""
-    from server.models.user import UserRole
-    from server.services import audit
-    from server.services.users import get_user_by_email
+def _hash_password() -> int:
+    """Prompt for the admin's password (twice) and print its argon2id hash."""
+    import getpass
 
-    db = SessionLocal()
-    try:
-        user = get_user_by_email(db, email)
-        if user is None:
-            print(f"error: no account with the email '{email}'", file=sys.stderr)
-            return 1
-        if user.role != UserRole.ADMIN:
-            user.role = UserRole.ADMIN
-            user.is_active = True
-            audit.record(db, "user.promoted", target=user, detail={"reason": "cli"})
-        print(f"{email} is an admin.")
-        return 0
-    finally:
-        db.close()
+    from server.auth.admin_secrets import hash_password
+
+    password = getpass.getpass("Admin password: ")
+    if len(password) < 12:
+        print("error: use at least 12 characters", file=sys.stderr)
+        return 1
+    if getpass.getpass("Again: ") != password:
+        print("error: the two passwords differ", file=sys.stderr)
+        return 1
+    print(hash_password(password))
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -104,14 +111,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         "claim-legacy",
         help="give the data that predates per-user ownership to an account",
     )
-    claim.add_argument("--email", required=True, help="the account that takes over")
+    claim.add_argument(
+        "--email",
+        help="the account that takes over (default: the admin of ADMIN_USERNAME)",
+    )
     commands.add_parser(
         "migrate", help="apply the database migrations (what a deploy Job runs)"
     )
-    promote = commands.add_parser(
-        "promote-admin", help="make an account admin (break-glass, audited)"
+    commands.add_parser(
+        "hash-password", help="print the ADMIN_PASSWORD_HASH of a password typed in"
     )
-    promote.add_argument("email")
     commands.add_parser(
         "gen-key", help="print a new key for SECRETS_ENCRYPTION_KEYS (id:key)"
     )
@@ -125,8 +134,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _claim_legacy(args.email)
     if args.command == "migrate":
         return _migrate()
-    if args.command == "promote-admin":
-        return _promote_admin(args.email)
+    if args.command == "hash-password":
+        return _hash_password()
     if args.command == "gen-key":
         return _gen_key()
     if args.command == "rewrap-secrets":

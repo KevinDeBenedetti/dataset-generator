@@ -9,19 +9,42 @@ deliberately short: only what differs between deployments is a variable; tuning
 values are constants in `apps/server/core/config.py`, and everything a
 deployment can't get wrong follows from **`ENVIRONMENT`**.
 
-| Setting                  | `ENVIRONMENT=development` (local)                             | anything else (production)                                                                                                                |
-| ------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Session cookies          | plain names, http                                             | `__Host-` prefixed, Secure (https only)                                                                                                   |
-| Sign-in                  | SSO + email/password                                          | SSO only (`ENABLE_LOCAL_LOGIN=true` to allow passwords)                                                                                   |
-| Sign-up                  | open                                                          | closed until an admin opens it (backoffice **Platform** tab)                                                                              |
-| Model keys               | a user's own, else the server's `OPENAI_API_KEY`, `HF_TOKEN`… | the user's own only; with `SERVER_LLM_FOR_ADMINS=true`, an admin without one uses the server's endpoint and key                           |
-| `/docs`, `/openapi.json` | on                                                            | off                                                                                                                                       |
-| Encryption key ring      | derived from `AUTH_SECRET_KEY`                                | `SECRETS_ENCRYPTION_KEYS` required                                                                                                        |
-| Startup checks           | none                                                          | refuses to boot without `DATABASE_URL`, `SECRETS_ENCRYPTION_KEYS`, a real `AUTH_SECRET_KEY`, an https `FRONTEND_URL` and a sign-in method |
+| Setting                  | `ENVIRONMENT=development` (local)                             | anything else (production)                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session cookies          | plain names, http                                             | `__Host-` prefixed, Secure (https only)                                                                                                                        |
+| Sign-in                  | SSO + email/password; the admin also with `ADMIN_PASSWORD`    | SSO only (`ENABLE_LOCAL_LOGIN=true` to allow passwords); the admin with `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` only                                          |
+| Sign-up                  | open                                                          | closed until an admin opens it (backoffice **Platform** tab)                                                                                                   |
+| Model keys               | a user's own, else the server's `OPENAI_API_KEY`, `HF_TOKEN`… | the user's own only; with `SERVER_LLM_FOR_ADMINS=true`, an admin without one uses the server's endpoint and key                                                |
+| `/docs`, `/openapi.json` | on                                                            | off                                                                                                                                                            |
+| Encryption key ring      | derived from `AUTH_SECRET_KEY`                                | `SECRETS_ENCRYPTION_KEYS` required                                                                                                                             |
+| Startup checks           | none                                                          | refuses to boot without `DATABASE_URL`, `SECRETS_ENCRYPTION_KEYS`, a real `AUTH_SECRET_KEY`, an https `FRONTEND_URL`, a sign-in method and the admin's secrets |
 
 What a production deployment sets, and how it is served, is in
 [Production](./production.md); who can sign in, and with which keys, in
 [Accounts, roles and keys](./accounts.md).
+
+## Admin sign-in
+
+The admin signs in at `/admin/login` with these secrets only (see
+[Accounts, roles and keys](./accounts.md)).
+
+| Variable              | What it sets                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `ADMIN_USERNAME`      | The admin's username: letters, digits, `.`, `_`, `-` (required outside development)                         |
+| `ADMIN_PASSWORD_HASH` | Its password, as the argon2id hash `python -m server.cli hash-password` prints (required with the username) |
+| `ADMIN_TOTP_SECRET`   | Optional: a base32 secret; the sign-in then asks for the authenticator app's 6-digit code                   |
+| `ADMIN_PASSWORD`      | Development only: the password in clear, instead of the hash (production refuses to start with it)          |
+| `ADMIN_HF_TOKEN`      | The admin's Hugging Face token (blank: `HF_TOKEN`); the admin's other keys are the server keys below        |
+
+## Tabular drafts
+
+See [Storage](./storage.md#tabular-drafts).
+
+| Variable                     | What it sets                                                              |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `DRAFT_STORE_URL`            | The draft store's directory, `file:///…` (default `file:///data/drafts`)  |
+| `QUOTA_DRAFT_BYTES_PER_USER` | Bytes of drafts and fetched files a user may hold (default 2 GB)          |
+| `DRAFT_RETENTION_DAYS`       | Unpublished drafts older than this are deleted by the worker (default 14) |
 
 ## Models
 
@@ -71,8 +94,9 @@ OPENAI_EMBEDDING_MODEL=embed-default
 
 In development, every key or setting a user hasn't saved in **Settings** comes
 from these variables. Outside development they serve no user: each saves their
-own, except that an admin with `SERVER_LLM_FOR_ADMINS=true` and no key of their
-own calls `OPENAI_BASE_URL` with `OPENAI_API_KEY`.
+own, except the admin of `ADMIN_USERNAME`, who always acts with them, and an
+admin with `SERVER_LLM_FOR_ADMINS=true` and no key of their own, who calls
+`OPENAI_BASE_URL` with `OPENAI_API_KEY`.
 
 | Variable                     | What it sets                                                               |
 | ---------------------------- | -------------------------------------------------------------------------- |

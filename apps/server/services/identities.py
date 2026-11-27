@@ -9,7 +9,7 @@ For an :class:`~server.services.sso.ExternalIdentity` coming back from a provide
    provider is a trusted one (Infomaniak, GitHub): the account with that email
    (this is how an existing password account starts using SSO). Audited.
 4. **Sign-up** — a new account, only with a verified email, when sign-up is
-   open and the domain allowed (backoffice platform switches).
+   open (the backoffice's sign-up policy is "open").
    ``ADMIN_EMAILS`` can always sign up.
 
 An unverified email never links and never creates an account: otherwise anyone
@@ -56,8 +56,11 @@ def is_admin_email(email: Optional[str]) -> bool:
 
 
 def is_locked_admin(user: User) -> bool:
-    """An ``ADMIN_EMAILS`` account: its role and status can't be changed in the app."""
-    return is_admin_email(user.email)
+    """An ``ADMIN_EMAILS`` account or the secrets admin (auth/admin_secrets.py):
+    its role and status can't be changed in the app."""
+    from server.auth.admin_secrets import is_current_secrets_admin
+
+    return is_admin_email(user.email) or is_current_secrets_admin(user)
 
 
 def _find(db: Session, provider: str, subject: str) -> Optional[Identity]:
@@ -84,13 +87,10 @@ def _attach(db: Session, user: User, ext: ExternalIdentity) -> Identity:
 def _may_sign_up(email: str) -> None:
     if is_admin_email(email):
         return
+    # An SSO sign-in knows no Hugging Face organisation: only the "open"
+    # policy lets it create an account.
     if not platform.allow_signup():
         raise LoginRefused("signup_closed", "New accounts are not open at the moment.")
-    domains = platform.allowed_email_domains()
-    if domains and email.rsplit("@", 1)[-1] not in domains:
-        raise LoginRefused(
-            "domain_not_allowed", "Accounts are limited to certain email domains."
-        )
 
 
 def _after_login(db: Session, user: User, ip: Optional[str]) -> None:
@@ -108,7 +108,11 @@ def _after_login(db: Session, user: User, ip: Optional[str]) -> None:
     user.last_login_at = _now()
     db.commit()
 
-    if is_admin_email(user.email) and get_user_by_email(db, SYSTEM_EMAIL) is not None:
+    if (
+        user.email
+        and is_admin_email(user.email)
+        and get_user_by_email(db, SYSTEM_EMAIL) is not None
+    ):
         from server.services.legacy import claim_legacy_rows
 
         counts = claim_legacy_rows(db, user.email)

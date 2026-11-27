@@ -348,3 +348,23 @@ def test_a_long_reason_is_cut(db, monkeypatch):
     db.expire_all()
     reason = schedules.get_schedule(db, OWNER, RESUME_JOB_ID, "r1")["skipped"]["reason"]
     assert len(reason) == schedules.MAX_SKIP_REASON_CHARS
+
+
+def test_a_schedule_waits_while_its_owners_hf_token_does_not_work(db):
+    from server.models.user_secret import UserSecret
+
+    row = _due(db, scope="r1")
+    db.add(
+        UserSecret(
+            user_id=OWNER,
+            kind="hf_token",
+            ciphertext="x",
+            key_id="k",
+            last_state="revoked",
+        )
+    )
+    db.commit()
+    assert queue_due(datetime.now(timezone.utc)) == []
+    db.refresh(row)
+    assert row.skipped["reason"] == "its owner's Hugging Face token no longer works"
+    assert db.query(JobRun).count() == 0

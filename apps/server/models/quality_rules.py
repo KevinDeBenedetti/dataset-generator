@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
+from typing import Any, Dict, Optional
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from server.core.database import Base
@@ -30,6 +32,9 @@ class QualityRules(Base):
     auto_reject_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    # The rules of tabular drafts (review/tabular_quality.py DEFAULT_RULES):
+    # null = the defaults.
+    tabular: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
     )

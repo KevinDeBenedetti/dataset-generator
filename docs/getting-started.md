@@ -43,7 +43,9 @@ make dev     # builds if needed, starts, and streams logs (Ctrl-C stops it)
 when dependencies change, and source edits hot-reload without a rebuild — so the
 same command works on the first run and every day after.
 
-Sign in with a development account, seeded at startup: `admin@example.com` /
+Sign in with your Hugging Face username and a write token
+(<https://huggingface.co/settings/tokens/new?preset=write>): the first sign-in
+creates your account. Or sign in with a development account, seeded at startup: `admin@example.com` /
 `admin1234` or `user@example.com` / `user1234` (see
 [Configuration](./configuration.md) to change the passwords).
 
@@ -114,8 +116,8 @@ QA generation → deduplication → save (a new version of the draft).
 
 ## Publishing to Hugging Face
 
-Add your Hugging Face token (write access) in **Settings**, open the draft
-under **Drafts**, review it — leave pairs out, edit a question or an answer —
+Your Hugging Face token (the one you signed in with, or saved in **Settings**)
+publishes. Open the draft under **Drafts**, review it — leave pairs out, edit a question or an answer —
 then use **Publish to Hugging Face**. The reviewed pairs are merged by id into
 the dataset's rows, in one commit: `data/train.jsonl` for a new dataset, or the
 file an existing one already keeps them in (a recipe's `train.jsonl`, say). The

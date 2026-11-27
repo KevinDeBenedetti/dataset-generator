@@ -826,9 +826,12 @@ def push_corpus(creds: Credentials, directory: Path, repo_id: str) -> str:
     # here, before megabytes are uploaded — a fine-grained token missing write
     # access otherwise only surfaces at the final commit — and a bare name,
     # which would 404 on commit, is completed with the namespace.
+    from server.auth.hf_token import TokenUnusable, ensure_can_publish
+
     try:
         repo_id = open_repo(creds, repo_id).repo_id
-    except HubRepoError as exc:
+        ensure_can_publish(creds)
+    except (HubRepoError, TokenUnusable) as exc:
         raise JobError(str(exc)) from exc
     api = _api(creds)
     ensure_private_dataset_repo(api, repo_id)

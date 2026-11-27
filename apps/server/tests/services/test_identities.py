@@ -30,7 +30,6 @@ def ik(subject="ik-1", email="dev@example.com", verified=True):
 def _policy(monkeypatch):
     monkeypatch.setattr(config, "allow_signup", True)
     monkeypatch.setattr(config, "admin_emails_raw", "")
-    monkeypatch.setattr(config, "allowed_email_domains_raw", "")
     monkeypatch.setattr(config, "sso_trusted_email_providers_raw", "infomaniak,github")
 
 
@@ -113,22 +112,11 @@ def test_an_identity_of_someone_else_cannot_be_linked(test_db):
     assert list_identities(test_db, me) == []
 
 
-def test_sign_up_can_be_closed_and_limited_to_domains(test_db, monkeypatch):
+def test_sign_up_can_be_closed(test_db, monkeypatch):
     monkeypatch.setattr(config, "allow_signup", False)
     with pytest.raises(LoginRefused) as refused:
         resolve_login(test_db, gh())
     assert refused.value.code == "signup_closed"
-
-    monkeypatch.setattr(config, "allow_signup", True)
-    monkeypatch.setattr(
-        config, "allowed_email_domains_raw", "@corp.example, lab.example"
-    )
-    with pytest.raises(LoginRefused) as refused:
-        resolve_login(test_db, gh(email="dev@gmail.com"))
-    assert refused.value.code == "domain_not_allowed"
-    assert (
-        resolve_login(test_db, gh(email="dev@corp.example")).email == "dev@corp.example"
-    )
 
 
 def test_admin_emails_are_promoted_and_may_always_sign_up(test_db, monkeypatch):

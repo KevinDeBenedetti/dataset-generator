@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from server.main import create_app
+from server.models.data_source import DataSource, Recipe
 from server.models.dataset_recipe import DatasetRecipe
 from server.models.job_run import JobRun
 from server.models.user import User, UserRole
@@ -27,6 +28,7 @@ SECRET = "bobs-secret"
 RUN_ID = "run-of-bob"
 RECIPE_ID = "recipe-of-bob"
 COLLECTION_ID = "collection-of-bob"
+SOURCE_ID = "source-of-bob"
 
 
 def _item(id_, question):
@@ -85,6 +87,25 @@ def bobs_data(bob, test_db, datasets_db):
         )
     )
     test_db.add(
+        DataSource(
+            id=SOURCE_ID,
+            owner_id=bob.id,
+            name=SECRET,
+            connector="upload",
+            config={"filename": "bob.csv"},
+        )
+    )
+    test_db.flush()
+    test_db.add(
+        Recipe(
+            id=RECIPE_ID,
+            owner_id=bob.id,
+            data_source_id=SOURCE_ID,
+            name=SECRET,
+            target_repo="bob/table",
+        )
+    )
+    test_db.add(
         VectorCollection(
             id=COLLECTION_ID,
             owner_id=bob.id,
@@ -121,19 +142,36 @@ _RESOURCE_ROUTES = {
     ("GET", "/q_a/{dataset_name}"): {},
     ("GET", "/q_a/{dataset_name}/stats"): {},
     ("POST", "/q_a/{dataset_name}/score"): {},
+    ("GET", "/data-sources/{source_id}"): {},
+    ("PATCH", "/data-sources/{source_id}"): {"json": {"name": "renamed"}},
+    ("DELETE", "/data-sources/{source_id}"): {},
+    ("PUT", "/data-sources/{source_id}/secret"): {"json": {"value": "x"}},
+    ("POST", "/data-sources/{source_id}/test"): {},
+    ("DELETE", "/data-sources/{source_id}/secret"): {},
+    ("GET", "/recipes/{recipe_id}"): {},
+    ("PATCH", "/recipes/{recipe_id}"): {"json": {"name": "renamed"}},
+    ("DELETE", "/recipes/{recipe_id}"): {},
+    ("POST", "/recipes/{recipe_id}/preview"): {"json": {}},
+    ("POST", "/recipes/{recipe_id}/run"): {},
+    ("GET", "/recipes/{recipe_id}/schedule"): {},
+    ("PUT", "/recipes/{recipe_id}/schedule"): {"json": {"every": "day"}},
+    ("DELETE", "/recipes/{recipe_id}/schedule"): {},
+    ("GET", "/runs/{run_id}/draft"): {},
+    ("GET", "/runs/{run_id}/draft/rows"): {},
+    ("POST", "/runs/{run_id}/review"): {"json": {"decision": "rejected"}},
     ("GET", "/jobs/runs/{run_id}"): {},
     ("GET", "/jobs/runs/{run_id}/checks"): {},
     ("POST", "/jobs/runs/{run_id}/publish"): {"json": {}},
     ("POST", "/jobs/runs/{run_id}/cancel"): {},
-    ("GET", "/recipes/{recipe_id}"): {},
-    ("PUT", "/recipes/{recipe_id}"): {
+    ("GET", "/github/recipes/{recipe_id}"): {},
+    ("PUT", "/github/recipes/{recipe_id}"): {
         "json": {"name": "mine", "target_repo": "alice/qa"}
     },
-    ("DELETE", "/recipes/{recipe_id}"): {},
-    ("POST", "/recipes/{recipe_id}/run"): {"json": {}},
-    ("GET", "/recipes/{recipe_id}/schedule"): {},
-    ("PUT", "/recipes/{recipe_id}/schedule"): {"json": {"every": "day"}},
-    ("DELETE", "/recipes/{recipe_id}/schedule"): {},
+    ("DELETE", "/github/recipes/{recipe_id}"): {},
+    ("POST", "/github/recipes/{recipe_id}/run"): {"json": {}},
+    ("GET", "/github/recipes/{recipe_id}/schedule"): {},
+    ("PUT", "/github/recipes/{recipe_id}/schedule"): {"json": {"every": "day"}},
+    ("DELETE", "/github/recipes/{recipe_id}/schedule"): {},
     ("GET", "/collections/{collection_id}"): {},
     ("POST", "/collections/{collection_id}/build"): {"json": {}},
     ("DELETE", "/collections/{collection_id}"): {},
@@ -149,6 +187,19 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/health"),
     ("GET", "/ready"),
     ("POST", "/auth/login"),
+    ("POST", "/auth/admin/login"),
+    ("POST", "/auth/hf"),
+    ("GET", "/data-sources"),
+    ("POST", "/data-sources"),
+    ("POST", "/data-sources/upload"),
+    ("GET", "/connectors"),
+    ("GET", "/connectors/{kind}/discover"),
+    ("GET", "/connectors/datagouv/resources/{resource_id}/profile"),
+    ("GET", "/connectors/rest/presets"),
+    ("POST", "/connectors/rest/presets/{preset_id}"),
+    ("GET", "/runs"),
+    ("GET", "/recipes"),
+    ("POST", "/recipes"),
     ("POST", "/auth/refresh"),
     ("POST", "/auth/logout"),
     ("GET", "/auth/me"),
@@ -173,8 +224,8 @@ _NOT_RESOURCE_ROUTES = {
     ("GET", "/github/repos/{owner}/{repo}"),
     ("GET", "/github/repos/{owner}/{repo}/doc"),
     # Your own recipes: the list and a new one are the caller's by construction.
-    ("GET", "/recipes"),
-    ("POST", "/recipes"),
+    ("GET", "/github/recipes"),
+    ("POST", "/github/recipes"),
     # A whole-account job's schedule is keyed by the caller and the job.
     ("GET", "/jobs/{job_id}/schedule"),
     ("PUT", "/jobs/{job_id}/schedule"),
@@ -246,6 +297,7 @@ def _path(template):
         run_id=RUN_ID,
         recipe_id=RECIPE_ID,
         collection_id=COLLECTION_ID,
+        source_id=SOURCE_ID,
     )
 
 
@@ -276,7 +328,7 @@ def test_every_route_is_classified():
     # A route that takes a resource id must be walked, not exempted.
     for method, path in _NOT_RESOURCE_ROUTES:
         assert not re.search(
-            r"\{(dataset_name|run_id|recipe_id|collection_id)\}", path
+            r"\{(dataset_name|run_id|recipe_id|collection_id|source_id)\}", path
         ), (
             method,
             path,
@@ -317,6 +369,10 @@ def test_nothing_of_bob_changed_after_alice_tried_everything(
     recipe = test_db.get(DatasetRecipe, RECIPE_ID)
     assert recipe is not None and recipe.name == SECRET
     assert recipe.target_repo == "bob/qa"
+    source = test_db.get(DataSource, SOURCE_ID)
+    assert source is not None and source.name == SECRET
+    new_recipe = test_db.get(Recipe, RECIPE_ID)
+    assert new_recipe is not None and new_recipe.name == SECRET
     collection = test_db.get(VectorCollection, COLLECTION_ID)
     assert collection is not None and collection.name == SECRET
     assert collection.status == "ready" and collection.revision == "a" * 40

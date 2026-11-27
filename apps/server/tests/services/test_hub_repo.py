@@ -598,3 +598,16 @@ def test_a_hub_that_answers_a_server_error_is_unavailable_not_a_bad_token():
     # A token the Hub refuses for this repo is not an outage either.
     with pytest.raises(HubTokenRejected):
         HfHubBackend("hf_x", "k", client=DownHfApi(403)).head("kevin/x", ["a"])
+
+
+def test_an_unusable_token_is_refused_before_anything_is_written(monkeypatch):
+    """open_repo on the real Hub re-checks the token before a publication."""
+    from server.auth import hf_token
+
+    hub = InMemoryHub()
+    monkeypatch.setattr(hub_repo, "backend_for", lambda creds: hub)
+    monkeypatch.setattr(hf_token, "token_state", lambda token: "read_only")
+    repo = open_repo(CREDS, REPO)
+    with pytest.raises(HubTokenRejected, match="can no longer write"):
+        repo.publish(repo.read(), [{"id": "1"}], card=None, message="m")
+    assert not hub.exists(REPO)
