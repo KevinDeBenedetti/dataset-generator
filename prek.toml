@@ -70,7 +70,8 @@ hooks = [
   { id = "check-merge-conflict", name = "🔍 Check merge conflicts" },
   { id = "detect-private-key", name = "🔐 Detect private keys" },
   { id = "check-case-conflict", name = "🔍 Check case conflicts" },
-  { id = "mixed-line-ending", name = "🔍 Check line endings", args = ["--fix=lf"] },
+  # The CSV fixtures keep the CRLF of the files they copy (data.gouv.fr).
+  { id = "mixed-line-ending", name = "🔍 Check line endings", args = ["--fix=lf"], exclude = "^apps/server/tests/fixtures/data/" },
 ]
 
 # ===============================

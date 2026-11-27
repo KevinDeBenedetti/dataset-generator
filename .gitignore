@@ -3,6 +3,8 @@
 
 ### Custom ###
 data/
+# The test fixtures of the data source connectors are code, not data.
+!apps/server/tests/fixtures/data/
 
 ### macOS ###
 # General
