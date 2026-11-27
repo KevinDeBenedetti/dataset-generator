@@ -1,3 +1,4 @@
+import hashlib
 import json
 from dataclasses import replace
 from unittest.mock import MagicMock, patch
@@ -6,12 +7,15 @@ import pytest
 
 from server.jobs import corpus
 from server.jobs.corpus import (
+    SCHEMA_VERSION,
     Chunk,
+    CorpusMoved,
     JobError,
     RawFile,
     build_github_snapshot_chunks,
     build_knowledge_profile_chunks,
     chunk_file,
+    dataset_card,
     doc_sections,
     export_corpus,
     is_code_indexable,
@@ -62,7 +66,38 @@ GO_OUTPUT = [
 
 def test_snapshot_chunks_match_go_output(snapshot):
     records = [c.to_record() for c in build_github_snapshot_chunks(snapshot)]
-    assert records == GO_OUTPUT
+    # Schema 2 adds only the content hash: ids and text are unchanged.
+    assert records == [
+        {**r, "content_hash": hashlib.sha256(r["content"].encode()).hexdigest()}
+        for r in GO_OUTPUT
+    ]
+
+
+def test_readme_is_split_into_sections_after_the_card(snapshot):
+    readme = (
+        "# Portfolio\n"
+        + "Hello, this is my site. " * 5
+        + "\n\n## Install\n"
+        + "Run bun install. " * 10
+        + "\n\n## Deploy\n"
+        + "Push to main. " * 10
+    )
+    repo = replace(snapshot.repos[0], readme="capped", readme_full=readme)
+    card, install, deploy = build_github_snapshot_chunks(
+        replace(snapshot, profile=None, repos=[repo])
+    )
+    assert card.content.endswith(
+        "README:\n# Portfolio\n" + ("Hello, this is my site. " * 5).strip()
+    )
+    assert card.id == deterministic_id("github:repo:https://github.com/kevin/portfolio")
+    assert install.content.startswith("# portfolio README — Portfolio > Install\n\n")
+    assert install.id == deterministic_id(
+        "github:readme:https://github.com/kevin/portfolio:Portfolio > Install"
+    )
+    assert [(c.type, c.repo) for c in (install, deploy)] == [
+        ("readme", "portfolio"),
+        ("readme", "portfolio"),
+    ]
 
 
 def test_snapshot_chunks_omit_empty_fields(snapshot):
@@ -91,12 +126,16 @@ def test_snapshot_chunks_omit_empty_fields(snapshot):
 
 def test_knowledge_profile_chunks(snapshot):
     overview, skills, project = build_knowledge_profile_chunks(snapshot)
+    content = (
+        "Portfolio owner: Kevin De Benedetti\nLocation: Lyon\n"
+        "Website: https://kevindb.dev\nGitHub: https://github.com/kevin\nBio: Dev"
+    )
     assert overview.to_record() == {
         "id": deterministic_id("profile:overview"),
-        "content": "Portfolio owner: Kevin De Benedetti\nLocation: Lyon\n"
-        "Website: https://kevindb.dev\nGitHub: https://github.com/kevin\nBio: Dev",
+        "content": content,
         "source": "profile",
         "type": "bio",
+        "content_hash": hashlib.sha256(content.encode()).hexdigest(),
     }
     # The language and its same-name topic count once; ranked, not a tag dump.
     assert skills.content == (
@@ -128,9 +167,11 @@ def test_write_jsonl_is_sorted_compact_and_utf8():
         Chunk(id="b", content="é", source="s", type="t"),
         Chunk(id="a", content="x", source="s", type="t", path="p"),
     ]
+    hx = hashlib.sha256(b"x").hexdigest()
+    he = hashlib.sha256("é".encode()).hexdigest()
     assert write_jsonl(chunks) == (
-        '{"id":"a","content":"x","source":"s","type":"t","path":"p"}\n'
-        '{"id":"b","content":"é","source":"s","type":"t"}\n'
+        f'{{"id":"a","content":"x","source":"s","type":"t","path":"p","content_hash":"{hx}"}}\n'
+        f'{{"id":"b","content":"é","source":"s","type":"t","content_hash":"{he}"}}\n'
     )
     assert write_jsonl([]) == ""
 
@@ -144,6 +185,19 @@ def test_write_jsonl_is_sorted_compact_and_utf8():
         (".eslintrc.js", 10, False),
         ("bun.lock", 10, False),
         ("src/big.py", 200_000, False),
+        ("README.md", 10, False),
+        # Only the root README is in the github split: a package's own README
+        # is read nowhere else.
+        ("apps/web/README.md", 10, True),
+        ("pkg/CHANGELOG.md", 10, False),
+        ("LICENSE", 10, False),
+        ("package-lock.json", 10, False),
+        ("web/app.min.js", 10, False),
+        ("api/v1/user.pb.go", 10, False),
+        ("src/readme_parser.py", 10, True),
+        ("app/security.py", 10, True),
+        ("src/history.ts", 10, True),
+        ("SECURITY.md", 10, False),
     ],
 )
 def test_is_code_indexable(path, size, expected):
@@ -162,11 +216,19 @@ def _raw(content: str, language: str = "Python") -> RawFile:
     )
 
 
+SMALL = "def main():\n    print('hello, world, from a small file')\n"
+
+
 def test_chunk_file_small_file_is_one_chunk():
-    [chunk] = chunk_file(_raw("print(1)\n"), "kevin")
-    assert chunk.content.startswith("// File: a.py (Python) lines 1-2\n")
-    assert chunk.url == "https://gh/a.py#L1-L2"
-    assert chunk.id == deterministic_id("github_code:kevin/r:a.py:1")
+    [chunk] = chunk_file(_raw(SMALL), "kevin")
+    assert chunk.content == f"// File: a.py (Python)\n{SMALL}"
+    assert chunk.url == "https://gh/a.py#L1-L3"
+    key = hashlib.sha256(SMALL.encode()).hexdigest()[:16]
+    assert chunk.id == deterministic_id(f"github_code:kevin/r:a.py:{key}")
+
+
+def test_chunk_file_skips_a_file_with_almost_no_code():
+    assert chunk_file(_raw("package main", "Go"), "kevin") == []
 
 
 def test_chunk_file_splits_large_file_on_function_boundaries():
@@ -179,9 +241,36 @@ def test_chunk_file_splits_large_file_on_function_boundaries():
     ]
 
 
-def test_chunk_file_truncates_long_chunks():
-    [chunk] = chunk_file(_raw("y" * 5000), "kevin")
-    assert chunk.content.endswith("\n// [truncated]")
+def _bodies(chunks):
+    return [c.content.split("\n", 1)[1] for c in chunks]
+
+
+def test_chunk_file_splits_a_long_chunk_without_losing_code():
+    lines = [f"value_{i} = {i}  # " + "x" * 60 for i in range(100)]
+    chunks = chunk_file(_raw("\n".join(lines)), "kevin")
+    assert len(chunks) > 1
+    assert all(len(c.content) <= corpus.MAX_CODE_CHUNK_CHARS for c in chunks)
+    assert "\n".join(_bodies(chunks)) == "\n".join(lines)
+    anchors = [str(c.url).split("#")[1] for c in chunks]
+    assert anchors[0].startswith("L1-") and anchors[-1].endswith("-L100")
+
+
+def test_chunk_file_cuts_a_minified_line_into_pieces():
+    chunks = chunk_file(_raw("y" * 5000), "kevin")
+    assert "".join(_bodies(chunks)) == "y" * 5000
+    assert all(str(c.url).endswith("#L1-L1") for c in chunks)
+    assert len({c.id for c in chunks}) == len(chunks)
+
+
+def test_code_ids_survive_code_added_above():
+    body = ["def f():"] + ["    return 1"] * 10
+    before = ["x = 1"] * 160 + [""] + body
+    after = ["y = 2"] * 5 + before
+    ids_before = {c.id: c.content for c in chunk_file(_raw("\n".join(before)), "k")}
+    ids_after = {c.id: c.content for c in chunk_file(_raw("\n".join(after)), "k")}
+    shared = set(ids_before) & set(ids_after)
+    # The function moved five lines down: same text, same id.
+    assert any("def f():" in ids_before[i] for i in shared)
 
 
 def test_split_markdown_sections():
@@ -194,12 +283,36 @@ def test_split_markdown_sections():
     assert split_markdown_sections("") == []
 
 
+async def test_docs_ids_survive_a_section_inserted_before(github):
+    def account(content):
+        github.json("/repos/kevin/a", {"default_branch": "main"})
+        github.json(
+            "/repos/kevin/a/git/trees/main",
+            {"tree": [{"path": "docs/guide.md", "type": "blob", "size": 10}]},
+        )
+        github.json(
+            "/repos/kevin/a/contents/docs/guide.md",
+            {"content": b64(content), "encoding": "base64"},
+        )
+
+    text = "text " * 30
+    account(f"# Setup\n{text}\n# Usage\n{text}")
+    before, _ = await corpus.build_github_docs_chunks(github.client(), "kevin", ["a"])
+    account(f"# Intro\n{text}\n# Setup\n{text}\n# Usage\n{text}")
+    after, _ = await corpus.build_github_docs_chunks(github.client(), "kevin", ["a"])
+    assert {c.id for c in before} <= {c.id for c in after}
+    assert len(after) == 3
+
+
 def test_doc_sections_merge_short_and_cap_long():
     long_body = "\n\n".join(["p" * 900] * 3)
     doc = RepoDoc(path="docs/a.md", content=f"# A\nshort\n# B\nmore\n# C\n{long_body}")
     sections = doc_sections(doc)
     assert sections[0].body == "short\n\nB\nmore"
     assert [len(s.body) for s in sections[1:]] == [1802, 900]
+
+
+MAIN_GO = 'package main\n\nfunc main() {\n\tprintln("hello, world")\n}\n'
 
 
 def _fake_account(github):
@@ -219,10 +332,11 @@ def _fake_account(github):
         github.json(
             f"/repos/kevin/{name}/git/trees/main",
             {
+                "sha": f"tree-{name}",
                 "tree": [
                     {"path": "docs/guide.md", "type": "blob", "size": 10},
                     {"path": "main.go", "type": "blob", "size": 10},
-                ]
+                ],
             },
         )
         github.json(
@@ -231,7 +345,7 @@ def _fake_account(github):
         )
         github.json(
             f"/repos/kevin/{name}/contents/main.go",
-            {"content": b64("package main"), "encoding": "base64"},
+            {"content": b64(MAIN_GO), "encoding": "base64"},
         )
 
 
@@ -256,12 +370,21 @@ async def test_export_corpus_writes_splits_manifest_and_card(github, tmp_path):
         ("profile", 4),
     ]
     assert manifest["generated_at"].endswith("Z")
+    assert manifest["schema_version"] == SCHEMA_VERSION
+    assert manifest["owner"] == "kevin"
+    assert manifest["chunker"]["code"]["max_chunk_chars"] == 2500
+    assert manifest["inputs"] == {
+        "kevin/a": {"branch": "main", "tree": "tree-a"},
+        "kevin/b": {"branch": "main", "tree": "tree-b"},
+    }
     on_disk = json.loads((tmp_path / "manifest.json").read_text())
     assert on_disk["files"] == manifest["files"]
     code = (tmp_path / "data/github_code.jsonl").read_text().splitlines()
     assert json.loads(code[0])["language"] == "Go"
     card = (tmp_path / "README.md").read_text()
     assert "config_name: github_docs" in card and "- Repository: `ns/kb`" in card
+    assert "dataset_info:" in card and "- name: content_hash" in card
+    assert "num_examples: 2" in card and "experience" not in card
 
 
 async def test_export_refuses_truncated_split(github, tmp_path):
@@ -270,6 +393,31 @@ async def test_export_refuses_truncated_split(github, tmp_path):
         with pytest.raises(JobError, match='"github_code" produced only 2 chunks'):
             await export_corpus(tmp_path, ["github_code"], "kevin", "t")
     assert not (tmp_path / "manifest.json").exists()
+
+
+@pytest.mark.parametrize(
+    "records,category",
+    [
+        (999, "n<1K"),
+        (150_000, "100K<n<1M"),
+        (1_500_000, "1M<n<10M"),
+        (25_000_000, "10M<n<100M"),
+    ],
+)
+def test_card_size_category_follows_the_record_count(records, category):
+    card = dataset_card(
+        {"files": [{"source": "github_code", "records": records, "path": "data/c"}]},
+        "ns/kb",
+        "kevin",
+    )
+    assert f"size_categories:\n  - {category}\n" in card
+
+
+def test_card_counts_an_entry_without_records_as_empty():
+    card = dataset_card(
+        {"files": [{"source": "github_code", "path": "data/c"}]}, "ns/kb", "kevin"
+    )
+    assert "num_examples: 0" in card
 
 
 def test_push_requires_a_complete_export(tmp_path):
@@ -323,3 +471,168 @@ def test_push_completes_a_bare_repo_name(tmp_path, memory_hub):
     assert url == "https://huggingface.co/datasets/kevin/kb"
     assert api.create_repo.call_args.args[0] == "kevin/kb"
     assert api.upload_folder.call_args.kwargs["repo_id"] == "kevin/kb"
+
+
+# --- push: a complete snapshot, on the version that was read ----------------
+
+
+def _export_dir(tmp_path, sources=("profile",), version=SCHEMA_VERSION, chunker=None):
+    files = []
+    (tmp_path / "data").mkdir(exist_ok=True)
+    for source in sources:
+        path = f"data/{source}.jsonl"
+        body = f'{{"id":"{source}"}}\n'
+        (tmp_path / path).write_text(body)
+        files.append(
+            {
+                "path": path,
+                "source": source,
+                "records": 1,
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+            }
+        )
+    manifest = {"schema_version": version, "owner": "kevin", "files": files}
+    if chunker is not None:
+        manifest["chunker"] = chunker
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    return manifest
+
+
+def _hub_api(
+    tmp_path, remote_files=None, remote_version=SCHEMA_VERSION, remote_chunker=None
+):
+    """An HfApi whose repo is at commit `c0ffee` holding ``remote_files``."""
+    from huggingface_hub.errors import EntryNotFoundError
+
+    hub = tmp_path / "hub"
+    hub.mkdir()
+    blobs = {}
+    if remote_files is not None:
+        entries = []
+        for source, body in remote_files.items():
+            path = f"data/{source}.jsonl"
+            blobs[path] = body
+            entries.append(
+                {
+                    "path": path,
+                    "source": source,
+                    "records": 1,
+                    "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                }
+            )
+        remote = {"schema_version": remote_version, "files": entries}
+        if remote_chunker is not None:
+            remote["chunker"] = remote_chunker
+        blobs["manifest.json"] = json.dumps(remote)
+
+    def download(repo_id, filename, repo_type, revision):
+        assert revision == "c0ffee"
+        if filename not in blobs:
+            raise EntryNotFoundError(filename)
+        target = hub / filename.replace("/", "_")
+        target.write_text(blobs[filename])
+        return str(target)
+
+    api = MagicMock()
+    api.repo_info.return_value = MagicMock(private=True, sha="c0ffee")
+    api.hf_hub_download.side_effect = download
+    return api, blobs
+
+
+def test_push_deletes_stale_files_and_commits_on_the_read_version(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, corpus.KNOWN_SOURCES)
+    api, _ = _hub_api(tmp_path)
+    with patch("server.services.huggingface._api", return_value=api):
+        push_corpus(CREDS, export, "ns/kb")
+
+    kwargs = api.upload_folder.call_args.kwargs
+    assert kwargs["parent_commit"] == "c0ffee"
+    assert kwargs["delete_patterns"] == ["data/*"]
+
+
+def test_push_carries_forward_the_splits_it_did_not_build(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"])
+    api, blobs = _hub_api(tmp_path, {"github_code": '{"id":"old-code"}\n'})
+    with patch("server.services.huggingface._api", return_value=api):
+        push_corpus(CREDS, export, "ns/kb")
+
+    assert (export / "data/github_code.jsonl").read_text() == blobs[
+        "data/github_code.jsonl"
+    ]
+    manifest = json.loads((export / "manifest.json").read_text())
+    assert [f["source"] for f in manifest["files"]] == ["github_code", "profile"]
+    # The manifest's chunker and inputs describe this build: a carried split
+    # says which published commit it was taken from instead.
+    assert [f.get("carried_from") for f in manifest["files"]] == ["c0ffee", None]
+    assert "config_name: github_code" in (export / "README.md").read_text()
+
+
+def test_push_keeps_where_a_split_was_first_carried_from(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"])
+    api, blobs = _hub_api(tmp_path, {"github_code": "{}\n"})
+    remote = json.loads(blobs["manifest.json"])
+    remote["files"][0]["carried_from"] = "beef001"
+    blobs["manifest.json"] = json.dumps(remote)
+    with patch("server.services.huggingface._api", return_value=api):
+        push_corpus(CREDS, export, "ns/kb")
+
+    manifest = json.loads((export / "manifest.json").read_text())
+    assert manifest["files"][0]["carried_from"] == "beef001"
+
+
+def test_push_refuses_to_carry_a_split_cut_with_other_settings(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"], chunker={"code": {"max_chunk_chars": 2500}})
+    api, _ = _hub_api(
+        tmp_path,
+        {"github_code": "{}\n"},
+        remote_chunker={"code": {"max_chunk_chars": 4000}},
+    )
+    with patch("server.services.huggingface._api", return_value=api):
+        with pytest.raises(JobError, match="other chunker settings"):
+            push_corpus(CREDS, export, "ns/kb")
+    api.upload_folder.assert_not_called()
+
+
+def test_push_refuses_to_mix_schema_versions(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"])
+    api, _ = _hub_api(tmp_path, {"github_code": "{}\n"}, remote_version=1)
+    with patch("server.services.huggingface._api", return_value=api):
+        with pytest.raises(JobError, match="rebuild every source once"):
+            push_corpus(CREDS, export, "ns/kb")
+    api.upload_folder.assert_not_called()
+
+
+def test_push_refuses_a_carried_file_that_does_not_match_its_hash(tmp_path, memory_hub):
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, ["profile"])
+    api, blobs = _hub_api(tmp_path, {"github_code": "{}\n"})
+    blobs["data/github_code.jsonl"] = "tampered\n"
+    with patch("server.services.huggingface._api", return_value=api):
+        with pytest.raises(JobError, match="does not match its manifest hash"):
+            push_corpus(CREDS, export, "ns/kb")
+
+
+def test_push_reports_a_repo_that_moved(tmp_path, memory_hub):
+    from huggingface_hub.errors import HfHubHTTPError
+
+    export = tmp_path / "out"
+    export.mkdir()
+    _export_dir(export, corpus.KNOWN_SOURCES)
+    api, _ = _hub_api(tmp_path)
+    api.upload_folder.side_effect = HfHubHTTPError(
+        "precondition failed", response=MagicMock(status_code=412)
+    )
+    with patch("server.services.huggingface._api", return_value=api):
+        with pytest.raises(CorpusMoved, match="run it again"):
+            push_corpus(CREDS, export, "ns/kb")

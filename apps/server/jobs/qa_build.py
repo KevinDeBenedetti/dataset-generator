@@ -38,6 +38,7 @@ from server.services.hub_repo import (
 )
 
 from server.jobs.github_snapshot import (
+    deterministic_id,
     gather_limited,
 )
 from server.services.providers import (
@@ -134,6 +135,7 @@ class QAPair:
             rec["confidence"] = self.confidence
         if self.id:
             rec["id"] = self.id
+            rec["uuid"] = pair_uuid(self.source, self.id)
         if self.sources:
             rec["sources"] = self.sources
         if self.grounding is not None:
@@ -379,6 +381,16 @@ def pair_id(pair: QAPair) -> str:
     """Content-derived, so an unchanged pair keeps its id across runs."""
     key = f"{pair.category}:{pair.repo or ''}:{pair.question}"
     return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+
+
+def pair_uuid(source: str, pair_id: str) -> str:
+    """The pair's point id in a vector store: a UUIDv5 over ``{source}:qa:{id}``.
+
+    Byte-identical to the id the portfolio gives the pair's Qdrant point
+    (``deterministicId(`github:qa:${id}`)`` in its ``src/lib/rag/chunks.ts``),
+    so both sides name one pair the same way; pinned by a test on each side.
+    """
+    return deterministic_id(f"{source}:qa:{pair_id}")
 
 
 def sanitize_pairs(pairs: List[QAPair]) -> Tuple[List[QAPair], int]:

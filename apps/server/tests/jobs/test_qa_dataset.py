@@ -208,7 +208,8 @@ def test_to_jsonl_record_shape():
     lines = to_jsonl([pair, profile]).splitlines()
     assert (
         lines[0]
-        == '{"question":"Q two?","answer":"B","source":"github","category":"profile","id":"a"}'
+        == '{"question":"Q two?","answer":"B","source":"github","category":"profile","id":"a",'
+        '"uuid":"1084842a-b930-567e-b1db-8e1f27e6ff87"}'
     )
     assert json.loads(lines[1])["repo"] == "r"
 
@@ -544,6 +545,7 @@ def test_to_record_includes_confidence_only_when_set():
         "repo",
         "confidence",
         "id",
+        "uuid",
     ]
     assert "confidence" not in unscored.to_record()
 
